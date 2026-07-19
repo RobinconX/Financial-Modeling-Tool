@@ -1,0 +1,190 @@
+import type { EasyProjection } from '../types'
+import {
+  cagr,
+  newEasyProjection,
+  sortEasyProjections,
+  totalReturn,
+  yearsUntil,
+} from '../lib/valuation'
+import {
+  impliedSharePrice,
+  marketCapFromSharePrice,
+} from '../lib/sharePrice'
+import { MoneyInput, NumberInput } from './MoneyInput'
+import { formatMoney, formatPercent, formatPrice } from '../lib/format'
+
+type Props = {
+  rows: EasyProjection[]
+  onChange: (rows: EasyProjection[]) => void
+  currency?: string
+  currentMarketCap?: number | null
+  sharesOutstanding?: number | null
+  currentPrice?: number | null
+}
+
+export function EasyInputs({
+  rows,
+  onChange,
+  currency = 'USD',
+  currentMarketCap,
+  sharesOutstanding,
+  currentPrice,
+}: Props) {
+  const currentYear = new Date().getFullYear()
+  const sorted = sortEasyProjections(rows)
+  const canConvert = sharesOutstanding != null && sharesOutstanding > 0
+
+  function commit(next: EasyProjection[]) {
+    onChange(sortEasyProjections(next))
+  }
+
+  function updateRow(id: string, patch: Partial<EasyProjection>) {
+    commit(rows.map((r) => (r.id === id ? { ...r, ...patch } : r)))
+  }
+
+  function removeRow(id: string) {
+    commit(rows.filter((r) => r.id !== id))
+  }
+
+  function addRow() {
+    const last = sorted.length ? sorted[sorted.length - 1] : null
+    const nextYear = last ? last.year + 1 : currentYear + 5
+    commit([...rows, newEasyProjection(nextYear, null)])
+  }
+
+  function setSharePrice(id: string, sharePrice: number | null) {
+    if (sharePrice == null) {
+      updateRow(id, { projectedMarketCap: null })
+      return
+    }
+    const mcap = marketCapFromSharePrice(sharePrice, sharesOutstanding)
+    if (mcap != null) {
+      updateRow(id, { projectedMarketCap: mcap })
+    }
+  }
+
+  return (
+    <div className="space-y-3">
+      <p className="text-sm text-white/50">
+        Enter target years and projected <strong className="font-medium text-white/70">market cap</strong>{' '}
+        or <strong className="font-medium text-white/70">share price</strong>. The other is calculated
+        from shares outstanding
+        {canConvert
+          ? ` (${sharesOutstanding!.toLocaleString(undefined, { maximumFractionDigits: 0 })})`
+          : ''}
+        {currentPrice != null && currentPrice > 0
+          ? ` · live price ${formatPrice(currentPrice, currency)}`
+          : ''}
+        . ROI uses market cap vs today.
+      </p>
+      {!canConvert && (
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+          Share price conversion needs shares outstanding (fetch a ticker with mcap/price, or set a
+          market cap override so shares ≈ mcap ÷ price).
+        </p>
+      )}
+
+      {sorted.map((row, index) => {
+        const horizon =
+          row.projectedMarketCap != null &&
+          row.projectedMarketCap > 0 &&
+          currentMarketCap != null &&
+          currentMarketCap > 0
+            ? yearsUntil(row.year, currentYear)
+            : null
+        const rowCagr =
+          horizon != null && horizon > 0
+            ? cagr(currentMarketCap!, row.projectedMarketCap!, horizon)
+            : null
+        const rowTotal =
+          horizon != null && horizon > 0
+            ? totalReturn(currentMarketCap!, row.projectedMarketCap!)
+            : null
+        const sharePx = impliedSharePrice(row.projectedMarketCap, sharesOutstanding)
+
+        return (
+          <div
+            key={row.id}
+            className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-3"
+          >
+            <div className="flex flex-wrap items-center justify-between gap-2">
+              <div className="flex flex-wrap items-baseline gap-x-2">
+                <h4 className="text-sm font-semibold text-white/85">
+                  {row.year || `Year ${index + 1}`}
+                </h4>
+                <span className="text-xs text-white/40">Projection {index + 1}</span>
+                {rowCagr != null && Number.isFinite(rowCagr) && (
+                  <span
+                    className={`rounded-md border px-1.5 py-0.5 text-[11px] font-semibold tabular-nums ${
+                      rowCagr >= 0
+                        ? 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300'
+                        : 'border-red-500/30 bg-red-500/10 text-red-300'
+                    }`}
+                  >
+                    ROI p.a. {formatPercent(rowCagr)}
+                    {rowTotal != null && Number.isFinite(rowTotal)
+                      ? ` · total ${formatPercent(rowTotal)}`
+                      : ''}
+                  </span>
+                )}
+              </div>
+              {rows.length > 1 && (
+                <button
+                  type="button"
+                  className="btn-ghost !py-1 !text-xs"
+                  onClick={() => removeRow(row.id)}
+                >
+                  Remove
+                </button>
+              )}
+            </div>
+
+            <div className="grid gap-3 sm:grid-cols-3">
+              <NumberInput
+                label="Target year"
+                value={row.year}
+                min={currentYear + 1}
+                step="1"
+                onChange={(year) => updateRow(row.id, { year: year ?? currentYear + 5 })}
+                placeholder={String(currentYear + 5)}
+              />
+              <MoneyInput
+                label="Projected market cap"
+                value={row.projectedMarketCap}
+                onChange={(projectedMarketCap) => updateRow(row.id, { projectedMarketCap })}
+                placeholder="e.g. 5T"
+                currency={currency}
+                hint={
+                  row.projectedMarketCap != null
+                    ? `= ${formatMoney(row.projectedMarketCap, currency)}`
+                    : 'Accepts 5T, 500B, or full numbers'
+                }
+              />
+              <MoneyInput
+                label="Projected share price"
+                value={sharePx}
+                onChange={(px) => setSharePrice(row.id, px)}
+                placeholder="e.g. 450"
+                currency={currency}
+                disabled={!canConvert}
+                commitOnBlur
+                displayDecimals={4}
+                hint={
+                  canConvert
+                    ? sharePx != null
+                      ? `= ${formatPrice(sharePx, currency)} · mcap = price × shares`
+                      : 'Enter price → mcap = price × shares'
+                    : 'Needs shares outstanding'
+                }
+              />
+            </div>
+          </div>
+        )
+      })}
+
+      <button type="button" className="btn-ghost w-full" onClick={addRow}>
+        + Add year
+      </button>
+    </div>
+  )
+}
