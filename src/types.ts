@@ -83,7 +83,16 @@ export type StoragePayload = {
   scenarios: SavedScenario[]
 }
 
-export type AppTab = 'analyzer' | 'saved' | 'portfolio'
+export type AppTab =
+  | 'analyzer'
+  | 'saved'
+  | 'portfolio'
+  | 'overview'
+  | 'income-cost'
+  | 'pension-funds'
+
+/** Portfolio display currency (storage remains USD-based). */
+export type DisplayCurrency = 'USD' | 'CHF'
 
 /** Payload to load a scenario into an analyzer panel */
 export type AnalyzerLoadState = {
@@ -119,12 +128,15 @@ export type PortfolioHolding = {
 /**
  * A deposit of capital into the portfolio in a given year
  * (including additional deposits planned for the current year).
+ * Opening cash is a deposit with `isOpening: true` (counts on the Now bar).
  */
 export type PortfolioDeposit = {
   id: string
   year: number
   /** Dollars deposited in this year (not a running cash balance). */
   amount: number
+  /** Opening cash already held today — at most one per portfolio when normalized. */
+  isOpening?: boolean
 }
 
 export type PortfolioActionType = 'buy' | 'sell'
@@ -144,19 +156,21 @@ export type SavedPortfolio = {
   id: string
   name: string
   /**
-   * Cash already held today (distinct from this year's planned deposit).
-   * Cash at year Y = currentCash + deposits − buy costs + sell proceeds (through Y).
+   * @deprecated Prefer deposits with isOpening. Kept for migration; normalize to 0.
+   * Cash at year Y = sum(deposits year<=Y) − buys + sells.
    */
   currentCash: number
   /**
-   * @deprecated Migrated into currentCash / deposits.
+   * @deprecated Migrated into opening deposit / deposits.
    */
   cashDollars?: number
   /**
    * @deprecated Migrated into deposits.
    */
   cashByYear?: { year: number; amount: number }[]
-  /** Capital contributions by year (can include the current year). */
+  /**
+   * Capital contributions by year. First/opening row (isOpening) is current cash.
+   */
   deposits: PortfolioDeposit[]
   /** Planned buy/sell trades by year. */
   actions: PortfolioAction[]

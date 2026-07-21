@@ -14,6 +14,7 @@ import { EasyAssumptionsTable } from './EasyAssumptionsTable'
 import { AdvancedAssumptionsTable } from './AdvancedAssumptionsTable'
 import { RoiHero } from './RoiHero'
 import { MarketCapChart } from './MarketCapChart'
+import { FullscreenChart } from './FullscreenChart'
 
 type Props = {
   scenarios: SavedScenario[]
@@ -22,6 +23,16 @@ type Props = {
   updateScenario: (id: string, patch: Partial<SavedScenario>) => boolean
   deleteScenario: (id: string) => boolean
   onOpenInAnalyzer: (state: AnalyzerLoadState) => void
+}
+
+const LIST_COLLAPSED_KEY = 'grok-lab-saved-list-collapsed'
+
+function readListCollapsed(): boolean {
+  try {
+    return localStorage.getItem(LIST_COLLAPSED_KEY) === '1'
+  } catch {
+    return false
+  }
 }
 
 export function SavedView({
@@ -38,6 +49,15 @@ export function SavedView({
   const [selectedBasis, setSelectedBasis] = useState<ValuationBasis | 'easy'>('easy')
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [listCollapsed, setListCollapsed] = useState(readListCollapsed)
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(LIST_COLLAPSED_KEY, listCollapsed ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }, [listCollapsed])
 
   // Keep selection valid when list changes
   useEffect(() => {
@@ -125,23 +145,54 @@ export function SavedView({
   }
 
   return (
-    <div className="grid gap-6 lg:grid-cols-[260px_1fr]">
-      <aside className="card max-h-[calc(100vh-12rem)] overflow-y-auto p-4">
-        <h2 className="mb-3 text-sm font-semibold text-white">Saved projections</h2>
-        {storageError && (
-          <p className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-300">
-            {storageError}
-          </p>
-        )}
-        <ScenarioList
-          groups={grouped}
-          selectedId={selectedId}
-          onSelect={setSelectedId}
-          onDelete={(id) => {
-            deleteScenario(id)
-          }}
-        />
-      </aside>
+    <div
+      className={`grid gap-6 ${listCollapsed ? '' : 'lg:grid-cols-[260px_1fr]'}`}
+    >
+      {listCollapsed ? (
+        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+          <button
+            type="button"
+            className="btn-ghost !px-2 !py-1 !text-xs"
+            onClick={() => setListCollapsed(false)}
+            title="Show projections list"
+          >
+            » Projections
+          </button>
+          {selected && (
+            <span className="truncate text-sm text-white/70">
+              <span className="text-white/40">Active · </span>
+              {selected.symbol} · {selected.name}
+            </span>
+          )}
+        </div>
+      ) : (
+        <aside className="card max-h-[calc(100vh-12rem)] overflow-y-auto p-4">
+          <div className="mb-3 flex items-center justify-between gap-2">
+            <h2 className="text-sm font-semibold text-white">Saved projections</h2>
+            <button
+              type="button"
+              className="btn-ghost !px-2 !py-1 !text-[11px]"
+              onClick={() => setListCollapsed(true)}
+              title="Hide projections list"
+            >
+              « Hide
+            </button>
+          </div>
+          {storageError && (
+            <p className="mb-3 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-300">
+              {storageError}
+            </p>
+          )}
+          <ScenarioList
+            groups={grouped}
+            selectedId={selectedId}
+            onSelect={setSelectedId}
+            onDelete={(id) => {
+              deleteScenario(id)
+            }}
+          />
+        </aside>
+      )}
 
       <div className="min-w-0 space-y-5">
         {!selected ? (
@@ -302,17 +353,21 @@ export function SavedView({
                 <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
                   Easy · mcap path
                 </h3>
-                <MarketCapChart data={easyChart} mode="easy" currency={selected.currency} />
+                <FullscreenChart title="Easy · mcap path">
+                  <MarketCapChart data={easyChart} mode="easy" currency={selected.currency} />
+                </FullscreenChart>
               </div>
               <div className="card p-5">
                 <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
                   Advanced · mcap path
                 </h3>
-                <MarketCapChart
-                  data={advancedChart}
-                  mode="advanced"
-                  currency={selected.currency}
-                />
+                <FullscreenChart title="Advanced · mcap path">
+                  <MarketCapChart
+                    data={advancedChart}
+                    mode="advanced"
+                    currency={selected.currency}
+                  />
+                </FullscreenChart>
               </div>
             </div>
           </>

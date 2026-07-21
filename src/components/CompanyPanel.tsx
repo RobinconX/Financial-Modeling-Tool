@@ -32,6 +32,7 @@ import { MarketCapChart } from './MarketCapChart'
 import { ProjectionTable } from './ProjectionTable'
 import { MoneyInput } from './MoneyInput'
 import { SaveScenarioButton } from './SaveScenarioButton'
+import { FullscreenChart } from './FullscreenChart'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -267,7 +268,9 @@ export function CompanyPanel({ title, onSaveScenario, loadState, onLoadConsumed 
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
           Market cap evolution
         </h3>
-        <MarketCapChart data={chartData} mode={mode} currency={currency} />
+        <FullscreenChart title="Market cap evolution">
+          <MarketCapChart data={chartData} mode={mode} currency={currency} />
+        </FullscreenChart>
       </div>
 
       <div>

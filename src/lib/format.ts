@@ -11,12 +11,18 @@ export function parseMoney(input: string): number | null {
   return n * factor
 }
 
-/** Market caps / large $ amounts — always 2 digits after the decimal. */
+function moneyPrefix(currency: string): string {
+  if (currency === 'USD') return '$'
+  if (currency === 'CHF') return 'CHF '
+  return `${currency} `
+}
+
+/** Market caps / large amounts — always 2 digits after the decimal. */
 export function formatMoney(value: number | null | undefined, currency = 'USD'): string {
   if (value == null || !Number.isFinite(value)) return '—'
   const abs = Math.abs(value)
   const sign = value < 0 ? '-' : ''
-  const symbol = currency === 'USD' ? '$' : `${currency} `
+  const symbol = moneyPrefix(currency)
 
   if (abs >= 1e12) return `${sign}${symbol}${(abs / 1e12).toFixed(2)}T`
   if (abs >= 1e9) return `${sign}${symbol}${(abs / 1e9).toFixed(2)}B`

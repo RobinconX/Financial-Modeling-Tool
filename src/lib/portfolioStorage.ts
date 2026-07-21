@@ -4,7 +4,7 @@ import type {
   PortfolioHolding,
   SavedPortfolio,
 } from '../types'
-import { newDeposit, newHolding } from './portfolio'
+import { newDeposit, newHolding, normalizePortfolioCashModel } from './portfolio'
 
 export const PORTFOLIO_STORAGE_KEY = 'grok-lab.saved-portfolios.v1'
 
@@ -74,17 +74,19 @@ function normalizeDeposits(raw: Record<string, unknown>): PortfolioDeposit[] {
         const year = asNumber(d.year, 0)
         const amount = asNumber(d.amount, NaN)
         if (year <= 0 || !Number.isFinite(amount) || amount < 0) return null
-        return {
+        const dep: PortfolioDeposit = {
           id: typeof d.id === 'string' ? d.id : crypto.randomUUID(),
           year,
           amount,
         }
+        if (d.isOpening === true) dep.isOpening = true
+        return dep
       })
       .filter((d): d is PortfolioDeposit => d != null)
       .sort((a, b) => a.year - b.year)
   }
 
-  // Migrate legacy cashByYear only into deposits (cashDollars → currentCash)
+  // Migrate legacy cashByYear only into deposits (cashDollars → opening via normalizePortfolioCashModel)
   const deposits: PortfolioDeposit[] = []
   if (Array.isArray(raw.cashByYear)) {
     for (const c of raw.cashByYear) {
@@ -126,30 +128,28 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
 
   const deposits = normalizeDeposits(raw)
   const currentCash = normalizeCurrentCash(raw, deposits)
-  const actions: PortfolioAction[] = Array.isArray(raw.actions)
-    ? raw.actions
-        .map((a) => {
-          if (!isRecord(a)) return null
-          const type = a.type === 'sell' ? 'sell' : a.type === 'buy' ? 'buy' : null
-          const holdingId = typeof a.holdingId === 'string' ? a.holdingId : null
-          const year = asNumber(a.year, 0)
-          const shares = asNumber(a.shares, NaN)
-          if (!type || !holdingId || year <= 0 || !Number.isFinite(shares) || shares < 0) {
-            return null
-          }
-          return {
-            id: typeof a.id === 'string' ? a.id : crypto.randomUUID(),
-            type,
-            holdingId,
-            year,
-            shares,
-            note: typeof a.note === 'string' ? a.note : undefined,
-          } satisfies PortfolioAction
-        })
-        .filter((a): a is PortfolioAction => a != null)
-    : []
+  const actions: PortfolioAction[] = []
+  if (Array.isArray(raw.actions)) {
+    for (const a of raw.actions) {
+      if (!isRecord(a)) continue
+      const type = a.type === 'sell' ? 'sell' : a.type === 'buy' ? 'buy' : null
+      const holdingId = typeof a.holdingId === 'string' ? a.holdingId : null
+      const year = asNumber(a.year, 0)
+      const shares = asNumber(a.shares, NaN)
+      if (!type || !holdingId || year <= 0 || !Number.isFinite(shares) || shares < 0) continue
+      const action: PortfolioAction = {
+        id: typeof a.id === 'string' ? a.id : crypto.randomUUID(),
+        type,
+        holdingId,
+        year,
+        shares,
+      }
+      if (typeof a.note === 'string') action.note = a.note
+      actions.push(action)
+    }
+  }
 
-  return {
+  return normalizePortfolioCashModel({
     id,
     name,
     currentCash,
@@ -158,7 +158,7 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     holdings,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
-  }
+  })
 }
 
 export function loadPortfolios(): SavedPortfolio[] {

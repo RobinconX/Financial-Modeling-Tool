@@ -26,12 +26,21 @@ export function newHolding(symbol = ''): PortfolioHolding {
   }
 }
 
-export function newDeposit(year?: number, amount = 0): PortfolioDeposit {
+export function newDeposit(
+  year?: number,
+  amount = 0,
+  opts?: { isOpening?: boolean },
+): PortfolioDeposit {
   return {
     id: crypto.randomUUID(),
     year: year ?? new Date().getFullYear(),
     amount: Math.max(0, amount),
+    ...(opts?.isOpening ? { isOpening: true } : {}),
   }
+}
+
+export function newOpeningDeposit(amount = 0, year?: number): PortfolioDeposit {
+  return newDeposit(year ?? new Date().getFullYear(), amount, { isOpening: true })
 }
 
 export function newPortfolio(name = 'My portfolio'): SavedPortfolio {
@@ -40,11 +49,130 @@ export function newPortfolio(name = 'My portfolio'): SavedPortfolio {
     id: crypto.randomUUID(),
     name,
     currentCash: 0,
-    deposits: [],
+    deposits: [newOpeningDeposit(0)],
     actions: [],
     holdings: [],
     createdAt: now,
     updatedAt: now,
+  }
+}
+
+/**
+ * Deep-clone a portfolio with new IDs so edits do not affect the source.
+ * Holding `scenarioId` is preserved (shared projections). Action holdingIds are remapped.
+ */
+export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortfolio {
+  const now = new Date().toISOString()
+  const holdingIdMap = new Map<string, string>()
+
+  const holdings = (source.holdings ?? []).map((h) => {
+    const newId = crypto.randomUUID()
+    holdingIdMap.set(h.id, newId)
+    return {
+      id: newId,
+      symbol: h.symbol,
+      sharesHeld: h.sharesHeld,
+      scenarioId: h.scenarioId,
+      basis: h.basis,
+      yearOverrides: (h.yearOverrides ?? []).map((o) => ({
+        year: o.year,
+        valueDollars: o.valueDollars,
+      })),
+      manualCurrentPrice: h.manualCurrentPrice,
+    }
+  })
+
+  const deposits = (source.deposits ?? []).map((d) => ({
+    id: crypto.randomUUID(),
+    year: d.year,
+    amount: d.amount,
+    ...(d.isOpening ? { isOpening: true as const } : {}),
+  }))
+
+  const actions = (source.actions ?? [])
+    .map((a) => {
+      const newHoldingId = holdingIdMap.get(a.holdingId)
+      if (!newHoldingId) return null
+      const action: PortfolioAction = {
+        id: crypto.randomUUID(),
+        type: a.type,
+        holdingId: newHoldingId,
+        year: a.year,
+        shares: a.shares,
+      }
+      if (a.note) action.note = a.note
+      return action
+    })
+    .filter((a): a is PortfolioAction => a != null)
+
+  return normalizePortfolioCashModel({
+    id: crypto.randomUUID(),
+    name: name.trim() || `Copy of ${source.name}`,
+    currentCash: source.currentCash ?? 0,
+    deposits,
+    actions,
+    holdings,
+    createdAt: now,
+    updatedAt: now,
+  })
+}
+
+/**
+ * Fold legacy currentCash into an opening deposit; ensure exactly one opening row.
+ * After normalize, currentCash is always 0 and cash lives only in deposits.
+ */
+export function normalizePortfolioCashModel(portfolio: SavedPortfolio): SavedPortfolio {
+  const currentYear = new Date().getFullYear()
+  let deposits = Array.isArray(portfolio.deposits) ? [...portfolio.deposits] : []
+
+  let legacyCash = 0
+  if (
+    portfolio.currentCash != null &&
+    Number.isFinite(portfolio.currentCash) &&
+    portfolio.currentCash > 0
+  ) {
+    legacyCash = portfolio.currentCash
+  } else if (
+    portfolio.cashDollars != null &&
+    Number.isFinite(portfolio.cashDollars) &&
+    portfolio.cashDollars > 0
+  ) {
+    legacyCash = portfolio.cashDollars
+  }
+
+  const openings = deposits.filter((d) => d.isOpening)
+  let opening = openings[0]
+
+  if (!opening) {
+    opening = newOpeningDeposit(legacyCash, currentYear)
+    deposits = [opening, ...deposits]
+  } else if (legacyCash > 0 && opening.amount === 0) {
+    // Fold leftover currentCash into existing empty opening
+    opening = { ...opening, amount: legacyCash, year: opening.year || currentYear }
+    deposits = deposits.map((d) => (d.id === opening!.id ? opening! : d))
+  } else if (legacyCash > 0 && openings.length === 1) {
+    // Prefer not double-count: if both had cash, sum once into opening
+    // (legacy path when both fields were set)
+    if (portfolio.currentCash != null && portfolio.currentCash > 0) {
+      // opening already has amount; leave it — caller should zero currentCash
+    }
+  }
+
+  // Exactly one isOpening
+  deposits = deposits.map((d) =>
+    d.id === opening!.id ? { ...d, isOpening: true } : { ...d, isOpening: false },
+  )
+
+  deposits.sort((a, b) => {
+    if (a.isOpening && !b.isOpening) return -1
+    if (!a.isOpening && b.isOpening) return 1
+    return a.year - b.year || a.id.localeCompare(b.id)
+  })
+
+  return {
+    ...portfolio,
+    currentCash: 0,
+    deposits,
   }
 }
 
@@ -82,30 +210,52 @@ export function resolveCurrentPrice(
   return null
 }
 
-/** Normalized deposits list. */
+/** Deposits list sorted (opening first). Does not create rows — normalize on load/save. */
 export function getDeposits(portfolio: SavedPortfolio): PortfolioDeposit[] {
   if (!Array.isArray(portfolio.deposits)) return []
-  return [...portfolio.deposits].sort((a, b) => a.year - b.year || a.id.localeCompare(b.id))
+  return [...portfolio.deposits].sort((a, b) => {
+    if (a.isOpening && !b.isOpening) return -1
+    if (!a.isOpening && b.isOpening) return 1
+    return a.year - b.year || a.id.localeCompare(b.id)
+  })
 }
 
-export function getCurrentCash(portfolio: SavedPortfolio): number {
-  if (portfolio.currentCash != null && Number.isFinite(portfolio.currentCash) && portfolio.currentCash >= 0) {
+/** Opening cash (Now bar) — from isOpening deposit, or legacy currentCash if present. */
+export function getOpeningCash(portfolio: SavedPortfolio): number {
+  const deposits = Array.isArray(portfolio.deposits) ? portfolio.deposits : []
+  const opening = deposits.find((d) => d.isOpening)
+  if (opening && Number.isFinite(opening.amount) && opening.amount >= 0) {
+    return opening.amount
+  }
+  // Pre-normalize legacy
+  if (
+    portfolio.currentCash != null &&
+    Number.isFinite(portfolio.currentCash) &&
+    portfolio.currentCash > 0
+  ) {
     return portfolio.currentCash
   }
-  // Legacy: treat old cashDollars as current cash if present
   if (portfolio.cashDollars != null && portfolio.cashDollars > 0) {
     return portfolio.cashDollars
   }
   return 0
 }
 
+/** @deprecated Use getOpeningCash — alias for opening / current cash */
+export function getCurrentCash(portfolio: SavedPortfolio): number {
+  return getOpeningCash(portfolio)
+}
+
 /**
  * Cash from deposits only (no trades):
- *   current cash + sum of deposits with year <= Y.
+ *   sum of deposits with year <= Y (opening cash is a deposit).
  */
 export function cashFromDeposits(portfolio: SavedPortfolio, year: number): number {
-  let sum = getCurrentCash(portfolio)
-  for (const d of getDeposits(portfolio)) {
+  const deposits = getDeposits(portfolio)
+  const hasOpening = deposits.some((d) => d.isOpening)
+  // Legacy: currentCash not yet folded into deposits
+  let sum = hasOpening ? 0 : getOpeningCash(portfolio)
+  for (const d of deposits) {
     if (d.year <= year && d.amount > 0) sum += d.amount
   }
   return sum
@@ -116,10 +266,10 @@ export function cashForYear(portfolio: SavedPortfolio, year: number): number {
   return cashAtYear(portfolio, year)
 }
 
-/** Deposit amount scheduled in a specific year (not cumulative, excludes current cash). */
+/** Non-opening deposit amount scheduled in a specific year (not cumulative). */
 export function depositInYear(portfolio: SavedPortfolio, year: number): number {
   return getDeposits(portfolio)
-    .filter((d) => d.year === year)
+    .filter((d) => d.year === year && !d.isOpening)
     .reduce((s, d) => s + d.amount, 0)
 }
 
@@ -412,6 +562,15 @@ export function buildPortfolioGrid(
   }
 }
 
+export type PortfolioChartBreakdownRow = {
+  key: string
+  ticker: string
+  /** null for cash */
+  shares: number | null
+  value: number
+  isCash?: boolean
+}
+
 export type PortfolioChartPoint = {
   /** Stable category key for the X axis ("now" | "2026" | …) */
   xKey: string
@@ -426,7 +585,9 @@ export type PortfolioChartPoint = {
   /** True for years with no portfolio projection (keeps time spacing) */
   isEmpty: boolean
   total: number
-  [key: string]: number | string | boolean | null
+  /** Per-holding (+ cash) breakdown for hover table */
+  breakdown: PortfolioChartBreakdownRow[]
+  [key: string]: number | string | boolean | null | PortfolioChartBreakdownRow[]
 }
 
 /**
@@ -450,8 +611,11 @@ export function buildPortfolioChartData(
   const holdingsById = new Map(portfolio.holdings.map((h) => [h.id, h]))
 
   const data: PortfolioChartPoint[] = []
+  const actions = getActions(portfolio)
 
-  // --- Now: base shares only + current cash (no deposits, no actions) ---
+  // --- Now: base shares only + opening cash (no planned deposits / actions) ---
+  const nowCash = getOpeningCash(portfolio)
+  const nowBreakdown: PortfolioChartBreakdownRow[] = []
   const nowPoint: PortfolioChartPoint = {
     xKey: 'now',
     yearLabel: 'Now',
@@ -460,29 +624,49 @@ export function buildPortfolioChartData(
     isCurrentYear: false,
     isEmpty: false,
     total: 0,
-    cash: getCurrentCash(portfolio),
+    cash: nowCash,
+    breakdown: [],
   }
-  let nowTotal = getCurrentCash(portfolio)
+  let nowTotal = nowCash
   for (const row of equityRows) {
     const holding = row.holdingId ? holdingsById.get(row.holdingId) : null
     let v = 0
-    if (holding && holding.sharesHeld > 0) {
+    const shares = holding?.sharesHeld ?? 0
+    if (holding && shares > 0) {
       const scenario = holding.scenarioId
         ? (byScenarioId.get(holding.scenarioId) ?? null)
         : null
       const px = resolveCurrentPrice(holding, scenario)
-      if (px != null && px > 0) v = holding.sharesHeld * px
+      if (px != null && px > 0) v = shares * px
     }
     nowPoint[row.key] = v
     nowTotal += v
+    nowBreakdown.push({
+      key: row.key,
+      ticker: holding?.symbol || row.label || '—',
+      shares,
+      value: v,
+    })
+  }
+  if (nowCash !== 0) {
+    nowBreakdown.push({
+      key: 'cash',
+      ticker: 'Cash',
+      shares: null,
+      value: nowCash,
+      isCash: true,
+    })
   }
   nowPoint.total = nowTotal
+  nowPoint.breakdown = nowBreakdown
   data.push(nowPoint)
 
   // --- Calendar years (current year first, then future; empty slots keep spacing) ---
   for (let year = currentYear; year <= maxYear; year++) {
     const i = indexByYear.get(year)
     const hasGridYear = i != null
+    const cash = hasGridYear ? cashAtYear(portfolio, year, scenarios, currentYear) : 0
+    const breakdown: PortfolioChartBreakdownRow[] = []
     const point: PortfolioChartPoint = {
       xKey: String(year),
       yearLabel: String(year),
@@ -491,19 +675,40 @@ export function buildPortfolioChartData(
       isCurrentYear: year === currentYear,
       isEmpty: !hasGridYear,
       total: 0,
-      cash: hasGridYear ? cashAtYear(portfolio, year, scenarios, currentYear) : 0,
+      cash,
+      breakdown: [],
     }
     for (const row of equityRows) {
-      point[row.key] = hasGridYear ? (row.values[i] ?? 0) : 0
+      const holding = row.holdingId ? holdingsById.get(row.holdingId) : null
+      const v = hasGridYear ? (row.values[i!] ?? 0) : 0
+      const rawShares = holding ? sharesAtYear(holding, actions, year) : 0
+      const shares = hasGridYear ? Math.max(0, rawShares) : 0
+      point[row.key] = v
+      breakdown.push({
+        key: row.key,
+        ticker: holding?.symbol || row.label || '—',
+        shares,
+        value: typeof v === 'number' ? v : 0,
+      })
     }
     if (hasGridYear) {
-      let t = typeof point.cash === 'number' ? point.cash : 0
+      let t = typeof cash === 'number' ? cash : 0
       for (const row of equityRows) {
         const v = point[row.key]
         if (typeof v === 'number') t += v
       }
       point.total = t
+      if (cash !== 0) {
+        breakdown.push({
+          key: 'cash',
+          ticker: 'Cash',
+          shares: null,
+          value: cash,
+          isCash: true,
+        })
+      }
     }
+    point.breakdown = breakdown
     data.push(point)
   }
 

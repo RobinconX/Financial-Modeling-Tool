@@ -36,7 +36,17 @@ function ActualDot({
   return <circle cx={cx} cy={cy} r={4} fill={color} stroke="#0b0f14" strokeWidth={1.5} />
 }
 
-export function MarketCapChart({ data, mode, currency = 'USD' }: Props) {
+type ChartProps = Props & {
+  /** Grow to parent height (fullscreen overlay) */
+  fillContainer?: boolean
+}
+
+export function MarketCapChart({
+  data,
+  mode,
+  currency = 'USD',
+  fillContainer = false,
+}: ChartProps) {
   const hasSeries =
     mode === 'easy'
       ? data.some((d) => d.easy != null)
@@ -61,7 +71,7 @@ export function MarketCapChart({ data, mode, currency = 'USD' }: Props) {
   if (ticks[ticks.length - 1] !== maxYear) ticks.push(maxYear)
 
   return (
-    <div className="h-72 w-full">
+    <div className={fillContainer ? 'h-full min-h-0 w-full' : 'h-72 w-full'}>
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={data} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
           <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
