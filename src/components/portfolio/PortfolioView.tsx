@@ -1,6 +1,12 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { DisplayCurrency, SavedPortfolio, SavedScenario } from '../../types'
-import { buildPortfolioGrid } from '../../lib/portfolio'
+import type {
+  CashflowLine,
+  CashflowScenario,
+  DisplayCurrency,
+  SavedPortfolio,
+  SavedScenario,
+} from '../../types'
+import { buildPortfolioGrid, withResolvedDepositAmounts } from '../../lib/portfolio'
 import { fetchFxRateClient } from '../../lib/fx'
 import { PortfolioHoldingsEditor } from './PortfolioHoldingsEditor'
 import { PortfolioValueTable } from './PortfolioValueTable'
@@ -47,6 +53,8 @@ type Props = {
   deletePortfolio: (id: string) => boolean
   copyPortfolio: (id: string, name: string) => SavedPortfolio | null
   reorderPortfolios: (orderedIds: string[]) => boolean
+  incomeCostScenarios?: CashflowScenario[]
+  incomeCostLines?: CashflowLine[]
 }
 
 export function PortfolioView({
@@ -58,6 +66,8 @@ export function PortfolioView({
   deletePortfolio,
   copyPortfolio,
   reorderPortfolios,
+  incomeCostScenarios = [],
+  incomeCostLines = [],
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     readSelectedPortfolioId(portfolios),
@@ -125,8 +135,12 @@ export function PortfolioView({
 
   const grid = useMemo(() => {
     if (!selected) return null
-    return buildPortfolioGrid(selected, scenarios)
-  }, [selected, scenarios, selected?.updatedAt])
+    const resolved = withResolvedDepositAmounts(selected, {
+      incomeCostLines,
+      usdToChf,
+    })
+    return buildPortfolioGrid(resolved, scenarios)
+  }, [selected, scenarios, selected?.updatedAt, incomeCostLines, usdToChf])
 
   const canConvert = displayCurrency === 'USD' || (usdToChf != null && usdToChf > 0)
   const activeCurrency: DisplayCurrency = canConvert ? displayCurrency : 'USD'
@@ -429,6 +443,8 @@ export function PortfolioView({
                 showFxWarning={displayCurrency === 'CHF' && usdToChf == null && !fxLoading}
                 autoFocusName={focusNameId === selected.id}
                 onNameFocused={() => setFocusNameId(null)}
+                incomeCostScenarios={incomeCostScenarios}
+                incomeCostLines={incomeCostLines}
               />
             </div>
           </>

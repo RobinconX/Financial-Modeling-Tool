@@ -1,7 +1,10 @@
-import { useEffect, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
+  CashflowLine,
+  CashflowScenario,
   DisplayCurrency,
   PortfolioDeposit,
+  PortfolioDepositSource,
   PortfolioHolding,
   SavedPortfolio,
   SavedScenario,
@@ -17,7 +20,11 @@ import {
   newHolding,
   newOpeningDeposit,
   resolveCurrentPrice,
+  resolveDepositAmount,
+  type DepositResolveContext,
+  withResolvedDepositAmounts,
 } from '../../lib/portfolio'
+import { scenarioTotals } from '../../lib/incomeCost'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
 import { fromDisplay, toDisplay } from '../../lib/fx'
 import { HoldingActionsEditor } from './PortfolioActionsEditor'
@@ -36,6 +43,9 @@ type Props = {
   /** Focus + select portfolio name (after New / Copy). */
   autoFocusName?: boolean
   onNameFocused?: () => void
+  /** Income/Cost scenarios for surplus-linked deposits (read-only). */
+  incomeCostScenarios?: CashflowScenario[]
+  incomeCostLines?: CashflowLine[]
 }
 
 const BASIS_OPTIONS: { id: ValuationBasis | 'easy'; label: string }[] = [
@@ -58,13 +68,22 @@ export function PortfolioHoldingsEditor({
   showFxWarning = false,
   autoFocusName = false,
   onNameFocused,
+  incomeCostScenarios = [],
+  incomeCostLines = [],
 }: Props) {
   const currentYear = new Date().getFullYear()
+  const depositCtx: DepositResolveContext = {
+    incomeCostLines,
+    usdToChf,
+  }
+  const resolvedPortfolio = withResolvedDepositAmounts(portfolio, depositCtx)
   let deposits = getDeposits(portfolio)
   // Ensure opening row exists in UI state (persisted via normalize on update)
   if (!deposits.some((d) => d.isOpening)) {
     deposits = [newOpeningDeposit(getOpeningCash(portfolio), currentYear), ...deposits]
   }
+  const resolvedDeposits = getDeposits(resolvedPortfolio)
+  const resolvedById = new Map(resolvedDeposits.map((d) => [d.id, d]))
   // Default collapsed so chart/totals stay in view; newly added holdings open.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   const [showRenameHint, setShowRenameHint] = useState(false)
@@ -239,10 +258,21 @@ export function PortfolioHoldingsEditor({
     })
   }
 
-  const openingCash = getOpeningCash({ ...portfolio, deposits })
-  const totalDeposited = deposits.reduce((s, d) => s + (d.amount > 0 ? d.amount : 0), 0)
-  const cashNow = cashForYear({ ...portfolio, deposits, currentCash: 0 }, currentYear)
-  const depositThisYear = depositInYear({ ...portfolio, deposits }, currentYear)
+  const bookPortfolio = {
+    ...resolvedPortfolio,
+    deposits: deposits.map((d) => {
+      const resolved = resolvedById.get(d.id)
+      return resolved ? { ...d, amount: resolved.amount } : d
+    }),
+    currentCash: 0,
+  }
+  const openingCash = getOpeningCash(bookPortfolio)
+  const totalDeposited = bookPortfolio.deposits.reduce(
+    (s, d) => s + (d.amount > 0 ? d.amount : 0),
+    0,
+  )
+  const cashNow = cashForYear(bookPortfolio, currentYear)
+  const depositThisYear = depositInYear(bookPortfolio, currentYear)
 
   return (
     <div className="space-y-4">
@@ -317,8 +347,9 @@ export function PortfolioHoldingsEditor({
           <div>
             <h3 className="text-sm font-semibold text-white/85">Cash & deposits</h3>
             <p className="text-[11px] text-white/40">
-              First row is current cash (opening). Add more rows for capital you plan to put in
-              later. Cash after = all deposits through that year.
+              First row is current cash (opening). Add deposits as a flat amount or as a % of
+              surplus from an Income/Cost scenario (scenario is not changed). Cash after = all
+              deposits through that year.
             </p>
           </div>
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={addDeposit}>
@@ -326,9 +357,10 @@ export function PortfolioHoldingsEditor({
           </button>
         </div>
 
-        <div className="grid grid-cols-[7rem_1fr_auto_auto] gap-2 px-0.5 text-[10px] uppercase tracking-wider text-white/40">
+        <div className="hidden grid-cols-[5.5rem_6.5rem_minmax(0,1fr)_auto_auto] gap-2 px-0.5 text-[10px] uppercase tracking-wider text-white/40 sm:grid">
           <span>Year</span>
-          <span>Amount ({displayCurrency})</span>
+          <span>Source</span>
+          <span>Amount / surplus</span>
           <span className="text-right">Cash after</span>
           <span />
         </div>
@@ -337,12 +369,17 @@ export function PortfolioHoldingsEditor({
           <DepositRow
             key={d.id}
             deposit={d}
+            resolvedAmount={
+              resolvedById.get(d.id)?.amount ?? resolveDepositAmount(d, depositCtx)
+            }
             minYear={currentYear}
-            cashAfter={cashForYear({ ...portfolio, deposits, currentCash: 0 }, d.year)}
+            cashAfter={cashForYear(bookPortfolio, d.year)}
             canRemove={!d.isOpening}
             isOpening={!!d.isOpening}
             displayCurrency={displayCurrency}
             usdToChf={usdToChf}
+            incomeCostScenarios={incomeCostScenarios}
+            incomeCostLines={incomeCostLines}
             onCommit={(patch) => {
               const next = deposits.map((x) =>
                 x.id === d.id
@@ -379,6 +416,11 @@ export function PortfolioHoldingsEditor({
             Total cash contributions:{' '}
             <span className="font-medium text-white/70">{fmt(totalDeposited)}</span>
           </p>
+          {deposits.some((d) => d.source === 'surplus') && usdToChf == null && (
+            <p className="text-amber-300/90">
+              Surplus deposits need a USD/CHF rate to convert Income/Cost (CHF) into portfolio cash.
+            </p>
+          )}
         </div>
       </div>
 
@@ -808,29 +850,42 @@ function roundInput(n: number): number {
 
 function DepositRow({
   deposit,
+  resolvedAmount,
   minYear,
   cashAfter,
   canRemove,
   isOpening = false,
   displayCurrency,
   usdToChf,
+  incomeCostScenarios,
+  incomeCostLines,
   onCommit,
   onRemove,
 }: {
   deposit: PortfolioDeposit
+  /** Resolved USD book amount (surplus % applied) */
+  resolvedAmount: number
   minYear: number
   cashAfter: number
   canRemove: boolean
   isOpening?: boolean
   displayCurrency: DisplayCurrency
   usdToChf: number | null
+  incomeCostScenarios: CashflowScenario[]
+  incomeCostLines: CashflowLine[]
   onCommit: (patch: Partial<PortfolioDeposit>) => void
   onRemove: () => void
 }) {
+  const source: PortfolioDepositSource = deposit.source === 'surplus' ? 'surplus' : 'fixed'
   const [yearText, setYearText] = useState(String(deposit.year))
   const [amountText, setAmountText] = useState(
     deposit.amount > 0
       ? String(roundInput(toDisplay(deposit.amount, displayCurrency, usdToChf)))
+      : '',
+  )
+  const [percentText, setPercentText] = useState(
+    deposit.surplusPercent != null && deposit.surplusPercent !== 0
+      ? String(deposit.surplusPercent)
       : '',
   )
 
@@ -846,6 +901,38 @@ function DepositRow({
         : '',
     )
   }, [deposit.id, deposit.amount, displayCurrency, usdToChf])
+
+  useEffect(() => {
+    setPercentText(
+      deposit.surplusPercent != null && deposit.surplusPercent !== 0
+        ? String(deposit.surplusPercent)
+        : '',
+    )
+  }, [deposit.id, deposit.surplusPercent])
+
+  const orderedScenarios = useMemo(
+    () => [...incomeCostScenarios].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
+    [incomeCostScenarios],
+  )
+
+  const surplusPreview = useMemo(() => {
+    if (source !== 'surplus' || !deposit.surplusScenarioId) return null
+    const totals = scenarioTotals(incomeCostLines, deposit.surplusScenarioId)
+    const surplusChf = Math.max(0, totals.netYearly)
+    const pct = Number.isFinite(deposit.surplusPercent) ? Math.max(0, deposit.surplusPercent!) : 0
+    return {
+      surplusChf,
+      depositChf: surplusChf * (pct / 100),
+      scenarioName:
+        orderedScenarios.find((s) => s.id === deposit.surplusScenarioId)?.name ?? 'Scenario',
+    }
+  }, [
+    source,
+    deposit.surplusScenarioId,
+    deposit.surplusPercent,
+    incomeCostLines,
+    orderedScenarios,
+  ])
 
   function commitYear() {
     const y = Number(yearText)
@@ -875,9 +962,46 @@ function DepositRow({
     if (book !== deposit.amount) onCommit({ amount: book })
   }
 
+  function commitPercent() {
+    const raw = percentText.trim()
+    if (!raw) {
+      if ((deposit.surplusPercent ?? 0) !== 0) onCommit({ surplusPercent: 0 })
+      return
+    }
+    const n = Number(raw.replace(/%/g, ''))
+    if (!Number.isFinite(n) || n < 0) {
+      setPercentText(
+        deposit.surplusPercent != null && deposit.surplusPercent !== 0
+          ? String(deposit.surplusPercent)
+          : '',
+      )
+      return
+    }
+    if (n !== deposit.surplusPercent) onCommit({ surplusPercent: n })
+  }
+
+  function setSource(next: PortfolioDepositSource) {
+    if (next === source) return
+    if (next === 'fixed') {
+      onCommit({
+        source: 'fixed',
+        surplusScenarioId: null,
+        surplusPercent: undefined,
+      })
+    } else {
+      const first = orderedScenarios[0]?.id ?? null
+      onCommit({
+        source: 'surplus',
+        surplusScenarioId: deposit.surplusScenarioId ?? first,
+        surplusPercent: deposit.surplusPercent ?? 100,
+        amount: deposit.amount,
+      })
+    }
+  }
+
   return (
     <div
-      className={`grid grid-cols-[7rem_1fr_auto_auto] items-center gap-2 ${
+      className={`grid grid-cols-1 items-start gap-2 sm:grid-cols-[5.5rem_6.5rem_minmax(0,1fr)_auto_auto] sm:items-center ${
         isOpening ? 'rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] px-0.5 py-1' : ''
       }`}
     >
@@ -902,24 +1026,106 @@ function DepositRow({
           }}
         />
       )}
-      <div>
-        {isOpening && (
-          <div className="mb-0.5 text-[10px] font-medium uppercase tracking-wide text-white/40">
+
+      <select
+        className="input !py-1.5 !text-xs"
+        value={source}
+        onChange={(e) => setSource(e.target.value as PortfolioDepositSource)}
+        aria-label="Deposit source"
+      >
+        <option value="fixed">Fixed</option>
+        <option value="surplus">% surplus</option>
+      </select>
+
+      <div className="min-w-0 space-y-1">
+        {isOpening && source === 'fixed' && (
+          <div className="text-[10px] font-medium uppercase tracking-wide text-white/40">
             Current cash (opening)
           </div>
         )}
-        <input
-          className="input"
-          type="text"
-          inputMode="decimal"
-          placeholder="e.g. 10K"
-          value={amountText}
-          onChange={(e) => setAmountText(e.target.value)}
-          onBlur={commitAmount}
-          onKeyDown={(e) => {
-            if (e.key === 'Enter') e.currentTarget.blur()
-          }}
-        />
+        {source === 'fixed' ? (
+          <input
+            className="input"
+            type="text"
+            inputMode="decimal"
+            placeholder={`e.g. 10K ${displayCurrency}`}
+            value={amountText}
+            onChange={(e) => setAmountText(e.target.value)}
+            onBlur={commitAmount}
+            onKeyDown={(e) => {
+              if (e.key === 'Enter') e.currentTarget.blur()
+            }}
+          />
+        ) : (
+          <div className="space-y-1.5">
+            <div className="flex flex-wrap gap-1.5">
+              <select
+                className="input min-w-[8rem] flex-1 !py-1.5 !text-xs"
+                value={deposit.surplusScenarioId ?? ''}
+                onChange={(e) =>
+                  onCommit({
+                    source: 'surplus',
+                    surplusScenarioId: e.target.value || null,
+                  })
+                }
+                aria-label="Income/Cost scenario for surplus"
+              >
+                <option value="" disabled>
+                  {orderedScenarios.length ? 'Scenario…' : 'No Income/Cost scenarios'}
+                </option>
+                {orderedScenarios.map((s) => {
+                  const net = scenarioTotals(incomeCostLines, s.id).netYearly
+                  return (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                      {net >= 0 ? ` · surplus CHF ${Math.round(net).toLocaleString()}` : ' · deficit'}
+                    </option>
+                  )
+                })}
+              </select>
+              <div className="relative w-20 shrink-0">
+                <input
+                  className="input !py-1.5 !pr-6 !text-xs tabular-nums"
+                  type="text"
+                  inputMode="decimal"
+                  placeholder="%"
+                  value={percentText}
+                  onChange={(e) => setPercentText(e.target.value)}
+                  onBlur={commitPercent}
+                  onKeyDown={(e) => {
+                    if (e.key === 'Enter') e.currentTarget.blur()
+                  }}
+                  aria-label="Percent of surplus"
+                />
+                <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-white/35">
+                  %
+                </span>
+              </div>
+            </div>
+            {surplusPreview ? (
+              <p className="text-[10px] leading-snug text-white/40">
+                {surplusPreview.scenarioName}: surplus{' '}
+                <span className="tabular-nums text-white/60">
+                  {formatMoney(surplusPreview.surplusChf, 'CHF')}
+                </span>
+                /yr → deposit{' '}
+                <span className="tabular-nums text-emerald-400/85">
+                  {formatMoney(
+                    toDisplay(resolvedAmount, displayCurrency, usdToChf),
+                    displayCurrency,
+                  )}
+                </span>
+                {usdToChf == null ? (
+                  <span className="text-amber-300/80"> (needs FX rate)</span>
+                ) : null}
+              </p>
+            ) : (
+              <p className="text-[10px] text-white/35">
+                Pick an Income/Cost scenario and % of yearly surplus (left over).
+              </p>
+            )}
+          </div>
+        )}
       </div>
       <div className="min-w-[5.5rem] text-right text-xs tabular-nums text-white/50">
         {formatMoney(toDisplay(cashAfter, displayCurrency, usdToChf), displayCurrency)}

@@ -9,9 +9,16 @@ import {
   newOpeningDeposit,
   newPortfolio,
   normalizePortfolioCashModel,
+  resolveDepositAmount,
   sharesAtYear,
+  withResolvedDepositAmounts,
 } from '../../src/lib/portfolio'
-import type { PortfolioAction, PortfolioHolding, SavedPortfolio } from '../../src/types'
+import type {
+  CashflowLine,
+  PortfolioAction,
+  PortfolioHolding,
+  SavedPortfolio,
+} from '../../src/types'
 
 function basePortfolio(overrides: Partial<SavedPortfolio> = {}): SavedPortfolio {
   const now = new Date().toISOString()
@@ -143,5 +150,118 @@ describe('clonePortfolio', () => {
     const copy = clonePortfolio(source, 'B')
     copy.deposits[0].amount = 99
     expect(source.deposits[0].amount).not.toBe(99)
+  })
+
+  it('copies surplus deposit fields', () => {
+    const source = basePortfolio({
+      deposits: [
+        newOpeningDeposit(0, 2026),
+        {
+          id: 'd1',
+          year: 2027,
+          amount: 0,
+          source: 'surplus',
+          surplusScenarioId: 'sc-1',
+          surplusPercent: 40,
+        },
+      ],
+    })
+    const copy = clonePortfolio(source, 'Copy')
+    const surplus = copy.deposits.find((d) => d.source === 'surplus')
+    expect(surplus).toBeTruthy()
+    expect(surplus!.surplusScenarioId).toBe('sc-1')
+    expect(surplus!.surplusPercent).toBe(40)
+  })
+})
+
+describe('surplus-linked deposits', () => {
+  const lines: CashflowLine[] = [
+    {
+      id: 'i1',
+      scenarioId: 'sc-1',
+      kind: 'income',
+      name: 'Salary',
+      cadence: 'recurring',
+      yearlyAmount: 120_000,
+    },
+    {
+      id: 'c1',
+      scenarioId: 'sc-1',
+      kind: 'cost',
+      name: 'Rent',
+      cadence: 'recurring',
+      yearlyAmount: 40_000,
+    },
+  ]
+
+  it('resolveDepositAmount uses % of positive surplus (CHF→USD)', () => {
+    // surplus 80_000 CHF, 25% = 20_000 CHF; rate 0.8 CHF/USD → 25_000 USD
+    const amount = resolveDepositAmount(
+      {
+        id: 'd',
+        year: 2027,
+        amount: 0,
+        source: 'surplus',
+        surplusScenarioId: 'sc-1',
+        surplusPercent: 25,
+      },
+      { incomeCostLines: lines, usdToChf: 0.8 },
+    )
+    expect(amount).toBeCloseTo(20_000 / 0.8, 6)
+  })
+
+  it('surplus ignores negative net (no deposit)', () => {
+    const deficitLines: CashflowLine[] = [
+      {
+        id: 'i1',
+        scenarioId: 'sc-1',
+        kind: 'income',
+        name: 'Job',
+        cadence: 'recurring',
+        yearlyAmount: 10_000,
+      },
+      {
+        id: 'c1',
+        scenarioId: 'sc-1',
+        kind: 'cost',
+        name: 'Life',
+        cadence: 'recurring',
+        yearlyAmount: 50_000,
+      },
+    ]
+    const amount = resolveDepositAmount(
+      {
+        id: 'd',
+        year: 2027,
+        amount: 999,
+        source: 'surplus',
+        surplusScenarioId: 'sc-1',
+        surplusPercent: 100,
+      },
+      { incomeCostLines: deficitLines, usdToChf: 0.9 },
+    )
+    expect(amount).toBe(0)
+  })
+
+  it('withResolvedDepositAmounts feeds cashFromDeposits', () => {
+    const p = basePortfolio({
+      deposits: [
+        newOpeningDeposit(0, 2026),
+        {
+          id: 'd2',
+          year: 2027,
+          amount: 0,
+          source: 'surplus',
+          surplusScenarioId: 'sc-1',
+          surplusPercent: 50,
+        },
+      ],
+    })
+    // 80k * 50% = 40k CHF / 0.8 = 50k USD
+    const resolved = withResolvedDepositAmounts(p, {
+      incomeCostLines: lines,
+      usdToChf: 0.8,
+    })
+    expect(cashFromDeposits(resolved, 2027)).toBeCloseTo(50_000, 6)
   })
 })

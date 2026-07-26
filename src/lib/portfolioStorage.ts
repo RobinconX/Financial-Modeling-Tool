@@ -80,6 +80,12 @@ function normalizeDeposits(raw: Record<string, unknown>): PortfolioDeposit[] {
           amount,
         }
         if (d.isOpening === true) dep.isOpening = true
+        if (d.source === 'surplus') {
+          dep.source = 'surplus'
+          dep.surplusScenarioId =
+            typeof d.surplusScenarioId === 'string' ? d.surplusScenarioId : null
+          dep.surplusPercent = Math.max(0, asNumber(d.surplusPercent, 0))
+        }
         return dep
       })
       .filter((d): d is PortfolioDeposit => d != null)

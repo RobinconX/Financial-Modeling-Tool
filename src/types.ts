@@ -190,6 +190,9 @@ export type PortfolioHolding = {
   manualCurrentPrice: number | null
 }
 
+/** How a portfolio deposit amount is determined. */
+export type PortfolioDepositSource = 'fixed' | 'surplus'
+
 /**
  * A deposit of capital into the portfolio in a given year
  * (including additional deposits planned for the current year).
@@ -198,10 +201,23 @@ export type PortfolioHolding = {
 export type PortfolioDeposit = {
   id: string
   year: number
-  /** Dollars deposited in this year (not a running cash balance). */
+  /**
+   * USD book amount for this year when `source` is `fixed` (default).
+   * Ignored for cash math when `source` is `surplus` (computed from Income/Cost).
+   */
   amount: number
   /** Opening cash already held today — at most one per portfolio when normalized. */
   isOpening?: boolean
+  /**
+   * `fixed` = use `amount`.
+   * `surplus` = deposit = max(0, scenario net yearly) × surplusPercent / 100 (CHF→USD via FX).
+   * Income/Cost scenario is not modified.
+   */
+  source?: PortfolioDepositSource
+  /** Income/Cost scenario id when source is surplus */
+  surplusScenarioId?: string | null
+  /** Percent of that scenario’s yearly surplus (e.g. 50 = half of left-over) */
+  surplusPercent?: number
 }
 
 export type PortfolioActionType = 'buy' | 'sell'

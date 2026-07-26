@@ -1,6 +1,8 @@
 import type {
+  CashflowLine,
   PortfolioAction,
   PortfolioDeposit,
+  PortfolioDepositSource,
   PortfolioGrid,
   PortfolioGridRow,
   PortfolioHolding,
@@ -8,11 +10,62 @@ import type {
   SavedScenario,
   ValuationBasis,
 } from '../types'
+import { scenarioTotals } from './incomeCost'
 import { effectiveMarketCap, impliedSharePrice } from './sharePrice'
 import {
   buildAdvancedProjections,
   buildEasyProjections,
 } from './valuation'
+
+/** Context to resolve surplus-linked deposits (Income/Cost is CHF; portfolio book is USD). */
+export type DepositResolveContext = {
+  incomeCostLines: CashflowLine[]
+  /** USD→CHF rate; required to convert surplus CHF into USD book amounts */
+  usdToChf: number | null
+}
+
+/**
+ * Resolved USD deposit for cash math.
+ * Surplus mode: max(0, scenario net yearly CHF) × percent / 100, converted to USD.
+ * Does not mutate Income/Cost data.
+ */
+export function resolveDepositAmount(
+  d: PortfolioDeposit,
+  ctx?: DepositResolveContext | null,
+): number {
+  const source: PortfolioDepositSource = d.source === 'surplus' ? 'surplus' : 'fixed'
+  if (source !== 'surplus') {
+    return Number.isFinite(d.amount) && d.amount > 0 ? d.amount : 0
+  }
+  if (!ctx?.incomeCostLines || !d.surplusScenarioId) {
+    return Number.isFinite(d.amount) && d.amount > 0 ? d.amount : 0
+  }
+  const netChf = scenarioTotals(ctx.incomeCostLines, d.surplusScenarioId).netYearly
+  const surplusChf = Math.max(0, netChf)
+  const pct = Number.isFinite(d.surplusPercent) ? Math.max(0, d.surplusPercent!) : 0
+  const chf = surplusChf * (pct / 100)
+  if (ctx.usdToChf != null && ctx.usdToChf > 0) {
+    return chf / ctx.usdToChf
+  }
+  // No FX: cannot convert CHF→USD reliably; fall back to stored amount
+  return Number.isFinite(d.amount) && d.amount > 0 ? d.amount : 0
+}
+
+/** Portfolio copy with each deposit.amount replaced by resolveDepositAmount (for cash math / charts). */
+export function withResolvedDepositAmounts(
+  portfolio: SavedPortfolio,
+  ctx?: DepositResolveContext | null,
+): SavedPortfolio {
+  const deposits = getDeposits(portfolio)
+  if (!deposits.some((d) => d.source === 'surplus')) return portfolio
+  return {
+    ...portfolio,
+    deposits: deposits.map((d) => ({
+      ...d,
+      amount: resolveDepositAmount(d, ctx),
+    })),
+  }
+}
 
 export function newHolding(symbol = ''): PortfolioHolding {
   return {
@@ -82,12 +135,20 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
     }
   })
 
-  const deposits = (source.deposits ?? []).map((d) => ({
-    id: crypto.randomUUID(),
-    year: d.year,
-    amount: d.amount,
-    ...(d.isOpening ? { isOpening: true as const } : {}),
-  }))
+  const deposits = (source.deposits ?? []).map((d) => {
+    const next: PortfolioDeposit = {
+      id: crypto.randomUUID(),
+      year: d.year,
+      amount: d.amount,
+    }
+    if (d.isOpening) next.isOpening = true
+    if (d.source === 'surplus') {
+      next.source = 'surplus'
+      next.surplusScenarioId = d.surplusScenarioId ?? null
+      next.surplusPercent = d.surplusPercent ?? 0
+    }
+    return next
+  })
 
   const actions = (source.actions ?? [])
     .map((a) => {
