@@ -367,6 +367,8 @@ export default function App() {
               deletePortfolio={deletePortfolio}
               copyPortfolio={copyPortfolio}
               reorderPortfolios={reorderPortfolios}
+              incomeCostScenarios={incomeCostScenarios}
+              incomeCostLines={incomeCostLines}
             />
           )}
 
