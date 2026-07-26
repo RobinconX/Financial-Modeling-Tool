@@ -8,6 +8,8 @@ import { useAutoQuoteRefresh } from './hooks/useAutoQuoteRefresh'
 import { useIncomeCost } from './hooks/useIncomeCost'
 import { IncomeCostView } from './components/income-cost/IncomeCostView'
 import { SavingsView } from './components/savings/SavingsView'
+import { OverviewView } from './components/overview/OverviewView'
+import { useSavings } from './hooks/useSavings'
 import type { AnalyzerLoadState, AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
@@ -79,7 +81,7 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
   },
   overview: {
     title: 'Overview',
-    subtitle: 'High-level household and portfolio summary.',
+    subtitle: 'Stacked net worth by year (CHF) from portfolios, savings, and manual assets.',
   },
   'income-cost': {
     title: 'Income / Cost',
@@ -89,15 +91,6 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
     title: 'Savings',
     subtitle: 'Balances, contributions, and compound projections (CHF).',
   },
-}
-
-function PlaceholderView({ title }: { title: string }) {
-  return (
-    <div className="card flex min-h-[16rem] flex-col items-center justify-center gap-2 p-10 text-center">
-      <p className="text-lg font-semibold text-white/80">{title}</p>
-      <p className="text-sm text-white/40">Coming soon — no content yet.</p>
-    </div>
-  )
 }
 
 export default function App() {
@@ -158,6 +151,8 @@ export default function App() {
     reorderScenariosByIds,
     copyScenario,
   } = useIncomeCost()
+
+  const { accounts: savingsAccounts } = useSavings()
 
   const handleOpenInAnalyzer = useCallback((state: AnalyzerLoadState) => {
     setLoadA(state)
@@ -375,7 +370,14 @@ export default function App() {
             />
           )}
 
-          {tab === 'overview' && <PlaceholderView title="Overview" />}
+          {tab === 'overview' && (
+            <OverviewView
+              portfolios={portfolios}
+              stockScenarios={scenarios}
+              savingsAccounts={savingsAccounts}
+              incomeCostLines={incomeCostLines}
+            />
+          )}
           {tab === 'income-cost' && (
             <IncomeCostView
               scenarios={incomeCostScenarios}

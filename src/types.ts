@@ -159,6 +159,48 @@ export type SavingsState = {
   accounts: SavingsAccount[]
 }
 
+// --- Overview (net-worth stack config; display CHF) ---
+
+export type OverviewSeriesType = 'portfolio' | 'savings' | 'manual'
+
+export type OverviewSeries = {
+  id: string
+  name: string
+  enabled: boolean
+  sortOrder: number
+  type: OverviewSeriesType
+  /**
+   * Optional custom stack color (#rrggbb). When unset, a shade is chosen by origin
+   * (portfolio greens / savings blues / manual amber–violet).
+   */
+  color?: string | null
+  /** type === 'portfolio' */
+  portfolioId?: string | null
+  /** type === 'savings' */
+  savingsAccountId?: string | null
+  /** type === 'manual' */
+  baseChf?: number
+  annualRatePercent?: number
+  /** Year when baseChf applies (defaults to year of creation) */
+  baseYear?: number
+}
+
+/** Named combination of asset series (+ year range) for the Overview chart. */
+export type OverviewScenario = {
+  id: string
+  name: string
+  sortOrder: number
+  startYear: number
+  endYear: number
+  series: OverviewSeries[]
+}
+
+export type OverviewState = {
+  version: 2
+  scenarios: OverviewScenario[]
+  selectedScenarioId: string | null
+}
+
 /** Payload to load a scenario into an analyzer panel */
 export type AnalyzerLoadState = {
   symbol: string
