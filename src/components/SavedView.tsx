@@ -337,14 +337,14 @@ export function SavedView({
                 onChange={(easyRows) => updateScenario(selected.id, { easyRows })}
                 currentMarketCap={currentMarketCap}
                 sharesOutstanding={selected.sharesOutstanding}
-                currency={selected.currency}
+                currency="USD"
               />
               <AdvancedAssumptionsTable
                 rows={selected.advancedRows}
                 onChange={(advancedRows) => updateScenario(selected.id, { advancedRows })}
                 currentMarketCap={currentMarketCap}
                 sharesOutstanding={selected.sharesOutstanding}
-                currency={selected.currency}
+                currency="USD"
               />
             </div>
 

@@ -4,6 +4,7 @@ import { SavedView } from './components/SavedView'
 import { PortfolioView } from './components/PortfolioView'
 import { useSavedScenarios } from './hooks/useSavedScenarios'
 import { useSavedPortfolios } from './hooks/useSavedPortfolios'
+import { useAutoQuoteRefresh } from './hooks/useAutoQuoteRefresh'
 import type { AnalyzerLoadState, AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
@@ -135,6 +136,9 @@ export default function App() {
     copyPortfolio,
     reorderPortfolios,
   } = useSavedPortfolios()
+
+  // Live quotes for all known tickers — on load + every 5 minutes
+  useAutoQuoteRefresh(scenarios, portfolios, updateScenario)
 
   const handleOpenInAnalyzer = useCallback((state: AnalyzerLoadState) => {
     setLoadA(state)

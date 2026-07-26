@@ -4,7 +4,14 @@ import {
   newEasyProjection,
   sortEasyProjections,
 } from '../lib/valuation'
-import { formatMoney, formatPercent, formatPrice, parseMoney } from '../lib/format'
+import {
+  cleanMoneyAmount,
+  formatMoney,
+  formatPercent,
+  formatPrice,
+  parseMoney,
+} from '../lib/format'
+import { formatInputNumber } from './MoneyInput'
 import { impliedSharePrice, marketCapFromSharePrice } from '../lib/sharePrice'
 
 type Props = {
@@ -20,8 +27,9 @@ export function EasyAssumptionsTable({
   onChange,
   currentMarketCap,
   sharesOutstanding,
-  currency = 'USD',
+  currency: _currency = 'USD',
 }: Props) {
+  void _currency // Projection tables always display/store USD
   const currentYear = new Date().getFullYear()
   const sorted = sortEasyProjections(rows)
   const projections =
@@ -94,13 +102,15 @@ export function EasyAssumptionsTable({
                   </td>
                   <td className="px-2 py-1.5">
                     <MoneyCell
+                      cellKey={`${row.id}-mcap`}
                       value={row.projectedMarketCap}
                       onChange={(projectedMarketCap) => update(row.id, { projectedMarketCap })}
-                      currency={currency}
+                      currency="USD"
                     />
                   </td>
                   <td className="px-2 py-1.5">
                     <MoneyCell
+                      cellKey={`${row.id}-px`}
                       value={sharePx}
                       onChange={(px) => {
                         if (px == null) {
@@ -110,7 +120,7 @@ export function EasyAssumptionsTable({
                         const mcap = marketCapFromSharePrice(px, sharesOutstanding)
                         if (mcap != null) update(row.id, { projectedMarketCap: mcap })
                       }}
-                      currency={currency}
+                      currency="USD"
                       formatAsPrice
                       disabled={sharesOutstanding == null}
                     />
@@ -156,16 +166,22 @@ export function EasyAssumptionsTable({
 function MoneyCell({
   value,
   onChange,
-  currency,
+  currency = 'USD',
   formatAsPrice,
   disabled,
+  cellKey,
 }: {
   value: number | null
   onChange: (v: number | null) => void
-  currency: string
+  currency?: string
   formatAsPrice?: boolean
   disabled?: boolean
+  /** Stable key so float noise does not remount mid-edit */
+  cellKey: string
 }) {
+  const clean = cleanMoneyAmount(value)
+  const display =
+    clean == null ? '' : formatAsPrice ? formatInputNumber(clean, 6) : formatInputNumber(clean, 2)
   return (
     <div>
       <input
@@ -174,20 +190,21 @@ function MoneyCell({
         inputMode="decimal"
         disabled={disabled}
         placeholder={formatAsPrice ? 'e.g. 450' : 'e.g. 5T'}
-        defaultValue={value == null ? '' : String(value)}
-        key={value == null ? 'empty' : String(value)}
+        defaultValue={display}
+        key={`${cellKey}:${display}`}
         onBlur={(e) => {
           const raw = e.target.value.trim()
           if (!raw) {
             onChange(null)
             return
           }
-          onChange(parseMoney(raw))
+          const parsed = parseMoney(raw)
+          onChange(cleanMoneyAmount(parsed))
         }}
       />
-      {value != null && (
+      {clean != null && (
         <div className="mt-0.5 text-[10px] text-white/35">
-          {formatAsPrice ? formatPrice(value, currency) : formatMoney(value, currency)}
+          {formatAsPrice ? formatPrice(clean, currency) : formatMoney(clean, currency)}
         </div>
       )}
     </div>

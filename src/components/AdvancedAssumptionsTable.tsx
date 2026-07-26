@@ -9,7 +9,14 @@ import {
   normalizeDilution,
   sortYearProjections,
 } from '../lib/valuation'
-import { formatMoney, formatPercent, formatPrice, parseMoney } from '../lib/format'
+import {
+  cleanMoneyAmount,
+  formatMoney,
+  formatPercent,
+  formatPrice,
+  parseMoney,
+} from '../lib/format'
+import { formatInputNumber } from './MoneyInput'
 import { impliedSharePrice } from '../lib/sharePrice'
 
 type Props = {
@@ -25,8 +32,9 @@ export function AdvancedAssumptionsTable({
   onChange,
   currentMarketCap,
   sharesOutstanding,
-  currency = 'USD',
+  currency: _currency = 'USD',
 }: Props) {
+  void _currency // Projection tables always display/store USD
   const currentYear = new Date().getFullYear()
   const sorted = sortYearProjections(rows)
   const projections =
@@ -143,51 +151,54 @@ export function AdvancedAssumptionsTable({
                     />
                   </td>
                   <MoneyTd
+                    cellKey={`${row.id}-rev`}
                     value={row.revenue}
                     onChange={(revenue) => update(row.id, { revenue })}
-                    currency={currency}
+                    currency="USD"
                   />
                   <NumTd
                     value={row.psMultiple}
                     onChange={(psMultiple) => update(row.id, { psMultiple })}
                   />
                   <td className="px-2 py-1.5 tabular-nums text-white/70">
-                    {formatMoney(psMcap, currency)}
+                    {formatMoney(psMcap, 'USD')}
                   </td>
                   <td className="px-2 py-1.5 tabular-nums text-white/70">
-                    {formatPrice(impliedSharePrice(psEq, sharesOutstanding), currency)}
+                    {formatPrice(impliedSharePrice(psEq, sharesOutstanding), 'USD')}
                   </td>
                   <RoiTd cagr={psProj?.cagr} />
                   <MoneyTd
+                    cellKey={`${row.id}-fcf`}
                     value={row.fcf}
                     onChange={(fcf) => update(row.id, { fcf })}
-                    currency={currency}
+                    currency="USD"
                   />
                   <NumTd
                     value={row.pfcfMultiple}
                     onChange={(pfcfMultiple) => update(row.id, { pfcfMultiple })}
                   />
                   <td className="px-2 py-1.5 tabular-nums text-white/70">
-                    {formatMoney(pfcfMcap, currency)}
+                    {formatMoney(pfcfMcap, 'USD')}
                   </td>
                   <td className="px-2 py-1.5 tabular-nums text-white/70">
-                    {formatPrice(impliedSharePrice(pfcfEq, sharesOutstanding), currency)}
+                    {formatPrice(impliedSharePrice(pfcfEq, sharesOutstanding), 'USD')}
                   </td>
                   <RoiTd cagr={pfcfProj?.cagr} />
                   <MoneyTd
+                    cellKey={`${row.id}-profit`}
                     value={row.profit}
                     onChange={(profit) => update(row.id, { profit })}
-                    currency={currency}
+                    currency="USD"
                   />
                   <NumTd
                     value={row.peMultiple}
                     onChange={(peMultiple) => update(row.id, { peMultiple })}
                   />
                   <td className="px-2 py-1.5 tabular-nums text-white/70">
-                    {formatMoney(peMcap, currency)}
+                    {formatMoney(peMcap, 'USD')}
                   </td>
                   <td className="px-2 py-1.5 tabular-nums text-white/70">
-                    {formatPrice(impliedSharePrice(peEq, sharesOutstanding), currency)}
+                    {formatPrice(impliedSharePrice(peEq, sharesOutstanding), 'USD')}
                   </td>
                   <RoiTd cagr={peProj?.cagr} />
                   <td className="px-2 py-1.5">
@@ -254,12 +265,16 @@ function NumTd({
 function MoneyTd({
   value,
   onChange,
-  currency,
+  currency = 'USD',
+  cellKey,
 }: {
   value: number | null
   onChange: (v: number | null) => void
-  currency: string
+  currency?: string
+  cellKey: string
 }) {
+  const clean = cleanMoneyAmount(value)
+  const display = clean == null ? '' : formatInputNumber(clean, 2)
   return (
     <td className="px-2 py-1.5">
       <input
@@ -267,19 +282,19 @@ function MoneyTd({
         type="text"
         inputMode="decimal"
         placeholder="100B"
-        defaultValue={value == null ? '' : String(value)}
-        key={value == null ? 'empty' : String(value)}
+        defaultValue={display}
+        key={`${cellKey}:${display}`}
         onBlur={(e) => {
           const raw = e.target.value.trim()
           if (!raw) {
             onChange(null)
             return
           }
-          onChange(parseMoney(raw))
+          onChange(cleanMoneyAmount(parseMoney(raw)))
         }}
       />
-      {value != null && (
-        <div className="mt-0.5 text-[10px] text-white/30">{formatMoney(value, currency)}</div>
+      {clean != null && (
+        <div className="mt-0.5 text-[10px] text-white/30">{formatMoney(clean, currency)}</div>
       )}
     </td>
   )

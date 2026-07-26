@@ -8,7 +8,24 @@ export function parseMoney(input: string): number | null {
   if (!Number.isFinite(n)) return null
   const mult: Record<string, number> = { K: 1e3, M: 1e6, B: 1e9, T: 1e12 }
   const factor = m[2] ? mult[m[2]] : 1
-  return n * factor
+  const value = n * factor
+  // Suffix amounts (K/M/B/T) are whole-unit multiples; keep clean integers
+  if (m[2]) return Math.round(value)
+  // Bare numbers: if effectively whole dollars, store as integer
+  if (Math.abs(value - Math.round(value)) < 1e-6) return Math.round(value)
+  return value
+}
+
+/** Clean stored money for display / re-save (strip float noise). */
+export function cleanMoneyAmount(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null
+  if (Math.abs(value) >= 1) {
+    const rounded = Math.round(value)
+    // Prefer integer if within 0.01 of a whole dollar
+    if (Math.abs(value - rounded) < 0.01) return rounded
+    return Math.round(value * 100) / 100
+  }
+  return value
 }
 
 function moneyPrefix(currency: string): string {

@@ -36,7 +36,8 @@ export function marketCapFromSharePrice(
   ) {
     return null
   }
-  return sharePrice * sharesOutstanding
+  // Whole dollars — avoids float noise written back into projection mcap fields
+  return Math.round(sharePrice * sharesOutstanding)
 }
 
 export function effectiveMarketCap(

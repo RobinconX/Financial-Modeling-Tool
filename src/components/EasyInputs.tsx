@@ -149,31 +149,31 @@ export function EasyInputs({
                 placeholder={String(currentYear + 5)}
               />
               <MoneyInput
-                label="Projected market cap"
+                label="Projected market cap (USD)"
                 value={row.projectedMarketCap}
                 onChange={(projectedMarketCap) => updateRow(row.id, { projectedMarketCap })}
                 placeholder="e.g. 5T"
-                currency={currency}
+                currency="USD"
                 hint={
                   row.projectedMarketCap != null
-                    ? `= ${formatMoney(row.projectedMarketCap, currency)}`
-                    : 'Accepts 5T, 500B, or full numbers'
+                    ? `= ${formatMoney(row.projectedMarketCap, 'USD')}`
+                    : 'Accepts 5T, 500B, or full numbers — always USD'
                 }
               />
               <MoneyInput
-                label="Projected share price"
+                label="Projected share price (USD)"
                 value={sharePx}
                 onChange={(px) => setSharePrice(row.id, px)}
                 placeholder="e.g. 450"
-                currency={currency}
+                currency="USD"
                 disabled={!canConvert}
                 commitOnBlur
                 displayDecimals={4}
                 hint={
                   canConvert
                     ? sharePx != null
-                      ? `= ${formatPrice(sharePx, currency)} · mcap = price × shares`
-                      : 'Enter price → mcap = price × shares'
+                      ? `= ${formatPrice(sharePx, 'USD')} · mcap = price × shares`
+                      : 'Enter price → mcap = price × shares (USD)'
                     : 'Needs shares outstanding'
                 }
               />

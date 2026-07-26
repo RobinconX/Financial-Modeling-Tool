@@ -125,6 +125,37 @@ export function CompanyPanel({ title, onSaveScenario, loadState, onLoadConsumed 
     }
   }
 
+  /** Quiet refresh: update live quote without clearing Easy/Advanced assumptions. */
+  async function silentRefreshQuote() {
+    const symbol = quote?.symbol
+    if (!symbol) return
+    try {
+      const q = await fetchQuoteClient(symbol)
+      if (q.symbol.toUpperCase() !== symbol.toUpperCase()) return
+      setQuote(q)
+      // Keep mcapOverride if user set one; only refresh live quote fields
+    } catch {
+      // Non-fatal background refresh
+    }
+  }
+
+  // Periodic + visibility refresh for the open analyzer ticker
+  useEffect(() => {
+    if (!quote?.symbol) return
+    const id = window.setInterval(() => {
+      void silentRefreshQuote()
+    }, 5 * 60 * 1000)
+    function onVis() {
+      if (document.visibilityState === 'visible') void silentRefreshQuote()
+    }
+    document.addEventListener('visibilitychange', onVis)
+    return () => {
+      window.clearInterval(id)
+      document.removeEventListener('visibilitychange', onVis)
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [quote?.symbol])
+
   const projectionRows = useMemo(() => {
     if (currentMarketCap == null || currentMarketCap <= 0) return []
     if (mode === 'easy') {
