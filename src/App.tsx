@@ -5,6 +5,8 @@ import { PortfolioView } from './components/portfolio/PortfolioView'
 import { useSavedScenarios } from './hooks/useSavedScenarios'
 import { useSavedPortfolios } from './hooks/useSavedPortfolios'
 import { useAutoQuoteRefresh } from './hooks/useAutoQuoteRefresh'
+import { useIncomeCost } from './hooks/useIncomeCost'
+import { IncomeCostView } from './components/income-cost/IncomeCostView'
 import type { AnalyzerLoadState, AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
@@ -78,7 +80,7 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
   },
   'income-cost': {
     title: 'Income / Cost',
-    subtitle: 'Track income and expenses.',
+    subtitle: 'Income streams and cost positions by year (CHF).',
   },
   'pension-funds': {
     title: 'Pension / Funds',
@@ -139,6 +141,20 @@ export default function App() {
 
   // Live quotes for all known tickers — on load + every 5 minutes
   useAutoQuoteRefresh(scenarios, portfolios, updateScenario)
+
+  const {
+    scenarios: incomeCostScenarios,
+    lines: incomeCostLines,
+    error: incomeCostError,
+    upsertLine,
+    removeLine,
+    addLine,
+    addScenario,
+    renameScenario,
+    removeScenario,
+    reorderScenariosByIds,
+    copyScenario,
+  } = useIncomeCost()
 
   const handleOpenInAnalyzer = useCallback((state: AnalyzerLoadState) => {
     setLoadA(state)
@@ -355,7 +371,21 @@ export default function App() {
           )}
 
           {tab === 'overview' && <PlaceholderView title="Overview" />}
-          {tab === 'income-cost' && <PlaceholderView title="Income / Cost" />}
+          {tab === 'income-cost' && (
+            <IncomeCostView
+              scenarios={incomeCostScenarios}
+              lines={incomeCostLines}
+              storageError={incomeCostError}
+              upsertLine={upsertLine}
+              removeLine={removeLine}
+              addLine={addLine}
+              addScenario={addScenario}
+              renameScenario={renameScenario}
+              removeScenario={removeScenario}
+              reorderScenariosByIds={reorderScenariosByIds}
+              copyScenario={copyScenario}
+            />
+          )}
           {tab === 'pension-funds' && <PlaceholderView title="Pension / Funds" />}
         </main>
       </div>

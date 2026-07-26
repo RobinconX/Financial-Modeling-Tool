@@ -94,6 +94,43 @@ export type AppTab =
 /** Portfolio display currency (storage remains USD-based). */
 export type DisplayCurrency = 'USD' | 'CHF'
 
+// --- Income / Cost (amounts always stored in CHF) ---
+
+export type CashflowKind = 'income' | 'cost'
+export type CashflowCadence = 'recurring' | 'one-time'
+export type MoneyEditField = 'monthly' | 'yearly'
+
+/** Named budget scenario (not necessarily a calendar year). */
+export type CashflowScenario = {
+  id: string
+  name: string
+  /** Lower = earlier in the top bar */
+  sortOrder: number
+}
+
+export type CashflowLine = {
+  id: string
+  scenarioId: string
+  kind: CashflowKind
+  /** Short label (e.g. taxes, groceries, salary) */
+  name: string
+  /** Longer text; shown on hover of the name */
+  detail?: string
+  cadence: CashflowCadence
+  /**
+   * Recurring: annual CHF amount (source of truth; monthly = yearly / 12).
+   * One-time: single CHF amount for this scenario.
+   */
+  yearlyAmount: number
+  lastEdited?: MoneyEditField
+}
+
+export type IncomeCostState = {
+  version: 2
+  scenarios: CashflowScenario[]
+  lines: CashflowLine[]
+}
+
 /** Payload to load a scenario into an analyzer panel */
 export type AnalyzerLoadState = {
   symbol: string
