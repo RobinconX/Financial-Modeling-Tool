@@ -7,6 +7,7 @@ import { useSavedPortfolios } from './hooks/useSavedPortfolios'
 import { useAutoQuoteRefresh } from './hooks/useAutoQuoteRefresh'
 import { useIncomeCost } from './hooks/useIncomeCost'
 import { IncomeCostView } from './components/income-cost/IncomeCostView'
+import { SavingsView } from './components/savings/SavingsView'
 import type { AnalyzerLoadState, AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
@@ -18,7 +19,7 @@ const ALL_TABS: AppTab[] = [
   'portfolio',
   'overview',
   'income-cost',
-  'pension-funds',
+  'savings',
 ]
 
 function readNavCollapsed(): boolean {
@@ -32,6 +33,8 @@ function readNavCollapsed(): boolean {
 function readAppTab(): AppTab {
   try {
     const v = localStorage.getItem(APP_TAB_KEY)
+    // Migrate renamed tab id
+    if (v === 'pension-funds') return 'savings'
     if (v && (ALL_TABS as string[]).includes(v)) return v as AppTab
   } catch {
     /* ignore */
@@ -45,7 +48,7 @@ const NAV_MARKS: Record<AppTab, string> = {
   portfolio: 'P',
   overview: 'O',
   'income-cost': 'I',
-  'pension-funds': 'F',
+  savings: 'V',
 }
 
 type NavItem = {
@@ -82,9 +85,9 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
     title: 'Income / Cost',
     subtitle: 'Income streams and cost positions by year (CHF).',
   },
-  'pension-funds': {
-    title: 'Pension / Funds',
-    subtitle: 'Pension and fund allocations.',
+  savings: {
+    title: 'Savings',
+    subtitle: 'Balances, contributions, and compound projections (CHF).',
   },
 }
 
@@ -187,7 +190,7 @@ export default function App() {
       items: [
         { id: 'overview', label: 'Overview' },
         { id: 'income-cost', label: 'Income / Cost' },
-        { id: 'pension-funds', label: 'Pension / Funds' },
+        { id: 'savings', label: 'Savings' },
       ],
     },
   ]
@@ -386,7 +389,7 @@ export default function App() {
               copyScenario={copyScenario}
             />
           )}
-          {tab === 'pension-funds' && <PlaceholderView title="Pension / Funds" />}
+          {tab === 'savings' && <SavingsView />}
         </main>
       </div>
     </div>

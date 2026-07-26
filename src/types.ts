@@ -89,7 +89,7 @@ export type AppTab =
   | 'portfolio'
   | 'overview'
   | 'income-cost'
-  | 'pension-funds'
+  | 'savings'
 
 /** Portfolio display currency (storage remains USD-based). */
 export type DisplayCurrency = 'USD' | 'CHF'
@@ -129,6 +129,34 @@ export type IncomeCostState = {
   version: 2
   scenarios: CashflowScenario[]
   lines: CashflowLine[]
+}
+
+// --- Savings (amounts always stored in CHF; end-of-month balances) ---
+
+/** How often the contribution amount is deposited (compounding is always yearly Dec→Jan). */
+export type SavingsCadence = 'monthly' | 'yearly'
+
+export type SavingsAccount = {
+  id: string
+  name: string
+  /**
+   * Actual end-of-month balances by period key ('YYYY-MM').
+   * Only keys ≤ current period are used as actuals; future keys ignored.
+   */
+  actuals: Record<string, number>
+  /** Contribution amount per contribution period (CHF) */
+  contribution: number
+  /** monthly = every month; yearly = once a year in January (after compound) */
+  cadence: SavingsCadence
+  /** Annual compounding rate in percent (applied Dec→Jan only), e.g. 3.5 */
+  annualRatePercent: number
+  /** Lower = earlier in the table */
+  sortOrder: number
+}
+
+export type SavingsState = {
+  version: 1
+  accounts: SavingsAccount[]
 }
 
 /** Payload to load a scenario into an analyzer panel */
