@@ -7,8 +7,8 @@ import type {
   SavedScenario,
   ValuationBasis,
   YearProjection,
-} from '../types'
-import { fetchQuoteClient } from '../lib/quote'
+} from '../../types'
+import { fetchQuoteClient } from '../../lib/quote'
 import {
   buildAdvancedProjections,
   buildChartSeries,
@@ -16,23 +16,23 @@ import {
   newEasyProjection,
   newYearProjection,
   pickHeroRow,
-} from '../lib/valuation'
-import { formatMoney, formatPrice } from '../lib/format'
+} from '../../lib/valuation'
+import { formatMoney, formatPrice } from '../../lib/format'
 import {
   impliedSharePrice,
   marketCapFromSharePrice,
   resolveSharesOutstanding,
-} from '../lib/sharePrice'
+} from '../../lib/sharePrice'
 import { TickerSearch } from './TickerSearch'
-import { ModeToggle } from './ModeToggle'
+import { ModeToggle } from '../common/ModeToggle'
 import { EasyInputs } from './EasyInputs'
 import { AdvancedInputs } from './AdvancedInputs'
 import { RoiHero } from './RoiHero'
-import { MarketCapChart } from './MarketCapChart'
+import { MarketCapChart } from '../charts/MarketCapChart'
 import { ProjectionTable } from './ProjectionTable'
-import { MoneyInput } from './MoneyInput'
+import { MoneyInput } from '../common/MoneyInput'
 import { SaveScenarioButton } from './SaveScenarioButton'
-import { FullscreenChart } from './FullscreenChart'
+import { FullscreenChart } from '../common/FullscreenChart'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 

@@ -1,6 +1,6 @@
 import { useState, type FormEvent } from 'react'
-import { formatMoney, formatPrice } from '../lib/format'
-import type { Quote } from '../types'
+import { formatMoney, formatPrice } from '../../lib/format'
+import type { Quote } from '../../types'
 
 type Props = {
   quote: Quote | null

@@ -1,4 +1,4 @@
-import type { YearProjection } from '../types'
+import type { YearProjection } from '../../types'
 import {
   buildAdvancedProjections,
   equityValueAfterDilution,
@@ -8,16 +8,16 @@ import {
   newYearProjection,
   normalizeDilution,
   sortYearProjections,
-} from '../lib/valuation'
+} from '../../lib/valuation'
 import {
   cleanMoneyAmount,
   formatMoney,
   formatPercent,
   formatPrice,
   parseMoney,
-} from '../lib/format'
-import { formatInputNumber } from './MoneyInput'
-import { impliedSharePrice } from '../lib/sharePrice'
+} from '../../lib/format'
+import { formatInputNumber } from '../common/MoneyInput'
+import { impliedSharePrice } from '../../lib/sharePrice'
 
 type Props = {
   rows: YearProjection[]

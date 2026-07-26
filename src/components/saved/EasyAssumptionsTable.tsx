@@ -1,18 +1,18 @@
-import type { EasyProjection } from '../types'
+import type { EasyProjection } from '../../types'
 import {
   buildEasyProjections,
   newEasyProjection,
   sortEasyProjections,
-} from '../lib/valuation'
+} from '../../lib/valuation'
 import {
   cleanMoneyAmount,
   formatMoney,
   formatPercent,
   formatPrice,
   parseMoney,
-} from '../lib/format'
-import { formatInputNumber } from './MoneyInput'
-import { impliedSharePrice, marketCapFromSharePrice } from '../lib/sharePrice'
+} from '../../lib/format'
+import { formatInputNumber } from '../common/MoneyInput'
+import { impliedSharePrice, marketCapFromSharePrice } from '../../lib/sharePrice'
 
 type Props = {
   rows: EasyProjection[]

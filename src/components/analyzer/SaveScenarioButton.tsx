@@ -1,5 +1,5 @@
 import { useState } from 'react'
-import type { EasyProjection, Quote, SavedScenario, YearProjection } from '../types'
+import type { EasyProjection, Quote, SavedScenario, YearProjection } from '../../types'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 

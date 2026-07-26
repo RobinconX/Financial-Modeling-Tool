@@ -17,7 +17,7 @@
     "erasableSyntaxOnly": true,
     "noFallthroughCasesInSwitch": true,
     "noUncheckedSideEffectImports": true,
-    "types": ["vite/client"]
+    "types": ["vite/client", "vitest/globals"]
   },
-  "include": ["src", "vite.config.ts", "server"]
+  "include": ["src", "vite.config.ts", "server", "tests"]
 }

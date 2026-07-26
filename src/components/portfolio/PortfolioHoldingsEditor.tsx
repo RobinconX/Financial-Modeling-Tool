@@ -6,7 +6,7 @@ import type {
   SavedPortfolio,
   SavedScenario,
   ValuationBasis,
-} from '../types'
+} from '../../types'
 import {
   cashForYear,
   depositInYear,
@@ -17,9 +17,9 @@ import {
   newHolding,
   newOpeningDeposit,
   resolveCurrentPrice,
-} from '../lib/portfolio'
-import { formatMoney, formatPrice, parseMoney } from '../lib/format'
-import { fromDisplay, toDisplay } from '../lib/fx'
+} from '../../lib/portfolio'
+import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
+import { fromDisplay, toDisplay } from '../../lib/fx'
 import { HoldingActionsEditor } from './PortfolioActionsEditor'
 
 type Props = {

@@ -1,13 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react'
-import type { YearProjection } from '../types'
+import type { YearProjection } from '../../types'
 import {
   equityValueAfterDilution,
   newYearProjection,
   sortYearProjections,
-} from '../lib/valuation'
-import { impliedSharePrice } from '../lib/sharePrice'
-import { MoneyInput, NumberInput } from './MoneyInput'
-import { formatMoney, formatMultiple, formatPrice } from '../lib/format'
+} from '../../lib/valuation'
+import { impliedSharePrice } from '../../lib/sharePrice'
+import { MoneyInput, NumberInput } from '../common/MoneyInput'
+import { formatMoney, formatMultiple, formatPrice } from '../../lib/format'
 
 type Props = {
   rows: YearProjection[]

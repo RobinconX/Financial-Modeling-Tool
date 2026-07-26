@@ -1,5 +1,5 @@
 import { useEffect, useState } from 'react'
-import { cleanMoneyAmount, formatMoney, parseMoney } from '../lib/format'
+import { cleanMoneyAmount, formatMoney, parseMoney } from '../../lib/format'
 
 /** Clean number for text inputs — strips float noise (e.g. 399.99999999994 → 400). */
 export function formatInputNumber(value: number, maxDecimals = 6): string {

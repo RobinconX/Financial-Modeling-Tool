@@ -1,6 +1,6 @@
-import { formatMoney } from '../lib/format'
-import { toDisplay } from '../lib/fx'
-import type { DisplayCurrency, PortfolioGrid } from '../types'
+import { formatMoney } from '../../lib/format'
+import { toDisplay } from '../../lib/fx'
+import type { DisplayCurrency, PortfolioGrid } from '../../types'
 
 type Props = {
   grid: PortfolioGrid

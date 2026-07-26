@@ -5,10 +5,10 @@ import type {
   PortfolioHolding,
   SavedPortfolio,
   SavedScenario,
-} from '../types'
-import { getActions, newAction, tradePriceForYear } from '../lib/portfolio'
-import { formatMoney, formatPrice } from '../lib/format'
-import { toDisplay } from '../lib/fx'
+} from '../../types'
+import { getActions, newAction, tradePriceForYear } from '../../lib/portfolio'
+import { formatMoney, formatPrice } from '../../lib/format'
+import { toDisplay } from '../../lib/fx'
 
 type Props = {
   portfolio: SavedPortfolio

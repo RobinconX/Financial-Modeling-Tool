@@ -1,6 +1,6 @@
-import { formatMoney, formatPercent, formatPrice } from '../lib/format'
-import { impliedSharePrice } from '../lib/sharePrice'
-import type { ProjectionRow } from '../types'
+import { formatMoney, formatPercent, formatPrice } from '../../lib/format'
+import { impliedSharePrice } from '../../lib/sharePrice'
+import type { ProjectionRow } from '../../types'
 
 const BASIS_LABEL: Record<string, string> = {
   easy: 'Easy',

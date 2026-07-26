@@ -8,8 +8,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatMoney } from '../lib/format'
-import type { SeriesPoint } from '../types'
+import { formatMoney } from '../../lib/format'
+import type { SeriesPoint } from '../../types'
 
 type Props = {
   data: SeriesPoint[]

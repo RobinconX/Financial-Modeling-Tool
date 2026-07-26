@@ -1,20 +1,20 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { AnalyzerLoadState, SavedScenario, ValuationBasis } from '../types'
-import { fetchQuoteClient } from '../lib/quote'
-import { effectiveMarketCap } from '../lib/sharePrice'
+import type { AnalyzerLoadState, SavedScenario, ValuationBasis } from '../../types'
+import { fetchQuoteClient } from '../../lib/quote'
+import { effectiveMarketCap } from '../../lib/sharePrice'
 import {
   buildAdvancedProjections,
   buildChartSeries,
   buildEasyProjections,
   pickHeroRow,
-} from '../lib/valuation'
-import { formatMoney, formatPrice } from '../lib/format'
+} from '../../lib/valuation'
+import { formatMoney, formatPrice } from '../../lib/format'
 import { ScenarioList } from './ScenarioList'
 import { EasyAssumptionsTable } from './EasyAssumptionsTable'
 import { AdvancedAssumptionsTable } from './AdvancedAssumptionsTable'
-import { RoiHero } from './RoiHero'
-import { MarketCapChart } from './MarketCapChart'
-import { FullscreenChart } from './FullscreenChart'
+import { RoiHero } from '../analyzer/RoiHero'
+import { MarketCapChart } from '../charts/MarketCapChart'
+import { FullscreenChart } from '../common/FullscreenChart'
 
 type Props = {
   scenarios: SavedScenario[]

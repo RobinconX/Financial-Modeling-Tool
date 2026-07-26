@@ -16,14 +16,14 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatMoney } from '../lib/format'
-import { toDisplay } from '../lib/fx'
-import type { DisplayCurrency, PortfolioGrid, SavedPortfolio } from '../types'
+import { formatMoney } from '../../lib/format'
+import { toDisplay } from '../../lib/fx'
+import type { DisplayCurrency, PortfolioGrid, SavedPortfolio } from '../../types'
 import {
   buildPortfolioChartData,
   type PortfolioChartBreakdownRow,
   type PortfolioChartPoint,
-} from '../lib/portfolio'
+} from '../../lib/portfolio'
 
 const HOLDING_COLORS = [
   '#38bdf8',
@@ -46,7 +46,7 @@ const PANEL_EDGE = 8
 type Props = {
   grid: PortfolioGrid
   portfolio: SavedPortfolio
-  scenarios?: import('../types').SavedScenario[]
+  scenarios?: import('../../types').SavedScenario[]
   /** @deprecated use displayCurrency */
   currency?: string
   displayCurrency?: DisplayCurrency

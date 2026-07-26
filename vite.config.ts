@@ -1,3 +1,4 @@
+/// <reference types="vitest/config" />
 import { defineConfig, type Connect, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
@@ -69,4 +70,14 @@ function apiPlugin(): Plugin {
 
 export default defineConfig({
   plugins: [react(), tailwindcss(), apiPlugin()],
+  test: {
+    environment: 'node',
+    include: ['tests/**/*.test.ts'],
+    coverage: {
+      provider: 'v8',
+      reporter: ['text', 'text-summary'],
+      include: ['src/lib/**/*.ts', 'server/**/*.ts'],
+      exclude: ['tests/**'],
+    },
+  },
 })

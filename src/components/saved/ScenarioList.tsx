@@ -1,11 +1,11 @@
-import { formatPercent } from '../lib/format'
-import { effectiveMarketCap } from '../lib/sharePrice'
+import { formatPercent } from '../../lib/format'
+import { effectiveMarketCap } from '../../lib/sharePrice'
 import {
   buildAdvancedProjections,
   buildEasyProjections,
   pickHeroRow,
-} from '../lib/valuation'
-import type { SavedScenario } from '../types'
+} from '../../lib/valuation'
+import type { SavedScenario } from '../../types'
 
 type Group = { symbol: string; scenarios: SavedScenario[] }
 
