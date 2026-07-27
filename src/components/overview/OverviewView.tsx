@@ -57,6 +57,14 @@ export function OverviewView({
   const [chartMode, setChartMode] = useState<ChartMode>('stack')
   /** Scenario ids included in compare line chart (defaults to all). */
   const [compareIds, setCompareIds] = useState<string[]>([])
+  // Draft year inputs so typing multi-digit years doesn't clamp mid-edit
+  const [fromDraft, setFromDraft] = useState(String(startYear))
+  const [toDraft, setToDraft] = useState(String(endYear))
+
+  useEffect(() => {
+    setFromDraft(String(startYear))
+    setToDraft(String(endYear))
+  }, [startYear, endYear, selectedScenarioId])
 
   const loadFx = useCallback(async () => {
     setFxLoading(true)
@@ -106,16 +114,16 @@ export function OverviewView({
     [scenarios, compareIds],
   )
 
-  // Shared axis: union of compared scenarios’ ranges (fallback to active scenario)
-  const compareRange = useMemo(() => {
-    if (compareScenarios.length === 0) {
-      return { startYear, endYear }
-    }
-    return {
-      startYear: Math.min(...compareScenarios.map((s) => s.startYear)),
-      endYear: Math.max(...compareScenarios.map((s) => s.endYear)),
-    }
-  }, [compareScenarios, startYear, endYear])
+  /** Apply year range immediately when both values look like calendar years (spinner or finished typing). */
+  function applyRangeDraft(fromStr: string, toStr: string) {
+    const from = Number(fromStr)
+    const to = Number(toStr)
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return
+    // Avoid clamping partial keystrokes like "20" / "203"
+    if (from < 1000 || from > 9999 || to < 1000 || to > 9999) return
+    if (from === startYear && to === endYear) return
+    setRange(from, to)
+  }
 
   const needsFx =
     chartMode === 'stack'
@@ -129,7 +137,8 @@ export function OverviewView({
       const p = portfolios[0]
       addSeries({
         type: 'portfolio',
-        name: p?.name ?? 'Portfolio',
+        // Default label = selected portfolio name (empty until one exists)
+        name: p?.name?.trim() || '',
         portfolioId: p?.id ?? null,
       })
       return
@@ -138,14 +147,15 @@ export function OverviewView({
       const a = savingsAccounts[0]
       addSeries({
         type: 'savings',
-        name: a?.name?.trim() || 'Savings',
+        name: a?.name?.trim() || '',
         savingsAccountId: a?.id ?? null,
       })
       return
     }
+    // Manual: no default text — grey placeholder only
     addSeries({
       type: 'manual',
-      name: 'Cash',
+      name: '',
       baseChf: 0,
       annualRatePercent: 0,
       baseYear: asOf.getFullYear(),
@@ -286,32 +296,58 @@ export function OverviewView({
                 </button>
               ))}
             </div>
-            {chartMode === 'stack' ? (
-              <>
-                <label className="flex items-center gap-1.5 text-xs text-white/50">
-                  From
-                  <input
-                    className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
-                    type="number"
-                    value={startYear}
-                    onChange={(e) => setRange(Number(e.target.value), endYear)}
-                  />
-                </label>
-                <label className="flex items-center gap-1.5 text-xs text-white/50">
-                  To
-                  <input
-                    className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
-                    type="number"
-                    value={endYear}
-                    onChange={(e) => setRange(startYear, Number(e.target.value))}
-                  />
-                </label>
-              </>
-            ) : (
-              <span className="text-[11px] text-white/40">
-                Years {compareRange.startYear}–{compareRange.endYear} (union of selected)
-              </span>
-            )}
+            <label className="flex items-center gap-1.5 text-xs text-white/50">
+              From
+              <input
+                className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
+                type="number"
+                value={fromDraft}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setFromDraft(v)
+                  applyRangeDraft(v, toDraft)
+                }}
+                onBlur={() => {
+                  const from = Number(fromDraft)
+                  const to = Number(toDraft)
+                  if (!Number.isFinite(from) || !Number.isFinite(to)) {
+                    setFromDraft(String(startYear))
+                    setToDraft(String(endYear))
+                    return
+                  }
+                  setRange(from, to)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
+              />
+            </label>
+            <label className="flex items-center gap-1.5 text-xs text-white/50">
+              To
+              <input
+                className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
+                type="number"
+                value={toDraft}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setToDraft(v)
+                  applyRangeDraft(fromDraft, v)
+                }}
+                onBlur={() => {
+                  const from = Number(fromDraft)
+                  const to = Number(toDraft)
+                  if (!Number.isFinite(from) || !Number.isFinite(to)) {
+                    setFromDraft(String(startYear))
+                    setToDraft(String(endYear))
+                    return
+                  }
+                  setRange(from, to)
+                }}
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                }}
+              />
+            </label>
             <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white/45">
               {OVERVIEW_CURRENCY}
             </span>
@@ -378,6 +414,7 @@ export function OverviewView({
         >
           {chartMode === 'stack' ? (
             <OverviewChart
+              key={`stack-${selectedScenarioId}-${startYear}-${endYear}`}
               startYear={startYear}
               endYear={endYear}
               series={series}
@@ -385,9 +422,10 @@ export function OverviewView({
             />
           ) : (
             <OverviewCompareChart
+              key={`compare-${startYear}-${endYear}-${compareIds.join(',')}`}
               scenarios={compareScenarios}
-              startYear={compareRange.startYear}
-              endYear={compareRange.endYear}
+              startYear={startYear}
+              endYear={endYear}
               deps={deps}
             />
           )}
@@ -403,24 +441,23 @@ export function OverviewView({
         </div>
       </div>
 
-      {chartMode === 'stack' ? (
-        <div className="card p-5">
-          <OverviewSeriesEditor
-            series={series}
-            portfolios={portfolios}
-            savingsAccounts={savingsAccounts}
-            onAdd={handleAdd}
-            onUpdate={updateSeries}
-            onToggle={toggleSeries}
-            onRemove={removeSeries}
-          />
-        </div>
-      ) : (
-        <div className="card p-4 text-sm text-white/45">
-          Switch to <span className="text-white/70">Stacked</span> to edit asset series for the
-          selected scenario. Compare mode plots each scenario’s total only.
-        </div>
-      )}
+      <div className="card p-5">
+        {chartMode === 'compare' && selectedScenario ? (
+          <p className="mb-3 text-xs text-white/40">
+            Editing series for <span className="text-white/75">{selectedScenario.name}</span>
+            — the compare chart uses each scenario’s total (enabled series only).
+          </p>
+        ) : null}
+        <OverviewSeriesEditor
+          series={series}
+          portfolios={portfolios}
+          savingsAccounts={savingsAccounts}
+          onAdd={handleAdd}
+          onUpdate={updateSeries}
+          onToggle={toggleSeries}
+          onRemove={removeSeries}
+        />
+      </div>
     </div>
   )
 }

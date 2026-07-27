@@ -255,12 +255,21 @@ export function clampOverviewRange(
   const maxY = cy + OVERVIEW_MAX_HORIZON_YEARS
   start = Math.min(Math.max(start, minY), maxY)
   end = Math.min(Math.max(end, minY), maxY)
-  if (end < start) end = start
+  // Swap if inverted (don't collapse to a single year)
+  if (end < start) {
+    const t = start
+    start = end
+    end = t
+  }
   return { startYear: start, endYear: end }
 }
 
-export function yearsInRange(startYear: number, endYear: number): number[] {
-  const { startYear: s, endYear: e } = clampOverviewRange(startYear, endYear)
+export function yearsInRange(
+  startYear: number,
+  endYear: number,
+  asOf: Date = new Date(),
+): number[] {
+  const { startYear: s, endYear: e } = clampOverviewRange(startYear, endYear, asOf)
   const out: number[] = []
   for (let y = s; y <= e; y++) out.push(y)
   return out
@@ -392,7 +401,7 @@ export function buildOverviewChartRows(
   deps: OverviewBuildDeps,
 ): OverviewChartRow[] {
   const asOf = deps.asOf ?? new Date()
-  const years = yearsInRange(state.startYear, state.endYear)
+  const years = yearsInRange(state.startYear, state.endYear, asOf)
   const active = enabledSeries(state.series)
 
   return years.map((year) => {
@@ -456,7 +465,7 @@ export function buildOverviewCompareRows(
     start = Math.min(...scenarios.map((s) => s.startYear))
     end = Math.max(...scenarios.map((s) => s.endYear))
   }
-  const years = yearsInRange(start, end)
+  const years = yearsInRange(start, end, asOf)
 
   return years.map((year) => {
     const row: OverviewCompareRow = {

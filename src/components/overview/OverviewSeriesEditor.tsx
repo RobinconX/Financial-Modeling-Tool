@@ -87,7 +87,7 @@ export function OverviewSeriesEditor({
                     checked={s.enabled}
                     onChange={() => onToggle(s.id)}
                     title={s.enabled ? 'Included in chart' : 'Excluded from chart'}
-                    aria-label={`Include ${s.name}`}
+                    aria-label={`Include ${s.name.trim() || sourceLabel(s.type)}`}
                   />
                   <span className="rounded-md bg-white/5 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-white/45">
                     {sourceLabel(s.type)}
@@ -101,7 +101,13 @@ export function OverviewSeriesEditor({
                       className="input !py-1.5 !text-xs"
                       value={s.name}
                       onChange={(e) => onUpdate(s.id, { name: e.target.value })}
-                      placeholder="Series name"
+                      placeholder={
+                        s.type === 'manual'
+                          ? 'Series name'
+                          : s.type === 'portfolio'
+                            ? 'Portfolio name'
+                            : 'Account name'
+                      }
                     />
                   </div>
 
@@ -160,7 +166,7 @@ export function OverviewSeriesEditor({
                           const p = portfolios.find((x) => x.id === id)
                           onUpdate(s.id, {
                             portfolioId: id,
-                            name: s.name.trim() ? s.name : p?.name || 'Portfolio',
+                            name: p?.name?.trim() || '',
                           })
                         }}
                       >
@@ -185,7 +191,7 @@ export function OverviewSeriesEditor({
                           const a = savingsAccounts.find((x) => x.id === id)
                           onUpdate(s.id, {
                             savingsAccountId: id,
-                            name: s.name.trim() ? s.name : a?.name || 'Savings',
+                            name: a?.name?.trim() || '',
                           })
                         }}
                       >

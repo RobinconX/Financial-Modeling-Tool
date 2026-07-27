@@ -35,9 +35,10 @@ describe('range helpers', () => {
     expect(yearsInRange(2026, 2028)).toEqual([2026, 2027, 2028])
   })
 
-  it('clamps inverted range', () => {
+  it('swaps inverted range instead of collapsing', () => {
     const r = clampOverviewRange(2030, 2026, asOf)
-    expect(r.startYear).toBeLessThanOrEqual(r.endYear)
+    expect(r.startYear).toBe(2026)
+    expect(r.endYear).toBe(2030)
   })
 
   it('yearKind actual vs projected', () => {

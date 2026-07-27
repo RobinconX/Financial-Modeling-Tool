@@ -1,4 +1,11 @@
-import { useMemo, useState } from 'react'
+import {
+  useEffect,
+  useLayoutEffect,
+  useMemo,
+  useRef,
+  useState,
+  type CSSProperties,
+} from 'react'
 import {
   Bar,
   BarChart,
@@ -22,6 +29,11 @@ import {
 } from '../../lib/overview'
 import type { OverviewSeries } from '../../types'
 
+const PANEL_WIDTH = 260
+const PANEL_GAP = 12
+const PANEL_TOP = 8
+const PANEL_EDGE = 8
+
 type Props = {
   startYear: number
   endYear: number
@@ -33,6 +45,7 @@ type Props = {
 type HoverState = {
   year: number
   kind: 'actual' | 'projected'
+  barX: number
   stacks: { id: string; name: string; type: OverviewSeries['type']; value: number }[]
   total: number
   portfolios: {
@@ -43,6 +56,40 @@ type HoverState = {
   }[]
 }
 
+/**
+ * Place tooltip beside the bar, preferring the side toward chart center.
+ * Left-half bars → panel to the right; right-half bars → panel to the left.
+ */
+function computePanelStyle(barX: number, areaW: number, areaH: number): CSSProperties {
+  const w = areaW > 0 ? areaW : 640
+  const h = areaH > 0 ? areaH : 320
+  const panelW = Math.min(PANEL_WIDTH, Math.max(200, w - PANEL_EDGE * 2))
+  const mid = w / 2
+
+  let left: number
+  if (barX < mid) {
+    // Bar on left → open toward center (right of bar)
+    left = barX + PANEL_GAP
+    if (left + panelW > w - PANEL_EDGE) {
+      left = barX - panelW - PANEL_GAP
+    }
+  } else {
+    // Bar on right → open toward center (left of bar)
+    left = barX - panelW - PANEL_GAP
+    if (left < PANEL_EDGE) {
+      left = barX + PANEL_GAP
+    }
+  }
+  left = Math.max(PANEL_EDGE, Math.min(left, w - panelW - PANEL_EDGE))
+
+  return {
+    left,
+    top: PANEL_TOP,
+    width: panelW,
+    maxHeight: Math.max(140, h - PANEL_TOP - PANEL_EDGE),
+  }
+}
+
 export function OverviewChart({
   startYear,
   endYear,
@@ -51,6 +98,12 @@ export function OverviewChart({
   fillContainer = false,
 }: Props) {
   const [hover, setHover] = useState<HoverState | null>(null)
+  const chartAreaRef = useRef<HTMLDivElement>(null)
+  const panelRef = useRef<HTMLDivElement>(null)
+  const [areaSize, setAreaSize] = useState({ w: 0, h: 0 })
+  const overChartRef = useRef(false)
+  const overPanelRef = useRef(false)
+  const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
   const active = useMemo(
     () => series.filter((s) => s.enabled).sort((a, b) => a.sortOrder - b.sortOrder),
@@ -64,7 +117,42 @@ export function OverviewChart({
 
   const colorById = useMemo(() => assignOverviewSeriesColors(series), [series])
 
-  function hoverFromRow(row: OverviewChartRow): HoverState | null {
+  useLayoutEffect(() => {
+    const el = chartAreaRef.current
+    if (!el) return
+    const update = () => {
+      const r = el.getBoundingClientRect()
+      setAreaSize({ w: r.width, h: r.height })
+    }
+    update()
+    const ro = new ResizeObserver(update)
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [fillContainer, rows.length])
+
+  useEffect(() => {
+    return () => {
+      if (clearTimerRef.current) clearTimeout(clearTimerRef.current)
+    }
+  }, [])
+
+  function scheduleClear() {
+    if (clearTimerRef.current) clearTimeout(clearTimerRef.current)
+    clearTimerRef.current = setTimeout(() => {
+      if (!overChartRef.current && !overPanelRef.current) {
+        setHover(null)
+      }
+    }, 80)
+  }
+
+  function cancelClear() {
+    if (clearTimerRef.current) {
+      clearTimeout(clearTimerRef.current)
+      clearTimerRef.current = null
+    }
+  }
+
+  function hoverFromRow(row: OverviewChartRow, barX: number): HoverState {
     const stacks: HoverState['stacks'] = []
     const portfolios: HoverState['portfolios'] = []
     let total = 0
@@ -92,35 +180,22 @@ export function OverviewChart({
       }
     }
 
-    if (stacks.length === 0) {
-      // Still show year with total 0 so user sees something on hover
-      return {
-        year: row.year,
-        kind: row.kind,
-        stacks: [],
-        total: 0,
-        portfolios: [],
-      }
-    }
-
     return {
       year: row.year,
       kind: row.kind,
+      barX,
       stacks,
       total,
       portfolios,
     }
   }
 
-  /**
-   * Recharts 3 mouse state: use isTooltipActive + activeLabel / activeTooltipIndex
-   * (same as PortfolioChart). Do not rely on activePayload.
-   */
   function resolveHover(state: {
     isTooltipActive?: boolean
     activeLabel?: string | number
     activeTooltipIndex?: number | string | unknown
     activeIndex?: number | string | unknown
+    activeCoordinate?: { x?: number; y?: number }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     activePayload?: any[]
   }): HoverState | null {
@@ -144,7 +219,6 @@ export function OverviewChart({
           : -1
     const byIndex = idx >= 0 ? rows[idx] : undefined
 
-    // Fallback: payload payload (some recharts versions)
     let byPayload: OverviewChartRow | undefined
     const p0 = state.activePayload?.[0]?.payload
     if (p0 && typeof p0 === 'object' && typeof (p0 as OverviewChartRow).year === 'number') {
@@ -153,8 +227,16 @@ export function OverviewChart({
 
     const row = byLabel ?? byIndex ?? byPayload
     if (!row) return null
-    return hoverFromRow(row)
+
+    const barX =
+      typeof state.activeCoordinate?.x === 'number' ? state.activeCoordinate.x : areaSize.w / 2
+
+    return hoverFromRow(row, barX)
   }
+
+  const panelStyle = hover
+    ? computePanelStyle(hover.barX, areaSize.w, areaSize.h)
+    : null
 
   if (active.length === 0) {
     return (
@@ -179,21 +261,31 @@ export function OverviewChart({
       }
     >
       <div
+        ref={chartAreaRef}
         className={
           fillContainer
-            ? 'relative min-h-0 w-full flex-1'
-            : 'relative h-80 w-full min-h-[20rem]'
+            ? 'relative min-h-0 w-full flex-1 overflow-hidden'
+            : 'relative h-80 w-full min-h-[20rem] overflow-hidden'
         }
-        onMouseLeave={() => setHover(null)}
+        onMouseEnter={() => {
+          overChartRef.current = true
+          cancelClear()
+        }}
+        onMouseLeave={() => {
+          overChartRef.current = false
+          scheduleClear()
+        }}
       >
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
           <BarChart
             data={rows}
             margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
             onMouseMove={(state) => {
-              setHover(resolveHover(state as Parameters<typeof resolveHover>[0]))
+              overChartRef.current = true
+              cancelClear()
+              const next = resolveHover(state as Parameters<typeof resolveHover>[0])
+              setHover(next)
             }}
-            onMouseLeave={() => setHover(null)}
           >
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
@@ -213,7 +305,6 @@ export function OverviewChart({
                 return String(v)
               }}
             />
-            {/* Required so isTooltipActive stays true on hover (Recharts 3) */}
             <Tooltip
               content={() => null}
               cursor={{ fill: 'rgba(255,255,255,0.06)' }}
@@ -240,9 +331,21 @@ export function OverviewChart({
           </BarChart>
         </ResponsiveContainer>
 
-        {/* Compact totals panel — chart-local, not clipped by page below */}
-        {hover ? (
-          <div className="pointer-events-none absolute right-2 top-2 z-30 w-[15.5rem] rounded-xl border border-white/10 bg-[#121820]/95 px-3 py-2 text-xs shadow-2xl backdrop-blur-sm">
+        {hover && panelStyle ? (
+          <div
+            ref={panelRef}
+            className="absolute z-30 overflow-y-auto rounded-xl border border-white/10 bg-[#121820]/95 px-3 py-2 text-xs shadow-2xl backdrop-blur-sm outline-none"
+            style={panelStyle}
+            tabIndex={-1}
+            onMouseEnter={() => {
+              overPanelRef.current = true
+              cancelClear()
+            }}
+            onMouseLeave={() => {
+              overPanelRef.current = false
+              scheduleClear()
+            }}
+          >
             <div className="flex items-center gap-2 font-semibold text-white">
               <span>{hover.year}</span>
               {hover.kind === 'projected' ? (
@@ -255,8 +358,9 @@ export function OverviewChart({
                 </span>
               )}
             </div>
+
             {hover.stacks.length > 0 ? (
-              <div className="mt-1.5 max-h-40 space-y-0.5 overflow-y-auto">
+              <div className="mt-1.5 space-y-0.5">
                 {hover.stacks.map((st) => (
                   <div key={st.id} className="flex justify-between gap-3">
                     <span className="inline-flex min-w-0 items-center gap-1.5 text-white/60">
@@ -264,7 +368,9 @@ export function OverviewChart({
                         className="h-2 w-2 shrink-0 rounded-sm"
                         style={{ background: colorById.get(st.id) ?? '#94a3b8' }}
                       />
-                      <span className="truncate">{st.name}</span>
+                      <span className="truncate">
+                        {st.name.trim() || sourceLabel(st.type)}
+                      </span>
                       <span className="shrink-0 text-white/30">({sourceLabel(st.type)})</span>
                     </span>
                     <span className="shrink-0 tabular-nums text-white/90">
@@ -276,63 +382,63 @@ export function OverviewChart({
             ) : (
               <p className="mt-1.5 text-white/40">No values this year</p>
             )}
+
             <div className="mt-1.5 flex justify-between border-t border-white/10 pt-1.5 font-medium">
               <span className="text-white/50">Total</span>
               <span className="tabular-nums text-emerald-400/90">
                 {formatMoney(hover.total, OVERVIEW_CURRENCY)}
               </span>
             </div>
-            {hover.portfolios.length > 0 ? (
-              <p className="mt-1.5 text-[10px] text-white/35">Portfolio details below chart</p>
-            ) : null}
+
+            {/* Portfolio breakdown in the same floating panel, scrollable */}
+            {hover.portfolios.map((p) => (
+              <div
+                key={p.seriesId}
+                className="mt-2 border-t border-white/10 pt-2"
+              >
+                <div className="mb-1 flex items-center justify-between gap-2 font-medium text-white/80">
+                  <span className="inline-flex items-center gap-1.5">
+                    <span
+                      className="h-2 w-2 rounded-sm"
+                      style={{ background: colorById.get(p.seriesId) ?? '#34d399' }}
+                    />
+                    {p.name.trim() || 'Portfolio'}
+                  </span>
+                  <span className="tabular-nums text-white/70">
+                    {formatMoney(p.total, OVERVIEW_CURRENCY)}
+                  </span>
+                </div>
+                <ul className="max-h-28 space-y-0.5 overflow-y-auto">
+                  {p.lines.map((line, i) => (
+                    <li
+                      key={`${p.seriesId}-${line.label}-${i}`}
+                      className="flex justify-between gap-3 text-[11px]"
+                    >
+                      <span
+                        className={
+                          line.kind === 'cash'
+                            ? 'text-white/40'
+                            : 'min-w-0 truncate text-white/50'
+                        }
+                        title={line.label}
+                      >
+                        {line.label}
+                      </span>
+                      <span
+                        className={`shrink-0 tabular-nums ${
+                          line.valueChf < 0 ? 'text-red-300/80' : 'text-white/65'
+                        }`}
+                      >
+                        {formatMoney(line.valueChf, OVERVIEW_CURRENCY)}
+                      </span>
+                    </li>
+                  ))}
+                </ul>
+              </div>
+            ))}
           </div>
         ) : null}
       </div>
-
-      {/* Portfolio holdings — separate from compact totals */}
-      {hover && hover.portfolios.length > 0 ? (
-        <div className="relative z-20 mt-3 space-y-2">
-          {hover.portfolios.map((p) => (
-            <div
-              key={p.seriesId}
-              className="rounded-xl border border-white/10 bg-[#121820]/90 px-3 py-2 text-xs shadow-xl"
-            >
-              <div className="flex flex-wrap items-center justify-between gap-2">
-                <div className="inline-flex items-center gap-1.5 font-semibold text-white">
-                  <span
-                    className="h-2.5 w-2.5 rounded-sm"
-                    style={{ background: colorById.get(p.seriesId) ?? '#34d399' }}
-                  />
-                  {p.name}
-                  <span className="font-normal text-white/40">· portfolio · {hover.year}</span>
-                </div>
-                <span className="tabular-nums font-medium text-emerald-400/90">
-                  {formatMoney(p.total, OVERVIEW_CURRENCY)}
-                </span>
-              </div>
-              <ul className="mt-1.5 max-h-36 space-y-0.5 overflow-y-auto border-t border-white/10 pt-1.5">
-                {p.lines.map((line, i) => (
-                  <li
-                    key={`${p.seriesId}-${line.label}-${i}`}
-                    className="flex justify-between gap-4 text-[11px]"
-                  >
-                    <span className={line.kind === 'cash' ? 'text-white/45' : 'text-white/55'}>
-                      {line.label}
-                    </span>
-                    <span
-                      className={`shrink-0 tabular-nums ${
-                        line.valueChf < 0 ? 'text-red-300/80' : 'text-white/75'
-                      }`}
-                    >
-                      {formatMoney(line.valueChf, OVERVIEW_CURRENCY)}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </div>
-          ))}
-        </div>
-      ) : null}
 
       <div className="mt-3 flex flex-wrap items-center gap-x-4 gap-y-2">
         {active.map((s) => (
@@ -341,12 +447,12 @@ export function OverviewChart({
               className="h-2.5 w-2.5 rounded-sm"
               style={{ background: colorById.get(s.id) ?? '#94a3b8' }}
             />
-            {s.name}
+            {s.name.trim() || sourceLabel(s.type)}
             <span className="text-white/30">· {sourceLabel(s.type)}</span>
           </span>
         ))}
         <span className="text-[10px] text-white/30">
-          Hover a bar for year totals (top-right); portfolio holdings list under the chart
+          Hover a bar for totals next to it · portfolio holdings scroll inside the panel
         </span>
       </div>
     </div>

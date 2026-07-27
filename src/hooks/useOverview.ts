@@ -10,19 +10,24 @@ import {
 import { loadOverview, saveOverview, OVERVIEW_STORAGE_KEY } from '../lib/overviewStorage'
 
 export function useOverview() {
-  const initial = loadOverview()
-  const [state, setState] = useState<OverviewState>(() => initial)
+  const [state, setState] = useState<OverviewState>(() => loadOverview())
   const [error, setError] = useState<string | null>(null)
 
-  const persist = useCallback((next: OverviewState) => {
-    const result = saveOverview(next)
-    if (!result.ok) {
-      setError(result.error)
-      return false
-    }
-    setError(null)
-    setState(next)
-    return true
+  /** Always derive next state from the latest snapshot (avoids stale range edits). */
+  const persistUpdate = useCallback((recipe: (prev: OverviewState) => OverviewState) => {
+    let ok = false
+    setState((prev) => {
+      const next = recipe(prev)
+      const result = saveOverview(next)
+      if (!result.ok) {
+        setError(result.error)
+        return prev
+      }
+      setError(null)
+      ok = true
+      return next
+    })
+    return ok
   }, [])
 
   useEffect(() => {
@@ -51,62 +56,76 @@ export function useOverview() {
 
   const updateScenario = useCallback(
     (id: string, patch: Partial<OverviewScenario>) => {
-      const next = state.scenarios.map((s) => {
-        if (s.id !== id) return s
-        const merged = { ...s, ...patch, id: s.id }
-        if (patch.startYear != null || patch.endYear != null) {
-          const range = clampOverviewRange(merged.startYear, merged.endYear)
-          merged.startYear = range.startYear
-          merged.endYear = range.endYear
-        }
-        return merged
+      return persistUpdate((prev) => {
+        const scenarios = prev.scenarios.map((s) => {
+          if (s.id !== id) return s
+          const merged = { ...s, ...patch, id: s.id }
+          if (patch.startYear != null || patch.endYear != null) {
+            const range = clampOverviewRange(merged.startYear, merged.endYear)
+            merged.startYear = range.startYear
+            merged.endYear = range.endYear
+          }
+          return merged
+        })
+        return { ...prev, scenarios }
       })
-      return persist({ ...state, scenarios: next })
     },
-    [persist, state],
+    [persistUpdate],
   )
 
   const selectScenario = useCallback(
     (id: string) => {
-      if (!state.scenarios.some((s) => s.id === id)) return false
-      return persist({ ...state, selectedScenarioId: id })
+      return persistUpdate((prev) => {
+        if (!prev.scenarios.some((s) => s.id === id)) return prev
+        return { ...prev, selectedScenarioId: id }
+      })
     },
-    [persist, state],
+    [persistUpdate],
   )
 
   const addScenario = useCallback(
     (name?: string) => {
-      const maxOrder = state.scenarios.reduce((m, s) => Math.max(m, s.sortOrder), -1)
-      const sc = newOverviewScenario(name ?? `Scenario ${state.scenarios.length + 1}`, maxOrder + 1)
-      return persist({
-        ...state,
-        scenarios: [...state.scenarios, sc],
-        selectedScenarioId: sc.id,
+      let created: OverviewScenario | null = null
+      persistUpdate((prev) => {
+        const maxOrder = prev.scenarios.reduce((m, s) => Math.max(m, s.sortOrder), -1)
+        const sc = newOverviewScenario(
+          name ?? `Scenario ${prev.scenarios.length + 1}`,
+          maxOrder + 1,
+        )
+        created = sc
+        return {
+          ...prev,
+          scenarios: [...prev.scenarios, sc],
+          selectedScenarioId: sc.id,
+        }
       })
-        ? sc
-        : null
+      return created
     },
-    [persist, state],
+    [persistUpdate],
   )
 
-  /** Save current series/range under a new scenario name (copy). */
   const saveAsScenario = useCallback(
     (name: string) => {
-      if (!selected) return null
-      const maxOrder = state.scenarios.reduce((m, s) => Math.max(m, s.sortOrder), -1)
-      const sc = newOverviewScenario(name, maxOrder + 1)
-      sc.startYear = selected.startYear
-      sc.endYear = selected.endYear
-      sc.series = cloneSeriesList(selected.series)
-      return persist({
-        ...state,
-        scenarios: [...state.scenarios, sc],
-        selectedScenarioId: sc.id,
+      let created: OverviewScenario | null = null
+      persistUpdate((prev) => {
+        const sel =
+          prev.scenarios.find((s) => s.id === prev.selectedScenarioId) ?? prev.scenarios[0]
+        if (!sel) return prev
+        const maxOrder = prev.scenarios.reduce((m, s) => Math.max(m, s.sortOrder), -1)
+        const sc = newOverviewScenario(name, maxOrder + 1)
+        sc.startYear = sel.startYear
+        sc.endYear = sel.endYear
+        sc.series = cloneSeriesList(sel.series)
+        created = sc
+        return {
+          ...prev,
+          scenarios: [...prev.scenarios, sc],
+          selectedScenarioId: sc.id,
+        }
       })
-        ? sc
-        : null
+      return created
     },
-    [persist, selected, state],
+    [persistUpdate],
   )
 
   const renameScenario = useCallback(
@@ -116,29 +135,32 @@ export function useOverview() {
 
   const removeScenario = useCallback(
     (id: string) => {
-      if (state.scenarios.length <= 1) return false
-      const next = state.scenarios.filter((s) => s.id !== id)
-      const selectedScenarioId =
-        state.selectedScenarioId === id ? next[0]!.id : state.selectedScenarioId
-      return persist({ ...state, scenarios: next, selectedScenarioId })
+      return persistUpdate((prev) => {
+        if (prev.scenarios.length <= 1) return prev
+        const scenarios = prev.scenarios.filter((s) => s.id !== id)
+        const selectedScenarioId =
+          prev.selectedScenarioId === id ? scenarios[0]!.id : prev.selectedScenarioId
+        return { ...prev, scenarios, selectedScenarioId }
+      })
     },
-    [persist, state],
+    [persistUpdate],
   )
 
   const setRange = useCallback(
     (startYear: number, endYear: number) => {
-      if (!selected) return false
-      return updateScenario(selected.id, { startYear, endYear })
+      return persistUpdate((prev) => {
+        const id = prev.selectedScenarioId ?? prev.scenarios[0]?.id
+        if (!id) return prev
+        const range = clampOverviewRange(startYear, endYear)
+        const scenarios = prev.scenarios.map((s) =>
+          s.id === id
+            ? { ...s, startYear: range.startYear, endYear: range.endYear }
+            : s,
+        )
+        return { ...prev, scenarios }
+      })
     },
-    [selected, updateScenario],
-  )
-
-  const patchActiveSeries = useCallback(
-    (series: OverviewSeries[]) => {
-      if (!selected) return false
-      return updateScenario(selected.id, { series })
-    },
-    [selected, updateScenario],
+    [persistUpdate],
   )
 
   const addSeries = useCallback(
@@ -146,40 +168,77 @@ export function useOverview() {
       partial: Omit<OverviewSeries, 'id' | 'sortOrder' | 'enabled'> &
         Partial<Pick<OverviewSeries, 'enabled'>>,
     ) => {
-      if (!selected) return null
-      const maxOrder = selected.series.reduce((m, s) => Math.max(m, s.sortOrder), -1)
-      const series = newOverviewSeries(partial, maxOrder + 1)
-      const ok = patchActiveSeries([...selected.series, series])
-      return ok ? series : null
+      let created: OverviewSeries | null = null
+      persistUpdate((prev) => {
+        const id = prev.selectedScenarioId ?? prev.scenarios[0]?.id
+        if (!id) return prev
+        const sel = prev.scenarios.find((s) => s.id === id)
+        if (!sel) return prev
+        const maxOrder = sel.series.reduce((m, s) => Math.max(m, s.sortOrder), -1)
+        const series = newOverviewSeries(partial, maxOrder + 1)
+        created = series
+        const scenarios = prev.scenarios.map((s) =>
+          s.id === id ? { ...s, series: [...s.series, series] } : s,
+        )
+        return { ...prev, scenarios }
+      })
+      return created
     },
-    [patchActiveSeries, selected],
+    [persistUpdate],
   )
 
   const updateSeries = useCallback(
     (id: string, patch: Partial<OverviewSeries>) => {
-      if (!selected) return false
-      const next = selected.series.map((s) => (s.id === id ? { ...s, ...patch, id: s.id } : s))
-      return patchActiveSeries(next)
+      return persistUpdate((prev) => {
+        const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
+        if (!sid) return prev
+        const scenarios = prev.scenarios.map((sc) => {
+          if (sc.id !== sid) return sc
+          return {
+            ...sc,
+            series: sc.series.map((s) => (s.id === id ? { ...s, ...patch, id: s.id } : s)),
+          }
+        })
+        return { ...prev, scenarios }
+      })
     },
-    [patchActiveSeries, selected],
+    [persistUpdate],
   )
 
   const removeSeries = useCallback(
     (id: string) => {
-      if (!selected) return false
-      return patchActiveSeries(selected.series.filter((s) => s.id !== id))
+      return persistUpdate((prev) => {
+        const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
+        if (!sid) return prev
+        const scenarios = prev.scenarios.map((sc) =>
+          sc.id === sid
+            ? { ...sc, series: sc.series.filter((s) => s.id !== id) }
+            : sc,
+        )
+        return { ...prev, scenarios }
+      })
     },
-    [patchActiveSeries, selected],
+    [persistUpdate],
   )
 
   const toggleSeries = useCallback(
     (id: string) => {
-      if (!selected) return false
-      return patchActiveSeries(
-        selected.series.map((s) => (s.id === id ? { ...s, enabled: !s.enabled } : s)),
-      )
+      return persistUpdate((prev) => {
+        const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
+        if (!sid) return prev
+        const scenarios = prev.scenarios.map((sc) => {
+          if (sc.id !== sid) return sc
+          return {
+            ...sc,
+            series: sc.series.map((s) =>
+              s.id === id ? { ...s, enabled: !s.enabled } : s,
+            ),
+          }
+        })
+        return { ...prev, scenarios }
+      })
     },
-    [patchActiveSeries, selected],
+    [persistUpdate],
   )
 
   return {

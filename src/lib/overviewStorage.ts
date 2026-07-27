@@ -28,7 +28,8 @@ function normalizeSeries(raw: unknown, index: number): OverviewSeries | null {
   const name = typeof raw.name === 'string' ? raw.name : ''
   const series: OverviewSeries = {
     id: typeof raw.id === 'string' ? raw.id : crypto.randomUUID(),
-    name: name || (type === 'manual' ? 'Cash' : 'Series'),
+    // Allow empty labels (UI shows placeholder); do not force "Cash"/"Series"
+    name,
     enabled: raw.enabled !== false,
     sortOrder: Math.floor(asNumber(raw.sortOrder, index)),
     type,
