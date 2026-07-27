@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef } from 'react'
 import type { SavedPortfolio, SavedScenario } from '../types'
 import { fetchQuoteClient } from '../lib/quote'
+import { resolveSharesOutstanding } from '../lib/sharePrice'
 
 export const QUOTE_REFRESH_MS = 5 * 60 * 1000
 
@@ -46,12 +47,19 @@ export function useAutoQuoteRefresh(
             (s) => s.symbol.toUpperCase() === q.symbol.toUpperCase(),
           )
           for (const s of matches) {
+            const derivedShares = resolveSharesOutstanding({
+              sharesOutstanding: q.sharesOutstanding,
+              marketCap: q.marketCap,
+              price: q.price,
+            })
             updateRef.current(s.id, {
               companyName: q.name,
               currency: q.currency,
               currentPrice: q.price,
-              currentMarketCap: q.marketCap,
-              sharesOutstanding: q.sharesOutstanding,
+              // Keep prior mcap if quote omits it (some symbols return price only)
+              currentMarketCap: q.marketCap ?? s.currentMarketCap,
+              // Never wipe shares with null from a partial quote
+              sharesOutstanding: derivedShares ?? s.sharesOutstanding,
             })
           }
         } catch {

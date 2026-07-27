@@ -19,9 +19,12 @@ import {
 } from './savings'
 import {
   cashAtYear,
-  computeHoldingValues,
   getActions,
+  getPerpetualGrowthRate,
   holdingPositionLabel,
+  holdingValueAtYear,
+  lastStatedProjectionYear,
+  portfolioTotalUsdAtYear as portfolioBookTotalUsdAtYear,
   withResolvedDepositAmounts,
   type DepositResolveContext,
 } from './portfolio'
@@ -213,29 +216,54 @@ export function portfolioBreakdownChfAtYear(
   }
   const resolved = withResolvedDepositAmounts(p, depositCtx)
   const actions = getActions(resolved)
-  const lines: PortfolioBreakdownLine[] = []
+  const last = lastStatedProjectionYear(resolved, deps.stockScenarios, currentYear)
+  const rate = getPerpetualGrowthRate(resolved)
 
-  for (const h of resolved.holdings) {
-    const scenario = h.scenarioId
-      ? (deps.stockScenarios.find((s) => s.id === h.scenarioId) ?? null)
-      : null
-    const map = computeHoldingValues(h, scenario, actions, currentYear)
-    const usd = map.get(year)
-    if (usd == null || !Number.isFinite(usd) || usd === 0) continue
-    lines.push({
-      label: holdingPositionLabel(h, scenario),
-      kind: 'equity',
-      valueChf: toDisplay(usd, 'CHF', deps.usdToChf),
-    })
+  // After last stated year with growth: single compounded total (matches portfolio grid)
+  if (year > last && rate !== 0) {
+    const grown = portfolioBookTotalUsdAtYear(
+      resolved,
+      deps.stockScenarios,
+      year,
+      currentYear,
+    )
+    return [
+      {
+        label: `Growth ${rate}%/yr from ${last}`,
+        kind: 'equity',
+        valueChf: toDisplay(grown, 'CHF', deps.usdToChf),
+      },
+    ]
   }
 
-  const cashUsd = cashAtYear(resolved, year, deps.stockScenarios, currentYear)
-  if (Number.isFinite(cashUsd) && cashUsd !== 0) {
-    lines.push({
-      label: 'Cash',
-      kind: 'cash',
-      valueChf: toDisplay(cashUsd, 'CHF', deps.usdToChf),
-    })
+  const lines: PortfolioBreakdownLine[] = []
+
+  // Match portfolio grid: carry-forward within stated years; no equity after last stated
+  if (year <= last) {
+    for (const h of resolved.holdings) {
+      const scenario = h.scenarioId
+        ? (deps.stockScenarios.find((s) => s.id === h.scenarioId) ?? null)
+        : null
+      const usd = holdingValueAtYear(h, scenario, actions, year, currentYear)
+      if (usd == null || !Number.isFinite(usd) || usd === 0) continue
+      lines.push({
+        label: holdingPositionLabel(h, scenario),
+        kind: 'equity',
+        valueChf: toDisplay(usd, 'CHF', deps.usdToChf),
+      })
+    }
+  }
+
+  // After last stated without growth: cash only (same as portfolio grid)
+  if (year <= last || rate === 0) {
+    const cashUsd = cashAtYear(resolved, year, deps.stockScenarios, currentYear)
+    if (Number.isFinite(cashUsd) && cashUsd !== 0) {
+      lines.push({
+        label: 'Cash',
+        kind: 'cash',
+        valueChf: toDisplay(cashUsd, 'CHF', deps.usdToChf),
+      })
+    }
   }
 
   return lines
@@ -323,6 +351,7 @@ export function savingsValueAtYear(
 /**
  * Whole portfolio total in USD for calendar year Y
  * (equity + cash after deposits/actions), deposits surplus-resolved.
+ * Delegates to portfolio.ts so Overview matches the Portfolio tab exactly.
  */
 export function portfolioTotalUsdAtYear(
   portfolio: SavedPortfolio,
@@ -332,18 +361,7 @@ export function portfolioTotalUsdAtYear(
   currentYear = new Date().getFullYear(),
 ): number {
   const resolved = withResolvedDepositAmounts(portfolio, depositCtx)
-  const actions = getActions(resolved)
-  let equity = 0
-  for (const h of resolved.holdings) {
-    const scenario = h.scenarioId
-      ? (stockScenarios.find((s) => s.id === h.scenarioId) ?? null)
-      : null
-    const map = computeHoldingValues(h, scenario, actions, currentYear)
-    const v = map.get(year)
-    if (v != null && Number.isFinite(v)) equity += v
-  }
-  const cash = cashAtYear(resolved, year, stockScenarios, currentYear)
-  return equity + cash
+  return portfolioBookTotalUsdAtYear(resolved, stockScenarios, year, currentYear)
 }
 
 export function seriesValueChf(

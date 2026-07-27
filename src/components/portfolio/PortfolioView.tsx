@@ -132,6 +132,53 @@ export function PortfolioView({
   }, [portfolios, selectedId])
 
   const selected = portfolios.find((p) => p.id === selectedId) ?? null
+  const currentYear = new Date().getFullYear()
+
+  // Base grid = input years only (for defaults + last stated)
+  const baseGrid = useMemo(() => {
+    if (!selected) return null
+    const resolved = withResolvedDepositAmounts(selected, {
+      incomeCostLines,
+      usdToChf,
+    })
+    return buildPortfolioGrid(resolved, scenarios, currentYear)
+  }, [selected, scenarios, selected?.updatedAt, incomeCostLines, usdToChf, currentYear])
+
+  const lastInputYear = baseGrid?.lastStatedYear ?? currentYear
+  const firstInputYear =
+    baseGrid && baseGrid.years.length > 0 ? baseGrid.years[0]! : currentYear
+
+  // Period picker (defaults to input span; user can extend end to see growth)
+  const [periodFrom, setPeriodFrom] = useState(currentYear)
+  const [periodTo, setPeriodTo] = useState(currentYear)
+  const [fromDraft, setFromDraft] = useState(String(currentYear))
+  const [toDraft, setToDraft] = useState(String(currentYear))
+
+  // Reset period when portfolio or its stated years change
+  useEffect(() => {
+    setPeriodFrom(firstInputYear)
+    setPeriodTo(lastInputYear)
+    setFromDraft(String(firstInputYear))
+    setToDraft(String(lastInputYear))
+  }, [selected?.id, firstInputYear, lastInputYear])
+
+  function applyPeriod(fromStr: string, toStr: string) {
+    const from = Number(fromStr)
+    const to = Number(toStr)
+    if (!Number.isFinite(from) || !Number.isFinite(to)) return
+    if (from < 1000 || from > 9999 || to < 1000 || to > 9999) return
+    let a = Math.floor(from)
+    let b = Math.floor(to)
+    if (b < a) {
+      const t = a
+      a = b
+      b = t
+    }
+    setPeriodFrom(a)
+    setPeriodTo(b)
+    setFromDraft(String(a))
+    setToDraft(String(b))
+  }
 
   const grid = useMemo(() => {
     if (!selected) return null
@@ -139,8 +186,36 @@ export function PortfolioView({
       incomeCostLines,
       usdToChf,
     })
-    return buildPortfolioGrid(resolved, scenarios)
-  }, [selected, scenarios, selected?.updatedAt, incomeCostLines, usdToChf])
+    const throughYear = Math.max(periodTo, lastInputYear)
+    const full = buildPortfolioGrid(resolved, scenarios, currentYear, {
+      throughYear,
+    })
+    // Slice to period picker range
+    const idxs: number[] = []
+    full.years.forEach((y, i) => {
+      if (y >= periodFrom && y <= periodTo) idxs.push(i)
+    })
+    if (idxs.length === 0) return full
+    return {
+      years: idxs.map((i) => full.years[i]!),
+      rows: full.rows.map((r) => ({
+        ...r,
+        values: idxs.map((i) => r.values[i] ?? null),
+      })),
+      totals: idxs.map((i) => full.totals[i] ?? null),
+      lastStatedYear: full.lastStatedYear,
+    }
+  }, [
+    selected,
+    scenarios,
+    selected?.updatedAt,
+    incomeCostLines,
+    usdToChf,
+    currentYear,
+    periodFrom,
+    periodTo,
+    lastInputYear,
+  ])
 
   const canConvert = displayCurrency === 'USD' || (usdToChf != null && usdToChf > 0)
   const activeCurrency: DisplayCurrency = canConvert ? displayCurrency : 'USD'
@@ -402,12 +477,67 @@ export function PortfolioView({
             {grid && (
               <>
                 <div className="card p-5">
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-                    Portfolio value over time
-                  </h3>
+                  <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+                    <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
+                      Portfolio value over time
+                    </h3>
+                    <div className="flex flex-wrap items-center gap-2">
+                      <label className="flex items-center gap-1.5 text-xs text-white/50">
+                        From
+                        <input
+                          className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
+                          type="number"
+                          value={fromDraft}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            setFromDraft(v)
+                            applyPeriod(v, toDraft)
+                          }}
+                          onBlur={() => applyPeriod(fromDraft, toDraft)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                          }}
+                        />
+                      </label>
+                      <label className="flex items-center gap-1.5 text-xs text-white/50">
+                        To
+                        <input
+                          className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
+                          type="number"
+                          value={toDraft}
+                          onChange={(e) => {
+                            const v = e.target.value
+                            setToDraft(v)
+                            applyPeriod(fromDraft, v)
+                          }}
+                          onBlur={() => applyPeriod(fromDraft, toDraft)}
+                          onKeyDown={(e) => {
+                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                          }}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        className="btn-ghost !py-1 !text-[11px]"
+                        title="Reset to years with inputs only"
+                        onClick={() => {
+                          setPeriodFrom(firstInputYear)
+                          setPeriodTo(lastInputYear)
+                          setFromDraft(String(firstInputYear))
+                          setToDraft(String(lastInputYear))
+                        }}
+                      >
+                        Inputs only
+                      </button>
+                    </div>
+                  </div>
+                  <p className="mb-2 text-[11px] text-white/35">
+                    Default: years with deposits, actions, or projections. Extend{' '}
+                    <span className="text-white/50">To</span> to include perpetual growth (green).
+                  </p>
                   <FullscreenChart title="Portfolio value over time">
                     <PortfolioChart
-                      key={`chart-${selected.id}-${selected.updatedAt}-${activeCurrency}-${usdToChf ?? 0}-${grid.rows.map((r) => `${r.key}:${r.label}`).join('|')}`}
+                      key={`chart-${selected.id}-${selected.updatedAt}-${activeCurrency}-${usdToChf ?? 0}-${periodFrom}-${periodTo}-${grid.years.join(',')}`}
                       grid={grid}
                       portfolio={selected}
                       scenarios={scenarios}

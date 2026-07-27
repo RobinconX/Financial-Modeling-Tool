@@ -262,6 +262,18 @@ export type PortfolioDeposit = {
   surplusPercent?: number
 }
 
+/**
+ * Recurring deposit applied every calendar year *after* the last explicit
+ * non-opening deposit year (or after the opening year if no other deposits).
+ */
+export type PerpetualYearlyDeposit = {
+  /** USD when source is fixed; ignored when surplus (computed at resolve time). */
+  amount: number
+  source?: PortfolioDepositSource
+  surplusScenarioId?: string | null
+  surplusPercent?: number
+}
+
 export type PortfolioActionType = 'buy' | 'sell'
 
 /** Planned buy/sell taking effect from `year` onward. */
@@ -295,6 +307,17 @@ export type SavedPortfolio = {
    * Capital contributions by year. First/opening row (isOpening) is current cash.
    */
   deposits: PortfolioDeposit[]
+  /**
+   * Optional amount deposited every year after the last explicit deposit year.
+   * Null/undefined or zero amount = off.
+   */
+  perpetualYearlyDeposit?: PerpetualYearlyDeposit | null
+  /**
+   * Annual % growth applied to the whole portfolio total after the last year
+   * with stated projections (holdings scenarios, overrides, deposits, actions).
+   * 0 / null / undefined = off. Grid/chart extends a fixed default horizon when on.
+   */
+  perpetualGrowthPercent?: number | null
   /** Planned buy/sell trades by year. */
   actions: PortfolioAction[]
   holdings: PortfolioHolding[]
@@ -304,7 +327,7 @@ export type SavedPortfolio = {
 
 export type PortfolioGridRow = {
   key: string
-  kind: 'equity' | 'cash' | 'total'
+  kind: 'equity' | 'cash' | 'total' | 'growth'
   label: string
   holdingId?: string
   /** Parallel to years axis; null = empty cell */
@@ -316,4 +339,6 @@ export type PortfolioGrid = {
   years: number[]
   rows: PortfolioGridRow[]
   totals: (number | null)[]
+  /** Last year with explicit inputs; years after may use perpetual growth. */
+  lastStatedYear?: number
 }

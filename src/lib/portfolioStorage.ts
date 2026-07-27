@@ -1,4 +1,5 @@
 import type {
+  PerpetualYearlyDeposit,
   PortfolioAction,
   PortfolioDeposit,
   PortfolioHolding,
@@ -155,11 +156,32 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     }
   }
 
+  let perpetualYearlyDeposit: PerpetualYearlyDeposit | null = null
+  if (isRecord(raw.perpetualYearlyDeposit)) {
+    const p = raw.perpetualYearlyDeposit
+    const amount = Math.max(0, asNumber(p.amount, 0))
+    const source = p.source === 'surplus' ? 'surplus' : 'fixed'
+    perpetualYearlyDeposit = {
+      amount,
+      source,
+      surplusScenarioId:
+        typeof p.surplusScenarioId === 'string' ? p.surplusScenarioId : null,
+      surplusPercent: Math.max(0, asNumber(p.surplusPercent, 0)),
+    }
+  }
+
+  const perpetualGrowthPercent =
+    raw.perpetualGrowthPercent == null
+      ? null
+      : asNumber(raw.perpetualGrowthPercent, 0)
+
   return normalizePortfolioCashModel({
     id,
     name,
     currentCash,
     deposits,
+    perpetualYearlyDeposit,
+    perpetualGrowthPercent,
     actions,
     holdings,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,

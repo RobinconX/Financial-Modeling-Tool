@@ -12,13 +12,21 @@ import {
   parseMoney,
 } from '../../lib/format'
 import { formatInputNumber } from '../common/MoneyInput'
-import { impliedSharePrice, marketCapFromSharePrice } from '../../lib/sharePrice'
+import {
+  impliedSharePrice,
+  marketCapFromSharePrice,
+  resolveSharesOutstanding,
+} from '../../lib/sharePrice'
 
 type Props = {
   rows: EasyProjection[]
   onChange: (rows: EasyProjection[]) => void
   currentMarketCap: number | null
   sharesOutstanding: number | null
+  /** Live quote price — used to derive shares when sharesOutstanding is missing */
+  currentPrice?: number | null
+  /** Raw quote mcap (before override) — optional; falls back to currentMarketCap */
+  quoteMarketCap?: number | null
   currency?: string
 }
 
@@ -27,6 +35,8 @@ export function EasyAssumptionsTable({
   onChange,
   currentMarketCap,
   sharesOutstanding,
+  currentPrice = null,
+  quoteMarketCap = null,
   currency: _currency = 'USD',
 }: Props) {
   void _currency // Projection tables always display/store USD
@@ -36,6 +46,23 @@ export function EasyAssumptionsTable({
     currentMarketCap != null && currentMarketCap > 0
       ? buildEasyProjections(currentMarketCap, rows, currentYear)
       : []
+
+  // Same as Analyzer: explicit shares, else mcap ÷ price (override or quote mcap)
+  const shares = resolveSharesOutstanding({
+    sharesOutstanding,
+    marketCap: quoteMarketCap ?? currentMarketCap,
+    price: currentPrice,
+    mcapOverride: null,
+  })
+  // If still missing, try effective currentMarketCap (includes override) ÷ price
+  const effectiveShares =
+    shares ??
+    resolveSharesOutstanding({
+      sharesOutstanding: null,
+      marketCap: currentMarketCap,
+      price: currentPrice,
+    })
+  const canEditSharePrice = effectiveShares != null && effectiveShares > 0
 
   function commit(next: EasyProjection[]) {
     onChange(sortEasyProjections(next))
@@ -56,6 +83,15 @@ export function EasyAssumptionsTable({
   function add() {
     const last = sorted.length ? sorted[sorted.length - 1] : null
     commit([...rows, newEasyProjection(last ? last.year + 1 : currentYear + 5)])
+  }
+
+  function setSharePrice(id: string, px: number | null) {
+    if (px == null) {
+      update(id, { projectedMarketCap: null })
+      return
+    }
+    const mcap = marketCapFromSharePrice(px, effectiveShares)
+    if (mcap != null) update(id, { projectedMarketCap: mcap })
   }
 
   return (
@@ -83,7 +119,8 @@ export function EasyAssumptionsTable({
           <tbody>
             {sorted.map((row) => {
               const proj = projections.find((p) => p.year === row.year)
-              const sharePx = impliedSharePrice(proj?.equityValue, sharesOutstanding)
+              // Use stored mcap directly so share price shows even without current mcap / ROI
+              const sharePx = impliedSharePrice(row.projectedMarketCap, effectiveShares)
               return (
                 <tr key={row.id} className="border-t border-white/5">
                   <td className="px-2 py-1.5">
@@ -112,17 +149,10 @@ export function EasyAssumptionsTable({
                     <MoneyCell
                       cellKey={`${row.id}-px`}
                       value={sharePx}
-                      onChange={(px) => {
-                        if (px == null) {
-                          update(row.id, { projectedMarketCap: null })
-                          return
-                        }
-                        const mcap = marketCapFromSharePrice(px, sharesOutstanding)
-                        if (mcap != null) update(row.id, { projectedMarketCap: mcap })
-                      }}
+                      onChange={(px) => setSharePrice(row.id, px)}
                       currency="USD"
                       formatAsPrice
-                      disabled={sharesOutstanding == null}
+                      disabled={!canEditSharePrice}
                     />
                   </td>
                   <td className="px-2 py-1.5 tabular-nums text-white/70">
@@ -154,9 +184,10 @@ export function EasyAssumptionsTable({
           </tbody>
         </table>
       </div>
-      {sharesOutstanding == null && (
-        <p className="text-[11px] text-white/35">
-          Share price needs shares outstanding — use Refresh quote on this scenario.
+      {!canEditSharePrice && (
+        <p className="text-[11px] text-amber-200/80">
+          Share price needs shares outstanding (or live price + market cap so shares ≈ mcap ÷
+          price). Use Refresh quote, or set price and market cap / override.
         </p>
       )}
     </div>

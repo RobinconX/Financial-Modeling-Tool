@@ -1,23 +1,32 @@
 import { describe, expect, it } from 'vitest'
 import {
+  buildPortfolioGrid,
   cashAtYear,
   cashFromDeposits,
   clonePortfolio,
+  compoundWithGrowthAndDeposits,
+  computeHoldingValues,
   getOpeningCash,
+  getPerpetualGrowthRate,
+  getScenarioSharePriceByYear,
+  holdingValueAtYear,
   newAction,
   newHolding,
   newOpeningDeposit,
   newPortfolio,
   normalizePortfolioCashModel,
+  portfolioTotalUsdAtYear,
   resolveDepositAmount,
   sharesAtYear,
   withResolvedDepositAmounts,
 } from '../../src/lib/portfolio'
+import { portfolioTotalUsdAtYear as overviewPortfolioTotalUsdAtYear } from '../../src/lib/overview'
 import type {
   CashflowLine,
   PortfolioAction,
   PortfolioHolding,
   SavedPortfolio,
+  SavedScenario,
 } from '../../src/types'
 
 function basePortfolio(overrides: Partial<SavedPortfolio> = {}): SavedPortfolio {
@@ -83,6 +92,293 @@ describe('opening cash and deposits', () => {
     expect(cashFromDeposits(p, 2026)).toBe(10_000)
     expect(cashFromDeposits(p, 2027)).toBe(12_000)
     expect(cashFromDeposits(p, 2028)).toBe(15_000)
+  })
+
+  it('adds perpetual yearly amount after last explicit deposit', () => {
+    const p = basePortfolio({
+      deposits: [
+        newOpeningDeposit(10_000, 2026),
+        { id: 'd2', year: 2027, amount: 2_000 },
+      ],
+      perpetualYearlyDeposit: { amount: 1_000, source: 'fixed' },
+    })
+    // last explicit = 2027
+    expect(cashFromDeposits(p, 2027)).toBe(12_000)
+    expect(cashFromDeposits(p, 2028)).toBe(13_000) // +1k
+    expect(cashFromDeposits(p, 2030)).toBe(15_000) // +1k × 3
+  })
+})
+
+describe('perpetual growth after last projection', () => {
+  it('extends grid totals with compound growth', () => {
+    const p = basePortfolio({
+      deposits: [newOpeningDeposit(10_000, 2026)],
+      holdings: [],
+      perpetualGrowthPercent: 10,
+    })
+    expect(getPerpetualGrowthRate(p)).toBe(10)
+    // Default: inputs only
+    const base = buildPortfolioGrid(p, [], 2026)
+    expect(base.years).toEqual([2026])
+    // Extend period to see growth
+    const grid = buildPortfolioGrid(p, [], 2026, { throughYear: 2028 })
+    expect(grid.years).toContain(2026)
+    expect(grid.years).toContain(2028)
+    const totalIdx = grid.rows.findIndex((r) => r.kind === 'total')
+    const growthIdx = grid.rows.findIndex((r) => r.kind === 'growth')
+    const i2026 = grid.years.indexOf(2026)
+    const i2027 = grid.years.indexOf(2027)
+    const i2028 = grid.years.indexOf(2028)
+    expect(grid.rows[totalIdx]!.values[i2026]).toBe(10_000)
+    expect(grid.rows[totalIdx]!.values[i2027]).toBeCloseTo(11_000, 6)
+    expect(grid.rows[totalIdx]!.values[i2028]).toBeCloseTo(12_100, 6)
+    expect(grid.rows[growthIdx]!.values[i2027]).toBeCloseTo(11_000, 6)
+    // Equity/cash empty on growth years
+    const cashIdx = grid.rows.findIndex((r) => r.kind === 'cash')
+    expect(grid.rows[cashIdx]!.values[i2027]).toBe(0)
+  })
+
+  it('stacks perpetual yearly deposit with growth rate', () => {
+    const p = basePortfolio({
+      deposits: [newOpeningDeposit(10_000, 2026)],
+      holdings: [],
+      perpetualGrowthPercent: 10,
+      perpetualYearlyDeposit: { amount: 1_000, source: 'fixed' },
+    })
+    // 2027: 10000 * 1.1 + 1000 = 12000
+    // 2028: 12000 * 1.1 + 1000 = 14200
+    expect(compoundWithGrowthAndDeposits(10_000, 2026, 2027, 10, p)).toBeCloseTo(12_000, 6)
+    expect(compoundWithGrowthAndDeposits(10_000, 2026, 2028, 10, p)).toBeCloseTo(14_200, 6)
+
+    const grid = buildPortfolioGrid(p, [], 2026, { throughYear: 2028 })
+    const totalIdx = grid.rows.findIndex((r) => r.kind === 'total')
+    const i2027 = grid.years.indexOf(2027)
+    const i2028 = grid.years.indexOf(2028)
+    expect(grid.rows[totalIdx]!.values[i2027]).toBeCloseTo(12_000, 6)
+    expect(grid.rows[totalIdx]!.values[i2028]).toBeCloseTo(14_200, 6)
+  })
+})
+
+describe('scenario projection share prices on portfolio', () => {
+  function scenario(overrides: Partial<SavedScenario> = {}): SavedScenario {
+    const now = new Date().toISOString()
+    return {
+      id: 'sc1',
+      symbol: 'AAA',
+      name: 'Base case',
+      companyName: 'AAA Inc',
+      currency: 'USD',
+      currentPrice: 10,
+      currentMarketCap: 1_000_000,
+      sharesOutstanding: null, // often missing from quotes — must derive
+      mcapOverride: null,
+      easyRows: [
+        {
+          id: 'e1',
+          year: 2027,
+          projectedMarketCap: 2_000_000,
+        },
+        {
+          id: 'e2',
+          year: 2030,
+          projectedMarketCap: 4_000_000,
+        },
+      ],
+      advancedRows: [],
+      createdAt: now,
+      updatedAt: now,
+      ...overrides,
+    }
+  }
+
+  it('derives shares from mcap/price so projection years get prices', () => {
+    const sc = scenario()
+    const prices = getScenarioSharePriceByYear(sc, 'easy', 2026)
+    // shares = 1e6 / 10 = 100_000
+    expect(prices.get(2027)).toBeCloseTo(20, 6) // 2e6 / 1e5
+    expect(prices.get(2030)).toBeCloseTo(40, 6)
+  })
+
+  it('shows holding values for 2027 and 2030 on the grid', () => {
+    const sc = scenario()
+    const holding: PortfolioHolding = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 100,
+      scenarioId: sc.id,
+      basis: 'easy',
+      manualCurrentPrice: null,
+    }
+    const p = basePortfolio({
+      deposits: [newOpeningDeposit(0, 2026)],
+      holdings: [holding],
+    })
+    const values = computeHoldingValues(holding, sc, [], 2026)
+    expect(values.get(2027)).toBeCloseTo(2_000, 6) // 100 * $20
+    expect(values.get(2030)).toBeCloseTo(4_000, 6)
+
+    const grid = buildPortfolioGrid(p, [sc], 2026)
+    expect(grid.years).toContain(2027)
+    expect(grid.years).toContain(2030)
+    const eq = grid.rows.find((r) => r.kind === 'equity')!
+    const i2027 = grid.years.indexOf(2027)
+    const i2030 = grid.years.indexOf(2030)
+    expect(eq.values[i2027]).toBeCloseTo(2_000, 6)
+    expect(eq.values[i2030]).toBeCloseTo(4_000, 6)
+  })
+
+  it('uses advanced projections when holding basis is easy but only advanced is filled', () => {
+    const sc = scenario({
+      easyRows: [{ id: 'e0', year: 2030, projectedMarketCap: null }],
+      advancedRows: [
+        {
+          id: 'a1',
+          year: 2027,
+          dilutionFactor: 1,
+          revenue: 100_000,
+          psMultiple: 20, // mcap 2e6
+          fcf: null,
+          pfcfMultiple: null,
+          profit: null,
+          peMultiple: null,
+        },
+        {
+          id: 'a2',
+          year: 2030,
+          dilutionFactor: 1,
+          revenue: 200_000,
+          psMultiple: 20, // mcap 4e6
+          fcf: null,
+          pfcfMultiple: null,
+          profit: null,
+          peMultiple: null,
+        },
+      ],
+    })
+    const holding: PortfolioHolding = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 100,
+      scenarioId: sc.id,
+      basis: 'easy', // default — must fall back to ps
+      manualCurrentPrice: null,
+    }
+    const values = computeHoldingValues(holding, sc, [], 2026)
+    expect(values.get(2027)).toBeCloseTo(2_000, 6)
+    expect(values.get(2030)).toBeCloseTo(4_000, 6)
+
+    const grid = buildPortfolioGrid(
+      basePortfolio({
+        deposits: [newOpeningDeposit(0, 2026)],
+        holdings: [holding],
+      }),
+      [sc],
+      2026,
+    )
+    const eq = grid.rows.find((r) => r.kind === 'equity')!
+    expect(eq.values[grid.years.indexOf(2027)]).toBeCloseTo(2_000, 6)
+    expect(eq.values[grid.years.indexOf(2030)]).toBeCloseTo(4_000, 6)
+  })
+
+  it('values easy projections with only price+mcap (no shares outstanding)', () => {
+    const sc = scenario({
+      sharesOutstanding: null,
+      currentPrice: 50,
+      currentMarketCap: 5_000_000,
+      easyRows: [{ id: 'e1', year: 2028, projectedMarketCap: 10_000_000 }],
+    })
+    // px = 50 * (10e6 / 5e6) = 100; 10 shares → 1000
+    const holding: PortfolioHolding = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 10,
+      scenarioId: sc.id,
+      basis: 'easy',
+    }
+    const values = computeHoldingValues(holding, sc, [], 2026)
+    expect(values.get(2028)).toBeCloseTo(1_000, 6)
+  })
+
+  it('carries last known equity value across intermediate stated years', () => {
+    const sc = scenario({
+      easyRows: [{ id: 'e1', year: 2030, projectedMarketCap: 2_000_000 }],
+    })
+    const holding: PortfolioHolding = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 100,
+      scenarioId: sc.id,
+      basis: 'easy',
+      manualCurrentPrice: 10,
+    }
+    const p = basePortfolio({
+      deposits: [
+        newOpeningDeposit(0, 2026),
+        { id: 'd2', year: 2028, amount: 100 }, // creates intermediate year column
+      ],
+      holdings: [holding],
+    })
+    const grid = buildPortfolioGrid(p, [sc], 2026)
+    const eq = grid.rows.find((r) => r.kind === 'equity')!
+    // 2026 live: 100 * 10 = 1000, carried to 2028; 2030 jumps to 2000
+    expect(eq.values[grid.years.indexOf(2026)]).toBeCloseTo(1_000, 6)
+    expect(eq.values[grid.years.indexOf(2028)]).toBeCloseTo(1_000, 6)
+    expect(eq.values[grid.years.indexOf(2030)]).toBeCloseTo(2_000, 6)
+    // holdingValueAtYear matches for intermediate year not in sparse map
+    expect(holdingValueAtYear(holding, sc, [], 2028, 2026)).toBeCloseTo(1_000, 6)
+  })
+})
+
+describe('portfolio vs overview totals match', () => {
+  it('grid totals equal portfolioTotalUsdAtYear and overview for every year', () => {
+    const now = new Date().toISOString()
+    const sc: SavedScenario = {
+      id: 'sc1',
+      symbol: 'AAA',
+      name: 'Base',
+      companyName: null,
+      currency: 'USD',
+      currentPrice: 10,
+      currentMarketCap: 1_000_000,
+      sharesOutstanding: 100_000,
+      mcapOverride: null,
+      easyRows: [
+        { id: 'e1', year: 2027, projectedMarketCap: 2_000_000 },
+        { id: 'e2', year: 2030, projectedMarketCap: 4_000_000 },
+      ],
+      advancedRows: [],
+      createdAt: now,
+      updatedAt: now,
+    }
+    const holding: PortfolioHolding = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 100,
+      scenarioId: sc.id,
+      basis: 'easy',
+    }
+    const p = basePortfolio({
+      deposits: [
+        newOpeningDeposit(5_000, 2026),
+        { id: 'd2', year: 2028, amount: 500 },
+      ],
+      holdings: [holding],
+      perpetualGrowthPercent: 8,
+      perpetualYearlyDeposit: { amount: 200, source: 'fixed' },
+    })
+    const grid = buildPortfolioGrid(p, [sc], 2026, { throughYear: 2032 })
+    for (let i = 0; i < grid.years.length; i++) {
+      const y = grid.years[i]!
+      const fromFn = portfolioTotalUsdAtYear(p, [sc], y, 2026)
+      const fromOverview = overviewPortfolioTotalUsdAtYear(p, [sc], y, null, 2026)
+      expect(grid.totals[i], `grid ${y}`).toBeCloseTo(fromFn, 6)
+      expect(fromOverview, `overview ${y}`).toBeCloseTo(fromFn, 6)
+    }
+    // Intermediate year 2029 (between 2028 deposit and 2030 proj) must carry equity
+    const t2029 = portfolioTotalUsdAtYear(p, [sc], 2029, 2026)
+    const cash2029 = cashAtYear(p, 2029, [sc], 2026)
+    // equity carried from 2027 (100 * $20 = 2000) until 2030
+    expect(t2029).toBeCloseTo(cash2029 + 2_000, 6)
   })
 })
 

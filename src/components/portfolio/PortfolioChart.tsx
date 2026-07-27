@@ -21,6 +21,8 @@ import { toDisplay } from '../../lib/fx'
 import type { DisplayCurrency, PortfolioGrid, SavedPortfolio } from '../../types'
 import {
   buildPortfolioChartData,
+  PERPETUAL_GROWTH_CHART_KEY,
+  PERPETUAL_GROWTH_COLOR,
   type PortfolioChartBreakdownRow,
   type PortfolioChartPoint,
 } from '../../lib/portfolio'
@@ -107,15 +109,22 @@ export function PortfolioChart({
     () => grid.rows.filter((r) => r.kind === 'equity'),
     [grid.rows],
   )
+  const hasPerpetualGrowth = useMemo(
+    () => grid.rows.some((r) => r.kind === 'growth'),
+    [grid.rows],
+  )
 
   const data = useMemo(() => {
     const raw = buildPortfolioChartData(grid, portfolio, scenarios)
-    const keys = equityRows.map((r) => r.key)
+    const keys = [
+      ...equityRows.map((r) => r.key),
+      ...(hasPerpetualGrowth ? [PERPETUAL_GROWTH_CHART_KEY] : []),
+    ]
     return raw.map((p) => convertPoint(p, activeCurrency, usdToChf, keys))
-  }, [grid, portfolio, scenarios, activeCurrency, usdToChf, equityRows])
+  }, [grid, portfolio, scenarios, activeCurrency, usdToChf, equityRows, hasPerpetualGrowth])
   const hasCash =
     getCurrentCashSafe(portfolio) > 0 ||
-    data.some((d) => typeof d.cash === 'number' && d.cash !== 0)
+    data.some((d) => typeof d.cash === 'number' && d.cash !== 0 && !d.isPerpetualGrowth)
 
   const colorByKey = useMemo(() => {
     const map = new Map<string, string>()
@@ -123,6 +132,7 @@ export function PortfolioChart({
       map.set(row.key, HOLDING_COLORS[i % HOLDING_COLORS.length])
     })
     map.set('cash', CASH_COLOR)
+    map.set(PERPETUAL_GROWTH_CHART_KEY, PERPETUAL_GROWTH_COLOR)
     return map
   }, [equityRows])
 
@@ -273,7 +283,13 @@ export function PortfolioChart({
                     key={`${row.key}-${entry.xKey}`}
                     fill={HOLDING_COLORS[i % HOLDING_COLORS.length]}
                     fillOpacity={
-                      entry.isEmpty ? 0 : entry.isNow ? 1 : entry.isCurrentYear ? 0.95 : 0.88
+                      entry.isEmpty || entry.isPerpetualGrowth
+                        ? 0
+                        : entry.isNow
+                          ? 1
+                          : entry.isCurrentYear
+                            ? 0.95
+                            : 0.88
                     }
                     stroke={entry.isNow ? 'rgba(255,255,255,0.35)' : undefined}
                     strokeWidth={entry.isNow ? 1 : 0}
@@ -289,15 +305,34 @@ export function PortfolioChart({
                 fill={CASH_COLOR}
                 isAnimationActive={false}
                 maxBarSize={maxBarSize}
-                radius={[3, 3, 0, 0]}
+                radius={hasPerpetualGrowth ? [0, 0, 0, 0] : [3, 3, 0, 0]}
               >
                 {data.map((entry) => (
                   <Cell
                     key={`cash-${entry.xKey}`}
                     fill={entry.isNow ? NOW_CASH_COLOR : CASH_COLOR}
-                    fillOpacity={entry.isEmpty ? 0 : 1}
+                    fillOpacity={entry.isEmpty || entry.isPerpetualGrowth ? 0 : 1}
                     stroke={entry.isNow ? 'rgba(255,255,255,0.35)' : undefined}
                     strokeWidth={entry.isNow ? 1 : 0}
+                  />
+                ))}
+              </Bar>
+            )}
+            {hasPerpetualGrowth && (
+              <Bar
+                dataKey={PERPETUAL_GROWTH_CHART_KEY}
+                name="Growth"
+                stackId="portfolio"
+                fill={PERPETUAL_GROWTH_COLOR}
+                isAnimationActive={false}
+                maxBarSize={maxBarSize}
+                radius={[3, 3, 0, 0]}
+              >
+                {data.map((entry) => (
+                  <Cell
+                    key={`growth-${entry.xKey}`}
+                    fill={PERPETUAL_GROWTH_COLOR}
+                    fillOpacity={entry.isPerpetualGrowth ? 0.92 : 0}
                   />
                 ))}
               </Bar>
@@ -328,9 +363,9 @@ export function PortfolioChart({
       </div>
       {!fillContainer && (
         <p className="mt-1 shrink-0 text-center text-[11px] text-white/35">
-          <span className="text-white/55">Now</span> = live holdings + current cash ·{' '}
-          <span className="text-white/55">{new Date().getFullYear()}</span> and later = year view
-          (deposits cumulative). Empty years keep calendar spacing.
+          <span className="text-white/55">Now</span> = live holdings + current cash · later years =
+          projections · <span className="text-emerald-400/80">green</span> = perpetual growth from
+          last total
         </p>
       )}
     </div>

@@ -3,6 +3,7 @@ import type {
   CashflowLine,
   CashflowScenario,
   DisplayCurrency,
+  PerpetualYearlyDeposit,
   PortfolioDeposit,
   PortfolioDepositSource,
   PortfolioHolding,
@@ -16,11 +17,13 @@ import {
   getActions,
   getDeposits,
   getOpeningCash,
+  lastExplicitDepositYear,
   newDeposit,
   newHolding,
   newOpeningDeposit,
   resolveCurrentPrice,
   resolveDepositAmount,
+  resolvePerpetualYearlyAmount,
   type DepositResolveContext,
   withResolvedDepositAmounts,
 } from '../../lib/portfolio'
@@ -264,6 +267,7 @@ export function PortfolioHoldingsEditor({
       const resolved = resolvedById.get(d.id)
       return resolved ? { ...d, amount: resolved.amount } : d
     }),
+    perpetualYearlyDeposit: resolvedPortfolio.perpetualYearlyDeposit,
     currentCash: 0,
   }
   const openingCash = getOpeningCash(bookPortfolio)
@@ -273,6 +277,33 @@ export function PortfolioHoldingsEditor({
   )
   const cashNow = cashForYear(bookPortfolio, currentYear)
   const depositThisYear = depositInYear(bookPortfolio, currentYear)
+  const lastExplicitYear = lastExplicitDepositYear(
+    { ...portfolio, deposits },
+    currentYear,
+  )
+  const perpetual = portfolio.perpetualYearlyDeposit ?? null
+  const perpetualResolvedUsd = resolvePerpetualYearlyAmount(
+    perpetual,
+    depositCtx,
+  )
+  const growthPercent = portfolio.perpetualGrowthPercent ?? 0
+
+  function updatePerpetual(patch: Partial<PerpetualYearlyDeposit> | null) {
+    if (patch === null) {
+      onChange({ perpetualYearlyDeposit: null })
+      return
+    }
+    const base: PerpetualYearlyDeposit = perpetual ?? {
+      amount: 0,
+      source: 'fixed',
+    }
+    onChange({
+      perpetualYearlyDeposit: {
+        ...base,
+        ...patch,
+      },
+    })
+  }
 
   return (
     <div className="space-y-4">
@@ -348,8 +379,8 @@ export function PortfolioHoldingsEditor({
             <h3 className="text-sm font-semibold text-white/85">Cash & deposits</h3>
             <p className="text-[11px] text-white/40">
               First row is current cash (opening). Add deposits as a flat amount or as a % of
-              surplus from an Income/Cost scenario (scenario is not changed). Cash after = all
-              deposits through that year.
+              surplus from an Income/Cost scenario (scenario is not changed). Optionally repeat a
+              yearly amount after the last explicit deposit year.
             </p>
           </div>
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={addDeposit}>
@@ -397,6 +428,59 @@ export function PortfolioHoldingsEditor({
           />
         ))}
 
+        <PerpetualDepositRow
+          perpetual={perpetual}
+          lastExplicitYear={lastExplicitYear}
+          resolvedUsd={perpetualResolvedUsd}
+          displayCurrency={displayCurrency}
+          usdToChf={usdToChf}
+          incomeCostScenarios={incomeCostScenarios}
+          incomeCostLines={incomeCostLines}
+          onChange={updatePerpetual}
+        />
+
+        <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.06] px-2 py-2">
+          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+            <span className="text-xs font-medium text-white/80">
+              Perpetual growth after last projection
+            </span>
+            <span className="text-[10px] text-white/40">% / year on whole portfolio</span>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="relative w-24">
+              <input
+                className="input !py-1.5 !pr-6 !text-xs tabular-nums"
+                type="text"
+                inputMode="decimal"
+                value={
+                  growthPercent != null && growthPercent !== 0
+                    ? String(growthPercent)
+                    : ''
+                }
+                placeholder="0"
+                onChange={(e) => {
+                  const raw = e.target.value.trim().replace(/%/g, '')
+                  if (raw === '' || raw === '-') {
+                    onChange({ perpetualGrowthPercent: null })
+                    return
+                  }
+                  const n = Number(raw)
+                  onChange({
+                    perpetualGrowthPercent: Number.isFinite(n) ? n : null,
+                  })
+                }}
+              />
+              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-white/35">
+                %
+              </span>
+            </div>
+            <p className="text-[10px] text-white/40">
+              Compounds the full portfolio after the last year with specific inputs (projections,
+              deposits, actions). Leave empty or 0 to turn off.
+            </p>
+          </div>
+        </div>
+
         <div className="space-y-1 border-t border-white/5 pt-2 text-xs text-white/40">
           <p>
             Current cash:{' '}
@@ -413,10 +497,18 @@ export function PortfolioHoldingsEditor({
             Cash after {currentYear}:{' '}
             <span className="font-medium text-emerald-400/90">{fmt(cashNow)}</span>
             {' · '}
-            Total cash contributions:{' '}
+            Explicit deposits total:{' '}
             <span className="font-medium text-white/70">{fmt(totalDeposited)}</span>
+            {perpetualResolvedUsd > 0 && (
+              <>
+                {' · '}
+                +{fmt(perpetualResolvedUsd)}/yr after {lastExplicitYear}
+              </>
+            )}
           </p>
-          {deposits.some((d) => d.source === 'surplus') && usdToChf == null && (
+          {(deposits.some((d) => d.source === 'surplus') ||
+            perpetual?.source === 'surplus') &&
+            usdToChf == null && (
             <p className="text-amber-300/90">
               Surplus deposits need a USD/CHF rate to convert Income/Cost (CHF) into portfolio cash.
             </p>
@@ -846,6 +938,222 @@ function roundInput(n: number): number {
   if (!Number.isFinite(n)) return n
   // Keep enough precision for inputs after FX conversion
   return Math.round(n * 10000) / 10000
+}
+
+function PerpetualDepositRow({
+  perpetual,
+  lastExplicitYear,
+  resolvedUsd,
+  displayCurrency,
+  usdToChf,
+  incomeCostScenarios,
+  onChange,
+}: {
+  perpetual: PerpetualYearlyDeposit | null
+  lastExplicitYear: number
+  resolvedUsd: number
+  displayCurrency: DisplayCurrency
+  usdToChf: number | null
+  incomeCostScenarios: CashflowScenario[]
+  incomeCostLines: CashflowLine[]
+  onChange: (patch: Partial<PerpetualYearlyDeposit> | null) => void
+}) {
+  const enabled = perpetual != null
+  const source: PortfolioDepositSource = perpetual?.source === 'surplus' ? 'surplus' : 'fixed'
+  const [amountText, setAmountText] = useState(
+    perpetual && perpetual.amount > 0
+      ? String(roundInput(toDisplay(perpetual.amount, displayCurrency, usdToChf)))
+      : '',
+  )
+  const [percentText, setPercentText] = useState(
+    perpetual?.surplusPercent != null && perpetual.surplusPercent !== 0
+      ? String(perpetual.surplusPercent)
+      : '',
+  )
+
+  useEffect(() => {
+    setAmountText(
+      perpetual && perpetual.amount > 0
+        ? String(roundInput(toDisplay(perpetual.amount, displayCurrency, usdToChf)))
+        : '',
+    )
+  }, [perpetual?.amount, displayCurrency, usdToChf])
+
+  useEffect(() => {
+    setPercentText(
+      perpetual?.surplusPercent != null && perpetual.surplusPercent !== 0
+        ? String(perpetual.surplusPercent)
+        : '',
+    )
+  }, [perpetual?.surplusPercent])
+
+  const orderedScenarios = useMemo(
+    () =>
+      [...incomeCostScenarios].sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
+      ),
+    [incomeCostScenarios],
+  )
+
+  return (
+    <div className="rounded-lg border border-sky-500/20 bg-sky-500/[0.06] px-2 py-2">
+      <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
+        <label className="inline-flex cursor-pointer items-center gap-2 text-xs text-white/80">
+          <input
+            type="checkbox"
+            className="h-3.5 w-3.5 accent-sky-400"
+            checked={enabled}
+            onChange={(e) => {
+              if (!e.target.checked) {
+                onChange(null)
+                return
+              }
+              onChange({
+                amount: perpetual?.amount ?? 0,
+                source: 'fixed',
+                surplusScenarioId: null,
+                surplusPercent: 0,
+              })
+            }}
+          />
+          <span className="font-medium">Yearly after last deposit</span>
+        </label>
+        <span className="text-[10px] text-white/40">
+          Every year after {lastExplicitYear}
+        </span>
+      </div>
+      {enabled ? (
+        <div className="grid gap-2 sm:grid-cols-[6.5rem_minmax(0,1fr)] sm:items-start">
+          <select
+            className="input !py-1.5 !text-xs"
+            value={source}
+            onChange={(e) => {
+              const next = e.target.value as PortfolioDepositSource
+              if (next === 'fixed') {
+                onChange({
+                  source: 'fixed',
+                  surplusScenarioId: null,
+                  surplusPercent: 0,
+                })
+              } else {
+                onChange({
+                  source: 'surplus',
+                  surplusScenarioId:
+                    perpetual?.surplusScenarioId ?? orderedScenarios[0]?.id ?? null,
+                  surplusPercent: perpetual?.surplusPercent ?? 100,
+                })
+              }
+            }}
+          >
+            <option value="fixed">Fixed</option>
+            <option value="surplus">% surplus</option>
+          </select>
+          {source === 'fixed' ? (
+            <input
+              className="input !py-1.5 !text-xs tabular-nums"
+              type="text"
+              inputMode="decimal"
+              placeholder={`Amount / year (${displayCurrency})`}
+              value={amountText}
+              onChange={(e) => setAmountText(e.target.value)}
+              onBlur={() => {
+                const raw = amountText.trim()
+                if (!raw) {
+                  onChange({ amount: 0, source: 'fixed' })
+                  return
+                }
+                const parsed = parseMoney(raw)
+                if (parsed == null || parsed < 0) {
+                  setAmountText(
+                    perpetual && perpetual.amount > 0
+                      ? String(
+                          roundInput(toDisplay(perpetual.amount, displayCurrency, usdToChf)),
+                        )
+                      : '',
+                  )
+                  return
+                }
+                onChange({
+                  amount: fromDisplay(parsed, displayCurrency, usdToChf),
+                  source: 'fixed',
+                })
+              }}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur()
+              }}
+            />
+          ) : (
+            <div className="space-y-1">
+              <div className="flex flex-wrap gap-1.5">
+                <select
+                  className="input min-w-[8rem] flex-1 !py-1.5 !text-xs"
+                  value={perpetual?.surplusScenarioId ?? ''}
+                  onChange={(e) =>
+                    onChange({
+                      source: 'surplus',
+                      surplusScenarioId: e.target.value || null,
+                    })
+                  }
+                >
+                  <option value="" disabled>
+                    {orderedScenarios.length ? 'Scenario…' : 'No Income/Cost scenarios'}
+                  </option>
+                  {orderedScenarios.map((s) => (
+                    <option key={s.id} value={s.id}>
+                      {s.name}
+                    </option>
+                  ))}
+                </select>
+                <div className="relative w-20 shrink-0">
+                  <input
+                    className="input !py-1.5 !pr-6 !text-xs tabular-nums"
+                    type="text"
+                    inputMode="decimal"
+                    placeholder="%"
+                    value={percentText}
+                    onChange={(e) => setPercentText(e.target.value)}
+                    onBlur={() => {
+                      const n = Number(percentText.replace(/%/g, ''))
+                      if (!Number.isFinite(n) || n < 0) {
+                        setPercentText(
+                          perpetual?.surplusPercent
+                            ? String(perpetual.surplusPercent)
+                            : '',
+                        )
+                        return
+                      }
+                      onChange({ source: 'surplus', surplusPercent: n })
+                    }}
+                    onKeyDown={(e) => {
+                      if (e.key === 'Enter') e.currentTarget.blur()
+                    }}
+                  />
+                  <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-white/35">
+                    %
+                  </span>
+                </div>
+              </div>
+              {resolvedUsd > 0 && (
+                <p className="text-[10px] text-white/40">
+                  ≈{' '}
+                  {formatMoney(
+                    toDisplay(resolvedUsd, displayCurrency, usdToChf),
+                    displayCurrency,
+                  )}
+                  / year after {lastExplicitYear}
+                </p>
+              )}
+            </div>
+          )}
+        </div>
+      ) : (
+        <p className="text-[10px] text-white/35">
+          Enable to add the same amount every year after your last explicit deposit year (
+          {lastExplicitYear}).
+        </p>
+      )}
+    </div>
+  )
 }
 
 function DepositRow({

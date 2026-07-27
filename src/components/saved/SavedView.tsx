@@ -1,7 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { AnalyzerLoadState, SavedScenario, ValuationBasis } from '../../types'
 import { fetchQuoteClient } from '../../lib/quote'
-import { effectiveMarketCap } from '../../lib/sharePrice'
+import { effectiveMarketCap, resolveSharesOutstanding } from '../../lib/sharePrice'
 import {
   buildAdvancedProjections,
   buildChartSeries,
@@ -71,6 +71,15 @@ export function SavedView({
     ? effectiveMarketCap(selected.mcapOverride, selected.currentMarketCap)
     : null
 
+  const sharesOutstanding = selected
+    ? resolveSharesOutstanding({
+        sharesOutstanding: selected.sharesOutstanding,
+        marketCap: selected.currentMarketCap,
+        price: selected.currentPrice,
+        mcapOverride: selected.mcapOverride,
+      })
+    : null
+
   const easyProjections = useMemo(() => {
     if (!selected || currentMarketCap == null) return []
     return buildEasyProjections(currentMarketCap, selected.easyRows)
@@ -130,12 +139,19 @@ export function SavedView({
     setRefreshError(null)
     try {
       const q = await fetchQuoteClient(selected.symbol)
+      const derivedShares = resolveSharesOutstanding({
+        sharesOutstanding: q.sharesOutstanding,
+        marketCap: q.marketCap,
+        price: q.price,
+      })
       updateScenario(selected.id, {
         companyName: q.name,
         currency: q.currency,
         currentPrice: q.price,
-        currentMarketCap: q.marketCap,
-        sharesOutstanding: q.sharesOutstanding,
+        // Keep prior mcap if quote omits it
+        currentMarketCap: q.marketCap ?? selected.currentMarketCap,
+        // Never wipe a known share count with null from a partial quote
+        sharesOutstanding: derivedShares ?? selected.sharesOutstanding,
       })
     } catch (err) {
       setRefreshError(err instanceof Error ? err.message : 'Refresh failed')
@@ -264,11 +280,8 @@ export function SavedView({
                 <Meta
                   label="Shares"
                   value={
-                    selected.sharesOutstanding != null
-                      ? formatMoney(selected.sharesOutstanding, selected.currency).replace(
-                          /^\$/,
-                          '',
-                        )
+                    sharesOutstanding != null
+                      ? formatMoney(sharesOutstanding, selected.currency).replace(/^\$/, '')
                       : '—'
                   }
                 />
@@ -336,14 +349,16 @@ export function SavedView({
                 rows={selected.easyRows}
                 onChange={(easyRows) => updateScenario(selected.id, { easyRows })}
                 currentMarketCap={currentMarketCap}
-                sharesOutstanding={selected.sharesOutstanding}
+                sharesOutstanding={sharesOutstanding}
+                currentPrice={selected.currentPrice}
+                quoteMarketCap={selected.currentMarketCap}
                 currency="USD"
               />
               <AdvancedAssumptionsTable
                 rows={selected.advancedRows}
                 onChange={(advancedRows) => updateScenario(selected.id, { advancedRows })}
                 currentMarketCap={currentMarketCap}
-                sharesOutstanding={selected.sharesOutstanding}
+                sharesOutstanding={sharesOutstanding}
                 currency="USD"
               />
             </div>

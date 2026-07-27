@@ -60,16 +60,22 @@ export function PortfolioValueTable({
                 className={`border-t border-white/5 ${
                   row.kind === 'total'
                     ? 'bg-emerald-500/10 font-semibold'
-                    : row.kind === 'cash'
-                      ? hasNegativeCash
-                        ? 'bg-amber-500/5'
-                        : 'bg-white/[0.02]'
-                      : ''
+                    : row.kind === 'growth'
+                      ? 'bg-emerald-500/5'
+                      : row.kind === 'cash'
+                        ? hasNegativeCash
+                          ? 'bg-amber-500/5'
+                          : 'bg-white/[0.02]'
+                        : ''
                 }`}
               >
                 <td className="sticky left-0 z-10 bg-[#0f141b] px-3 py-2">
                   <div
-                    className={row.kind === 'total' ? 'text-emerald-300' : 'text-white/90'}
+                    className={
+                      row.kind === 'total' || row.kind === 'growth'
+                        ? 'text-emerald-300'
+                        : 'text-white/90'
+                    }
                     title={row.label}
                   >
                     {row.label}
