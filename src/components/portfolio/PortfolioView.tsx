@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type {
   CashflowLine,
   CashflowScenario,
@@ -8,22 +8,26 @@ import type {
 } from '../../types'
 import { buildPortfolioGrid, withResolvedDepositAmounts } from '../../lib/portfolio'
 import { fetchFxRateClient } from '../../lib/fx'
-import { PortfolioHoldingsEditor } from './PortfolioHoldingsEditor'
+import {
+  PortfolioHoldingsEditor,
+  type PortfolioEditorPanel,
+} from './PortfolioHoldingsEditor'
 import { PortfolioValueTable } from './PortfolioValueTable'
 import { PortfolioChart } from './PortfolioChart'
 import { FullscreenChart } from '../common/FullscreenChart'
 
-const LIST_COLLAPSED_KEY = 'grok-lab-portfolio-list-collapsed'
 const CURRENCY_KEY = 'grok-lab-portfolio-currency'
 const SELECTED_PORTFOLIO_KEY = 'grok-lab-selected-portfolio'
+const PANEL_KEY = 'grok-lab-portfolio-panel'
 
-function readListCollapsed(): boolean {
-  try {
-    return localStorage.getItem(LIST_COLLAPSED_KEY) === '1'
-  } catch {
-    return false
-  }
-}
+type WorkspaceTab = 'chart' | PortfolioEditorPanel
+
+const TABS: { id: WorkspaceTab; label: string; short: string }[] = [
+  { id: 'chart', label: 'Chart', short: 'Chart' },
+  { id: 'cash', label: 'Cash', short: 'Cash' },
+  { id: 'positions', label: 'Positions', short: 'Pos.' },
+  { id: 'growth', label: 'Growth', short: 'Growth' },
+]
 
 function readCurrency(): DisplayCurrency {
   try {
@@ -42,6 +46,16 @@ function readSelectedPortfolioId(portfolios: SavedPortfolio[]): string | null {
     /* ignore */
   }
   return portfolios[0]?.id ?? null
+}
+
+function readPanel(): WorkspaceTab {
+  try {
+    const v = localStorage.getItem(PANEL_KEY)
+    if (v === 'chart' || v === 'cash' || v === 'positions' || v === 'growth') return v
+  } catch {
+    /* ignore */
+  }
+  return 'positions'
 }
 
 type Props = {
@@ -72,23 +86,20 @@ export function PortfolioView({
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     readSelectedPortfolioId(portfolios),
   )
-  const [listCollapsed, setListCollapsed] = useState(readListCollapsed)
+  const [panel, setPanel] = useState<WorkspaceTab>(readPanel)
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(readCurrency)
   const [usdToChf, setUsdToChf] = useState<number | null>(null)
   const [fxAsOf, setFxAsOf] = useState<string | null>(null)
   const [fxLoading, setFxLoading] = useState(false)
   const [fxError, setFxError] = useState<string | null>(null)
   const [focusNameId, setFocusNameId] = useState<string | null>(null)
+  const [manageOpen, setManageOpen] = useState(false)
+  const [pickerOpen, setPickerOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
-
-  useEffect(() => {
-    try {
-      localStorage.setItem(LIST_COLLAPSED_KEY, listCollapsed ? '1' : '0')
-    } catch {
-      /* ignore */
-    }
-  }, [listCollapsed])
+  const pickerRef = useRef<HTMLDivElement>(null)
+  const manageRef = useRef<HTMLDivElement>(null)
+  const renameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
     try {
@@ -97,6 +108,14 @@ export function PortfolioView({
       /* ignore */
     }
   }, [displayCurrency])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(PANEL_KEY, panel)
+    } catch {
+      /* ignore */
+    }
+  }, [panel])
 
   useEffect(() => {
     if (selectedId) {
@@ -131,10 +150,37 @@ export function PortfolioView({
     setSelectedId(portfolios[0]?.id ?? null)
   }, [portfolios, selectedId])
 
+  // Focus rename when creating/copying
+  useEffect(() => {
+    if (!focusNameId) return
+    setManageOpen(true)
+    const t = window.setTimeout(() => {
+      renameRef.current?.focus()
+      renameRef.current?.select()
+    }, 80)
+    return () => window.clearTimeout(t)
+  }, [focusNameId])
+
+  // Close dropdowns on outside click
+  useEffect(() => {
+    function onDoc(e: MouseEvent) {
+      const t = e.target as Node
+      if (pickerOpen && pickerRef.current && !pickerRef.current.contains(t)) {
+        setPickerOpen(false)
+      }
+      if (manageOpen && manageRef.current && !manageRef.current.contains(t)) {
+        // keep open while focusing rename after create — only close if not focusing name
+        if (focusNameId) return
+        setManageOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [pickerOpen, manageOpen, focusNameId])
+
   const selected = portfolios.find((p) => p.id === selectedId) ?? null
   const currentYear = new Date().getFullYear()
 
-  // Base grid = input years only (for defaults + last stated)
   const baseGrid = useMemo(() => {
     if (!selected) return null
     const resolved = withResolvedDepositAmounts(selected, {
@@ -148,13 +194,11 @@ export function PortfolioView({
   const firstInputYear =
     baseGrid && baseGrid.years.length > 0 ? baseGrid.years[0]! : currentYear
 
-  // Period picker (defaults to input span; user can extend end to see growth)
   const [periodFrom, setPeriodFrom] = useState(currentYear)
   const [periodTo, setPeriodTo] = useState(currentYear)
   const [fromDraft, setFromDraft] = useState(String(currentYear))
   const [toDraft, setToDraft] = useState(String(currentYear))
 
-  // Reset period when portfolio or its stated years change
   useEffect(() => {
     setPeriodFrom(firstInputYear)
     setPeriodTo(lastInputYear)
@@ -190,7 +234,6 @@ export function PortfolioView({
     const full = buildPortfolioGrid(resolved, scenarios, currentYear, {
       throughYear,
     })
-    // Slice to period picker range
     const idxs: number[] = []
     full.years.forEach((y, i) => {
       if (y >= periodFrom && y <= periodTo) idxs.push(i)
@@ -225,6 +268,7 @@ export function PortfolioView({
     if (created) {
       setSelectedId(created.id)
       setFocusNameId(created.id)
+      setPanel('positions')
     }
   }
 
@@ -278,277 +322,371 @@ export function PortfolioView({
     usdToChf != null
       ? `1 USD = ${usdToChf.toFixed(4)} CHF${fxAsOf ? ` · ${fxAsOf}` : ''}`
       : fxLoading
-        ? 'Loading FX rate…'
+        ? 'Loading FX…'
         : fxError
           ? `FX: ${fxError}`
-          : 'FX rate unavailable'
+          : 'FX unavailable'
+
+  const editorPanel: PortfolioEditorPanel | null =
+    panel === 'cash' || panel === 'positions' || panel === 'growth' ? panel : null
 
   return (
-    <div
-      className={`grid gap-6 ${listCollapsed ? '' : 'lg:grid-cols-[240px_1fr]'}`}
-    >
-      {listCollapsed ? (
-        <div className="flex flex-wrap items-center gap-2 rounded-xl border border-white/10 bg-black/20 px-3 py-2">
+    <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-3">
+      {/* Top bar — z-index so portfolio/manage menus paint above the workspace panel */}
+      <div className="card relative z-40 flex flex-wrap items-center gap-3 overflow-visible px-3 py-2.5 sm:px-4">
+        <div className="relative z-50 min-w-0 flex-1" ref={pickerRef}>
+          <label className="sr-only" htmlFor="portfolio-picker">
+            Portfolio
+          </label>
           <button
+            id="portfolio-picker"
             type="button"
-            className="btn-ghost !px-2 !py-1 !text-xs"
-            onClick={() => setListCollapsed(false)}
-            title="Show portfolio list"
+            className="flex w-full max-w-xl items-center gap-2 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-left hover:border-white/25"
+            onClick={() => {
+              setPickerOpen((o) => !o)
+              setManageOpen(false)
+            }}
+            aria-expanded={pickerOpen}
+            aria-haspopup="listbox"
           >
-            » Portfolios
+            <span className="min-w-0 flex-1">
+              <span className="block text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                Portfolio
+              </span>
+              <span className="block truncate text-sm font-semibold text-white sm:whitespace-normal sm:break-words">
+                {selected?.name ?? 'Select portfolio…'}
+              </span>
+            </span>
+            <span className="shrink-0 text-white/40" aria-hidden>
+              ▾
+            </span>
+          </button>
+          {pickerOpen && (
+            <ul
+              className="absolute left-0 right-0 z-50 mt-1 max-h-72 overflow-y-auto rounded-xl border border-white/15 bg-[#121820] py-1 shadow-xl shadow-black/50"
+              role="listbox"
+            >
+              {portfolios.length === 0 ? (
+                <li className="px-3 py-2 text-sm text-white/40">No portfolios yet</li>
+              ) : (
+                portfolios.map((p) => (
+                  <li key={p.id} role="option" aria-selected={p.id === selectedId}>
+                    <button
+                      type="button"
+                      className={`flex w-full flex-col items-start px-3 py-2 text-left hover:bg-white/5 ${
+                        p.id === selectedId ? 'bg-emerald-500/15' : ''
+                      }`}
+                      onClick={() => {
+                        setSelectedId(p.id)
+                        setPickerOpen(false)
+                      }}
+                    >
+                      <span className="text-sm font-medium text-white">{p.name}</span>
+                      <span className="text-[11px] text-white/40">
+                        {p.holdings.length} holding{p.holdings.length === 1 ? '' : 's'}
+                        {(p.deposits?.length ?? 0) > 0
+                          ? ` · ${p.deposits!.length} deposit${p.deposits!.length === 1 ? '' : 's'}`
+                          : ''}
+                      </span>
+                    </button>
+                  </li>
+                ))
+              )}
+            </ul>
+          )}
+        </div>
+
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button type="button" className="btn-primary !px-2.5 !py-1.5 text-xs" onClick={handleCreate}>
+            New
           </button>
           {selected && (
-            <span className="truncate text-sm text-white/70">
-              <span className="text-white/40">Active · </span>
-              {selected.name}
-            </span>
-          )}
-          <div className="ml-auto flex items-center gap-1">
-            {selected && (
-              <button
-                type="button"
-                className="btn-ghost !px-2 !py-1 text-xs"
-                onClick={() => handleCopy(selected)}
-                title="Copy portfolio"
-              >
-                Copy
-              </button>
-            )}
             <button
               type="button"
-              className="btn-primary !px-2 !py-1 text-xs"
-              onClick={handleCreate}
+              className="btn-ghost !px-2.5 !py-1.5 text-xs"
+              onClick={() => handleCopy(selected)}
             >
-              New
+              Copy
             </button>
+          )}
+          <div className="relative z-50" ref={manageRef}>
+            <button
+              type="button"
+              className="btn-ghost !px-2.5 !py-1.5 text-xs"
+              onClick={() => {
+                setManageOpen((o) => !o)
+                setPickerOpen(false)
+              }}
+              aria-expanded={manageOpen}
+            >
+              Manage…
+            </button>
+            {manageOpen && (
+              <div className="absolute right-0 z-50 mt-1 w-[min(100vw-2rem,22rem)] rounded-xl border border-white/15 bg-[#121820] p-3 shadow-xl shadow-black/50">
+                <p className="mb-2 text-[11px] font-semibold uppercase tracking-wider text-white/45">
+                  Manage portfolios
+                </p>
+                {storageError && (
+                  <p className="mb-2 rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-300">
+                    {storageError}
+                  </p>
+                )}
+                {selected && (
+                  <div className="mb-3">
+                    <label className="label">Rename selected</label>
+                    <input
+                      ref={renameRef}
+                      className="input"
+                      value={selected.name}
+                      onChange={(e) => updatePortfolio(selected.id, { name: e.target.value })}
+                      onBlur={() => {
+                        if (focusNameId === selected.id) setFocusNameId(null)
+                      }}
+                    />
+                  </div>
+                )}
+                {portfolios.length === 0 ? (
+                  <p className="text-sm text-white/40">Create a portfolio to get started.</p>
+                ) : (
+                  <ul className="max-h-56 space-y-1 overflow-y-auto">
+                    {portfolios.map((p, index) => {
+                      const isDragOver = dragOverId === p.id && dragId !== p.id
+                      return (
+                        <li
+                          key={p.id}
+                          draggable
+                          onDragStart={(e) => {
+                            setDragId(p.id)
+                            e.dataTransfer.effectAllowed = 'move'
+                            e.dataTransfer.setData('text/plain', p.id)
+                          }}
+                          onDragEnd={() => {
+                            setDragId(null)
+                            setDragOverId(null)
+                          }}
+                          onDragOver={(e) => {
+                            e.preventDefault()
+                            e.dataTransfer.dropEffect = 'move'
+                            if (dragOverId !== p.id) setDragOverId(p.id)
+                          }}
+                          onDragLeave={() => {
+                            if (dragOverId === p.id) setDragOverId(null)
+                          }}
+                          onDrop={(e) => {
+                            e.preventDefault()
+                            onDropOn(p.id)
+                          }}
+                          className={`flex items-center gap-1 rounded-lg border px-1 py-1 ${
+                            p.id === selectedId
+                              ? 'border-emerald-500/40 bg-emerald-500/10'
+                              : isDragOver
+                                ? 'border-sky-500/50 bg-sky-500/10'
+                                : 'border-white/5 bg-white/[0.03]'
+                          } ${dragId === p.id ? 'opacity-50' : ''}`}
+                        >
+                          <span
+                            className="cursor-grab px-1 text-white/30 active:cursor-grabbing"
+                            title="Drag to reorder"
+                          >
+                            ⠿
+                          </span>
+                          <div className="flex flex-col">
+                            <button
+                              type="button"
+                              className="text-[10px] text-white/35 hover:text-white disabled:opacity-20"
+                              disabled={index === 0}
+                              onClick={() => movePortfolio(p.id, 'up')}
+                            >
+                              ▲
+                            </button>
+                            <button
+                              type="button"
+                              className="text-[10px] text-white/35 hover:text-white disabled:opacity-20"
+                              disabled={index === portfolios.length - 1}
+                              onClick={() => movePortfolio(p.id, 'down')}
+                            >
+                              ▼
+                            </button>
+                          </div>
+                          <button
+                            type="button"
+                            className="min-w-0 flex-1 px-1 py-1 text-left text-sm text-white"
+                            onClick={() => setSelectedId(p.id)}
+                          >
+                            {p.name}
+                          </button>
+                          <button
+                            type="button"
+                            className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-white/40 hover:bg-red-500/20 hover:text-red-300"
+                            title="Delete"
+                            onClick={() => {
+                              if (confirm(`Delete portfolio “${p.name}”?`)) deletePortfolio(p.id)
+                            }}
+                          >
+                            ✕
+                          </button>
+                        </li>
+                      )
+                    })}
+                  </ul>
+                )}
+                {portfolios.length > 1 && (
+                  <p className="mt-2 text-[10px] text-white/30">Drag ⠿ or use ▲▼ to reorder</p>
+                )}
+              </div>
+            )}
           </div>
         </div>
-      ) : (
-        <aside className="card max-h-[calc(100vh-12rem)] space-y-3 overflow-y-auto p-4">
-          <div className="flex items-center justify-between gap-2">
-            <h2 className="text-sm font-semibold text-white">Portfolios</h2>
-            <div className="flex items-center gap-1">
+
+        <div className="ml-auto flex flex-wrap items-center gap-2">
+          <div className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5">
+            {(['USD', 'CHF'] as const).map((c) => (
+              <button
+                key={c}
+                type="button"
+                onClick={() => setCurrency(c)}
+                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                  displayCurrency === c
+                    ? 'bg-white text-black shadow'
+                    : 'text-white/60 hover:text-white'
+                }`}
+              >
+                {c === 'USD' ? 'USD ($)' : 'CHF'}
+              </button>
+            ))}
+          </div>
+          <div className="flex items-center gap-1.5">
+            <span className="hidden text-[11px] text-white/40 sm:inline">{rateLabel}</span>
+            {displayCurrency === 'CHF' && usdToChf == null && (
               <button
                 type="button"
                 className="btn-ghost !px-2 !py-1 !text-[11px]"
-                onClick={() => setListCollapsed(true)}
-                title="Hide portfolio list"
+                onClick={() => void loadFx()}
+                disabled={fxLoading}
               >
-                « Hide
+                Retry rate
               </button>
-              <button
-                type="button"
-                className="btn-primary !px-2 !py-1 text-xs"
-                onClick={handleCreate}
-              >
-                New
-              </button>
-            </div>
+            )}
           </div>
-          {storageError && (
-            <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-2 py-1.5 text-xs text-red-300">
-              {storageError}
-            </p>
-          )}
-          {portfolios.length === 0 ? (
-            <p className="text-sm text-white/40">
-              Create a portfolio to allocate capital across tickers and cash.
-            </p>
-          ) : (
-            <ul className="space-y-1">
-              {portfolios.map((p, index) => {
-                const selectedRow = p.id === selectedId
-                const isDragOver = dragOverId === p.id && dragId !== p.id
-                return (
-                  <li
-                    key={p.id}
-                    draggable
-                    onDragStart={(e) => {
-                      setDragId(p.id)
-                      e.dataTransfer.effectAllowed = 'move'
-                      e.dataTransfer.setData('text/plain', p.id)
-                    }}
-                    onDragEnd={() => {
-                      setDragId(null)
-                      setDragOverId(null)
-                    }}
-                    onDragOver={(e) => {
-                      e.preventDefault()
-                      e.dataTransfer.dropEffect = 'move'
-                      if (dragOverId !== p.id) setDragOverId(p.id)
-                    }}
-                    onDragLeave={() => {
-                      if (dragOverId === p.id) setDragOverId(null)
-                    }}
-                    onDrop={(e) => {
-                      e.preventDefault()
-                      onDropOn(p.id)
-                    }}
-                  >
-                    <div
-                      className={`flex items-center gap-0.5 rounded-lg border transition ${
-                        selectedRow
-                          ? 'border-emerald-500/40 bg-emerald-500/10'
-                          : isDragOver
-                            ? 'border-sky-500/50 bg-sky-500/10'
-                            : 'border-transparent bg-white/[0.03] hover:border-white/10'
-                      } ${dragId === p.id ? 'opacity-50' : ''}`}
-                    >
-                      <span
-                        className="shrink-0 cursor-grab px-1.5 py-2 text-white/30 active:cursor-grabbing"
-                        title="Drag to reorder"
-                        aria-hidden
-                      >
-                        ⠿
-                      </span>
-                      <div className="flex shrink-0 flex-col gap-0.5 py-1">
-                        <button
-                          type="button"
-                          className="rounded px-1 text-[10px] leading-none text-white/35 hover:bg-white/10 hover:text-white disabled:opacity-20"
-                          disabled={index === 0}
-                          title="Move up"
-                          onClick={() => movePortfolio(p.id, 'up')}
-                        >
-                          ▲
-                        </button>
-                        <button
-                          type="button"
-                          className="rounded px-1 text-[10px] leading-none text-white/35 hover:bg-white/10 hover:text-white disabled:opacity-20"
-                          disabled={index === portfolios.length - 1}
-                          title="Move down"
-                          onClick={() => movePortfolio(p.id, 'down')}
-                        >
-                          ▼
-                        </button>
-                      </div>
-                      <button
-                        type="button"
-                        className="min-w-0 flex-1 px-2 py-2 text-left"
-                        onClick={() => setSelectedId(p.id)}
-                      >
-                        <div className="truncate text-sm font-medium text-white">{p.name}</div>
-                        <div className="text-[11px] text-white/40">
-                          {p.holdings.length} holding{p.holdings.length === 1 ? '' : 's'}
-                          {(p.deposits?.length ?? 0) > 0
-                            ? ` · ${p.deposits!.length} deposit${p.deposits!.length === 1 ? '' : 's'}`
-                            : ''}
-                        </div>
-                      </button>
-                      <button
-                        type="button"
-                        className="shrink-0 rounded-md px-2 py-1 text-[11px] text-white/45 hover:bg-white/10 hover:text-white"
-                        title="Copy portfolio"
-                        onClick={(e) => {
-                          e.stopPropagation()
-                          handleCopy(p)
-                        }}
-                      >
-                        Copy
-                      </button>
-                      <button
-                        type="button"
-                        className="mr-1 shrink-0 rounded-md px-2 py-1 text-[11px] text-white/40 hover:bg-red-500/20 hover:text-red-300"
-                        title="Delete portfolio"
-                        onClick={() => {
-                          if (confirm(`Delete portfolio “${p.name}”?`)) deletePortfolio(p.id)
-                        }}
-                      >
-                        ✕
-                      </button>
-                    </div>
-                  </li>
-                )
-              })}
-            </ul>
-          )}
-          {portfolios.length > 1 && (
-            <p className="text-[10px] text-white/30">Drag ⠿ or use ▲▼ to reorder</p>
-          )}
-        </aside>
+        </div>
+      </div>
+
+      {displayCurrency === 'CHF' && usdToChf == null && !fxLoading && (
+        <p className="text-[11px] text-amber-300/90">
+          Showing USD amounts until a live CHF rate is available.
+        </p>
       )}
 
-      <div className="min-w-0 space-y-5">
-        {!selected ? (
-          <div className="card flex h-64 items-center justify-center p-8 text-sm text-white/40">
-            Create or select a portfolio to get started.
-          </div>
-        ) : (
-          <>
-            {grid && (
-              <>
-                <div className="card p-5">
-                  <div className="mb-3 flex flex-wrap items-end justify-between gap-3">
+      {!selected ? (
+        <div className="card flex flex-1 items-center justify-center p-8 text-sm text-white/40">
+          Create or select a portfolio to get started.
+        </div>
+      ) : (
+        <div className="relative z-0 flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
+          {/* Side / top tabs */}
+          <nav
+            className="flex shrink-0 gap-1 overflow-x-auto md:w-28 md:flex-col md:overflow-visible"
+            aria-label="Portfolio sections"
+          >
+            {TABS.map((t) => {
+              const active = panel === t.id
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setPanel(t.id)}
+                  className={`rounded-lg px-3 py-2 text-left text-sm font-medium transition md:px-3 ${
+                    active
+                      ? 'bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/40'
+                      : 'text-white/55 hover:bg-white/5 hover:text-white/85'
+                  }`}
+                >
+                  <span className="md:hidden">{t.short}</span>
+                  <span className="hidden md:inline">{t.label}</span>
+                </button>
+              )
+            })}
+          </nav>
+
+          {/* Active panel */}
+          <div className="card min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-5">
+            {panel === 'chart' && grid && (
+              <div className="space-y-5">
+                <div className="flex flex-wrap items-end justify-between gap-3">
+                  <div>
                     <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
-                      Portfolio value over time
+                      Portfolio value
                     </h3>
-                    <div className="flex flex-wrap items-center gap-2">
-                      <label className="flex items-center gap-1.5 text-xs text-white/50">
-                        From
-                        <input
-                          className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
-                          type="number"
-                          value={fromDraft}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            setFromDraft(v)
-                            applyPeriod(v, toDraft)
-                          }}
-                          onBlur={() => applyPeriod(fromDraft, toDraft)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                          }}
-                        />
-                      </label>
-                      <label className="flex items-center gap-1.5 text-xs text-white/50">
-                        To
-                        <input
-                          className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
-                          type="number"
-                          value={toDraft}
-                          onChange={(e) => {
-                            const v = e.target.value
-                            setToDraft(v)
-                            applyPeriod(fromDraft, v)
-                          }}
-                          onBlur={() => applyPeriod(fromDraft, toDraft)}
-                          onKeyDown={(e) => {
-                            if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
-                          }}
-                        />
-                      </label>
-                      <button
-                        type="button"
-                        className="btn-ghost !py-1 !text-[11px]"
-                        title="Reset to years with inputs only"
-                        onClick={() => {
-                          setPeriodFrom(firstInputYear)
-                          setPeriodTo(lastInputYear)
-                          setFromDraft(String(firstInputYear))
-                          setToDraft(String(lastInputYear))
-                        }}
-                      >
-                        Inputs only
-                      </button>
-                    </div>
+                    <p className="mt-0.5 text-[11px] text-white/35">
+                      Extend <span className="text-white/50">To</span> to include perpetual growth
+                      (green).
+                    </p>
                   </div>
-                  <p className="mb-2 text-[11px] text-white/35">
-                    Default: years with deposits, actions, or projections. Extend{' '}
-                    <span className="text-white/50">To</span> to include perpetual growth (green).
-                  </p>
-                  <FullscreenChart title="Portfolio value over time">
-                    <PortfolioChart
-                      key={`chart-${selected.id}-${selected.updatedAt}-${activeCurrency}-${usdToChf ?? 0}-${periodFrom}-${periodTo}-${grid.years.join(',')}`}
-                      grid={grid}
-                      portfolio={selected}
-                      scenarios={scenarios}
-                      displayCurrency={activeCurrency}
-                      usdToChf={usdToChf}
-                    />
-                  </FullscreenChart>
+                  <div className="flex flex-wrap items-center gap-2">
+                    <label className="flex items-center gap-1.5 text-xs text-white/50">
+                      From
+                      <input
+                        className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
+                        type="number"
+                        value={fromDraft}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setFromDraft(v)
+                          applyPeriod(v, toDraft)
+                        }}
+                        onBlur={() => applyPeriod(fromDraft, toDraft)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                        }}
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-white/50">
+                      To
+                      <input
+                        className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
+                        type="number"
+                        value={toDraft}
+                        onChange={(e) => {
+                          const v = e.target.value
+                          setToDraft(v)
+                          applyPeriod(fromDraft, v)
+                        }}
+                        onBlur={() => applyPeriod(fromDraft, toDraft)}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                        }}
+                      />
+                    </label>
+                    <button
+                      type="button"
+                      className="btn-ghost !py-1 !text-[11px]"
+                      title="Reset to years with inputs only"
+                      onClick={() => {
+                        setPeriodFrom(firstInputYear)
+                        setPeriodTo(lastInputYear)
+                        setFromDraft(String(firstInputYear))
+                        setToDraft(String(lastInputYear))
+                      }}
+                    >
+                      Inputs only
+                    </button>
+                  </div>
                 </div>
-                <div className="card p-5">
+                <FullscreenChart title="Portfolio value over time">
+                  <PortfolioChart
+                    key={`chart-${selected.id}-${selected.updatedAt}-${activeCurrency}-${usdToChf ?? 0}-${periodFrom}-${periodTo}-${grid.years.join(',')}`}
+                    grid={grid}
+                    portfolio={selected}
+                    scenarios={scenarios}
+                    displayCurrency={activeCurrency}
+                    usdToChf={usdToChf}
+                  />
+                </FullscreenChart>
+                <div>
                   <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-                    Portfolio value by year
+                    Value by year
                   </h3>
                   <PortfolioValueTable
                     grid={grid}
@@ -556,30 +694,30 @@ export function PortfolioView({
                     usdToChf={usdToChf}
                   />
                 </div>
-              </>
+              </div>
             )}
 
-            <div className="card p-5">
+            {panel === 'chart' && !grid && (
+              <p className="text-sm text-white/40">Add cash or holdings to see the chart.</p>
+            )}
+
+            {editorPanel && (
               <PortfolioHoldingsEditor
+                panel={editorPanel}
                 portfolio={selected}
                 scenarios={scenarios}
                 onChange={(patch) => updatePortfolio(selected.id, patch)}
                 displayCurrency={activeCurrency}
                 usdToChf={usdToChf}
-                onDisplayCurrencyChange={setCurrency}
-                rateLabel={rateLabel}
-                fxLoading={fxLoading}
-                onRetryFx={() => void loadFx()}
-                showFxWarning={displayCurrency === 'CHF' && usdToChf == null && !fxLoading}
-                autoFocusName={focusNameId === selected.id}
-                onNameFocused={() => setFocusNameId(null)}
                 incomeCostScenarios={incomeCostScenarios}
                 incomeCostLines={incomeCostLines}
+                otherPortfolios={portfolios.filter((p) => p.id !== selected.id)}
+                onUpdateOtherPortfolio={updatePortfolio}
               />
-            </div>
-          </>
-        )}
-      </div>
+            )}
+          </div>
+        </div>
+      )}
     </div>
   )
 }

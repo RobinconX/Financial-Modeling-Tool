@@ -1,7 +1,6 @@
 import type { SavedScenario, StoragePayload } from '../types'
 import {
   newEasyProjection,
-  newYearProjection,
   sortEasyProjections,
   sortYearProjections,
 } from './valuation'
@@ -64,7 +63,7 @@ function normalizeScenario(raw: unknown): SavedScenario | null {
           peMultiple: asNumberOrNull(row.peMultiple),
         }
       })
-    : [newYearProjection()]
+    : []
 
   const now = new Date().toISOString()
   return {
@@ -78,9 +77,8 @@ function normalizeScenario(raw: unknown): SavedScenario | null {
     sharesOutstanding: asNumberOrNull(raw.sharesOutstanding),
     mcapOverride: asNumberOrNull(raw.mcapOverride),
     easyRows: sortEasyProjections(easyRows.length ? easyRows : [newEasyProjection()]),
-    advancedRows: sortYearProjections(
-      advancedRows.length ? advancedRows : [newYearProjection()],
-    ),
+    // Empty allowed — advanced is optional until the user adds it
+    advancedRows: sortYearProjections(advancedRows),
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   }

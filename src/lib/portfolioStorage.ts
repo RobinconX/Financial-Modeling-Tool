@@ -80,6 +80,7 @@ function normalizeDeposits(raw: Record<string, unknown>): PortfolioDeposit[] {
           year,
           amount,
         }
+        if (d.currency === 'CHF' || d.currency === 'USD') dep.currency = d.currency
         if (d.isOpening === true) dep.isOpening = true
         if (d.source === 'surplus') {
           dep.source = 'surplus'
@@ -151,6 +152,8 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
         year,
         shares,
       }
+      const price = asNumberOrNull(a.price)
+      if (price != null && price > 0) action.price = price
       if (typeof a.note === 'string') action.note = a.note
       actions.push(action)
     }
@@ -167,6 +170,9 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
       surplusScenarioId:
         typeof p.surplusScenarioId === 'string' ? p.surplusScenarioId : null,
       surplusPercent: Math.max(0, asNumber(p.surplusPercent, 0)),
+    }
+    if (p.currency === 'CHF' || p.currency === 'USD') {
+      perpetualYearlyDeposit.currency = p.currency
     }
   }
 

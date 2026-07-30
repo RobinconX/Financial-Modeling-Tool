@@ -6,9 +6,9 @@ import type {
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
-import { getActions, newAction, tradePriceForYear } from '../../lib/portfolio'
-import { formatMoney, formatPrice } from '../../lib/format'
-import { toDisplay } from '../../lib/fx'
+import { actionTradePrice, getActions, newAction } from '../../lib/portfolio'
+import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
+import { fromDisplay, toDisplay } from '../../lib/fx'
 
 type Props = {
   portfolio: SavedPortfolio
@@ -53,13 +53,14 @@ export function HoldingActionsEditor({
     const scenario = holding.scenarioId
       ? (scenariosById.get(holding.scenarioId) ?? null)
       : null
-    const px = tradePriceForYear(holding, scenario, a.year, currentYear)
+    const px = actionTradePrice(a, holding, scenario, currentYear)
     if (px == null) return 'No price for year'
     const dollars = a.shares * px
     const sign = a.type === 'buy' ? '−' : '+'
     const cashDisp = toDisplay(dollars, displayCurrency, usdToChf)
     const pxDisp = toDisplay(px, displayCurrency, usdToChf)
-    return `${sign}${formatMoney(cashDisp, displayCurrency)} cash · ${formatPrice(pxDisp, displayCurrency)}/sh`
+    const auto = a.price == null || !(a.price > 0)
+    return `${sign}${formatMoney(cashDisp, displayCurrency)} cash · ${formatPrice(pxDisp, displayCurrency)}/sh${auto ? ' (auto)' : ''}`
   }
 
   return (
@@ -70,7 +71,8 @@ export function HoldingActionsEditor({
             Intended actions
           </h4>
           <p className="text-[10px] text-white/35">
-            Buy / sell from a year on — adjusts shares and cash in the totals chart.
+            Buy / sell from a year on — set an optional trade price, or leave blank to use the
+            scenario/live price. Adjusts shares and cash in the totals chart.
           </p>
         </div>
         <div className="flex flex-wrap gap-1.5">
@@ -102,6 +104,8 @@ export function HoldingActionsEditor({
             action={a}
             minYear={currentYear}
             preview={preview(a)}
+            displayCurrency={displayCurrency}
+            usdToChf={usdToChf}
             onCommit={(patch) => updateAction(a.id, patch)}
             onRemove={() => removeAction(a.id)}
           />
@@ -114,21 +118,35 @@ export function HoldingActionsEditor({
 /** @deprecated Use HoldingActionsEditor — kept name export for any old imports */
 export const PortfolioActionsEditor = HoldingActionsEditor
 
+function roundPriceInput(n: number): number {
+  if (!Number.isFinite(n)) return n
+  return Math.round(n * 1e6) / 1e6
+}
+
 function ActionRow({
   action,
   minYear,
   preview,
+  displayCurrency,
+  usdToChf,
   onCommit,
   onRemove,
 }: {
   action: PortfolioAction
   minYear: number
   preview: string
+  displayCurrency: DisplayCurrency
+  usdToChf: number | null
   onCommit: (patch: Partial<PortfolioAction>) => void
   onRemove: () => void
 }) {
   const [yearText, setYearText] = useState(String(action.year))
   const [sharesText, setSharesText] = useState(action.shares > 0 ? String(action.shares) : '')
+  const [priceText, setPriceText] = useState(
+    action.price != null && action.price > 0
+      ? String(roundPriceInput(toDisplay(action.price, displayCurrency, usdToChf)))
+      : '',
+  )
 
   useEffect(() => {
     setYearText(String(action.year))
@@ -137,6 +155,33 @@ function ActionRow({
   useEffect(() => {
     setSharesText(action.shares > 0 ? String(action.shares) : '')
   }, [action.id, action.shares])
+
+  useEffect(() => {
+    setPriceText(
+      action.price != null && action.price > 0
+        ? String(roundPriceInput(toDisplay(action.price, displayCurrency, usdToChf)))
+        : '',
+    )
+  }, [action.id, action.price, displayCurrency, usdToChf])
+
+  function commitPrice() {
+    const raw = priceText.trim()
+    if (!raw) {
+      if (action.price != null) onCommit({ price: null })
+      return
+    }
+    const parsed = parseMoney(raw)
+    if (parsed == null || parsed <= 0) {
+      setPriceText(
+        action.price != null && action.price > 0
+          ? String(roundPriceInput(toDisplay(action.price, displayCurrency, usdToChf)))
+          : '',
+      )
+      return
+    }
+    const book = fromDisplay(parsed, displayCurrency, usdToChf)
+    if (book !== action.price) onCommit({ price: book })
+  }
 
   return (
     <div className="flex flex-wrap items-end gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2 py-1.5">
@@ -190,6 +235,22 @@ function ActionRow({
               return
             }
             if (n !== action.shares) onCommit({ shares: n })
+          }}
+        />
+      </div>
+      <div className="w-[6.5rem]">
+        <label className="label !mb-0.5 !text-[9px]">Price / sh</label>
+        <input
+          className="input !py-1 !text-xs tabular-nums"
+          type="text"
+          inputMode="decimal"
+          placeholder="Auto"
+          title={`Trade price in ${displayCurrency}. Leave empty to use scenario or live price.`}
+          value={priceText}
+          onChange={(e) => setPriceText(e.target.value)}
+          onBlur={commitPrice}
+          onKeyDown={(e) => {
+            if (e.key === 'Enter') e.currentTarget.blur()
           }}
         />
       </div>

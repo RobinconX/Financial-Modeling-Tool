@@ -244,14 +244,20 @@ export type PortfolioDeposit = {
   id: string
   year: number
   /**
-   * USD book amount for this year when `source` is `fixed` (default).
+   * Nominal amount when `source` is `fixed` (default), in `currency` (default USD).
+   * Stored as entered so CHF figures do not drift when the FX rate changes.
    * Ignored for cash math when `source` is `surplus` (computed from Income/Cost).
    */
   amount: number
+  /**
+   * Denomination of `amount` for fixed deposits. Default / missing = USD (legacy).
+   * Display shows this amount as-is when the portfolio display currency matches.
+   */
+  currency?: DisplayCurrency
   /** Opening cash already held today — at most one per portfolio when normalized. */
   isOpening?: boolean
   /**
-   * `fixed` = use `amount`.
+   * `fixed` = use `amount` (+ `currency`).
    * `surplus` = deposit = max(0, scenario net yearly) × surplusPercent / 100 (CHF→USD via FX).
    * Income/Cost scenario is not modified.
    */
@@ -267,8 +273,10 @@ export type PortfolioDeposit = {
  * non-opening deposit year (or after the opening year if no other deposits).
  */
 export type PerpetualYearlyDeposit = {
-  /** USD when source is fixed; ignored when surplus (computed at resolve time). */
+  /** Nominal amount when source is fixed, in `currency` (default USD). */
   amount: number
+  /** Denomination of `amount` for fixed perpetual deposits. Missing = USD. */
+  currency?: DisplayCurrency
   source?: PortfolioDepositSource
   surplusScenarioId?: string | null
   surplusPercent?: number
@@ -284,6 +292,12 @@ export type PortfolioAction = {
   year: number
   /** Shares bought or sold (always > 0). */
   shares: number
+  /**
+   * Optional trade share price in USD book.
+   * When set (> 0), used for cash impact instead of scenario/live price for that year.
+   * Null/omit = auto (scenario projection or current price).
+   */
+  price?: number | null
   note?: string
 }
 

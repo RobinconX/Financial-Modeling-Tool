@@ -297,10 +297,15 @@ export function CompanyPanel({ title, onSaveScenario, loadState, onLoadConsumed 
 
       <div>
         <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-          Market cap evolution
+          Projection chart
         </h3>
-        <FullscreenChart title="Market cap evolution">
-          <MarketCapChart data={chartData} mode={mode} currency={currency} />
+        <FullscreenChart title="Projection chart">
+          <MarketCapChart
+            data={chartData}
+            mode={mode}
+            currency={currency}
+            sharesOutstanding={sharesOutstanding}
+          />
         </FullscreenChart>
       </div>
 

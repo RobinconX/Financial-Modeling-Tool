@@ -29,6 +29,42 @@ export function fromDisplay(
   return amount
 }
 
+/**
+ * Convert a fixed cash amount stored in `amountCurrency` into USD book units.
+ * CHF amounts only move with FX when combining with USD stocks — the stored
+ * nominal CHF figure itself does not change.
+ */
+export function fixedAmountToUsd(
+  amount: number,
+  amountCurrency: DisplayCurrency | null | undefined,
+  usdToChf: number | null | undefined,
+): number {
+  if (!Number.isFinite(amount) || amount <= 0) return 0
+  if (amountCurrency === 'CHF') {
+    if (usdToChf != null && usdToChf > 0) return amount / usdToChf
+    return amount
+  }
+  return amount
+}
+
+/**
+ * Show a fixed cash amount in the portfolio display currency.
+ * When storage denomination matches display currency, return the stored
+ * number unchanged (no FX drift).
+ */
+export function amountToDisplay(
+  amount: number,
+  amountCurrency: DisplayCurrency | null | undefined,
+  displayCurrency: DisplayCurrency,
+  usdToChf: number | null,
+): number {
+  if (!Number.isFinite(amount)) return amount
+  const book: DisplayCurrency = amountCurrency === 'CHF' ? 'CHF' : 'USD'
+  if (book === displayCurrency) return amount
+  const usd = fixedAmountToUsd(amount, book, usdToChf)
+  return toDisplay(usd, displayCurrency, usdToChf)
+}
+
 export async function fetchFxRateClient(
   from = 'USD',
   to = 'CHF',

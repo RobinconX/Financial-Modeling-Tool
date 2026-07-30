@@ -12,6 +12,7 @@ import type {
   ValuationBasis,
 } from '../../types'
 import {
+  applyPortfolioValuesToTarget,
   cashForYear,
   depositInYear,
   getActions,
@@ -25,12 +26,15 @@ import {
   resolveDepositAmount,
   resolvePerpetualYearlyAmount,
   type DepositResolveContext,
+  type PropagatePortfolioFields,
   withResolvedDepositAmounts,
 } from '../../lib/portfolio'
 import { scenarioTotals } from '../../lib/incomeCost'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
-import { fromDisplay, toDisplay } from '../../lib/fx'
+import { amountToDisplay, fromDisplay, toDisplay } from '../../lib/fx'
 import { HoldingActionsEditor } from './PortfolioActionsEditor'
+
+export type PortfolioEditorPanel = 'cash' | 'positions' | 'growth' | 'all'
 
 type Props = {
   portfolio: SavedPortfolio
@@ -38,6 +42,8 @@ type Props = {
   onChange: (patch: Partial<SavedPortfolio>) => void
   displayCurrency?: DisplayCurrency
   usdToChf?: number | null
+  /** When set, only that workspace panel is shown (currency lives in parent top bar). */
+  panel?: PortfolioEditorPanel
   onDisplayCurrencyChange?: (c: DisplayCurrency) => void
   rateLabel?: string
   fxLoading?: boolean
@@ -49,6 +55,9 @@ type Props = {
   /** Income/Cost scenarios for surplus-linked deposits (read-only). */
   incomeCostScenarios?: CashflowScenario[]
   incomeCostLines?: CashflowLine[]
+  /** Other portfolios for “copy cash & stocks to…” */
+  otherPortfolios?: SavedPortfolio[]
+  onUpdateOtherPortfolio?: (id: string, patch: Partial<SavedPortfolio>) => boolean
 }
 
 const BASIS_OPTIONS: { id: ValuationBasis | 'easy'; label: string }[] = [
@@ -64,6 +73,7 @@ export function PortfolioHoldingsEditor({
   onChange,
   displayCurrency = 'USD',
   usdToChf = null,
+  panel = 'all',
   onDisplayCurrencyChange,
   rateLabel,
   fxLoading = false,
@@ -73,12 +83,23 @@ export function PortfolioHoldingsEditor({
   onNameFocused,
   incomeCostScenarios = [],
   incomeCostLines = [],
+  otherPortfolios = [],
+  onUpdateOtherPortfolio,
 }: Props) {
+  const showConfig = panel === 'all'
+  const showCash = panel === 'all' || panel === 'cash'
+  const showGrowth = panel === 'all' || panel === 'growth'
+  const showPositions = panel === 'all' || panel === 'positions'
   const currentYear = new Date().getFullYear()
   const depositCtx: DepositResolveContext = {
     incomeCostLines,
     usdToChf,
   }
+  /** 'cash' | 'holdings' which panel opened the copy dialog */
+  const [propagateMode, setPropagateMode] = useState<'cash' | 'holdings' | null>(null)
+  const [propagateIncludeActions, setPropagateIncludeActions] = useState(false)
+  const [propagateIds, setPropagateIds] = useState<Record<string, boolean>>({})
+  const [propagateMsg, setPropagateMsg] = useState<string | null>(null)
   const resolvedPortfolio = withResolvedDepositAmounts(portfolio, depositCtx)
   let deposits = getDeposits(portfolio)
   // Ensure opening row exists in UI state (persisted via normalize on update)
@@ -89,6 +110,11 @@ export function PortfolioHoldingsEditor({
   const resolvedById = new Map(resolvedDeposits.map((d) => [d.id, d]))
   // Default collapsed so chart/totals stay in view; newly added holdings open.
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  /**
+   * Display order only — does not rewrite portfolio.holdings storage order.
+   * 'symbol' = A–Z, 'value' = high→low by current $ value.
+   */
+  const [holdingSort, setHoldingSort] = useState<'manual' | 'symbol' | 'value'>('manual')
   const [showRenameHint, setShowRenameHint] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const knownHoldingIdsRef = useRef<Set<string> | null>(null)
@@ -152,6 +178,51 @@ export function PortfolioHoldingsEditor({
     (a, b) => a.symbol.localeCompare(b.symbol) || a.name.localeCompare(b.name),
   )
   const allActions = getActions(portfolio)
+
+  function holdingCurrentValue(h: PortfolioHolding): number | null {
+    const linked =
+      h.scenarioId != null
+        ? (scenarios.find((s) => s.id === h.scenarioId) ?? null)
+        : null
+    const px = resolveCurrentPrice(h, linked)
+    if (h.sharesHeld > 0 && px != null && px > 0) return h.sharesHeld * px
+    return null
+  }
+
+  const sortedHoldings = useMemo(() => {
+    const list = portfolio.holdings.slice()
+    if (holdingSort === 'manual' || list.length < 2) return list
+
+    if (holdingSort === 'symbol') {
+      list.sort((a, b) =>
+        (a.symbol || '—').localeCompare(b.symbol || '—', undefined, {
+          sensitivity: 'base',
+          numeric: true,
+        }),
+      )
+      return list
+    }
+
+    // value: high → low; missing price/value last, then by symbol
+    list.sort((a, b) => {
+      const va = holdingCurrentValue(a)
+      const vb = holdingCurrentValue(b)
+      if (va == null && vb == null) {
+        return (a.symbol || '').localeCompare(b.symbol || '', undefined, {
+          sensitivity: 'base',
+        })
+      }
+      if (va == null) return 1
+      if (vb == null) return -1
+      if (vb !== va) return vb - va
+      return (a.symbol || '').localeCompare(b.symbol || '', undefined, {
+        sensitivity: 'base',
+      })
+    })
+    return list
+    // scenarios used via holdingCurrentValue for prices
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- scenarios identity + holdings
+  }, [portfolio.holdings, holdingSort, scenarios])
 
   function toggleExpand(id: string) {
     setExpanded((prev) => ({ ...prev, [id]: !prev[id] }))
@@ -305,88 +376,231 @@ export function PortfolioHoldingsEditor({
     })
   }
 
+  function openPropagate(mode: 'cash' | 'holdings') {
+    const init: Record<string, boolean> = {}
+    for (const p of otherPortfolios) init[p.id] = true
+    setPropagateIds(init)
+    setPropagateIncludeActions(false)
+    setPropagateMsg(null)
+    setPropagateMode(mode)
+  }
+
+  function applyPropagate() {
+    if (!onUpdateOtherPortfolio || !propagateMode) return
+    const fields: PropagatePortfolioFields =
+      propagateMode === 'cash'
+        ? { cash: true }
+        : { holdings: true, actions: propagateIncludeActions }
+    const targets = otherPortfolios.filter((p) => propagateIds[p.id])
+    if (targets.length === 0) {
+      setPropagateMsg('Select at least one portfolio.')
+      return
+    }
+    let n = 0
+    for (const t of targets) {
+      const next = applyPortfolioValuesToTarget(portfolio, t, fields)
+      if (
+        onUpdateOtherPortfolio(t.id, {
+          deposits: next.deposits,
+          perpetualYearlyDeposit: next.perpetualYearlyDeposit,
+          holdings: next.holdings,
+          actions: next.actions,
+          currentCash: 0,
+        })
+      ) {
+        n += 1
+      }
+    }
+    const what =
+      propagateMode === 'cash'
+        ? 'cash'
+        : propagateIncludeActions
+          ? 'stocks & actions'
+          : 'stocks'
+    setPropagateMsg(`Copied ${what} to ${n} portfolio${n === 1 ? '' : 's'}.`)
+    setPropagateMode(null)
+  }
+
+  function renderPropagateDialog() {
+    if (!propagateMode || otherPortfolios.length === 0 || !onUpdateOtherPortfolio) return null
+    const isCash = propagateMode === 'cash'
+    return (
+      <div className="space-y-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
+        <div className="flex items-start justify-between gap-2">
+          <div>
+            <h4 className="text-sm font-semibold text-white/90">
+              {isCash ? 'Copy cash to other portfolios' : 'Copy stock positions'}
+            </h4>
+            <p className="text-[11px] text-white/45">
+              {isCash
+                ? 'Overwrite opening cash, planned deposits, and perpetual yearly deposit on the selected portfolios.'
+                : 'Overwrite matching tickers (by symbol) with this portfolio’s shares, scenario link, basis, and overrides.'}
+            </p>
+          </div>
+          <button
+            type="button"
+            className="btn-ghost !py-1 !text-xs"
+            onClick={() => setPropagateMode(null)}
+          >
+            Cancel
+          </button>
+        </div>
+        {!isCash && (
+          <label className="inline-flex items-center gap-2 text-sm text-white/80">
+            <input
+              type="checkbox"
+              checked={propagateIncludeActions}
+              onChange={(e) => setPropagateIncludeActions(e.target.checked)}
+            />
+            Also copy buy/sell actions for those tickers
+          </label>
+        )}
+        <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-white/10 bg-black/20 p-2">
+          <div className="mb-1 flex gap-2">
+            <button
+              type="button"
+              className="text-[11px] text-emerald-400/90 hover:underline"
+              onClick={() => {
+                const all: Record<string, boolean> = {}
+                for (const p of otherPortfolios) all[p.id] = true
+                setPropagateIds(all)
+              }}
+            >
+              Select all
+            </button>
+            <button
+              type="button"
+              className="text-[11px] text-white/45 hover:underline"
+              onClick={() => setPropagateIds({})}
+            >
+              None
+            </button>
+          </div>
+          {otherPortfolios.map((p) => (
+            <label
+              key={p.id}
+              className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm text-white/80 hover:bg-white/5"
+            >
+              <input
+                type="checkbox"
+                checked={!!propagateIds[p.id]}
+                onChange={(e) =>
+                  setPropagateIds((prev) => ({ ...prev, [p.id]: e.target.checked }))
+                }
+              />
+              <span className="truncate">{p.name}</span>
+            </label>
+          ))}
+        </div>
+        <button type="button" className="btn-primary !py-1.5 !text-xs" onClick={applyPropagate}>
+          Apply to selected
+        </button>
+      </div>
+    )
+  }
+
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-          Configuration
-        </h3>
-        <div className="grid gap-3 sm:grid-cols-2">
-          <div>
-            <label className="label">Portfolio name</label>
-            <input
-              ref={nameInputRef}
-              className="input"
-              value={portfolio.name}
-              onChange={(e) => onChange({ name: e.target.value })}
-              onBlur={() => setShowRenameHint(false)}
-              aria-describedby={showRenameHint ? 'portfolio-rename-hint' : undefined}
-            />
-            {showRenameHint && (
-              <p
-                id="portfolio-rename-hint"
-                className="mt-1 text-[11px] font-medium text-emerald-400/80"
-              >
-                Rename this portfolio — type a new name, then press Tab
-              </p>
-            )}
-          </div>
-          <div>
-            <label className="label">Display currency</label>
-            <div className="flex flex-wrap items-center gap-2">
-              <div className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5">
-                {(['USD', 'CHF'] as const).map((c) => (
-                  <button
-                    key={c}
-                    type="button"
-                    onClick={() => onDisplayCurrencyChange?.(c)}
-                    className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
-                      displayCurrency === c
-                        ? 'bg-white text-black shadow'
-                        : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    {c === 'USD' ? 'USD ($)' : 'CHF'}
-                  </button>
-                ))}
-              </div>
-              {displayCurrency === 'CHF' && usdToChf == null && onRetryFx && (
-                <button
-                  type="button"
-                  className="btn-ghost !px-2 !py-1 !text-[11px]"
-                  onClick={onRetryFx}
-                  disabled={fxLoading}
+      {showConfig && (
+        <div>
+          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
+            Configuration
+          </h3>
+          <div className="grid gap-3 sm:grid-cols-2">
+            <div>
+              <label className="label">Portfolio name</label>
+              <input
+                ref={nameInputRef}
+                className="input"
+                value={portfolio.name}
+                onChange={(e) => onChange({ name: e.target.value })}
+                onBlur={() => setShowRenameHint(false)}
+                aria-describedby={showRenameHint ? 'portfolio-rename-hint' : undefined}
+              />
+              {showRenameHint && (
+                <p
+                  id="portfolio-rename-hint"
+                  className="mt-1 text-[11px] font-medium text-emerald-400/80"
                 >
-                  Retry rate
-                </button>
+                  Rename this portfolio — type a new name, then press Tab
+                </p>
               )}
             </div>
-            {rateLabel && (
-              <p className="mt-1 text-[11px] text-white/40">{rateLabel}</p>
-            )}
-            {showFxWarning && (
-              <p className="mt-1 text-[11px] text-amber-300/90">
-                Showing USD until a live CHF rate is available.
-              </p>
-            )}
+            <div>
+              <label className="label">Display currency</label>
+              <div className="flex flex-wrap items-center gap-2">
+                <div className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5">
+                  {(['USD', 'CHF'] as const).map((c) => (
+                    <button
+                      key={c}
+                      type="button"
+                      onClick={() => onDisplayCurrencyChange?.(c)}
+                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                        displayCurrency === c
+                          ? 'bg-white text-black shadow'
+                          : 'text-white/60 hover:text-white'
+                      }`}
+                    >
+                      {c === 'USD' ? 'USD ($)' : 'CHF'}
+                    </button>
+                  ))}
+                </div>
+                {displayCurrency === 'CHF' && usdToChf == null && onRetryFx && (
+                  <button
+                    type="button"
+                    className="btn-ghost !px-2 !py-1 !text-[11px]"
+                    onClick={onRetryFx}
+                    disabled={fxLoading}
+                  >
+                    Retry rate
+                  </button>
+                )}
+              </div>
+              {rateLabel && (
+                <p className="mt-1 text-[11px] text-white/40">{rateLabel}</p>
+              )}
+              {showFxWarning && (
+                <p className="mt-1 text-[11px] text-amber-300/90">
+                  Showing USD until a live CHF rate is available.
+                </p>
+              )}
+            </div>
           </div>
         </div>
-      </div>
+      )}
 
+      {showCash && (
       <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div>
             <h3 className="text-sm font-semibold text-white/85">Cash & deposits</h3>
             <p className="text-[11px] text-white/40">
-              First row is current cash (opening). Add deposits as a flat amount or as a % of
-              surplus from an Income/Cost scenario (scenario is not changed). Optionally repeat a
-              yearly amount after the last explicit deposit year.
+              First row is current cash (opening). Amounts are stored in the currency you enter
+              (no FX drift if you stay in CHF). Deposits can be fixed or % of Income/Cost surplus.
+              Optionally repeat a yearly amount after the last explicit deposit year.
             </p>
           </div>
-          <button type="button" className="btn-ghost !py-1 !text-xs" onClick={addDeposit}>
-            + Deposit
-          </button>
+          <div className="flex flex-wrap gap-1">
+            {otherPortfolios.length > 0 && onUpdateOtherPortfolio && (
+              <button
+                type="button"
+                className="btn-ghost !py-1 !text-xs"
+                onClick={() => openPropagate('cash')}
+                title="Copy opening cash, deposits, and perpetual yearly deposit to other portfolios"
+              >
+                Copy cash…
+              </button>
+            )}
+            <button type="button" className="btn-ghost !py-1 !text-xs" onClick={addDeposit}>
+              + Deposit
+            </button>
+          </div>
         </div>
+
+        {propagateMsg && propagateMode === null && (
+          <p className="text-[11px] text-emerald-400/90">{propagateMsg}</p>
+        )}
+        {propagateMode === 'cash' && renderPropagateDialog()}
 
         <div className="hidden grid-cols-[5.5rem_6.5rem_minmax(0,1fr)_auto_auto] gap-2 px-0.5 text-[10px] uppercase tracking-wider text-white/40 sm:grid">
           <span>Year</span>
@@ -439,48 +653,6 @@ export function PortfolioHoldingsEditor({
           onChange={updatePerpetual}
         />
 
-        <div className="rounded-lg border border-violet-500/20 bg-violet-500/[0.06] px-2 py-2">
-          <div className="mb-1.5 flex flex-wrap items-center justify-between gap-2">
-            <span className="text-xs font-medium text-white/80">
-              Perpetual growth after last projection
-            </span>
-            <span className="text-[10px] text-white/40">% / year on whole portfolio</span>
-          </div>
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-24">
-              <input
-                className="input !py-1.5 !pr-6 !text-xs tabular-nums"
-                type="text"
-                inputMode="decimal"
-                value={
-                  growthPercent != null && growthPercent !== 0
-                    ? String(growthPercent)
-                    : ''
-                }
-                placeholder="0"
-                onChange={(e) => {
-                  const raw = e.target.value.trim().replace(/%/g, '')
-                  if (raw === '' || raw === '-') {
-                    onChange({ perpetualGrowthPercent: null })
-                    return
-                  }
-                  const n = Number(raw)
-                  onChange({
-                    perpetualGrowthPercent: Number.isFinite(n) ? n : null,
-                  })
-                }}
-              />
-              <span className="pointer-events-none absolute right-2 top-1/2 -translate-y-1/2 text-[11px] text-white/35">
-                %
-              </span>
-            </div>
-            <p className="text-[10px] text-white/40">
-              Compounds the full portfolio after the last year with specific inputs (projections,
-              deposits, actions). Leave empty or 0 to turn off.
-            </p>
-          </div>
-        </div>
-
         <div className="space-y-1 border-t border-white/5 pt-2 text-xs text-white/40">
           <p>
             Current cash:{' '}
@@ -515,12 +687,87 @@ export function PortfolioHoldingsEditor({
           )}
         </div>
       </div>
+      )}
 
+      {showGrowth && (
+        <div className="space-y-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.06] p-4">
+          <div>
+            <h3 className="text-sm font-semibold text-white/85">
+              Perpetual growth after last projection
+            </h3>
+            <p className="mt-1 text-[11px] text-white/40">
+              Compounds the full portfolio after the last year with specific inputs (projections,
+              deposits, actions). Leave empty or 0 to turn off. Use the Chart tab period{' '}
+              <span className="text-white/55">To</span> year to see growth bars.
+            </p>
+          </div>
+          <div className="flex flex-wrap items-center gap-3">
+            <div className="relative w-28">
+              <input
+                className="input !py-2 !pr-7 !text-sm tabular-nums"
+                type="text"
+                inputMode="decimal"
+                value={
+                  growthPercent != null && growthPercent !== 0
+                    ? String(growthPercent)
+                    : ''
+                }
+                placeholder="0"
+                onChange={(e) => {
+                  const raw = e.target.value.trim().replace(/%/g, '')
+                  if (raw === '' || raw === '-') {
+                    onChange({ perpetualGrowthPercent: null })
+                    return
+                  }
+                  const n = Number(raw)
+                  onChange({
+                    perpetualGrowthPercent: Number.isFinite(n) ? n : null,
+                  })
+                }}
+              />
+              <span className="pointer-events-none absolute right-2.5 top-1/2 -translate-y-1/2 text-xs text-white/35">
+                %
+              </span>
+            </div>
+            <span className="text-xs text-white/45">per year on whole portfolio total</span>
+          </div>
+        </div>
+      )}
+
+      {showPositions && (
+      <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">Holdings</h3>
           {portfolio.holdings.length > 0 && (
-            <div className="flex items-center gap-1">
+            <div className="flex flex-wrap items-center gap-1">
+              <div
+                className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5"
+                role="group"
+                aria-label="Sort holdings"
+              >
+                {(
+                  [
+                    { id: 'manual' as const, label: 'As added' },
+                    { id: 'symbol' as const, label: 'A–Z' },
+                    { id: 'value' as const, label: 'By value' },
+                  ] as const
+                ).map((opt) => (
+                  <button
+                    key={opt.id}
+                    type="button"
+                    className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition ${
+                      holdingSort === opt.id
+                        ? 'bg-white text-black shadow'
+                        : 'text-white/55 hover:text-white'
+                    }`}
+                    onClick={() => setHoldingSort(opt.id)}
+                    aria-pressed={holdingSort === opt.id}
+                  >
+                    {opt.label}
+                  </button>
+                ))}
+              </div>
               <button
                 type="button"
                 className="btn-ghost !px-2 !py-0.5 !text-[11px]"
@@ -539,6 +786,16 @@ export function PortfolioHoldingsEditor({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-2">
+          {otherPortfolios.length > 0 && onUpdateOtherPortfolio && (
+            <button
+              type="button"
+              className="btn-ghost !py-1.5 !text-xs"
+              onClick={() => openPropagate('holdings')}
+              title="Copy stock positions (and optionally buy/sell actions) to other portfolios"
+            >
+              Copy stocks…
+            </button>
+          )}
           {projectionOptions.length > 0 ? (
             <select
               className="select-compact"
@@ -569,6 +826,11 @@ export function PortfolioHoldingsEditor({
         </div>
       </div>
 
+      {propagateMsg && propagateMode === null && showPositions && !showCash && (
+        <p className="text-[11px] text-emerald-400/90">{propagateMsg}</p>
+      )}
+      {propagateMode === 'holdings' && renderPropagateDialog()}
+
       {portfolio.holdings.length === 0 && (
         <p className="text-sm text-white/40">
           Pick a ticker from your saved projections above, then enter shares held. Value = shares ×
@@ -583,18 +845,15 @@ export function PortfolioHoldingsEditor({
         </p>
       )}
 
-      <div className="space-y-3">
-        {portfolio.holdings.map((h) => {
+      <div className="space-y-3" key={`holdings-${holdingSort}`}>
+        {sortedHoldings.map((h) => {
           const symbolScenarios = scenariosForSymbol(h.symbol)
           const linked =
             h.scenarioId != null
               ? (scenarios.find((s) => s.id === h.scenarioId) ?? null)
               : null
           const currentPrice = resolveCurrentPrice(h, linked)
-          const currentValue =
-            h.sharesHeld > 0 && currentPrice != null && currentPrice > 0
-              ? h.sharesHeld * currentPrice
-              : null
+          const currentValue = holdingCurrentValue(h)
 
           const symbolOptions = [...availableSymbols]
           if (h.symbol && !symbolOptions.includes(h.symbol)) {
@@ -926,6 +1185,8 @@ export function PortfolioHoldingsEditor({
           )
         })}
       </div>
+      </>
+      )}
     </div>
   )
 }
@@ -962,7 +1223,16 @@ function PerpetualDepositRow({
   const source: PortfolioDepositSource = perpetual?.source === 'surplus' ? 'surplus' : 'fixed'
   const [amountText, setAmountText] = useState(
     perpetual && perpetual.amount > 0
-      ? String(roundInput(toDisplay(perpetual.amount, displayCurrency, usdToChf)))
+      ? String(
+          roundInput(
+            amountToDisplay(
+              perpetual.amount,
+              perpetual.currency,
+              displayCurrency,
+              usdToChf,
+            ),
+          ),
+        )
       : '',
   )
   const [percentText, setPercentText] = useState(
@@ -974,10 +1244,19 @@ function PerpetualDepositRow({
   useEffect(() => {
     setAmountText(
       perpetual && perpetual.amount > 0
-        ? String(roundInput(toDisplay(perpetual.amount, displayCurrency, usdToChf)))
+        ? String(
+            roundInput(
+              amountToDisplay(
+                perpetual.amount,
+                perpetual.currency,
+                displayCurrency,
+                usdToChf,
+              ),
+            ),
+          )
         : '',
     )
-  }, [perpetual?.amount, displayCurrency, usdToChf])
+  }, [perpetual?.amount, perpetual?.currency, displayCurrency, usdToChf])
 
   useEffect(() => {
     setPercentText(
@@ -1059,7 +1338,7 @@ function PerpetualDepositRow({
               onBlur={() => {
                 const raw = amountText.trim()
                 if (!raw) {
-                  onChange({ amount: 0, source: 'fixed' })
+                  onChange({ amount: 0, source: 'fixed', currency: displayCurrency })
                   return
                 }
                 const parsed = parseMoney(raw)
@@ -1067,14 +1346,23 @@ function PerpetualDepositRow({
                   setAmountText(
                     perpetual && perpetual.amount > 0
                       ? String(
-                          roundInput(toDisplay(perpetual.amount, displayCurrency, usdToChf)),
+                          roundInput(
+                            amountToDisplay(
+                              perpetual.amount,
+                              perpetual.currency,
+                              displayCurrency,
+                              usdToChf,
+                            ),
+                          ),
                         )
                       : '',
                   )
                   return
                 }
+                // Store nominal amount in display currency (no FX bake-in)
                 onChange({
-                  amount: fromDisplay(parsed, displayCurrency, usdToChf),
+                  amount: parsed,
+                  currency: displayCurrency,
                   source: 'fixed',
                 })
               }}
@@ -1188,7 +1476,11 @@ function DepositRow({
   const [yearText, setYearText] = useState(String(deposit.year))
   const [amountText, setAmountText] = useState(
     deposit.amount > 0
-      ? String(roundInput(toDisplay(deposit.amount, displayCurrency, usdToChf)))
+      ? String(
+          roundInput(
+            amountToDisplay(deposit.amount, deposit.currency, displayCurrency, usdToChf),
+          ),
+        )
       : '',
   )
   const [percentText, setPercentText] = useState(
@@ -1205,10 +1497,14 @@ function DepositRow({
   useEffect(() => {
     setAmountText(
       deposit.amount > 0
-        ? String(roundInput(toDisplay(deposit.amount, displayCurrency, usdToChf)))
+        ? String(
+            roundInput(
+              amountToDisplay(deposit.amount, deposit.currency, displayCurrency, usdToChf),
+            ),
+          )
         : '',
     )
-  }, [deposit.id, deposit.amount, displayCurrency, usdToChf])
+  }, [deposit.id, deposit.amount, deposit.currency, displayCurrency, usdToChf])
 
   useEffect(() => {
     setPercentText(
@@ -1254,20 +1550,26 @@ function DepositRow({
   function commitAmount() {
     const raw = amountText.trim()
     if (!raw) {
-      if (deposit.amount !== 0) onCommit({ amount: 0 })
+      if (deposit.amount !== 0) onCommit({ amount: 0, currency: displayCurrency })
       return
     }
     const parsed = parseMoney(raw)
     if (parsed == null || parsed < 0) {
       setAmountText(
         deposit.amount > 0
-          ? String(roundInput(toDisplay(deposit.amount, displayCurrency, usdToChf)))
+          ? String(
+              roundInput(
+                amountToDisplay(deposit.amount, deposit.currency, displayCurrency, usdToChf),
+              ),
+            )
           : '',
       )
       return
     }
-    const book = fromDisplay(parsed, displayCurrency, usdToChf)
-    if (book !== deposit.amount) onCommit({ amount: book })
+    // Store nominal amount in the currency the user is viewing — no FX bake-in
+    if (parsed !== deposit.amount || deposit.currency !== displayCurrency) {
+      onCommit({ amount: parsed, currency: displayCurrency })
+    }
   }
 
   function commitPercent() {

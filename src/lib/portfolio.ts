@@ -12,6 +12,7 @@ import type {
   ValuationBasis,
 } from '../types'
 import { scenarioTotals } from './incomeCost'
+import { fixedAmountToUsd } from './fx'
 import {
   effectiveMarketCap,
   impliedSharePrice,
@@ -28,8 +29,9 @@ export type DepositResolveContext = {
 
 /**
  * Resolved USD deposit for cash math.
- * Surplus mode: max(0, scenario net yearly CHF) × percent / 100, converted to USD.
- * Does not mutate Income/Cost data.
+ * Fixed: amount in `currency` (default USD) → USD (CHF uses FX only at resolve time).
+ * Surplus: max(0, scenario net yearly CHF) × percent / 100 → USD.
+ * Does not mutate Income/Cost data or persisted deposit rows.
  */
 export function resolveDepositAmount(
   d: PortfolioDeposit,
@@ -37,10 +39,10 @@ export function resolveDepositAmount(
 ): number {
   const source: PortfolioDepositSource = d.source === 'surplus' ? 'surplus' : 'fixed'
   if (source !== 'surplus') {
-    return Number.isFinite(d.amount) && d.amount > 0 ? d.amount : 0
+    return fixedAmountToUsd(d.amount, d.currency, ctx?.usdToChf)
   }
   if (!ctx?.incomeCostLines || !d.surplusScenarioId) {
-    return Number.isFinite(d.amount) && d.amount > 0 ? d.amount : 0
+    return fixedAmountToUsd(d.amount, d.currency, ctx?.usdToChf)
   }
   const netChf = scenarioTotals(ctx.incomeCostLines, d.surplusScenarioId).netYearly
   const surplusChf = Math.max(0, netChf)
@@ -49,8 +51,8 @@ export function resolveDepositAmount(
   if (ctx.usdToChf != null && ctx.usdToChf > 0) {
     return chf / ctx.usdToChf
   }
-  // No FX: cannot convert CHF→USD reliably; fall back to stored amount
-  return Number.isFinite(d.amount) && d.amount > 0 ? d.amount : 0
+  // No FX: cannot convert CHF→USD reliably; fall back to stored amount as USD
+  return fixedAmountToUsd(d.amount, d.currency ?? 'USD', ctx?.usdToChf)
 }
 
 /** Resolve a perpetual yearly deposit config to a USD book amount. */
@@ -64,6 +66,7 @@ export function resolvePerpetualYearlyAmount(
       id: 'perpetual',
       year: 0,
       amount: p.amount,
+      currency: p.currency,
       source: p.source,
       surplusScenarioId: p.surplusScenarioId,
       surplusPercent: p.surplusPercent,
@@ -72,37 +75,162 @@ export function resolvePerpetualYearlyAmount(
   )
 }
 
-/** Portfolio copy with deposit (and perpetual) amounts resolved for cash math / charts. */
+/** Portfolio copy with deposit (and perpetual) amounts resolved to USD for cash math / charts. */
 export function withResolvedDepositAmounts(
   portfolio: SavedPortfolio,
   ctx?: DepositResolveContext | null,
 ): SavedPortfolio {
   const deposits = getDeposits(portfolio)
-  const hasSurplusDeposit = deposits.some((d) => d.source === 'surplus')
-  const hasSurplusPerpetual = portfolio.perpetualYearlyDeposit?.source === 'surplus'
-  if (!hasSurplusDeposit && !hasSurplusPerpetual && !portfolio.perpetualYearlyDeposit) {
-    return portfolio
-  }
-  const next: SavedPortfolio = {
+  const perpetual = portfolio.perpetualYearlyDeposit ?? null
+  const needsResolve =
+    deposits.some((d) => d.source === 'surplus' || d.currency === 'CHF') ||
+    (perpetual != null &&
+      (perpetual.source === 'surplus' || perpetual.currency === 'CHF'))
+
+  if (!needsResolve) return portfolio
+
+  return {
     ...portfolio,
-    deposits: hasSurplusDeposit
-      ? deposits.map((d) => ({
-          ...d,
-          amount: resolveDepositAmount(d, ctx),
-        }))
-      : deposits,
+    deposits: deposits.map((d) => ({
+      ...d,
+      amount: resolveDepositAmount(d, ctx),
+      currency: undefined,
+      source: 'fixed' as const,
+    })),
+    perpetualYearlyDeposit: perpetual
+      ? {
+          amount: resolvePerpetualYearlyAmount(perpetual, ctx),
+          currency: undefined,
+          source: 'fixed' as const,
+        }
+      : null,
   }
-  if (portfolio.perpetualYearlyDeposit) {
-    const p = portfolio.perpetualYearlyDeposit
-    next.perpetualYearlyDeposit = {
-      ...p,
-      // Store resolved USD in amount for cashFromDeposits (display uses original via UI)
-      amount: resolvePerpetualYearlyAmount(p, ctx),
-      // Keep source as fixed after resolve so amount is used as-is
-      source: 'fixed',
+}
+
+export type PropagatePortfolioFields = {
+  /** Opening cash, planned deposits, and perpetual yearly deposit */
+  cash?: boolean
+  /** Shares (and linked scenario/basis/overrides) matched by symbol */
+  holdings?: boolean
+  /**
+   * With holdings: also copy buy/sell actions for matched tickers
+   * (holding ids remapped source → target).
+   */
+  actions?: boolean
+}
+
+/**
+ * Copy cash and/or stock position values from source onto target.
+ * Holdings are matched by symbol; target-only symbols are left unchanged.
+ * Does not change target id/name/createdAt.
+ */
+export function applyPortfolioValuesToTarget(
+  source: SavedPortfolio,
+  target: SavedPortfolio,
+  fields: PropagatePortfolioFields,
+): SavedPortfolio {
+  const doCash = !!fields.cash
+  const doHoldings = !!fields.holdings
+  const doActions = !!fields.actions && doHoldings
+  if (!doCash && !doHoldings) return target
+
+  let deposits = getDeposits(target)
+  let perpetualYearlyDeposit = target.perpetualYearlyDeposit ?? null
+  let holdings = target.holdings
+  let actions = getActions(target)
+
+  if (doCash) {
+    const srcDeps = getDeposits(source)
+    const srcOpening = srcDeps.find((d) => d.isOpening)
+    const srcPlanned = srcDeps.filter((d) => !d.isOpening)
+    const tgtOpening = deposits.find((d) => d.isOpening) ?? newOpeningDeposit(0)
+
+    const opening: PortfolioDeposit = {
+      ...tgtOpening,
+      amount: srcOpening?.amount ?? 0,
+      currency: srcOpening?.currency,
+      source: srcOpening?.source === 'surplus' ? 'surplus' : 'fixed',
+      surplusScenarioId: srcOpening?.surplusScenarioId ?? null,
+      surplusPercent: srcOpening?.surplusPercent,
+      isOpening: true,
     }
+    if (opening.source !== 'surplus') {
+      delete opening.surplusScenarioId
+      delete opening.surplusPercent
+    }
+
+    const planned: PortfolioDeposit[] = srcPlanned.map((d) => {
+      const row: PortfolioDeposit = {
+        id: crypto.randomUUID(),
+        year: d.year,
+        amount: d.amount,
+        currency: d.currency,
+        source: d.source === 'surplus' ? 'surplus' : 'fixed',
+      }
+      if (d.source === 'surplus') {
+        row.surplusScenarioId = d.surplusScenarioId ?? null
+        row.surplusPercent = d.surplusPercent
+      }
+      return row
+    })
+
+    deposits = [opening, ...planned]
+    perpetualYearlyDeposit = source.perpetualYearlyDeposit
+      ? { ...source.perpetualYearlyDeposit }
+      : null
   }
-  return next
+
+  // source holding id → target holding id for matched symbols
+  const sourceHoldingToTarget = new Map<string, string>()
+  if (doHoldings) {
+    holdings = target.holdings.map((th) => {
+      const match = source.holdings.find(
+        (sh) => sh.symbol.toUpperCase() === th.symbol.toUpperCase(),
+      )
+      if (!match) return th
+      sourceHoldingToTarget.set(match.id, th.id)
+      return {
+        ...th,
+        sharesHeld: match.sharesHeld,
+        manualCurrentPrice: match.manualCurrentPrice,
+        scenarioId: match.scenarioId,
+        basis: match.basis,
+        yearOverrides: (match.yearOverrides ?? []).map((o) => ({ ...o })),
+      }
+    })
+  }
+
+  if (doActions && sourceHoldingToTarget.size > 0) {
+    const matchedTargetIds = new Set(sourceHoldingToTarget.values())
+    // Drop target actions on matched tickers; keep actions on target-only symbols
+    const kept = getActions(target).filter((a) => !matchedTargetIds.has(a.holdingId))
+    const copied: PortfolioAction[] = []
+    for (const a of getActions(source)) {
+      const newHoldingId = sourceHoldingToTarget.get(a.holdingId)
+      if (!newHoldingId) continue
+      const next: PortfolioAction = {
+        id: crypto.randomUUID(),
+        type: a.type,
+        holdingId: newHoldingId,
+        year: a.year,
+        shares: a.shares,
+      }
+      if (a.price != null && a.price > 0) next.price = a.price
+      if (a.note) next.note = a.note
+      copied.push(next)
+    }
+    actions = [...kept, ...copied]
+  }
+
+  return normalizePortfolioCashModel({
+    ...target,
+    deposits,
+    perpetualYearlyDeposit,
+    holdings,
+    actions,
+    currentCash: 0,
+    updatedAt: new Date().toISOString(),
+  })
 }
 
 /**
@@ -197,6 +325,7 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
       year: d.year,
       amount: d.amount,
     }
+    if (d.currency === 'CHF' || d.currency === 'USD') next.currency = d.currency
     if (d.isOpening) next.isOpening = true
     if (d.source === 'surplus') {
       next.source = 'surplus'
@@ -217,6 +346,7 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
         year: a.year,
         shares: a.shares,
       }
+      if (a.price != null && a.price > 0) action.price = a.price
       if (a.note) action.note = a.note
       return action
     })
@@ -478,6 +608,22 @@ export function tradePriceForYear(
 }
 
 /**
+ * Effective share price for a planned buy/sell.
+ * Prefer the action’s explicit `price` when set; otherwise scenario/live for the year.
+ */
+export function actionTradePrice(
+  action: PortfolioAction,
+  holding: PortfolioHolding,
+  scenario: SavedScenario | null,
+  currentYear = new Date().getFullYear(),
+): number | null {
+  if (action.price != null && Number.isFinite(action.price) && action.price > 0) {
+    return action.price
+  }
+  return tradePriceForYear(holding, scenario, action.year, currentYear)
+}
+
+/**
  * Cash at year Y including deposits and buy/sell cash flows.
  * May be negative (allowed; UI should warn).
  */
@@ -496,7 +642,7 @@ export function cashAtYear(
     const holding = holdingsById.get(a.holdingId)
     if (!holding) continue
     const scenario = holding.scenarioId ? (byId.get(holding.scenarioId) ?? null) : null
-    const px = tradePriceForYear(holding, scenario, a.year, currentYear)
+    const px = actionTradePrice(a, holding, scenario, currentYear)
     if (px == null || px <= 0) continue
     const cashFlow = a.shares * px
     if (a.type === 'buy') sum -= cashFlow

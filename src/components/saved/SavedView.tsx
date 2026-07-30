@@ -366,24 +366,32 @@ export function SavedView({
             <div className="grid gap-5 lg:grid-cols-2">
               <div className="card p-5">
                 <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-                  Easy · mcap path
+                  Easy · path
                 </h3>
-                <FullscreenChart title="Easy · mcap path">
-                  <MarketCapChart data={easyChart} mode="easy" currency={selected.currency} />
-                </FullscreenChart>
-              </div>
-              <div className="card p-5">
-                <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-                  Advanced · mcap path
-                </h3>
-                <FullscreenChart title="Advanced · mcap path">
+                <FullscreenChart title="Easy · path">
                   <MarketCapChart
-                    data={advancedChart}
-                    mode="advanced"
+                    data={easyChart}
+                    mode="easy"
                     currency={selected.currency}
+                    sharesOutstanding={sharesOutstanding}
                   />
                 </FullscreenChart>
               </div>
+              {advancedProjections.length > 0 && (
+                <div className="card p-5">
+                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
+                    Advanced · path
+                  </h3>
+                  <FullscreenChart title="Advanced · path">
+                    <MarketCapChart
+                      data={advancedChart}
+                      mode="advanced"
+                      currency={selected.currency}
+                      sharesOutstanding={sharesOutstanding}
+                    />
+                  </FullscreenChart>
+                </div>
+              )}
             </div>
           </>
         )}

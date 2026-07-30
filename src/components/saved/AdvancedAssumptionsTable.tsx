@@ -1,3 +1,4 @@
+import { useState } from 'react'
 import type { YearProjection } from '../../types'
 import {
   buildAdvancedProjections,
@@ -27,6 +28,17 @@ type Props = {
   currency?: string
 }
 
+function isAdvancedRowBlank(r: YearProjection): boolean {
+  return (
+    (r.revenue == null || r.revenue === 0) &&
+    (r.psMultiple == null || r.psMultiple === 0) &&
+    (r.fcf == null || r.fcf === 0) &&
+    (r.pfcfMultiple == null || r.pfcfMultiple === 0) &&
+    (r.profit == null || r.profit === 0) &&
+    (r.peMultiple == null || r.peMultiple === 0)
+  )
+}
+
 export function AdvancedAssumptionsTable({
   rows,
   onChange,
@@ -37,6 +49,11 @@ export function AdvancedAssumptionsTable({
   void _currency // Projection tables always display/store USD
   const currentYear = new Date().getFullYear()
   const sorted = sortYearProjections(rows)
+  const hasFilledData = sorted.some((r) => !isAdvancedRowBlank(r))
+  // Local expand so user can open the table before typing; blank-only legacy rows stay collapsed
+  const [forceShow, setForceShow] = useState(false)
+  const showTable = forceShow || hasFilledData
+
   const projections =
     currentMarketCap != null && currentMarketCap > 0
       ? buildAdvancedProjections(currentMarketCap, rows, currentYear)
@@ -51,11 +68,9 @@ export function AdvancedAssumptionsTable({
   }
 
   function remove(id: string) {
-    if (rows.length <= 1) {
-      commit([newYearProjection()])
-      return
-    }
-    commit(rows.filter((r) => r.id !== id))
+    const next = rows.filter((r) => r.id !== id)
+    commit(next)
+    if (next.length === 0) setForceShow(false)
   }
 
   function add() {
@@ -64,17 +79,68 @@ export function AdvancedAssumptionsTable({
       ...rows,
       newYearProjection(last ? last.year + 1 : currentYear + 5, last?.dilutionFactor ?? 1),
     ])
+    setForceShow(true)
+  }
+
+  function enableAdvanced() {
+    // Drop blank legacy placeholders; start with one clean year row
+    if (rows.length === 0 || rows.every(isAdvancedRowBlank)) {
+      commit([newYearProjection()])
+    }
+    setForceShow(true)
+  }
+
+  function disableAdvanced() {
+    commit([])
+    setForceShow(false)
+  }
+
+  if (!showTable) {
+    return (
+      <div className="rounded-xl border border-dashed border-white/15 bg-black/15 px-3 py-3">
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <div>
+            <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
+              Advanced · P/S · P/FCF · P/E
+            </h3>
+            <p className="mt-0.5 text-[11px] text-white/40">
+              Optional. Add only if you want valuation from revenue, FCF, or earnings multiples.
+            </p>
+          </div>
+          <button type="button" className="btn-ghost !py-1.5 !text-xs" onClick={enableAdvanced}>
+            + Add advanced valuation
+          </button>
+        </div>
+      </div>
+    )
   }
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
-        <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
-          Advanced · P/S · P/FCF · P/E
-        </h3>
-        <button type="button" className="btn-ghost !py-1 !text-xs" onClick={add}>
-          + Year
-        </button>
+      <div className="flex flex-wrap items-center justify-between gap-2">
+        <div>
+          <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
+            Advanced · P/S · P/FCF · P/E
+          </h3>
+          {!hasFilledData && (
+            <p className="mt-0.5 text-[11px] text-white/35">
+              Enter multiples for at least one year, or remove advanced valuation.
+            </p>
+          )}
+        </div>
+        <div className="flex flex-wrap items-center gap-1.5">
+          <button type="button" className="btn-ghost !py-1 !text-xs" onClick={add}>
+            + Year
+          </button>
+          <button
+            type="button"
+            className="btn-ghost !py-1 !text-xs text-white/45 hover:text-red-300"
+            onClick={disableAdvanced}
+            title="Remove all advanced years"
+          >
+            Remove advanced
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full min-w-[1100px] text-left text-xs">

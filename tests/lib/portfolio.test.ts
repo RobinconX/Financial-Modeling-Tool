@@ -4,6 +4,7 @@ import {
   cashAtYear,
   cashFromDeposits,
   clonePortfolio,
+  applyPortfolioValuesToTarget,
   compoundWithGrowthAndDeposits,
   computeHoldingValues,
   getOpeningCash,
@@ -382,6 +383,126 @@ describe('portfolio vs overview totals match', () => {
   })
 })
 
+describe('CHF fixed deposits do not bake FX into stored amount', () => {
+  it('resolveDepositAmount converts CHF→USD only at resolve time', () => {
+    const d = {
+      id: 'd1',
+      year: 2026,
+      amount: 900,
+      currency: 'CHF' as const,
+      isOpening: true,
+    }
+    expect(resolveDepositAmount(d, { incomeCostLines: [], usdToChf: 0.9 })).toBeCloseTo(1000)
+    expect(resolveDepositAmount(d, { incomeCostLines: [], usdToChf: 0.8 })).toBeCloseTo(1125)
+    // Stored amount unchanged
+    expect(d.amount).toBe(900)
+  })
+
+  it('withResolvedDepositAmounts uses FX for CHF cash math', () => {
+    const p = basePortfolio({
+      deposits: [newOpeningDeposit(900, 2026)].map((d) => ({
+        ...d,
+        currency: 'CHF' as const,
+      })),
+    })
+    const resolved = withResolvedDepositAmounts(p, {
+      incomeCostLines: [],
+      usdToChf: 0.9,
+    })
+    expect(getOpeningCash(resolved)).toBeCloseTo(1000)
+    // Source portfolio still CHF nominal
+    expect(getOpeningCash(p)).toBe(900)
+  })
+})
+
+describe('applyPortfolioValuesToTarget', () => {
+  it('cash-only leaves holdings unchanged', () => {
+    const srcHold = { ...newHolding('AAA'), id: 's1', sharesHeld: 42 }
+    const tgtHold = { ...newHolding('AAA'), id: 't1', sharesHeld: 1 }
+    const source = basePortfolio({
+      deposits: [{ ...newOpeningDeposit(5_000, 2026), currency: 'CHF' }],
+      holdings: [srcHold],
+      perpetualYearlyDeposit: { amount: 100, currency: 'CHF', source: 'fixed' },
+    })
+    const target = basePortfolio({
+      id: 'p2',
+      name: 'Other',
+      deposits: [newOpeningDeposit(10, 2026)],
+      holdings: [tgtHold],
+    })
+    const next = applyPortfolioValuesToTarget(source, target, { cash: true })
+    expect(getOpeningCash(next)).toBe(5_000)
+    expect(next.deposits.find((d) => d.isOpening)?.currency).toBe('CHF')
+    expect(next.holdings.find((h) => h.symbol === 'AAA')?.sharesHeld).toBe(1)
+    expect(next.perpetualYearlyDeposit?.amount).toBe(100)
+    expect(next.id).toBe('p2')
+  })
+
+  it('holdings-only copies shares; optional actions remapped by symbol', () => {
+    const srcHold = { ...newHolding('AAA'), id: 's1', sharesHeld: 42 }
+    const tgtHold = { ...newHolding('AAA'), id: 't1', sharesHeld: 1 }
+    const otherHold = { ...newHolding('BBB'), id: 't2', sharesHeld: 9 }
+    const source = basePortfolio({
+      deposits: [newOpeningDeposit(1, 2026)],
+      holdings: [srcHold],
+      actions: [
+        {
+          id: 'a1',
+          type: 'buy',
+          holdingId: 's1',
+          year: 2028,
+          shares: 5,
+          price: 12,
+        },
+      ],
+    })
+    const target = basePortfolio({
+      id: 'p2',
+      name: 'Other',
+      deposits: [newOpeningDeposit(99, 2026)],
+      holdings: [tgtHold, otherHold],
+      actions: [
+        {
+          id: 'old',
+          type: 'sell',
+          holdingId: 't1',
+          year: 2027,
+          shares: 1,
+        },
+        {
+          id: 'keep',
+          type: 'buy',
+          holdingId: 't2',
+          year: 2029,
+          shares: 2,
+        },
+      ],
+    })
+    const stocksOnly = applyPortfolioValuesToTarget(source, target, {
+      holdings: true,
+    })
+    expect(getOpeningCash(stocksOnly)).toBe(99)
+    expect(stocksOnly.holdings.find((h) => h.symbol === 'AAA')?.sharesHeld).toBe(42)
+    expect(stocksOnly.holdings.find((h) => h.symbol === 'BBB')?.sharesHeld).toBe(9)
+    // actions unchanged when not requested
+    expect(stocksOnly.actions).toHaveLength(2)
+
+    const withActions = applyPortfolioValuesToTarget(source, target, {
+      holdings: true,
+      actions: true,
+    })
+    expect(withActions.holdings.find((h) => h.symbol === 'AAA')?.sharesHeld).toBe(42)
+    // BBB action kept; AAA old sell replaced by source buy remapped to t1
+    expect(withActions.actions.some((a) => a.holdingId === 't2' && a.shares === 2)).toBe(true)
+    const aaaActs = withActions.actions.filter((a) => a.holdingId === 't1')
+    expect(aaaActs).toHaveLength(1)
+    expect(aaaActs[0]!.type).toBe('buy')
+    expect(aaaActs[0]!.shares).toBe(5)
+    expect(aaaActs[0]!.price).toBe(12)
+    expect(aaaActs[0]!.id).not.toBe('a1')
+  })
+})
+
 describe('normalizePortfolioCashModel', () => {
   it('creates opening deposit from currentCash and zeros currentCash', () => {
     const p = basePortfolio({
@@ -421,6 +542,28 @@ describe('cashAtYear with actions', () => {
     })
     // buy 2 * $50 = $100
     expect(cashAtYear(p, 2026, [], 2026)).toBe(900)
+  })
+
+  it('uses explicit action price over live/scenario price', () => {
+    const holding: PortfolioHolding = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 10,
+      manualCurrentPrice: 50,
+    }
+    const p = basePortfolio({
+      holdings: [holding],
+      deposits: [newOpeningDeposit(1_000, 2026)],
+      actions: [
+        {
+          ...newAction('buy', 'h1', 2027),
+          shares: 2,
+          price: 25, // override — not 50
+        },
+      ],
+    })
+    // buy 2 * $25 = $50; opening still 1000
+    expect(cashAtYear(p, 2027, [], 2026)).toBe(950)
   })
 })
 
