@@ -1,5 +1,6 @@
 import type {
   CashflowLine,
+  DisplayCurrency,
   PerpetualYearlyDeposit,
   PortfolioAction,
   PortfolioDeposit,
@@ -117,10 +118,12 @@ export type PropagatePortfolioFields = {
    * (holding ids remapped source → target).
    */
   actions?: boolean
+  /** Monthly end-of-month actuals map + currency (full overwrite) */
+  actuals?: boolean
 }
 
 /**
- * Copy cash and/or stock position values from source onto target.
+ * Copy cash, stock positions, and/or actuals from source onto target.
  * Holdings are matched by symbol; target-only symbols are left unchanged.
  * Does not change target id/name/createdAt.
  */
@@ -132,12 +135,15 @@ export function applyPortfolioValuesToTarget(
   const doCash = !!fields.cash
   const doHoldings = !!fields.holdings
   const doActions = !!fields.actions && doHoldings
-  if (!doCash && !doHoldings) return target
+  const doActuals = !!fields.actuals
+  if (!doCash && !doHoldings && !doActuals) return target
 
   let deposits = getDeposits(target)
   let perpetualYearlyDeposit = target.perpetualYearlyDeposit ?? null
   let holdings = target.holdings
   let actions = getActions(target)
+  let actuals = target.actuals
+  let actualsCurrency = target.actualsCurrency
 
   if (doCash) {
     const srcDeps = getDeposits(source)
@@ -222,12 +228,19 @@ export function applyPortfolioValuesToTarget(
     actions = [...kept, ...copied]
   }
 
+  if (doActuals) {
+    actuals = source.actuals ? { ...source.actuals } : undefined
+    actualsCurrency = source.actualsCurrency
+  }
+
   return normalizePortfolioCashModel({
     ...target,
     deposits,
     perpetualYearlyDeposit,
     holdings,
     actions,
+    actuals,
+    actualsCurrency,
     currentCash: 0,
     updatedAt: new Date().toISOString(),
   })
@@ -255,11 +268,28 @@ export function newHolding(symbol = ''): PortfolioHolding {
   return {
     id: crypto.randomUUID(),
     symbol: symbol.toUpperCase(),
+    label: null,
     sharesHeld: 0,
     scenarioId: null,
     basis: 'easy',
     yearOverrides: [],
     manualCurrentPrice: null,
+    manualOnly: false,
+  }
+}
+
+/** Free-form position (options, etc.) — no projection link. */
+export function newManualHolding(name = ''): PortfolioHolding {
+  return {
+    id: crypto.randomUUID(),
+    symbol: name.trim() ? name.trim().toUpperCase().slice(0, 24) : 'MANUAL',
+    label: name.trim() || 'Manual position',
+    sharesHeld: 1,
+    scenarioId: null,
+    basis: 'easy',
+    yearOverrides: [],
+    manualCurrentPrice: null,
+    manualOnly: true,
   }
 }
 
@@ -274,6 +304,98 @@ export function newDeposit(
     amount: Math.max(0, amount),
     ...(opts?.isOpening ? { isOpening: true } : {}),
   }
+}
+
+// --- Manual end-of-month portfolio actuals (YYYY-MM → total) ---
+
+export function makeActualKey(year: number, month: number): string {
+  const m = Math.min(12, Math.max(1, Math.floor(month)))
+  return `${Math.floor(year)}-${String(m).padStart(2, '0')}`
+}
+
+export function parseActualKey(
+  key: string,
+): { year: number; month: number } | null {
+  const m = /^(\d{4})-(\d{2})$/.exec(key)
+  if (!m) return null
+  const year = Number(m[1])
+  const month = Number(m[2])
+  if (!Number.isFinite(year) || month < 1 || month > 12) return null
+  return { year, month }
+}
+
+export function getActualsMap(portfolio: SavedPortfolio): Record<string, number> {
+  if (!portfolio.actuals || typeof portfolio.actuals !== 'object') return {}
+  return portfolio.actuals
+}
+
+export function getActualsCurrency(portfolio: SavedPortfolio): DisplayCurrency {
+  return portfolio.actualsCurrency === 'CHF' ? 'CHF' : 'USD'
+}
+
+/** Nominal actual amount for a month (as stored), or null if unset. */
+export function actualAmountAtMonth(
+  portfolio: SavedPortfolio,
+  year: number,
+  month: number,
+): number | null {
+  const v = getActualsMap(portfolio)[makeActualKey(year, month)]
+  if (v == null || !Number.isFinite(v) || v < 0) return null
+  return v
+}
+
+/** Actual total in USD book for chart/math. */
+export function actualUsdAtMonth(
+  portfolio: SavedPortfolio,
+  year: number,
+  month: number,
+  usdToChf?: number | null,
+): number | null {
+  const amount = actualAmountAtMonth(portfolio, year, month)
+  if (amount == null) return null
+  return fixedAmountToUsd(amount, getActualsCurrency(portfolio), usdToChf)
+}
+
+/**
+ * Last recorded actual in a calendar year (highest month with a value).
+ * Used as the year-end bar for past years on the chart.
+ */
+export function yearEndActualUsd(
+  portfolio: SavedPortfolio,
+  year: number,
+  usdToChf?: number | null,
+): number | null {
+  const map = getActualsMap(portfolio)
+  let bestMonth = 0
+  let best: number | null = null
+  for (const [key, raw] of Object.entries(map)) {
+    const p = parseActualKey(key)
+    if (!p || p.year !== year) continue
+    if (raw == null || !Number.isFinite(raw) || raw < 0) continue
+    if (p.month >= bestMonth) {
+      bestMonth = p.month
+      best = fixedAmountToUsd(raw, getActualsCurrency(portfolio), usdToChf)
+    }
+  }
+  return best
+}
+
+/** Calendar years that have at least one actual month entry. */
+export function listActualYears(portfolio: SavedPortfolio): number[] {
+  const years = new Set<number>()
+  for (const key of Object.keys(getActualsMap(portfolio))) {
+    const p = parseActualKey(key)
+    if (p) years.add(p.year)
+  }
+  return [...years].sort((a, b) => a - b)
+}
+
+export function earliestActualYear(
+  portfolio: SavedPortfolio,
+  fallback: number,
+): number {
+  const years = listActualYears(portfolio)
+  return years.length > 0 ? years[0]! : fallback
 }
 
 export function newOpeningDeposit(amount = 0, year?: number): PortfolioDeposit {
@@ -308,14 +430,16 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
     return {
       id: newId,
       symbol: h.symbol,
+      label: h.label ?? null,
       sharesHeld: h.sharesHeld,
-      scenarioId: h.scenarioId,
+      scenarioId: h.manualOnly ? null : h.scenarioId,
       basis: h.basis,
       yearOverrides: (h.yearOverrides ?? []).map((o) => ({
         year: o.year,
         valueDollars: o.valueDollars,
       })),
       manualCurrentPrice: h.manualCurrentPrice,
+      manualOnly: h.manualOnly === true,
     }
   })
 
@@ -363,6 +487,8 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
     perpetualGrowthPercent: source.perpetualGrowthPercent ?? null,
     actions,
     holdings,
+    actuals: source.actuals ? { ...source.actuals } : undefined,
+    actualsCurrency: source.actualsCurrency,
     createdAt: now,
     updatedAt: now,
   })
@@ -490,7 +616,12 @@ export function resolveCurrentPrice(
   holding: PortfolioHolding,
   scenario: SavedScenario | null,
 ): number | null {
-  if (holding.manualCurrentPrice != null && holding.manualCurrentPrice > 0) {
+  // Manual positions may use 0 or negative unit marks (liabilities / shorts).
+  if (
+    holding.manualCurrentPrice != null &&
+    Number.isFinite(holding.manualCurrentPrice) &&
+    (holding.manualOnly === true || holding.manualCurrentPrice > 0)
+  ) {
     return holding.manualCurrentPrice
   }
   if (scenario?.currentPrice != null && scenario.currentPrice > 0) {
@@ -664,11 +795,25 @@ export function hasNegativeCash(
   return false
 }
 
+export function holdingDisplayName(holding: PortfolioHolding): string {
+  const label = holding.label?.trim()
+  if (label) return label
+  return (holding.symbol || '—').toUpperCase()
+}
+
 /** Human-readable row label for a holding (always derived fresh from scenario). */
 export function holdingPositionLabel(
   holding: PortfolioHolding,
   scenario: SavedScenario | null,
 ): string {
+  const name = holdingDisplayName(holding)
+  if (holding.manualOnly || (!holding.scenarioId && !scenario)) {
+    const qty =
+      holding.sharesHeld !== 0
+        ? `${holding.sharesHeld.toLocaleString(undefined, { maximumFractionDigits: 4 })} unit${Math.abs(holding.sharesHeld) === 1 ? '' : 's'}`
+        : null
+    return [name, 'Manual', qty].filter(Boolean).join(' · ')
+  }
   const symbol = (holding.symbol || '—').toUpperCase()
   const company =
     scenario?.companyName &&
@@ -686,7 +831,9 @@ export function holdingPositionLabel(
       ? `${holding.sharesHeld.toLocaleString(undefined, { maximumFractionDigits: 4 })} sh`
       : null
 
-  return [symbol, company, scenarioLabel, shareLabel].filter(Boolean).join(' · ')
+  return [name !== symbol ? name : symbol, company, scenarioLabel, shareLabel]
+    .filter(Boolean)
+    .join(' · ')
 }
 
 /**
@@ -825,7 +972,9 @@ export function compoundWithGrowthAndDeposits(
 
 /**
  * Position values by year for one holding.
- * Uses action-adjusted share counts × price; optional absolute $ overrides win.
+ * Uses action-adjusted share counts × price; absolute $ overrides always win.
+ * Manual-only holdings (options etc.) skip scenario prices and rely on
+ * manualCurrentPrice × qty and yearOverrides.
  */
 export function computeHoldingValues(
   holding: PortfolioHolding,
@@ -838,34 +987,58 @@ export function computeHoldingValues(
     .filter((a) => a.holdingId === holding.id && a.year >= currentYear)
     .map((a) => a.year)
 
-  const priceByYear =
-    scenario != null ? getHoldingSharePriceByYear(holding, scenario, currentYear) : new Map()
+  const useScenario = scenario != null && holding.manualOnly !== true
+  const priceByYear = useScenario
+    ? getHoldingSharePriceByYear(holding, scenario, currentYear)
+    : new Map()
 
   const yearsNeeded = new Set<number>([currentYear, ...actionYears, ...priceByYear.keys()])
   for (const o of holding.yearOverrides) {
     if (o.year >= currentYear) yearsNeeded.add(o.year)
   }
 
+  const isManual = holding.manualOnly === true
+
   for (const year of yearsNeeded) {
     const sh = sharesAtYear(holding, actions, year)
-    if (sh <= 0) continue
+    // Manual: allow negative qty (shorts). Equity: long-only shares.
+    if (isManual ? sh === 0 : sh <= 0) continue
     const px =
       year <= currentYear
-        ? resolveCurrentPrice(holding, scenario)
-        : (priceByYear.get(year) ?? tradePriceForYear(holding, scenario, year, currentYear))
-    if (px != null && px > 0) {
+        ? resolveCurrentPrice(holding, useScenario ? scenario : null)
+        : useScenario
+          ? (priceByYear.get(year) ?? tradePriceForYear(holding, scenario, year, currentYear))
+          : resolveCurrentPrice(holding, null) // manual: carry unit mark if no override
+    // Manual: any finite mark (incl. 0 / negative). Equity: positive price only.
+    if (px != null && Number.isFinite(px) && (isManual || px > 0)) {
       values.set(year, sh * px)
     }
   }
 
-  // Manual overrides win
+  // Absolute $ overrides win (and work with qty 0 — full position value).
+  // Manual positions may set negative total values (liabilities).
   for (const o of holding.yearOverrides) {
-    if (o.year >= currentYear && o.valueDollars >= 0 && Number.isFinite(o.valueDollars)) {
+    if (
+      o.year >= currentYear &&
+      Number.isFinite(o.valueDollars) &&
+      (isManual || o.valueDollars >= 0)
+    ) {
       values.set(o.year, o.valueDollars)
     }
   }
 
   return values
+}
+
+/** Live / Now value for a holding (current year map entry). */
+export function holdingLiveValue(
+  holding: PortfolioHolding,
+  scenario: SavedScenario | null,
+  actions: PortfolioAction[] = [],
+  currentYear = new Date().getFullYear(),
+): number | null {
+  const v = computeHoldingValues(holding, scenario, actions, currentYear).get(currentYear)
+  return v != null && Number.isFinite(v) ? v : null
 }
 
 /**
@@ -967,7 +1140,7 @@ export function buildPortfolioGrid(
   const built: Built[] = portfolio.holdings.map((holding) => {
     let scenario: SavedScenario | null = null
     let warning: string | null = null
-    if (holding.scenarioId) {
+    if (holding.scenarioId && !holding.manualOnly) {
       scenario = byId.get(holding.scenarioId) ?? null
       if (!scenario) {
         warning = 'Linked scenario missing — add overrides or re-link'
@@ -975,20 +1148,31 @@ export function buildPortfolioGrid(
         warning = warning ?? `Scenario is for ${scenario.symbol}`
       }
     }
-    const price = resolveCurrentPrice(holding, scenario)
-    if (holding.sharesHeld > 0 && (price == null || price <= 0)) {
-      warning = warning ?? 'Set current price (manual or via scenario) to value this holding'
+    const live = holdingLiveValue(holding, scenario, actions, currentYear)
+    if (
+      live == null &&
+      (holding.sharesHeld > 0 ||
+        holding.manualOnly ||
+        (holding.yearOverrides?.length ?? 0) > 0)
+    ) {
+      warning =
+        warning ??
+        (holding.manualOnly
+          ? 'Set unit price or a year value for this manual position'
+          : 'Set current price (manual or via scenario) to value this holding')
     }
 
-    // Oversell warning
-    const relevantYears = [
-      currentYear,
-      ...actions.filter((a) => a.holdingId === holding.id).map((a) => a.year),
-    ]
-    for (const y of relevantYears) {
-      if (sharesAtYear(holding, actions, y) < 0) {
-        warning = warning ?? `Sells exceed shares by ${y}`
-        break
+    // Oversell warning (skip for manual — negative qty is intentional)
+    if (!holding.manualOnly) {
+      const relevantYears = [
+        currentYear,
+        ...actions.filter((a) => a.holdingId === holding.id).map((a) => a.year),
+      ]
+      for (const y of relevantYears) {
+        if (sharesAtYear(holding, actions, y) < 0) {
+          warning = warning ?? `Sells exceed shares by ${y}`
+          break
+        }
       }
     }
 
@@ -1117,6 +1301,8 @@ export type PortfolioChartPoint = {
   isEmpty: boolean
   /** True when this bar is perpetual growth (compounded last total + deposits) */
   isPerpetualGrowth: boolean
+  /** True when total comes from manual end-of-month actuals (year-end last actual) */
+  isActual: boolean
   total: number
   /** Per-holding (+ cash) breakdown for hover table */
   breakdown: PortfolioChartBreakdownRow[]
@@ -1125,30 +1311,76 @@ export type PortfolioChartPoint = {
 
 export const PERPETUAL_GROWTH_CHART_KEY = 'perpetualGrowth'
 export const PERPETUAL_GROWTH_COLOR = '#22c55e'
+/** Single-series total mode (portfolio value) */
+export const PORTFOLIO_TOTAL_CHART_KEY = 'portfolioTotal'
+export const PORTFOLIO_TOTAL_COLOR = '#38bdf8'
+export const PORTFOLIO_ACTUAL_COLOR = '#f59e0b'
+
+export type PortfolioChartMode = 'stacked' | 'total'
+
+export type BuildPortfolioChartOptions = {
+  /** stacked = per position; total = one color whole portfolio */
+  mode?: PortfolioChartMode
+  /** Inclusive calendar range for year bars (Now sits between past and current year) */
+  fromYear?: number
+  toYear?: number
+  /** FX for converting CHF-denominated actuals to USD book */
+  usdToChf?: number | null
+}
 
 /**
- * Stacked bar chart data:
- * 1. First bar = **Now** (live equity prices + current cash only — no year deposits)
- * 2. Then calendar years from current year → max projection year
- *    Current year is a separate bar from Now (e.g. includes deposits through that year).
+ * Stacked / total bar chart data, X-axis order:
+ *   past years → **Now** (live) → current year → future years
+ * - Past years: last actual of that year when present
+ * - Now: live equity prices + opening cash
+ * - Current/future: projections (stacked or total)
  */
 export function buildPortfolioChartData(
   grid: PortfolioGrid,
   portfolio: SavedPortfolio,
   scenarios: SavedScenario[] = [],
   currentYear = new Date().getFullYear(),
+  options?: BuildPortfolioChartOptions,
 ): PortfolioChartPoint[] {
-  if (grid.years.length === 0 && getCurrentCash(portfolio) <= 0) return []
-
+  const mode: PortfolioChartMode = options?.mode === 'total' ? 'total' : 'stacked'
+  const usdToChf = options?.usdToChf ?? null
   const equityRows = grid.rows.filter((r) => r.kind === 'equity')
   const indexByYear = new Map(grid.years.map((y, i) => [y, i]))
   const byScenarioId = new Map(scenarios.map((s) => [s.id, s]))
   const holdingsById = new Map(portfolio.holdings.map((h) => [h.id, h]))
+  const actions = getActions(portfolio)
+  const growthRow = grid.rows.find((r) => r.kind === 'growth')
+  const cashRow = grid.rows.find((r) => r.kind === 'cash')
+  const lastStated = grid.lastStatedYear ?? currentYear
+
+  const hasLive =
+    getOpeningCash(portfolio) > 0 ||
+    portfolio.holdings.some(
+      (h) =>
+        h.sharesHeld !== 0 ||
+        (h.yearOverrides?.length ?? 0) > 0 ||
+        (h.manualCurrentPrice != null &&
+          Number.isFinite(h.manualCurrentPrice) &&
+          (h.manualOnly === true || h.manualCurrentPrice > 0)),
+    ) ||
+    Object.keys(getActualsMap(portfolio)).length > 0 ||
+    grid.years.length > 0 ||
+    (cashRow?.values.some((v) => v != null && v !== 0) ?? false)
+  if (!hasLive) return []
 
   const data: PortfolioChartPoint[] = []
-  const actions = getActions(portfolio)
 
-  // --- Now: base shares only + opening cash (no planned deposits / actions) ---
+  /** Prefer grid cash (already FX/surplus-resolved) so chart matches the value table. */
+  const cashForChartYear = (year: number): number => {
+    const i = indexByYear.get(year)
+    if (i != null && cashRow) {
+      const v = cashRow.values[i]
+      if (v != null && Number.isFinite(v)) return v
+    }
+    return cashAtYear(portfolio, year, scenarios, currentYear)
+  }
+
+  // --- Now point (inserted between past and current year) ---
   const nowCash = getOpeningCash(portfolio)
   const nowBreakdown: PortfolioChartBreakdownRow[] = []
   const nowPoint: PortfolioChartPoint = {
@@ -1159,28 +1391,29 @@ export function buildPortfolioChartData(
     isCurrentYear: false,
     isEmpty: false,
     isPerpetualGrowth: false,
+    isActual: false,
     total: 0,
-    cash: nowCash,
+    cash: mode === 'stacked' ? nowCash : 0,
     breakdown: [],
   }
   let nowTotal = nowCash
   for (const row of equityRows) {
     const holding = row.holdingId ? holdingsById.get(row.holdingId) : null
-    let v = 0
-    const shares = holding?.sharesHeld ?? 0
-    if (holding && shares > 0) {
-      const scenario = holding.scenarioId
+    const scenario =
+      holding && holding.scenarioId && !holding.manualOnly
         ? (byScenarioId.get(holding.scenarioId) ?? null)
         : null
-      const px = resolveCurrentPrice(holding, scenario)
-      if (px != null && px > 0) v = shares * px
-    }
-    nowPoint[row.key] = v
+    const v =
+      holding != null
+        ? (holdingLiveValue(holding, scenario, actions, currentYear) ?? 0)
+        : 0
+    const shares = holding ? Math.max(0, sharesAtYear(holding, actions, currentYear)) : 0
+    if (mode === 'stacked') nowPoint[row.key] = v
     nowTotal += v
     nowBreakdown.push({
       key: row.key,
-      ticker: holding?.symbol || row.label || '—',
-      shares,
+      ticker: holding ? holdingDisplayName(holding) : row.label || '—',
+      shares: holding?.manualOnly ? null : shares,
       value: v,
     })
   }
@@ -1194,21 +1427,151 @@ export function buildPortfolioChartData(
     })
   }
   nowPoint.total = nowTotal
+  if (mode === 'total') {
+    nowPoint[PORTFOLIO_TOTAL_CHART_KEY] = nowTotal
+  }
   nowPoint.breakdown = nowBreakdown
-  data.push(nowPoint)
 
-  const growthRow = grid.rows.find((r) => r.kind === 'growth')
-  const lastStated = grid.lastStatedYear ?? currentYear
+  // Year axis: period range, grid years, and actual years when in total mode
+  const gridYears = grid.years.filter((y) => Number.isFinite(y))
+  const defaultFrom =
+    options?.fromYear ??
+    (gridYears.length ? Math.min(...gridYears) : currentYear)
+  const defaultTo =
+    options?.toYear ??
+    (gridYears.length ? Math.max(...gridYears) : currentYear)
+  let fromY = Math.floor(options?.fromYear ?? defaultFrom)
+  let toY = Math.floor(options?.toYear ?? defaultTo)
+  if (mode === 'total') {
+    const earliest = earliestActualYear(portfolio, fromY)
+    if (earliest < fromY && options?.fromYear == null) fromY = earliest
+  }
+  if (toY < fromY) {
+    const t = fromY
+    fromY = toY
+    toY = t
+  }
 
-  // Only years present on the grid (input years, or extended by period picker)
-  for (const year of grid.years) {
-    if (year < currentYear) continue
+  let nowInserted = false
+  const insertNowIfNeeded = (year: number) => {
+    // Place Now immediately before the current calendar year bar
+    if (!nowInserted && year >= currentYear) {
+      data.push(nowPoint)
+      nowInserted = true
+    }
+  }
+
+  for (let year = fromY; year <= toY; year++) {
+    insertNowIfNeeded(year)
     const i = indexByYear.get(year)
-    if (i == null) continue
     const isGrowthYear =
-      growthRow != null && year > lastStated && (growthRow.values[i] ?? 0) != null && (growthRow.values[i] ?? 0) > 0
+      i != null &&
+      growthRow != null &&
+      year > lastStated &&
+      (growthRow.values[i] ?? 0) != null &&
+      (growthRow.values[i] ?? 0) > 0
 
-    const cash = !isGrowthYear ? cashAtYear(portfolio, year, scenarios, currentYear) : 0
+    // Past years: prefer year-end actual in total mode
+    if (year < currentYear) {
+      const actual = yearEndActualUsd(portfolio, year, usdToChf)
+      if (actual == null) {
+        // Skip empty past years in stacked mode; keep gap only if inside continuous range for total
+        if (mode === 'stacked') continue
+        // total mode: skip years with no actual
+        continue
+      }
+      const point: PortfolioChartPoint = {
+        xKey: String(year),
+        yearLabel: String(year),
+        year,
+        isNow: false,
+        isCurrentYear: false,
+        isEmpty: false,
+        isPerpetualGrowth: false,
+        isActual: true,
+        total: actual,
+        cash: 0,
+        breakdown: [
+          {
+            key: 'actual',
+            ticker: 'Actual (year-end)',
+            shares: null,
+            value: actual,
+          },
+        ],
+      }
+      if (mode === 'total') {
+        point[PORTFOLIO_TOTAL_CHART_KEY] = actual
+      } else {
+        // stacked: show as single cash-like total under portfolio total key for simplicity
+        point[PORTFOLIO_TOTAL_CHART_KEY] = actual
+      }
+      data.push(point)
+      continue
+    }
+
+    // Current / future years — projections
+    if (i == null && !isGrowthYear) {
+      // Year not on grid: still show total projection if we can compute
+      if (mode === 'total') {
+        const t = portfolioTotalUsdAtYear(portfolio, scenarios, year, currentYear)
+        data.push({
+          xKey: String(year),
+          yearLabel: String(year),
+          year,
+          isNow: false,
+          isCurrentYear: year === currentYear,
+          isEmpty: t === 0,
+          isPerpetualGrowth: year > lastStated && getPerpetualGrowthRate(portfolio) !== 0,
+          isActual: false,
+          total: t,
+          cash: 0,
+          [PORTFOLIO_TOTAL_CHART_KEY]: t,
+          breakdown: [
+            {
+              key: PORTFOLIO_TOTAL_CHART_KEY,
+              ticker: 'Portfolio',
+              shares: null,
+              value: t,
+            },
+          ],
+        })
+      }
+      continue
+    }
+
+    if (i == null) continue
+
+    if (mode === 'total') {
+      const t = portfolioTotalUsdAtYear(portfolio, scenarios, year, currentYear)
+      const isGrowth =
+        year > lastStated && getPerpetualGrowthRate(portfolio) !== 0
+      data.push({
+        xKey: String(year),
+        yearLabel: String(year),
+        year,
+        isNow: false,
+        isCurrentYear: year === currentYear,
+        isEmpty: false,
+        isPerpetualGrowth: isGrowth,
+        isActual: false,
+        total: t,
+        cash: 0,
+        [PORTFOLIO_TOTAL_CHART_KEY]: t,
+        breakdown: [
+          {
+            key: isGrowth ? PERPETUAL_GROWTH_CHART_KEY : PORTFOLIO_TOTAL_CHART_KEY,
+            ticker: isGrowth ? 'Growth' : 'Portfolio',
+            shares: null,
+            value: t,
+          },
+        ],
+      })
+      continue
+    }
+
+    // stacked mode — cash from grid when present (same numbers as the table)
+    const cash = !isGrowthYear ? cashForChartYear(year) : 0
     const breakdown: PortfolioChartBreakdownRow[] = []
     const point: PortfolioChartPoint = {
       xKey: String(year),
@@ -1218,6 +1581,7 @@ export function buildPortfolioChartData(
       isCurrentYear: year === currentYear,
       isEmpty: false,
       isPerpetualGrowth: !!isGrowthYear,
+      isActual: false,
       total: 0,
       cash,
       breakdown: [],
@@ -1226,12 +1590,12 @@ export function buildPortfolioChartData(
     if (isGrowthYear) {
       const g = growthRow!.values[i] ?? 0
       point[PERPETUAL_GROWTH_CHART_KEY] = g
-      point.total = g
+      point.total = typeof g === 'number' ? g : 0
       breakdown.push({
         key: PERPETUAL_GROWTH_CHART_KEY,
         ticker: growthRow!.label || 'Growth',
         shares: null,
-        value: g,
+        value: point.total,
       })
       for (const row of equityRows) {
         point[row.key] = 0
@@ -1270,6 +1634,37 @@ export function buildPortfolioChartData(
     }
     point.breakdown = breakdown
     data.push(point)
+  }
+
+  // Range was only past years (or empty future): still show Now after them
+  if (!nowInserted) data.push(nowPoint)
+
+  // Recharts stacked bars break (blank chart) when stack keys are missing/NaN on some points.
+  // Always zero-fill every series key used by PortfolioChart.
+  const equityKeys = equityRows.map((r) => r.key)
+  for (const p of data) {
+    if (mode === 'stacked') {
+      for (const k of equityKeys) {
+        const v = p[k]
+        p[k] = typeof v === 'number' && Number.isFinite(v) ? v : 0
+      }
+      p.cash =
+        typeof p.cash === 'number' && Number.isFinite(p.cash) ? p.cash : 0
+      const g = p[PERPETUAL_GROWTH_CHART_KEY]
+      p[PERPETUAL_GROWTH_CHART_KEY] =
+        typeof g === 'number' && Number.isFinite(g) ? g : 0
+      const t = p[PORTFOLIO_TOTAL_CHART_KEY]
+      p[PORTFOLIO_TOTAL_CHART_KEY] =
+        typeof t === 'number' && Number.isFinite(t) ? t : 0
+    } else {
+      const t = p[PORTFOLIO_TOTAL_CHART_KEY]
+      const totalNum = typeof p.total === 'number' && Number.isFinite(p.total) ? p.total : 0
+      p[PORTFOLIO_TOTAL_CHART_KEY] =
+        typeof t === 'number' && Number.isFinite(t) ? t : totalNum
+    }
+    if (typeof p.total !== 'number' || !Number.isFinite(p.total)) {
+      p.total = 0
+    }
   }
 
   return data

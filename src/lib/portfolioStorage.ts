@@ -45,7 +45,8 @@ function normalizeHolding(raw: unknown): PortfolioHolding | null {
         .filter((o): o is { year: number; valueDollars: number } => o != null)
     : []
 
-  let sharesHeld = Math.max(0, asNumber(raw.sharesHeld, NaN))
+  const manualOnly = raw.manualOnly === true
+  let sharesHeld = asNumber(raw.sharesHeld, NaN)
   if (!Number.isFinite(sharesHeld)) {
     const legacyAlloc = asNumber(raw.allocationDollars, 0)
     const price = asNumberOrNull(raw.manualCurrentPrice)
@@ -54,16 +55,24 @@ function normalizeHolding(raw: unknown): PortfolioHolding | null {
     } else {
       sharesHeld = 0
     }
+  } else if (!manualOnly) {
+    // Equity longs only; manual positions may be short / negative qty.
+    sharesHeld = Math.max(0, sharesHeld)
   }
-
   return {
     id,
     symbol,
+    label: typeof raw.label === 'string' ? raw.label : null,
     sharesHeld,
-    scenarioId: typeof raw.scenarioId === 'string' ? raw.scenarioId : null,
+    scenarioId: manualOnly
+      ? null
+      : typeof raw.scenarioId === 'string'
+        ? raw.scenarioId
+        : null,
     basis,
     yearOverrides,
     manualCurrentPrice: asNumberOrNull(raw.manualCurrentPrice),
+    manualOnly: manualOnly || undefined,
   }
 }
 
@@ -181,6 +190,21 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
       ? null
       : asNumber(raw.perpetualGrowthPercent, 0)
 
+  let actuals: Record<string, number> | undefined
+  if (isRecord(raw.actuals)) {
+    actuals = {}
+    for (const [k, v] of Object.entries(raw.actuals)) {
+      if (!/^\d{4}-\d{2}$/.test(k)) continue
+      const n = asNumber(v, NaN)
+      if (Number.isFinite(n) && n >= 0) actuals[k] = n
+    }
+    if (Object.keys(actuals).length === 0) actuals = undefined
+  }
+  const actualsCurrency =
+    raw.actualsCurrency === 'CHF' || raw.actualsCurrency === 'USD'
+      ? raw.actualsCurrency
+      : undefined
+
   return normalizePortfolioCashModel({
     id,
     name,
@@ -190,6 +214,8 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     perpetualGrowthPercent,
     actions,
     holdings,
+    actuals,
+    actualsCurrency,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   })

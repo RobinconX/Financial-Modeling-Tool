@@ -1,25 +1,31 @@
 import { describe, expect, it } from 'vitest'
 import {
+  applyPortfolioValuesToTarget,
+  buildPortfolioChartData,
   buildPortfolioGrid,
   cashAtYear,
   cashFromDeposits,
   clonePortfolio,
-  applyPortfolioValuesToTarget,
   compoundWithGrowthAndDeposits,
   computeHoldingValues,
   getOpeningCash,
   getPerpetualGrowthRate,
   getScenarioSharePriceByYear,
   holdingValueAtYear,
+  holdingLiveValue,
+  makeActualKey,
   newAction,
   newHolding,
+  newManualHolding,
   newOpeningDeposit,
   newPortfolio,
   normalizePortfolioCashModel,
   portfolioTotalUsdAtYear,
+  PORTFOLIO_TOTAL_CHART_KEY,
   resolveDepositAmount,
   sharesAtYear,
   withResolvedDepositAmounts,
+  yearEndActualUsd,
 } from '../../src/lib/portfolio'
 import { portfolioTotalUsdAtYear as overviewPortfolioTotalUsdAtYear } from '../../src/lib/overview'
 import type {
@@ -415,6 +421,143 @@ describe('CHF fixed deposits do not bake FX into stored amount', () => {
   })
 })
 
+describe('manual / option positions', () => {
+  it('values manual holdings with qty × mark and year overrides', () => {
+    const h = {
+      ...newManualHolding('AAPL 180C'),
+      sharesHeld: 10,
+      manualCurrentPrice: 5.5,
+      yearOverrides: [{ year: 2027, valueDollars: 0 }],
+    }
+    expect(holdingLiveValue(h, null, [], 2026)).toBeCloseTo(55, 6)
+    const map = computeHoldingValues(h, null, [], 2026)
+    expect(map.get(2026)).toBeCloseTo(55, 6)
+    expect(map.get(2027)).toBe(0)
+  })
+
+  it('absolute override wins without requiring shares', () => {
+    const h = {
+      ...newManualHolding('Custom'),
+      sharesHeld: 0,
+      yearOverrides: [{ year: 2026, valueDollars: 12_000 }],
+    }
+    expect(holdingLiveValue(h, null, [], 2026)).toBe(12_000)
+  })
+
+  it('allows negative qty, unit mark, and absolute overrides', () => {
+    const short = {
+      ...newManualHolding('SHORT'),
+      sharesHeld: -10,
+      manualCurrentPrice: 4,
+    }
+    expect(holdingLiveValue(short, null, [], 2026)).toBeCloseTo(-40, 6)
+
+    const negMark = {
+      ...newManualHolding('LIAB'),
+      sharesHeld: 2,
+      manualCurrentPrice: -50,
+    }
+    expect(holdingLiveValue(negMark, null, [], 2026)).toBeCloseTo(-100, 6)
+
+    const absNeg = {
+      ...newManualHolding('LOAN'),
+      sharesHeld: 0,
+      yearOverrides: [{ year: 2026, valueDollars: -25_000 }],
+    }
+    expect(holdingLiveValue(absNeg, null, [], 2026)).toBe(-25_000)
+
+    const zeroMark = {
+      ...newManualHolding('EXP'),
+      sharesHeld: 3,
+      manualCurrentPrice: 0,
+    }
+    expect(holdingLiveValue(zeroMark, null, [], 2026)).toBe(0)
+  })
+
+  it('builds grid and chart data without throwing for manual positions', () => {
+    const h1 = {
+      ...newManualHolding('OPT1'),
+      sharesHeld: 5,
+      manualCurrentPrice: 2,
+      yearOverrides: [
+        { year: 2027, valueDollars: 0 },
+        { year: 2028, valueDollars: 100 },
+      ],
+    }
+    const h2 = {
+      ...newManualHolding('OPT2'),
+      sharesHeld: 0,
+      yearOverrides: [{ year: 2026, valueDollars: 50_000 }],
+    }
+    const p = basePortfolio({
+      deposits: [newOpeningDeposit(1_000, 2026)],
+      holdings: [h1, h2],
+    })
+    const grid = buildPortfolioGrid(p, [], 2026, { throughYear: 2028 })
+    expect(grid.years.length).toBeGreaterThan(0)
+    expect(grid.rows.some((r) => r.kind === 'equity')).toBe(true)
+    const data = buildPortfolioChartData(grid, p, [], 2026, {
+      mode: 'stacked',
+      fromYear: 2026,
+      toYear: 2028,
+    })
+    expect(data.some((d) => d.isNow)).toBe(true)
+    expect(data.every((d) => Number.isFinite(d.total))).toBe(true)
+    // every equity key present on now bar as a number
+    for (const row of grid.rows.filter((r) => r.kind === 'equity')) {
+      expect(typeof data.find((d) => d.isNow)![row.key]).toBe('number')
+    }
+    const totalMode = buildPortfolioChartData(grid, p, [], 2026, {
+      mode: 'total',
+      fromYear: 2026,
+      toYear: 2028,
+    })
+    expect(totalMode.some((d) => d.isNow)).toBe(true)
+  })
+})
+
+describe('portfolio actuals and chart', () => {
+  it('yearEndActualUsd uses last month with a value', () => {
+    const p = basePortfolio({
+      actuals: {
+        [makeActualKey(2024, 3)]: 100,
+        [makeActualKey(2024, 11)]: 200,
+        [makeActualKey(2024, 6)]: 150,
+      },
+      actualsCurrency: 'USD',
+    })
+    expect(yearEndActualUsd(p, 2024, null)).toBe(200)
+    expect(yearEndActualUsd(p, 2023, null)).toBeNull()
+  })
+
+  it('chart includes Now between past actuals and current year', () => {
+    const p = basePortfolio({
+      deposits: [newOpeningDeposit(1_000, 2026)],
+      actuals: {
+        [makeActualKey(2024, 12)]: 50_000,
+        [makeActualKey(2025, 6)]: 55_000,
+      },
+      actualsCurrency: 'USD',
+    })
+    const grid = buildPortfolioGrid(p, [], 2026, { throughYear: 2027 })
+    const data = buildPortfolioChartData(grid, p, [], 2026, {
+      mode: 'total',
+      fromYear: 2024,
+      toYear: 2027,
+    })
+    const years = data.map((d) => (d.isNow ? 'now' : String(d.year)))
+    expect(years).toEqual(['2024', '2025', 'now', '2026', '2027'])
+    const now = data.find((d) => d.isNow)
+    expect(now?.total).toBe(1_000)
+    const y2024 = data.find((d) => d.year === 2024)
+    expect(y2024?.isActual).toBe(true)
+    expect(y2024?.total).toBe(50_000)
+    expect(y2024?.[PORTFOLIO_TOTAL_CHART_KEY]).toBe(50_000)
+    const y2025 = data.find((d) => d.year === 2025)
+    expect(y2025?.total).toBe(55_000)
+  })
+})
+
 describe('applyPortfolioValuesToTarget', () => {
   it('cash-only leaves holdings unchanged', () => {
     const srcHold = { ...newHolding('AAA'), id: 's1', sharesHeld: 42 }
@@ -500,6 +643,33 @@ describe('applyPortfolioValuesToTarget', () => {
     expect(aaaActs[0]!.shares).toBe(5)
     expect(aaaActs[0]!.price).toBe(12)
     expect(aaaActs[0]!.id).not.toBe('a1')
+  })
+
+  it('actuals-only overwrites monthly totals and currency', () => {
+    const source = basePortfolio({
+      deposits: [newOpeningDeposit(1, 2026)],
+      actuals: { '2024-12': 100_000, '2025-06': 110_000 },
+      actualsCurrency: 'CHF',
+    })
+    const target = basePortfolio({
+      id: 'p2',
+      name: 'Other',
+      deposits: [newOpeningDeposit(99, 2026)],
+      actuals: { '2023-01': 1 },
+      actualsCurrency: 'USD',
+    })
+    const next = applyPortfolioValuesToTarget(source, target, { actuals: true })
+    expect(next.actuals).toEqual({ '2024-12': 100_000, '2025-06': 110_000 })
+    expect(next.actualsCurrency).toBe('CHF')
+    expect(getOpeningCash(next)).toBe(99)
+    expect(next.id).toBe('p2')
+
+    const cleared = applyPortfolioValuesToTarget(
+      basePortfolio({ deposits: [newOpeningDeposit(1, 2026)] }),
+      target,
+      { actuals: true },
+    )
+    expect(cleared.actuals).toBeUndefined()
   })
 })
 

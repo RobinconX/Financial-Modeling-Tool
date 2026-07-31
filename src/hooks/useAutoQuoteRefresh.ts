@@ -29,13 +29,20 @@ export function useAutoQuoteRefresh(
     if (refreshingRef.current) return
     refreshingRef.current = true
     try {
+      // Only fetch real equity tickers (1–5 letters). Skip manual/option symbols
+      // like LMND45PDEC18 which are not valid quote symbols.
+      const isEquityTicker = (sym: string) => /^[A-Z]{1,5}$/.test(sym)
+
       const symbols = new Set<string>()
       for (const s of scenariosRef.current) {
-        if (s.symbol) symbols.add(s.symbol.toUpperCase())
+        const sym = (s.symbol || '').toUpperCase()
+        if (sym && isEquityTicker(sym)) symbols.add(sym)
       }
       for (const p of portfoliosRef.current) {
         for (const h of p.holdings ?? []) {
-          if (h.symbol) symbols.add(h.symbol.toUpperCase())
+          if (h.manualOnly) continue
+          const sym = (h.symbol || '').toUpperCase()
+          if (sym && isEquityTicker(sym)) symbols.add(sym)
         }
       }
       if (symbols.size === 0) return

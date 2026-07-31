@@ -223,13 +223,31 @@ export type PortfolioYearOverride = {
 export type PortfolioHolding = {
   id: string
   symbol: string
-  /** Number of shares held (value = shares × price) */
+  /**
+   * Optional display name (e.g. "AAPL Dec26 180C"). Falls back to symbol.
+   * Useful for options / custom instruments.
+   */
+  label?: string | null
+  /** Number of shares / contracts held (value = qty × price unless absolute override) */
   sharesHeld: number
+  /**
+   * Linked stock projection. Null = manual position (options, cash-like equity, etc.)
+   * valued only via manual price and yearOverrides.
+   */
   scenarioId: string | null
   basis: ValuationBasis | 'easy'
+  /**
+   * Absolute position $ by year (USD book). Wins over shares×price for that year.
+   * Use for options mark-to-model or fixed future values without a stock scenario.
+   */
   yearOverrides: PortfolioYearOverride[]
-  /** Used when scenario has no current price */
+  /** Unit price when scenario has no quote, or for pure manual positions */
   manualCurrentPrice: number | null
+  /**
+   * When true, never uses stock projections even if symbol matches a scenario.
+   * Set for options / custom instruments added as manual positions.
+   */
+  manualOnly?: boolean
 }
 
 /** How a portfolio deposit amount is determined. */
@@ -335,6 +353,13 @@ export type SavedPortfolio = {
   /** Planned buy/sell trades by year. */
   actions: PortfolioAction[]
   holdings: PortfolioHolding[]
+  /**
+   * End-of-month whole-portfolio totals (manual actuals).
+   * Keys: `YYYY-MM`. Amounts in `actualsCurrency` (default USD).
+   */
+  actuals?: Record<string, number>
+  /** Denomination of `actuals` amounts. Missing = USD (legacy). */
+  actualsCurrency?: DisplayCurrency
   createdAt: string
   updatedAt: string
 }

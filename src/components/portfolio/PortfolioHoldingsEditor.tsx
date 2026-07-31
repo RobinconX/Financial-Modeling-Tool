@@ -20,7 +20,10 @@ import {
   getOpeningCash,
   lastExplicitDepositYear,
   newDeposit,
+  holdingDisplayName,
+  holdingLiveValue,
   newHolding,
+  newManualHolding,
   newOpeningDeposit,
   resolveCurrentPrice,
   resolveDepositAmount,
@@ -181,12 +184,10 @@ export function PortfolioHoldingsEditor({
 
   function holdingCurrentValue(h: PortfolioHolding): number | null {
     const linked =
-      h.scenarioId != null
+      h.scenarioId != null && !h.manualOnly
         ? (scenarios.find((s) => s.id === h.scenarioId) ?? null)
         : null
-    const px = resolveCurrentPrice(h, linked)
-    if (h.sharesHeld > 0 && px != null && px > 0) return h.sharesHeld * px
-    return null
+    return holdingLiveValue(h, linked, allActions)
   }
 
   const sortedHoldings = useMemo(() => {
@@ -281,6 +282,12 @@ export function PortfolioHoldingsEditor({
     })
   }
 
+  function addManualPosition() {
+    onChange({
+      holdings: [...portfolio.holdings, newManualHolding('Option / manual')],
+    })
+  }
+
   function fmt(usd: number | null | undefined) {
     if (usd == null || !Number.isFinite(usd)) return formatMoney(usd, displayCurrency)
     return formatMoney(toDisplay(usd, displayCurrency, usdToChf), displayCurrency)
@@ -292,9 +299,10 @@ export function PortfolioHoldingsEditor({
   }
 
   /** Parse user money typed in display currency → USD book amount. */
-  function parseBook(raw: string): number | null {
+  function parseBook(raw: string, allowNegative = false): number | null {
     const v = parseMoney(raw)
-    if (v == null || v < 0) return null
+    if (v == null || !Number.isFinite(v)) return null
+    if (!allowNegative && v < 0) return null
     return fromDisplay(v, displayCurrency, usdToChf)
   }
 
@@ -305,7 +313,7 @@ export function PortfolioHoldingsEditor({
       updateHolding(holding.id, { yearOverrides: rest })
       return
     }
-    const value = parseBook(trimmed)
+    const value = parseBook(trimmed, holding.manualOnly === true)
     if (value == null) return
     updateHolding(holding.id, {
       yearOverrides: [...rest, { year, valueDollars: value }].sort((a, b) => a.year - b.year),
@@ -823,6 +831,14 @@ export function PortfolioHoldingsEditor({
           <button type="button" className="btn-ghost !py-1.5 !text-xs" onClick={addBlankHolding}>
             + Empty holding
           </button>
+          <button
+            type="button"
+            className="btn-ghost !py-1.5 !text-xs"
+            onClick={addManualPosition}
+            title="Options or any instrument without a stock projection"
+          >
+            + Manual / option
+          </button>
         </div>
       </div>
 
@@ -833,15 +849,15 @@ export function PortfolioHoldingsEditor({
 
       {portfolio.holdings.length === 0 && (
         <p className="text-sm text-white/40">
-          Pick a ticker from your saved projections above, then enter shares held. Value = shares ×
-          price.
+          Add from saved projections (stocks), or <span className="text-white/60">+ Manual /
+          option</span> for positions valued without projections (qty × mark, or absolute $ by year).
         </p>
       )}
 
       {scenarios.length === 0 && (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
-          No saved projections yet. Save a scenario from the Analyzer (Saved projections tab) to
-          choose tickers here.
+        <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/45">
+          No saved stock projections yet — you can still add manual / option positions. Save
+          scenarios from the Analyzer to link equities.
         </p>
       )}
 
@@ -849,7 +865,7 @@ export function PortfolioHoldingsEditor({
         {sortedHoldings.map((h) => {
           const symbolScenarios = scenariosForSymbol(h.symbol)
           const linked =
-            h.scenarioId != null
+            h.scenarioId != null && !h.manualOnly
               ? (scenarios.find((s) => s.id === h.scenarioId) ?? null)
               : null
           const currentPrice = resolveCurrentPrice(h, linked)
@@ -862,15 +878,21 @@ export function PortfolioHoldingsEditor({
           }
 
           const isOpen = expanded[h.id] ?? false
-          const scenarioName =
-            linked?.name ?? (h.scenarioId ? 'Missing scenario' : 'Manual')
+          const scenarioName = h.manualOnly
+            ? 'Manual / option'
+            : linked?.name ?? (h.scenarioId ? 'Missing scenario' : 'Manual')
           const holdingActions = allActions.filter((a) => a.holdingId === h.id)
           const actionCount = holdingActions.length
+          const displayName = holdingDisplayName(h)
 
           return (
             <div
               key={h.id}
-              className="rounded-xl border border-white/10 bg-black/20 transition-colors"
+              className={`rounded-xl border transition-colors ${
+                h.manualOnly
+                  ? 'border-amber-500/25 bg-amber-500/[0.04]'
+                  : 'border-white/10 bg-black/20'
+              }`}
             >
               <div className="flex items-start gap-2 p-3">
                 <button
@@ -890,15 +912,15 @@ export function PortfolioHoldingsEditor({
                   <div className="min-w-0 flex-1">
                     <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
                       <span className="text-sm font-semibold text-white/90">
-                        {h.symbol || '—'}
+                        {displayName}
                       </span>
                       <span className="text-xs text-white/40">{scenarioName}</span>
-                      {h.sharesHeld > 0 && (
+                      {h.sharesHeld !== 0 && (
                         <span className="text-xs tabular-nums text-white/50">
                           {h.sharesHeld.toLocaleString(undefined, {
                             maximumFractionDigits: 4,
                           })}{' '}
-                          sh
+                          {h.manualOnly ? 'units' : 'sh'}
                         </span>
                       )}
                       {currentValue != null && (
@@ -914,9 +936,13 @@ export function PortfolioHoldingsEditor({
                     </div>
                     {!isOpen && (
                       <p className="mt-0.5 text-[11px] text-white/35">
-                        {currentPrice != null
-                          ? `@ ${fmtPx(currentPrice)} · ${h.basis.toUpperCase()}`
-                          : 'Expand to edit'}
+                        {h.manualOnly
+                          ? currentValue != null
+                            ? `Mark ${fmt(currentValue)} · no projection`
+                            : 'Set qty + unit price or year values'
+                          : currentPrice != null
+                            ? `@ ${fmtPx(currentPrice)} · ${h.basis.toUpperCase()}`
+                            : 'Expand to edit'}
                         {actionCount > 0
                           ? ` · ${holdingActions
                               .map(
@@ -940,130 +966,224 @@ export function PortfolioHoldingsEditor({
 
               {isOpen && (
                 <div className="space-y-3 border-t border-white/5 px-3 pb-3 pt-3">
-                  <div className="flex flex-wrap items-start justify-between gap-2">
-                    <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
-                      <div>
-                        <label className="label">Ticker</label>
-                        {symbolOptions.length > 0 ? (
-                          <select
+                  {h.manualOnly ? (
+                    <>
+                      <p className="text-[11px] text-amber-200/70">
+                        Manual position — valued with unit mark × quantity, or absolute $ by year.
+                        Negative qty/mark/totals allowed (shorts, liabilities). Not linked to stock
+                        projections.
+                      </p>
+                      <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
+                        <div className="sm:col-span-2 lg:col-span-1">
+                          <label className="label">Name / label</label>
+                          <input
                             className="input"
-                            value={h.symbol}
-                            onChange={(e) => {
-                              const symbol = e.target.value.toUpperCase()
-                              const match = scenarios.find((s) => s.symbol === symbol)
+                            value={h.label ?? ''}
+                            placeholder="e.g. AAPL Dec26 180C"
+                            onChange={(e) =>
                               updateHolding(h.id, {
-                                symbol,
-                                scenarioId:
-                                  h.scenarioId &&
-                                  scenarios.some(
-                                    (s) => s.id === h.scenarioId && s.symbol === symbol,
-                                  )
-                                    ? h.scenarioId
-                                    : (match?.id ?? null),
+                                label: e.target.value,
+                                symbol: e.target.value
+                                  .trim()
+                                  .toUpperCase()
+                                  .replace(/[^A-Z0-9]/g, '')
+                                  .slice(0, 16) || h.symbol,
+                              })
+                            }
+                          />
+                        </div>
+                        <div>
+                          <label className="label">Quantity (contracts / units)</label>
+                          <input
+                            className="input"
+                            type="number"
+                            inputMode="decimal"
+                            step="any"
+                            placeholder="e.g. 10 or -5"
+                            value={h.sharesHeld || ''}
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              if (raw === '' || raw === '-') {
+                                updateHolding(h.id, { sharesHeld: 0 })
+                                return
+                              }
+                              const v = Number(raw)
+                              updateHolding(h.id, {
+                                sharesHeld: Number.isFinite(v) ? v : 0,
                               })
                             }}
-                          >
-                            <option value="" disabled>
-                              Select ticker…
-                            </option>
-                            {symbolOptions.map((s) => {
-                              const count = scenarios.filter((sc) => sc.symbol === s).length
-                              return (
-                                <option key={s} value={s}>
-                                  {s}
-                                  {count > 0
-                                    ? ` (${count} projection${count === 1 ? '' : 's'})`
-                                    : ''}
-                                </option>
-                              )
-                            })}
-                          </select>
-                        ) : (
-                          <input
-                            className="input uppercase"
-                            value={h.symbol}
-                            onChange={(e) =>
-                              updateHolding(h.id, { symbol: e.target.value.toUpperCase() })
-                            }
-                            placeholder="AAPL"
                           />
-                        )}
-                      </div>
-                      <div>
-                        <label className="label">Shares held</label>
-                        <input
-                          className="input"
-                          type="number"
-                          inputMode="decimal"
-                          min={0}
-                          step="any"
-                          placeholder="e.g. 100"
-                          value={h.sharesHeld || ''}
-                          onChange={(e) => {
-                            const raw = e.target.value
-                            if (raw === '') {
-                              updateHolding(h.id, { sharesHeld: 0 })
-                              return
+                        </div>
+                        <div>
+                          <label className="label">Unit mark ({displayCurrency})</label>
+                          <input
+                            className="input"
+                            type="text"
+                            placeholder="e.g. 5.50 or -2"
+                            defaultValue={
+                              h.manualCurrentPrice != null
+                                ? String(
+                                    roundInput(
+                                      toDisplay(
+                                        h.manualCurrentPrice,
+                                        displayCurrency,
+                                        usdToChf,
+                                      ),
+                                    ),
+                                  )
+                                : ''
                             }
-                            const v = Number(raw)
-                            updateHolding(h.id, {
-                              sharesHeld: Number.isFinite(v) && v >= 0 ? v : 0,
-                            })
-                          }}
-                        />
-                        <p className="mt-1 text-[11px] text-white/35">
-                          {currentPrice != null
-                            ? `× ${fmtPx(currentPrice)} = ${fmt(currentValue)}`
-                            : "Set current price to compute today's value"}
-                        </p>
+                            key={`px-m-${h.id}-${h.manualCurrentPrice}-${displayCurrency}-${usdToChf ?? 0}`}
+                            onBlur={(e) => {
+                              const raw = e.target.value.trim()
+                              if (!raw) {
+                                updateHolding(h.id, { manualCurrentPrice: null })
+                                return
+                              }
+                              const book = parseBook(raw, true)
+                              updateHolding(h.id, {
+                                manualCurrentPrice:
+                                  book != null && Number.isFinite(book) ? book : null,
+                              })
+                            }}
+                          />
+                          <p className="mt-1 text-[11px] text-white/35">
+                            {currentValue != null
+                              ? `Now = qty × mark = ${fmt(currentValue)}`
+                              : 'Or set absolute $ by year below'}
+                          </p>
+                        </div>
                       </div>
-                      <div>
-                        <label className="label">Saved projection</label>
-                        <select
-                          className="input"
-                          value={h.scenarioId ?? ''}
-                          onChange={(e) =>
-                            updateHolding(h.id, {
-                              scenarioId: e.target.value || null,
-                            })
-                          }
-                        >
-                          <option value="">— Manual only —</option>
-                          {(h.symbol ? symbolScenarios : scenarios).map((sc) => (
-                            <option key={sc.id} value={sc.id}>
-                              {sc.symbol} · {sc.name}
-                            </option>
-                          ))}
-                        </select>
-                      </div>
-                      <div>
-                        <label className="label">Price basis</label>
-                        <select
-                          className="input"
-                          value={h.basis}
-                          onChange={(e) =>
-                            updateHolding(h.id, {
-                              basis: e.target.value as ValuationBasis | 'easy',
-                            })
-                          }
-                        >
-                          {BASIS_OPTIONS.map((o) => (
-                            <option key={o.id} value={o.id}>
-                              {o.label}
-                            </option>
-                          ))}
-                        </select>
+                    </>
+                  ) : (
+                    <div className="flex flex-wrap items-start justify-between gap-2">
+                      <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-4">
+                        <div>
+                          <label className="label">Ticker</label>
+                          {symbolOptions.length > 0 ? (
+                            <select
+                              className="input"
+                              value={h.symbol}
+                              onChange={(e) => {
+                                const symbol = e.target.value.toUpperCase()
+                                const match = scenarios.find((s) => s.symbol === symbol)
+                                updateHolding(h.id, {
+                                  symbol,
+                                  scenarioId:
+                                    h.scenarioId &&
+                                    scenarios.some(
+                                      (s) => s.id === h.scenarioId && s.symbol === symbol,
+                                    )
+                                      ? h.scenarioId
+                                      : (match?.id ?? null),
+                                })
+                              }}
+                            >
+                              <option value="" disabled>
+                                Select ticker…
+                              </option>
+                              {symbolOptions.map((s) => {
+                                const count = scenarios.filter((sc) => sc.symbol === s).length
+                                return (
+                                  <option key={s} value={s}>
+                                    {s}
+                                    {count > 0
+                                      ? ` (${count} projection${count === 1 ? '' : 's'})`
+                                      : ''}
+                                  </option>
+                                )
+                              })}
+                            </select>
+                          ) : (
+                            <input
+                              className="input uppercase"
+                              value={h.symbol}
+                              onChange={(e) =>
+                                updateHolding(h.id, {
+                                  symbol: e.target.value.toUpperCase(),
+                                })
+                              }
+                              placeholder="AAPL"
+                            />
+                          )}
+                        </div>
+                        <div>
+                          <label className="label">Shares held</label>
+                          <input
+                            className="input"
+                            type="number"
+                            inputMode="decimal"
+                            min={0}
+                            step="any"
+                            placeholder="e.g. 100"
+                            value={h.sharesHeld || ''}
+                            onChange={(e) => {
+                              const raw = e.target.value
+                              if (raw === '') {
+                                updateHolding(h.id, { sharesHeld: 0 })
+                                return
+                              }
+                              const v = Number(raw)
+                              updateHolding(h.id, {
+                                sharesHeld: Number.isFinite(v) && v >= 0 ? v : 0,
+                              })
+                            }}
+                          />
+                          <p className="mt-1 text-[11px] text-white/35">
+                            {currentPrice != null
+                              ? `× ${fmtPx(currentPrice)} = ${fmt(currentValue)}`
+                              : "Set current price to compute today's value"}
+                          </p>
+                        </div>
+                        <div>
+                          <label className="label">Saved projection</label>
+                          <select
+                            className="input"
+                            value={h.scenarioId ?? ''}
+                            onChange={(e) =>
+                              updateHolding(h.id, {
+                                scenarioId: e.target.value || null,
+                                manualOnly: false,
+                              })
+                            }
+                          >
+                            <option value="">— Manual only —</option>
+                            {(h.symbol ? symbolScenarios : scenarios).map((sc) => (
+                              <option key={sc.id} value={sc.id}>
+                                {sc.symbol} · {sc.name}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
+                        <div>
+                          <label className="label">Price basis</label>
+                          <select
+                            className="input"
+                            value={h.basis}
+                            onChange={(e) =>
+                              updateHolding(h.id, {
+                                basis: e.target.value as ValuationBasis | 'easy',
+                              })
+                            }
+                          >
+                            {BASIS_OPTIONS.map((o) => (
+                              <option key={o.id} value={o.id}>
+                                {o.label}
+                              </option>
+                            ))}
+                          </select>
+                        </div>
                       </div>
                     </div>
-                  </div>
+                  )}
 
-                  <div className="grid gap-3 sm:grid-cols-2">
+                  {!h.manualOnly && (
                     <div>
                       <label className="label">
                         Manual current price (optional, {displayCurrency})
                       </label>
                       <input
-                        className="input"
+                        className="input max-w-xs"
                         type="text"
                         placeholder="If scenario has no price"
                         defaultValue={
@@ -1089,86 +1209,96 @@ export function PortfolioHoldingsEditor({
                         }}
                       />
                     </div>
-                    <div>
-                      <label className="label">Manual year override</label>
-                      <div className="flex gap-2">
-                        <input
-                          className="input !w-24"
-                          type="number"
-                          min={currentYear}
-                          placeholder="Year"
-                          id={`oy-${h.id}`}
-                        />
-                        <input
-                          className="input flex-1"
-                          type="text"
-                          placeholder="Position $ e.g. 50K"
-                          id={`ov-${h.id}`}
-                          onKeyDown={(e) => {
-                            if (e.key !== 'Enter') return
-                            const yearEl = document.getElementById(
-                              `oy-${h.id}`,
-                            ) as HTMLInputElement
-                            const valEl = document.getElementById(
-                              `ov-${h.id}`,
-                            ) as HTMLInputElement
-                            const year = Number(yearEl?.value)
-                            if (!year) return
-                            setOverride(h, year, valEl?.value ?? '')
-                            if (valEl) valEl.value = ''
-                          }}
-                        />
-                        <button
-                          type="button"
-                          className="btn-ghost shrink-0"
-                          onClick={() => {
-                            const yearEl = document.getElementById(
-                              `oy-${h.id}`,
-                            ) as HTMLInputElement
-                            const valEl = document.getElementById(
-                              `ov-${h.id}`,
-                            ) as HTMLInputElement
-                            const year = Number(yearEl?.value)
-                            if (!year) return
-                            setOverride(h, year, valEl?.value ?? '')
-                            if (valEl) valEl.value = ''
-                          }}
-                        >
-                          Set
-                        </button>
-                      </div>
-                      {h.yearOverrides.length > 0 && (
-                        <ul className="mt-1.5 flex flex-wrap gap-1.5">
-                          {h.yearOverrides
-                            .slice()
-                            .sort((a, b) => a.year - b.year)
-                            .map((o) => (
-                              <li
-                                key={o.year}
-                                className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px]"
-                              >
-                                <span className="text-white/50">{o.year}</span>
-                                <span className="tabular-nums text-white/80">
-                                  {fmt(o.valueDollars)}
-                                </span>
-                                <button
-                                  type="button"
-                                  className="text-white/35 hover:text-red-300"
-                                  onClick={() =>
-                                    updateHolding(h.id, {
-                                      yearOverrides: h.yearOverrides.filter(
-                                        (x) => x.year !== o.year,
-                                      ),
-                                    })
-                                  }
-                                >
-                                  ×
-                                </button>
-                              </li>
-                            ))}
-                        </ul>
-                      )}
+                  )}
+
+                  <div className="rounded-lg border border-white/10 bg-black/20 p-3">
+                    <label className="label">
+                      {h.manualOnly
+                        ? `Position value by year (${displayCurrency})`
+                        : `Absolute $ override by year (${displayCurrency})`}
+                    </label>
+                    <p className="mb-2 text-[10px] text-white/40">
+                      {h.manualOnly
+                        ? 'Optional. Overrides qty × mark for that year (e.g. $0 at expiry, or negative liability).'
+                        : 'Optional. Full position value for that year (wins over shares × price).'}
+                    </p>
+                    <div className="flex flex-wrap gap-2">
+                      <input
+                        className="input !w-24"
+                        type="number"
+                        min={currentYear}
+                        placeholder="Year"
+                        id={`oy-${h.id}`}
+                      />
+                      <input
+                        className="input min-w-[8rem] flex-1"
+                        type="text"
+                        placeholder={h.manualOnly ? 'Total $ e.g. 12K' : 'Position $ e.g. 50K'}
+                        id={`ov-${h.id}`}
+                        onKeyDown={(e) => {
+                          if (e.key !== 'Enter') return
+                          const yearEl = document.getElementById(
+                            `oy-${h.id}`,
+                          ) as HTMLInputElement
+                          const valEl = document.getElementById(
+                            `ov-${h.id}`,
+                          ) as HTMLInputElement
+                          const year = Number(yearEl?.value)
+                          if (!year) return
+                          setOverride(h, year, valEl?.value ?? '')
+                          if (valEl) valEl.value = ''
+                        }}
+                      />
+                      <button
+                        type="button"
+                        className="btn-ghost shrink-0"
+                        onClick={() => {
+                          const yearEl = document.getElementById(
+                            `oy-${h.id}`,
+                          ) as HTMLInputElement
+                          const valEl = document.getElementById(
+                            `ov-${h.id}`,
+                          ) as HTMLInputElement
+                          const year = Number(yearEl?.value)
+                          if (!year) return
+                          setOverride(h, year, valEl?.value ?? '')
+                          if (valEl) valEl.value = ''
+                        }}
+                      >
+                        Set
+                      </button>
                     </div>
+                    {h.yearOverrides.length > 0 && (
+                      <ul className="mt-2 flex flex-wrap gap-1.5">
+                        {h.yearOverrides
+                          .slice()
+                          .sort((a, b) => a.year - b.year)
+                          .map((o) => (
+                            <li
+                              key={o.year}
+                              className="inline-flex items-center gap-1 rounded-md border border-white/10 bg-white/5 px-2 py-0.5 text-[11px]"
+                            >
+                              <span className="text-white/50">{o.year}</span>
+                              <span className="tabular-nums text-white/80">
+                                {fmt(o.valueDollars)}
+                              </span>
+                              <button
+                                type="button"
+                                className="text-white/35 hover:text-red-300"
+                                onClick={() =>
+                                  updateHolding(h.id, {
+                                    yearOverrides: h.yearOverrides.filter(
+                                      (x) => x.year !== o.year,
+                                    ),
+                                  })
+                                }
+                              >
+                                ×
+                              </button>
+                            </li>
+                          ))}
+                      </ul>
+                    )}
                   </div>
 
                   <HoldingActionsEditor

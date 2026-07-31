@@ -6,7 +6,12 @@ import type {
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
-import { buildPortfolioGrid, withResolvedDepositAmounts } from '../../lib/portfolio'
+import {
+  buildPortfolioGrid,
+  earliestActualYear,
+  withResolvedDepositAmounts,
+  type PortfolioChartMode,
+} from '../../lib/portfolio'
 import { fetchFxRateClient } from '../../lib/fx'
 import {
   PortfolioHoldingsEditor,
@@ -14,16 +19,19 @@ import {
 } from './PortfolioHoldingsEditor'
 import { PortfolioValueTable } from './PortfolioValueTable'
 import { PortfolioChart } from './PortfolioChart'
+import { PortfolioActualsEditor } from './PortfolioActualsEditor'
 import { FullscreenChart } from '../common/FullscreenChart'
 
 const CURRENCY_KEY = 'grok-lab-portfolio-currency'
 const SELECTED_PORTFOLIO_KEY = 'grok-lab-selected-portfolio'
 const PANEL_KEY = 'grok-lab-portfolio-panel'
+const CHART_MODE_KEY = 'grok-lab-portfolio-chart-mode'
 
-type WorkspaceTab = 'chart' | PortfolioEditorPanel
+type WorkspaceTab = 'chart' | 'actuals' | PortfolioEditorPanel
 
 const TABS: { id: WorkspaceTab; label: string; short: string }[] = [
   { id: 'chart', label: 'Chart', short: 'Chart' },
+  { id: 'actuals', label: 'Actuals', short: 'Act.' },
   { id: 'cash', label: 'Cash', short: 'Cash' },
   { id: 'positions', label: 'Positions', short: 'Pos.' },
   { id: 'growth', label: 'Growth', short: 'Growth' },
@@ -51,11 +59,28 @@ function readSelectedPortfolioId(portfolios: SavedPortfolio[]): string | null {
 function readPanel(): WorkspaceTab {
   try {
     const v = localStorage.getItem(PANEL_KEY)
-    if (v === 'chart' || v === 'cash' || v === 'positions' || v === 'growth') return v
+    if (
+      v === 'chart' ||
+      v === 'actuals' ||
+      v === 'cash' ||
+      v === 'positions' ||
+      v === 'growth'
+    )
+      return v
   } catch {
     /* ignore */
   }
   return 'positions'
+}
+
+function readChartMode(): PortfolioChartMode {
+  try {
+    const v = localStorage.getItem(CHART_MODE_KEY)
+    if (v === 'total' || v === 'stacked') return v
+  } catch {
+    /* ignore */
+  }
+  return 'stacked'
 }
 
 type Props = {
@@ -87,6 +112,7 @@ export function PortfolioView({
     readSelectedPortfolioId(portfolios),
   )
   const [panel, setPanel] = useState<WorkspaceTab>(readPanel)
+  const [chartMode, setChartMode] = useState<PortfolioChartMode>(readChartMode)
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(readCurrency)
   const [usdToChf, setUsdToChf] = useState<number | null>(null)
   const [fxAsOf, setFxAsOf] = useState<string | null>(null)
@@ -116,6 +142,14 @@ export function PortfolioView({
       /* ignore */
     }
   }, [panel])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(CHART_MODE_KEY, chartMode)
+    } catch {
+      /* ignore */
+    }
+  }, [chartMode])
 
   useEffect(() => {
     if (selectedId) {
@@ -181,6 +215,13 @@ export function PortfolioView({
   const selected = portfolios.find((p) => p.id === selectedId) ?? null
   const currentYear = new Date().getFullYear()
 
+  // Period state must be declared with other hooks before any conditional returns
+  // and keep a fixed dependency array size (React requirement).
+  const [periodFrom, setPeriodFrom] = useState(currentYear)
+  const [periodTo, setPeriodTo] = useState(currentYear)
+  const [fromDraft, setFromDraft] = useState(String(currentYear))
+  const [toDraft, setToDraft] = useState(String(currentYear))
+
   const baseGrid = useMemo(() => {
     if (!selected) return null
     const resolved = withResolvedDepositAmounts(selected, {
@@ -194,17 +235,22 @@ export function PortfolioView({
   const firstInputYear =
     baseGrid && baseGrid.years.length > 0 ? baseGrid.years[0]! : currentYear
 
-  const [periodFrom, setPeriodFrom] = useState(currentYear)
-  const [periodTo, setPeriodTo] = useState(currentYear)
-  const [fromDraft, setFromDraft] = useState(String(currentYear))
-  const [toDraft, setToDraft] = useState(String(currentYear))
+  const selectedPortfolioId = selected?.id ?? null
 
+  // Reset period when switching portfolio or stated year span changes — not on every edit.
+  // Deps must always be the same length/order.
   useEffect(() => {
-    setPeriodFrom(firstInputYear)
+    const earliest =
+      selectedPortfolioId && selected
+        ? earliestActualYear(selected, firstInputYear)
+        : firstInputYear
+    const from = Math.min(earliest, firstInputYear)
+    setPeriodFrom(from)
     setPeriodTo(lastInputYear)
-    setFromDraft(String(firstInputYear))
+    setFromDraft(String(from))
     setToDraft(String(lastInputYear))
-  }, [selected?.id, firstInputYear, lastInputYear])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync on id / year span
+  }, [selectedPortfolioId, firstInputYear, lastInputYear])
 
   function applyPeriod(fromStr: string, toStr: string) {
     const from = Number(fromStr)
@@ -224,14 +270,19 @@ export function PortfolioView({
     setToDraft(String(b))
   }
 
-  const grid = useMemo(() => {
+  /** Deposits (incl. CHF / surplus) as USD book — must be used for chart cash math */
+  const resolvedSelected = useMemo(() => {
     if (!selected) return null
-    const resolved = withResolvedDepositAmounts(selected, {
+    return withResolvedDepositAmounts(selected, {
       incomeCostLines,
       usdToChf,
     })
+  }, [selected, selected?.updatedAt, incomeCostLines, usdToChf])
+
+  const grid = useMemo(() => {
+    if (!resolvedSelected) return null
     const throughYear = Math.max(periodTo, lastInputYear)
-    const full = buildPortfolioGrid(resolved, scenarios, currentYear, {
+    const full = buildPortfolioGrid(resolvedSelected, scenarios, currentYear, {
       throughYear,
     })
     const idxs: number[] = []
@@ -249,11 +300,8 @@ export function PortfolioView({
       lastStatedYear: full.lastStatedYear,
     }
   }, [
-    selected,
+    resolvedSelected,
     scenarios,
-    selected?.updatedAt,
-    incomeCostLines,
-    usdToChf,
     currentYear,
     periodFrom,
     periodTo,
@@ -620,11 +668,40 @@ export function PortfolioView({
                       Portfolio value
                     </h3>
                     <p className="mt-0.5 text-[11px] text-white/35">
-                      Extend <span className="text-white/50">To</span> to include perpetual growth
-                      (green).
+                      Order: past → <span className="text-white/55">Now</span> (live) → current /
+                      future. Past years use Actuals (last month of year) in portfolio value mode.
+                      Extend <span className="text-white/50">To</span> for growth.
                     </p>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
+                    <div
+                      className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5"
+                      role="group"
+                      aria-label="Chart display mode"
+                    >
+                      <button
+                        type="button"
+                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                          chartMode === 'stacked'
+                            ? 'bg-white text-black shadow'
+                            : 'text-white/55 hover:text-white'
+                        }`}
+                        onClick={() => setChartMode('stacked')}
+                      >
+                        By position
+                      </button>
+                      <button
+                        type="button"
+                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                          chartMode === 'total'
+                            ? 'bg-white text-black shadow'
+                            : 'text-white/55 hover:text-white'
+                        }`}
+                        onClick={() => setChartMode('total')}
+                      >
+                        Portfolio value
+                      </button>
+                    </div>
                     <label className="flex items-center gap-1.5 text-xs text-white/50">
                       From
                       <input
@@ -662,11 +739,13 @@ export function PortfolioView({
                     <button
                       type="button"
                       className="btn-ghost !py-1 !text-[11px]"
-                      title="Reset to years with inputs only"
+                      title="Reset to years with inputs / actuals"
                       onClick={() => {
-                        setPeriodFrom(firstInputYear)
+                        const earliest = earliestActualYear(selected, firstInputYear)
+                        const from = Math.min(earliest, firstInputYear)
+                        setPeriodFrom(from)
                         setPeriodTo(lastInputYear)
-                        setFromDraft(String(firstInputYear))
+                        setFromDraft(String(from))
                         setToDraft(String(lastInputYear))
                       }}
                     >
@@ -676,12 +755,15 @@ export function PortfolioView({
                 </div>
                 <FullscreenChart title="Portfolio value over time">
                   <PortfolioChart
-                    key={`chart-${selected.id}-${selected.updatedAt}-${activeCurrency}-${usdToChf ?? 0}-${periodFrom}-${periodTo}-${grid.years.join(',')}`}
+                    key={`chart-${selected.id}-${selected.updatedAt}-${activeCurrency}-${usdToChf ?? 0}-${periodFrom}-${periodTo}-${chartMode}-${grid.years.join(',')}`}
                     grid={grid}
-                    portfolio={selected}
+                    portfolio={resolvedSelected ?? selected}
                     scenarios={scenarios}
                     displayCurrency={activeCurrency}
                     usdToChf={usdToChf}
+                    chartMode={chartMode}
+                    fromYear={periodFrom}
+                    toYear={periodTo}
                   />
                 </FullscreenChart>
                 <div>
@@ -690,6 +772,8 @@ export function PortfolioView({
                   </h3>
                   <PortfolioValueTable
                     grid={grid}
+                    portfolio={resolvedSelected ?? selected}
+                    scenarios={scenarios}
                     displayCurrency={activeCurrency}
                     usdToChf={usdToChf}
                   />
@@ -699,6 +783,17 @@ export function PortfolioView({
 
             {panel === 'chart' && !grid && (
               <p className="text-sm text-white/40">Add cash or holdings to see the chart.</p>
+            )}
+
+            {panel === 'actuals' && (
+              <PortfolioActualsEditor
+                portfolio={selected}
+                onChange={(patch) => updatePortfolio(selected.id, patch)}
+                displayCurrency={activeCurrency}
+                usdToChf={usdToChf}
+                otherPortfolios={portfolios.filter((p) => p.id !== selected.id)}
+                onUpdateOtherPortfolio={updatePortfolio}
+              />
             )}
 
             {editorPanel && (
