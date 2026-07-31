@@ -44,7 +44,9 @@ type Props = {
 
 type HoverState = {
   year: number
-  kind: 'actual' | 'projected'
+  label: string
+  kind: 'actual' | 'projected' | 'now'
+  isNow: boolean
   barX: number
   stacks: { id: string; name: string; type: OverviewSeries['type']; value: number }[]
   total: number
@@ -168,7 +170,9 @@ export function OverviewChart({
       })
       total += value
       if (s.type === 'portfolio') {
-        const lines = portfolioBreakdownChfAtYear(s, row.year, deps)
+        const lines = portfolioBreakdownChfAtYear(s, row.year, deps, {
+          live: row.isNow === true,
+        })
         if (lines.length > 0) {
           portfolios.push({
             seriesId: s.id,
@@ -182,7 +186,9 @@ export function OverviewChart({
 
     return {
       year: row.year,
+      label: row.label,
       kind: row.kind,
+      isNow: row.isNow === true,
       barX,
       stacks,
       total,
@@ -205,8 +211,9 @@ export function OverviewChart({
       state.activeLabel != null
         ? rows.find(
             (r) =>
+              r.xKey === String(state.activeLabel) ||
               r.label === String(state.activeLabel) ||
-              String(r.year) === String(state.activeLabel),
+              (!r.isNow && String(r.year) === String(state.activeLabel)),
           )
         : undefined
 
@@ -289,10 +296,20 @@ export function OverviewChart({
           >
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
-              dataKey="label"
+              dataKey="xKey"
               tick={{ fill: 'rgba(232,238,245,0.45)', fontSize: 11 }}
               tickLine={false}
               axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+              interval={0}
+              tickFormatter={(key: string) => {
+                if (key === 'now') return 'Now'
+                // Thin dense year labels
+                if (rows.length > 18) {
+                  const n = Number(key)
+                  if (Number.isFinite(n) && n % 2 !== 0) return ''
+                }
+                return key
+              }}
             />
             <YAxis
               tick={{ fill: 'rgba(232,238,245,0.4)', fontSize: 10 }}
@@ -321,9 +338,11 @@ export function OverviewChart({
               >
                 {rows.map((r) => (
                   <Cell
-                    key={`${s.id}-${r.year}`}
+                    key={`${s.id}-${r.xKey}`}
                     fill={colorById.get(s.id) ?? '#94a3b8'}
-                    fillOpacity={r.kind === 'actual' ? 0.92 : 0.4}
+                    fillOpacity={r.isNow ? 1 : r.kind === 'actual' ? 0.92 : 0.4}
+                    stroke={r.isNow ? 'rgba(255,255,255,0.45)' : undefined}
+                    strokeWidth={r.isNow ? 1.5 : 0}
                   />
                 ))}
               </Bar>
@@ -347,8 +366,12 @@ export function OverviewChart({
             }}
           >
             <div className="flex items-center gap-2 font-semibold text-white">
-              <span>{hover.year}</span>
-              {hover.kind === 'projected' ? (
+              <span>{hover.isNow ? 'Now' : hover.label}</span>
+              {hover.isNow ? (
+                <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-medium text-sky-300/90">
+                  Live
+                </span>
+              ) : hover.kind === 'projected' ? (
                 <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/50">
                   Projected
                 </span>

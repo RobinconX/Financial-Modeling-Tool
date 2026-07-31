@@ -20,12 +20,15 @@ import {
 import {
   cashAtYear,
   getActions,
+  getOpeningCash,
   getPerpetualGrowthRate,
+  holdingLiveValue,
   holdingPositionLabel,
   holdingValueAtYear,
   lastStatedProjectionYear,
   portfolioTotalUsdAtYear as portfolioBookTotalUsdAtYear,
   withResolvedDepositAmounts,
+  yearEndActualUsd,
   type DepositResolveContext,
 } from './portfolio'
 
@@ -33,14 +36,21 @@ export const OVERVIEW_CURRENCY = 'CHF' as const
 export const OVERVIEW_DEFAULT_HORIZON_YEARS = 10
 export const OVERVIEW_MAX_HORIZON_YEARS = 40
 
-export type OverviewYearKind = 'actual' | 'projected'
+export type OverviewYearKind = 'actual' | 'projected' | 'now'
 
 export type OverviewChartRow = {
+  /**
+   * Calendar year for year bars; for the Now bar, the as-of calendar year
+   * (used for live lookups).
+   */
   year: number
+  /** Stable X-axis key: "now" or "2026" */
+  xKey: string
   label: string
   kind: OverviewYearKind
+  isNow: boolean
   total: number
-  [seriesId: string]: number | string
+  [seriesId: string]: number | string | boolean
 }
 
 export type OverviewBuildDeps = {
@@ -197,11 +207,13 @@ export type PortfolioBreakdownLine = {
 
 /**
  * Holdings + cash for a portfolio series at calendar year Y (CHF), for tooltips.
+ * Pass `live: true` for the Now bar (opening cash + live marks).
  */
 export function portfolioBreakdownChfAtYear(
   series: OverviewSeries,
   year: number,
   deps: OverviewBuildDeps,
+  options?: { live?: boolean },
 ): PortfolioBreakdownLine[] {
   if (series.type !== 'portfolio' || !series.portfolioId) return []
   const p = deps.portfolios.find((x) => x.id === series.portfolioId)
@@ -217,6 +229,48 @@ export function portfolioBreakdownChfAtYear(
   const resolved = withResolvedDepositAmounts(p, depositCtx)
   const actions = getActions(resolved)
   const last = lastStatedProjectionYear(resolved, deps.stockScenarios, currentYear)
+
+  if (options?.live) {
+    // Now bar: positions as held (ignore planned buy/sell actions)
+    const lines: PortfolioBreakdownLine[] = []
+    for (const h of resolved.holdings) {
+      const scenario =
+        h.scenarioId && !h.manualOnly
+          ? (deps.stockScenarios.find((s) => s.id === h.scenarioId) ?? null)
+          : null
+      const usd = holdingLiveValue(h, scenario, [], currentYear) ?? 0
+      if (!Number.isFinite(usd) || usd === 0) continue
+      lines.push({
+        label: holdingPositionLabel(h, scenario),
+        kind: 'equity',
+        valueChf: toDisplay(usd, 'CHF', deps.usdToChf),
+      })
+    }
+    const cashUsd = getOpeningCash(resolved)
+    if (Number.isFinite(cashUsd) && cashUsd !== 0) {
+      lines.push({
+        label: 'Cash',
+        kind: 'cash',
+        valueChf: toDisplay(cashUsd, 'CHF', deps.usdToChf),
+      })
+    }
+    return lines
+  }
+
+  // Past years: year-end actual (if recorded) as a single stack segment
+  if (year < currentYear) {
+    const actualUsd = yearEndActualUsd(resolved, year, deps.usdToChf)
+    if (actualUsd != null) {
+      return [
+        {
+          label: 'Actual (year-end)',
+          kind: 'equity',
+          valueChf: toDisplay(actualUsd, 'CHF', deps.usdToChf),
+        },
+      ]
+    }
+  }
+
   const rate = getPerpetualGrowthRate(resolved)
 
   // After last stated year with growth: single compounded total (matches portfolio grid)
@@ -304,7 +358,9 @@ export function yearsInRange(
 }
 
 export function yearKind(year: number, asOf: Date = new Date()): OverviewYearKind {
-  return year <= asOf.getFullYear() ? 'actual' : 'projected'
+  // Current calendar year is still a year-end style projection on the axis;
+  // live values live on the separate Now bar.
+  return year < asOf.getFullYear() ? 'actual' : 'projected'
 }
 
 /** Manual series: compound once per year after baseYear. */
@@ -364,6 +420,31 @@ export function portfolioTotalUsdAtYear(
   return portfolioBookTotalUsdAtYear(resolved, stockScenarios, year, currentYear)
 }
 
+/** Live portfolio total in CHF (opening cash + live holdings), matching Portfolio Now. */
+export function portfolioLiveTotalChf(
+  portfolio: SavedPortfolio,
+  deps: OverviewBuildDeps,
+): number {
+  if (deps.usdToChf == null || deps.usdToChf <= 0) return 0
+  const asOf = deps.asOf ?? new Date()
+  const currentYear = asOf.getFullYear()
+  const depositCtx: DepositResolveContext = {
+    incomeCostLines: deps.incomeCostLines,
+    usdToChf: deps.usdToChf,
+  }
+  const resolved = withResolvedDepositAmounts(portfolio, depositCtx)
+  // Now ignores buy/sell actions — only current holdings × marks
+  let usd = getOpeningCash(resolved)
+  for (const h of resolved.holdings) {
+    const scenario =
+      h.scenarioId && !h.manualOnly
+        ? (deps.stockScenarios.find((s) => s.id === h.scenarioId) ?? null)
+        : null
+    usd += holdingLiveValue(h, scenario, [], currentYear) ?? 0
+  }
+  return toDisplay(usd, 'CHF', deps.usdToChf)
+}
+
 export function seriesValueChf(
   series: OverviewSeries,
   year: number,
@@ -390,6 +471,16 @@ export function seriesValueChf(
   if (series.type === 'portfolio') {
     const p = deps.portfolios.find((x) => x.id === series.portfolioId)
     if (!p) return 0
+    if (deps.usdToChf == null || deps.usdToChf <= 0) return 0
+
+    // Past years: stack year-end actual when present (matches Portfolio chart)
+    if (year < currentYear) {
+      const actualUsd = yearEndActualUsd(p, year, deps.usdToChf)
+      if (actualUsd != null) {
+        return toDisplay(actualUsd, 'CHF', deps.usdToChf)
+      }
+    }
+
     const depositCtx: DepositResolveContext = {
       incomeCostLines: deps.incomeCostLines,
       usdToChf: deps.usdToChf,
@@ -401,8 +492,36 @@ export function seriesValueChf(
       depositCtx,
       currentYear,
     )
-    if (deps.usdToChf == null || deps.usdToChf <= 0) return 0
     return toDisplay(usd, 'CHF', deps.usdToChf)
+  }
+
+  return 0
+}
+
+/** Live “Now” value for a series (current balances, not year-end projection). */
+export function seriesValueChfNow(series: OverviewSeries, deps: OverviewBuildDeps): number {
+  const asOf = deps.asOf ?? new Date()
+  const currentYear = asOf.getFullYear()
+
+  if (series.type === 'manual') {
+    return manualValueAtYear(
+      series.baseChf ?? 0,
+      series.annualRatePercent ?? 0,
+      series.baseYear ?? currentYear,
+      currentYear,
+    )
+  }
+
+  if (series.type === 'savings') {
+    const acc = deps.savingsAccounts.find((a) => a.id === series.savingsAccountId)
+    if (!acc) return 0
+    return balanceNow(acc, asOf)
+  }
+
+  if (series.type === 'portfolio') {
+    const p = deps.portfolios.find((x) => x.id === series.portfolioId)
+    if (!p) return 0
+    return portfolioLiveTotalChf(p, deps)
   }
 
   return 0
@@ -414,31 +533,77 @@ export function enabledSeries(series: OverviewSeries[]): OverviewSeries[] {
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
 }
 
+function fillSeriesRow(
+  row: OverviewChartRow,
+  active: OverviewSeries[],
+  valueFn: (s: OverviewSeries) => number,
+): OverviewChartRow {
+  let total = 0
+  for (const s of active) {
+    const v = valueFn(s)
+    const safe = Number.isFinite(v) && v > 0 ? v : 0
+    row[s.id] = safe
+    total += safe
+  }
+  row.total = total
+  return row
+}
+
+/**
+ * Stacked bar rows: past years → **Now** (live) → current / future years.
+ * Now sits between the last past year and the current calendar year.
+ */
 export function buildOverviewChartRows(
   state: { startYear: number; endYear: number; series: OverviewSeries[] },
   deps: OverviewBuildDeps,
 ): OverviewChartRow[] {
   const asOf = deps.asOf ?? new Date()
+  const currentYear = asOf.getFullYear()
   const years = yearsInRange(state.startYear, state.endYear, asOf)
   const active = enabledSeries(state.series)
 
-  return years.map((year) => {
-    const row: OverviewChartRow = {
-      year,
-      label: String(year),
-      kind: yearKind(year, asOf),
-      total: 0,
+  const nowRow = (): OverviewChartRow =>
+    fillSeriesRow(
+      {
+        year: currentYear,
+        xKey: 'now',
+        label: 'Now',
+        kind: 'now',
+        isNow: true,
+        total: 0,
+      },
+      active,
+      (s) => seriesValueChfNow(s, deps),
+    )
+
+  const yearRow = (year: number): OverviewChartRow =>
+    fillSeriesRow(
+      {
+        year,
+        xKey: String(year),
+        label: String(year),
+        kind: yearKind(year, asOf),
+        isNow: false,
+        total: 0,
+      },
+      active,
+      (s) => seriesValueChf(s, year, deps),
+    )
+
+  const rows: OverviewChartRow[] = []
+  let nowInserted = false
+  for (const year of years) {
+    if (!nowInserted && year >= currentYear) {
+      rows.push(nowRow())
+      nowInserted = true
     }
-    let total = 0
-    for (const s of active) {
-      const v = seriesValueChf(s, year, deps)
-      const safe = Number.isFinite(v) && v > 0 ? v : 0
-      row[s.id] = safe
-      total += safe
-    }
-    row.total = total
-    return row
-  })
+    rows.push(yearRow(year))
+  }
+  // Range is entirely in the past: append Now after last past year
+  if (!nowInserted) {
+    rows.push(nowRow())
+  }
+  return rows
 }
 
 /** Total net worth (enabled series only) for one scenario at year Y. */

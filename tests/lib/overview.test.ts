@@ -10,7 +10,13 @@ import {
   yearKind,
   yearsInRange,
 } from '../../src/lib/overview'
-import type { OverviewScenario, OverviewSeries, SavingsAccount } from '../../src/types'
+import { makeActualKey } from '../../src/lib/portfolio'
+import type {
+  OverviewScenario,
+  OverviewSeries,
+  SavedPortfolio,
+  SavingsAccount,
+} from '../../src/types'
 
 const asOf = new Date(2026, 6, 15) // Jul 2026
 
@@ -41,9 +47,9 @@ describe('range helpers', () => {
     expect(r.endYear).toBe(2030)
   })
 
-  it('yearKind actual vs projected', () => {
-    expect(yearKind(2026, asOf)).toBe('actual')
+  it('yearKind: past actual, current and future projected (Now is separate)', () => {
     expect(yearKind(2025, asOf)).toBe('actual')
+    expect(yearKind(2026, asOf)).toBe('projected')
     expect(yearKind(2027, asOf)).toBe('projected')
   })
 })
@@ -57,6 +63,34 @@ describe('manual series', () => {
 })
 
 describe('buildOverviewChartRows', () => {
+  it('inserts Now between past and current year on the timeline', () => {
+    const rows = buildOverviewChartRows(
+      {
+        startYear: 2025,
+        endYear: 2027,
+        series: [
+          manualSeries({ id: 'a', baseChf: 1000, annualRatePercent: 0, enabled: true }),
+        ],
+      },
+      {
+        portfolios: [],
+        stockScenarios: [],
+        savingsAccounts: [],
+        incomeCostLines: [],
+        usdToChf: 0.9,
+        asOf,
+      },
+    )
+    // 2025 (past) → Now → 2026 → 2027
+    expect(rows.map((r) => r.xKey)).toEqual(['2025', 'now', '2026', '2027'])
+    expect(rows[0]!.kind).toBe('actual')
+    expect(rows[1]!.isNow).toBe(true)
+    expect(rows[1]!.label).toBe('Now')
+    expect(rows[1]!.kind).toBe('now')
+    expect(rows[2]!.kind).toBe('projected')
+    expect(rows[3]!.kind).toBe('projected')
+  })
+
   it('omits disabled series from totals', () => {
     const rows = buildOverviewChartRows(
       {
@@ -76,13 +110,16 @@ describe('buildOverviewChartRows', () => {
         asOf,
       },
     )
-    expect(rows).toHaveLength(2)
-    expect(rows[0].total).toBe(1000)
-    expect(rows[0]['a']).toBe(1000)
-    expect(rows[0]['b']).toBeUndefined()
-    expect(rows[0].kind).toBe('actual')
-    expect(rows[1].kind).toBe('projected')
-    expect(rows[1].total).toBe(1000)
+    // Now + 2026 + 2027
+    expect(rows).toHaveLength(3)
+    expect(rows[0]!.xKey).toBe('now')
+    expect(rows[0]!.total).toBe(1000)
+    expect(rows[0]!['a']).toBe(1000)
+    expect(rows[0]!['b']).toBeUndefined()
+    expect(rows[1]!.kind).toBe('projected')
+    expect(rows[1]!.total).toBe(1000)
+    expect(rows[2]!.kind).toBe('projected')
+    expect(rows[2]!.total).toBe(1000)
   })
 
   it('portfolio without FX rate contributes 0', () => {
@@ -110,7 +147,62 @@ describe('buildOverviewChartRows', () => {
         asOf,
       },
     )
-    expect(rows[0].total).toBe(0)
+    const yearRow = rows.find((r) => r.xKey === '2026')
+    expect(yearRow?.total).toBe(0)
+    expect(rows.some((r) => r.isNow)).toBe(true)
+  })
+
+  it('stacks portfolio year-end actuals on past year bars when present', () => {
+    const portfolio: SavedPortfolio = {
+      id: 'port-1',
+      name: 'Main',
+      currentCash: 0,
+      deposits: [],
+      holdings: [],
+      actions: [],
+      actuals: {
+        [makeActualKey(2024, 12)]: 100_000, // USD book
+        [makeActualKey(2025, 6)]: 120_000,
+      },
+      actualsCurrency: 'USD',
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const deps = {
+      portfolios: [portfolio],
+      stockScenarios: [],
+      savingsAccounts: [],
+      incomeCostLines: [],
+      usdToChf: 0.9,
+      asOf,
+    }
+    const rows = buildOverviewChartRows(
+      {
+        startYear: 2024,
+        endYear: 2026,
+        series: [
+          {
+            id: 'p',
+            name: 'Port',
+            enabled: true,
+            sortOrder: 0,
+            type: 'portfolio',
+            portfolioId: 'port-1',
+          },
+          manualSeries({ id: 'm', baseChf: 10_000, annualRatePercent: 0, enabled: true }),
+        ],
+      },
+      deps,
+    )
+    const y2024 = rows.find((r) => r.xKey === '2024')
+    const y2025 = rows.find((r) => r.xKey === '2025')
+    // 100k USD × 0.9 = 90k CHF + 10k manual
+    expect(y2024?.['p']).toBeCloseTo(90_000, 4)
+    expect(y2024?.['m']).toBe(10_000)
+    expect(y2024?.total).toBeCloseTo(100_000, 4)
+    // last actual in 2025 is June 120k USD → 108k CHF
+    expect(y2025?.['p']).toBeCloseTo(108_000, 4)
+    expect(y2025?.total).toBeCloseTo(118_000, 4)
   })
 })
 

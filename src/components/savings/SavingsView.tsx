@@ -137,12 +137,17 @@ export function SavingsView() {
             </FullscreenChart>
             <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-white/40">
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-sm bg-emerald-400/80" /> Actual (past + now)
+                <span className="h-2 w-2 rounded-sm bg-emerald-400/80" /> Year-end actual
+              </span>
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-sm ring-1 ring-white/50 bg-sky-400/80" /> Now (live)
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-sm bg-white/25" /> Projected
               </span>
-              <span className="text-white/30">Monthly or yearly scale · Expand for full view</span>
+              <span className="text-white/30">
+                Timeline: past years → Now → forward · Expand for full view
+              </span>
             </div>
           </div>
         </>

@@ -270,7 +270,7 @@ export function OverviewView({
             </h3>
             <p className="mt-0.5 text-xs text-white/35">
               {chartMode === 'stack'
-                ? 'Calendar years in CHF. Portfolio stacks are greens, savings blues, manual amber/violet.'
+                ? 'Past years → Now (live) → current / future. CHF. Portfolio greens, savings blues, manual amber/violet.'
                 : 'Each line is total net worth for a scenario (enabled series only).'}
             </p>
           </div>

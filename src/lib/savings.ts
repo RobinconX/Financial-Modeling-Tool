@@ -36,9 +36,11 @@ export type ChartRow = {
   key: string
   label: string
   kind: PeriodKind
+  /** True for the live Now category (between past year-ends and projections). */
+  isNow?: boolean
   total: number
   /** Per-account balances keyed by account id */
-  [accountId: string]: string | number | PeriodKind
+  [accountId: string]: string | number | PeriodKind | boolean | undefined
 }
 
 // --- Period keys (end-of-month values) ---
@@ -336,7 +338,13 @@ export function buildChartRows(
   const ordered = sortedAccounts(accounts)
   const pastSorted = pastYearEndKeys(ordered, asOf)
 
-  type Cat = { key: string; label: string; kind: PeriodKind; monthsFromNow: number | null }
+  type Cat = {
+    key: string
+    label: string
+    kind: PeriodKind
+    isNow?: boolean
+    monthsFromNow: number | null
+  }
   const cats: Cat[] = []
 
   for (const k of pastSorted) {
@@ -348,7 +356,14 @@ export function buildChartRows(
       monthsFromNow: null,
     })
   }
-  cats.push({ key: nowKey, label: 'Now', kind: 'actual', monthsFromNow: 0 })
+  // Live Now sits between past year-ends and forward projections
+  cats.push({
+    key: nowKey,
+    label: 'Now',
+    kind: 'actual',
+    isNow: true,
+    monthsFromNow: 0,
+  })
 
   if (resolution === 'monthly') {
     for (let i = 1; i <= 12; i++) {
@@ -414,6 +429,7 @@ export function buildChartRows(
       key: cat.key,
       label: cat.label,
       kind: cat.kind,
+      isNow: cat.isNow === true,
       total: 0,
     }
     let total = 0

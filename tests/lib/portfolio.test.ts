@@ -556,6 +556,39 @@ describe('portfolio actuals and chart', () => {
     const y2025 = data.find((d) => d.year === 2025)
     expect(y2025?.total).toBe(55_000)
   })
+
+  it('Now bar uses sharesHeld only — ignores buy/sell actions', () => {
+    const h = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 10,
+      manualCurrentPrice: 20,
+    }
+    const p = basePortfolio({
+      deposits: [newOpeningDeposit(0, 2026)],
+      holdings: [h],
+      actions: [
+        {
+          id: 'a1',
+          type: 'buy',
+          holdingId: 'h1',
+          year: 2026,
+          shares: 100,
+        },
+      ],
+    })
+    const grid = buildPortfolioGrid(p, [], 2026, { throughYear: 2026 })
+    const data = buildPortfolioChartData(grid, p, [], 2026, {
+      mode: 'stacked',
+      fromYear: 2026,
+      toYear: 2026,
+    })
+    const now = data.find((d) => d.isNow)
+    // 10 shares × $20 = $200 (not 110 shares)
+    expect(now?.total).toBeCloseTo(200, 6)
+    const eq = now?.breakdown?.find((b) => b.key.startsWith('eq-') || b.ticker)
+    expect(eq?.shares).toBe(10)
+  })
 })
 
 describe('applyPortfolioValuesToTarget', () => {

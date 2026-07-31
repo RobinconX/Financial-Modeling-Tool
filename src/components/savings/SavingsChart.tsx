@@ -59,7 +59,7 @@ export function SavingsChart({
   const tickKeys = useMemo(() => {
     const keep = new Set<string>()
     rows.forEach((r, i) => {
-      if (r.kind === 'actual') keep.add(r.key)
+      if (r.isNow || r.kind === 'actual') keep.add(r.key)
       if (r.key.startsWith('+')) {
         // Yearly mode: show every few years to avoid clutter
         if (resolution === 'yearly') {
@@ -171,13 +171,21 @@ export function SavingsChart({
               cursor={{ fill: 'rgba(255,255,255,0.04)' }}
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null
-                const kind = (payload[0]?.payload as { kind?: string } | undefined)?.kind
+                const row = payload[0]?.payload as
+                  | { kind?: string; isNow?: boolean }
+                  | undefined
+                const kind = row?.kind
+                const isNow = row?.isNow === true
                 const total = payload.reduce((s, p) => s + (Number(p.value) || 0), 0)
                 return (
                   <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
                     <div className="flex items-center gap-2 font-semibold text-white">
-                      <span>{String(label ?? '')}</span>
-                      {kind === 'projected' ? (
+                      <span>{isNow ? 'Now' : String(label ?? '')}</span>
+                      {isNow ? (
+                        <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-medium text-sky-300/90">
+                          Live
+                        </span>
+                      ) : kind === 'projected' ? (
                         <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/50">
                           Projected
                         </span>
@@ -225,7 +233,9 @@ export function SavingsChart({
                   <Cell
                     key={`${id}-${r.key}`}
                     fill={COLORS[i % COLORS.length]}
-                    fillOpacity={r.kind === 'actual' ? 0.92 : 0.38}
+                    fillOpacity={r.isNow ? 1 : r.kind === 'actual' ? 0.92 : 0.38}
+                    stroke={r.isNow ? 'rgba(255,255,255,0.45)' : undefined}
+                    strokeWidth={r.isNow ? 1.5 : 0}
                   />
                 ))}
               </Bar>

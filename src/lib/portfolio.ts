@@ -1030,7 +1030,11 @@ export function computeHoldingValues(
   return values
 }
 
-/** Live / Now value for a holding (current year map entry). */
+/**
+ * Live / Now value for a holding (current year map entry).
+ * Pass `actions: []` for the Now bar so planned buy/sells are not applied —
+ * only the position as currently held (`sharesHeld` × mark / overrides).
+ */
 export function holdingLiveValue(
   holding: PortfolioHolding,
   scenario: SavedScenario | null,
@@ -1403,11 +1407,12 @@ export function buildPortfolioChartData(
       holding && holding.scenarioId && !holding.manualOnly
         ? (byScenarioId.get(holding.scenarioId) ?? null)
         : null
+    // Now = positions as held today (no buy/sell actions applied)
     const v =
       holding != null
-        ? (holdingLiveValue(holding, scenario, actions, currentYear) ?? 0)
+        ? (holdingLiveValue(holding, scenario, [], currentYear) ?? 0)
         : 0
-    const shares = holding ? Math.max(0, sharesAtYear(holding, actions, currentYear)) : 0
+    const shares = holding ? holding.sharesHeld : 0
     if (mode === 'stacked') nowPoint[row.key] = v
     nowTotal += v
     nowBreakdown.push({
