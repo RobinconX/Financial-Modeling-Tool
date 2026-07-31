@@ -1,11 +1,12 @@
 import { useMemo, useState } from 'react'
 import { useSavings } from '../../hooks/useSavings'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { SavingsActualsEditor } from './SavingsActualsEditor'
 import { SavingsChart } from './SavingsChart'
 import { SavingsProjectionTable } from './SavingsProjectionTable'
 import { SavingsTable } from './SavingsTable'
 
-type SubTab = 'inputs' | 'projection'
+type SubTab = 'inputs' | 'actuals' | 'projection'
 
 const SUB_TABS: { id: SubTab; label: string; hint: string }[] = [
   {
@@ -14,9 +15,14 @@ const SUB_TABS: { id: SubTab; label: string; hint: string }[] = [
     hint: 'Accounts, current balances, contributions, and rates',
   },
   {
+    id: 'actuals',
+    label: 'Actuals',
+    hint: 'Year-end balances and current amount for each account',
+  },
+  {
     id: 'projection',
     label: 'Projection',
-    hint: 'Past actuals, progression, and stacked chart',
+    hint: 'Progression table and stacked chart',
   },
 ]
 
@@ -70,7 +76,7 @@ export function SavingsView() {
         </span>
       </div>
 
-      {subTab === 'inputs' ? (
+      {subTab === 'inputs' && (
         <div className="card p-5">
           <div className="mb-4">
             <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
@@ -93,7 +99,15 @@ export function SavingsView() {
             onRemove={removeAccount}
           />
         </div>
-      ) : (
+      )}
+
+      {subTab === 'actuals' && (
+        <div className="card p-5">
+          <SavingsActualsEditor accounts={accounts} asOf={asOf} onActual={setActual} />
+        </div>
+      )}
+
+      {subTab === 'projection' && (
         <>
           <div className="card p-5">
             <div className="mb-4">
@@ -101,7 +115,8 @@ export function SavingsView() {
                 Balance progression
               </h3>
               <p className="mt-0.5 text-xs text-white/35">
-                Enter past actuals by month or year-end, then review projections.
+                Review past actuals and forward projections. Year-end and current balances are on
+                the Actuals tab.
               </p>
             </div>
             <SavingsProjectionTable

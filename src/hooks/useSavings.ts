@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SavingsAccount, SavingsCadence } from '../types'
 import {
   ensurePastPeriodKey,
@@ -13,6 +13,9 @@ export function useSavings() {
   const initial = loadSavings()
   const [accounts, setAccounts] = useState<SavingsAccount[]>(() => initial.accounts)
   const [error, setError] = useState<string | null>(null)
+  /** Always-current list so consecutive cell edits stack correctly. */
+  const accountsRef = useRef(accounts)
+  accountsRef.current = accounts
 
   const persist = useCallback((next: SavingsAccount[]) => {
     const result = saveSavings({ version: 1, accounts: next })
@@ -21,6 +24,7 @@ export function useSavings() {
       return false
     }
     setError(null)
+    accountsRef.current = next
     setAccounts(next)
     return true
   }, [])
@@ -28,7 +32,9 @@ export function useSavings() {
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key !== SAVINGS_STORAGE_KEY) return
-      setAccounts(loadSavings().accounts)
+      const loaded = loadSavings().accounts
+      accountsRef.current = loaded
+      setAccounts(loaded)
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -40,75 +46,89 @@ export function useSavings() {
 
   const upsertAccount = useCallback(
     (account: SavingsAccount) => {
-      const exists = accounts.some((a) => a.id === account.id)
+      const current = accountsRef.current
+      const exists = current.some((a) => a.id === account.id)
       const next = exists
-        ? accounts.map((a) => (a.id === account.id ? account : a))
-        : [...accounts, account]
+        ? current.map((a) => (a.id === account.id ? account : a))
+        : [...current, account]
       return persist(next)
     },
-    [accounts, persist],
+    [persist],
   )
 
   const removeAccount = useCallback(
-    (id: string) => persist(accounts.filter((a) => a.id !== id)),
-    [accounts, persist],
+    (id: string) => persist(accountsRef.current.filter((a) => a.id !== id)),
+    [persist],
   )
 
   const addAccount = useCallback(() => {
-    const maxOrder = accounts.reduce((m, a) => Math.max(m, a.sortOrder), -1)
+    const current = accountsRef.current
+    const maxOrder = current.reduce((m, a) => Math.max(m, a.sortOrder), -1)
     const acc = newSavingsAccount(maxOrder + 1)
-    const ok = persist([...accounts, acc])
+    const ok = persist([...current, acc])
     return ok ? acc : null
-  }, [accounts, persist])
+  }, [persist])
 
+  /**
+   * Set end-of-month actual for an account. Pass `null` to clear that month.
+   */
   const setActual = useCallback(
-    (accountId: string, periodKey: string, amount: number) => {
-      const next = accounts.map((a) => {
+    (accountId: string, periodKey: string, amount: number | null) => {
+      const next = accountsRef.current.map((a) => {
         if (a.id !== accountId) return a
-        const actuals = { ...a.actuals, [periodKey]: Math.max(0, amount) }
+        const actuals = { ...a.actuals }
+        if (amount == null || !Number.isFinite(amount)) {
+          delete actuals[periodKey]
+        } else {
+          actuals[periodKey] = Math.max(0, amount)
+        }
         return { ...a, actuals }
       })
       return persist(next)
     },
-    [accounts, persist],
+    [persist],
   )
 
   const setContribution = useCallback(
     (accountId: string, contribution: number) => {
-      const next = accounts.map((a) =>
+      const next = accountsRef.current.map((a) =>
         a.id === accountId ? { ...a, contribution: Math.max(0, contribution) } : a,
       )
       return persist(next)
     },
-    [accounts, persist],
+    [persist],
   )
 
   const setCadence = useCallback(
     (accountId: string, cadence: SavingsCadence) => {
-      const next = accounts.map((a) => (a.id === accountId ? { ...a, cadence } : a))
+      const next = accountsRef.current.map((a) =>
+        a.id === accountId ? { ...a, cadence } : a,
+      )
       return persist(next)
     },
-    [accounts, persist],
+    [persist],
   )
 
   const setRate = useCallback(
     (accountId: string, annualRatePercent: number) => {
-      const next = accounts.map((a) =>
+      const next = accountsRef.current.map((a) =>
         a.id === accountId
           ? { ...a, annualRatePercent: Number.isFinite(annualRatePercent) ? annualRatePercent : 0 }
           : a,
       )
       return persist(next)
     },
-    [accounts, persist],
+    [persist],
   )
 
   const setName = useCallback(
     (accountId: string, name: string) => {
-      const next = accounts.map((a) => (a.id === accountId ? { ...a, name } : a))
+      const next = accountsRef.current.map((a) =>
+        a.id === accountId ? { ...a, name } : a,
+      )
       return persist(next)
     },
-    [accounts, persist],
+    [persist],
   )
 
   /**
@@ -117,22 +137,23 @@ export function useSavings() {
    */
   const addPastPeriodKey = useCallback(
     (periodKey: string) => {
-      const result = ensurePastPeriodKey(accounts, periodKey)
+      const current = accountsRef.current
+      const result = ensurePastPeriodKey(current, periodKey)
       if (!result) return null
-      if (result.accounts !== accounts) persist(result.accounts)
+      if (result.accounts !== current) persist(result.accounts)
       return result.key
     },
-    [accounts, persist],
+    [persist],
   )
 
   /** Remove a past actual period column from all accounts. */
   const removePastPeriod = useCallback(
     (periodKey: string) => {
-      const next = removePastPeriodKey(accounts, periodKey)
+      const next = removePastPeriodKey(accountsRef.current, periodKey)
       if (!next) return false
       return persist(next)
     },
-    [accounts, persist],
+    [persist],
   )
 
   return {

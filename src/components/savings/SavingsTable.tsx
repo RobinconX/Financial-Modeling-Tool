@@ -11,7 +11,7 @@ type Props = {
   onContribution: (id: string, value: number) => void
   onCadence: (id: string, cadence: SavingsCadence) => void
   onRate: (id: string, rate: number) => void
-  onActual: (id: string, periodKey: string, amount: number) => void
+  onActual: (id: string, periodKey: string, amount: number | null) => void
   onAdd: () => void
   onRemove: (id: string) => void
 }
@@ -204,7 +204,7 @@ export function SavingsTable({
       <p className="text-[11px] text-white/35">
         Amount is end-of-month balance (CHF). Contributions can be monthly or yearly;{' '}
         <span className="text-white/55">compounding is always yearly</span> (applied December →
-        January). Past actuals and projections are on the Projection tab.
+        January). Year-end history is on the Actuals tab; projections on Projection.
       </p>
     </div>
   )

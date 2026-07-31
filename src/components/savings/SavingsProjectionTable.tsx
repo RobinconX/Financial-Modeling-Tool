@@ -13,25 +13,10 @@ import type { SavingsAccount } from '../../types'
 type Props = {
   accounts: SavingsAccount[]
   asOf?: Date
-  onActual: (id: string, periodKey: string, amount: number) => void
+  onActual: (id: string, periodKey: string, amount: number | null) => void
   onAddPastPeriodKey: (periodKey: string) => string | null
   onRemovePastPeriod: (periodKey: string) => void
 }
-
-const MONTHS = [
-  { value: 1, label: 'January' },
-  { value: 2, label: 'February' },
-  { value: 3, label: 'March' },
-  { value: 4, label: 'April' },
-  { value: 5, label: 'May' },
-  { value: 6, label: 'June' },
-  { value: 7, label: 'July' },
-  { value: 8, label: 'August' },
-  { value: 9, label: 'September' },
-  { value: 10, label: 'October' },
-  { value: 11, label: 'November' },
-  { value: 12, label: 'December' },
-]
 
 function parseNonNeg(raw: string): number {
   const n = Number(raw.replace(/,/g, ''))
@@ -39,7 +24,7 @@ function parseNonNeg(raw: string): number {
   return n
 }
 
-/** Progression table + picker to add past actual months/years. */
+/** Progression table: past year-ends + now + projected months/milestones. */
 export function SavingsProjectionTable({
   accounts,
   asOf = new Date(),
@@ -61,29 +46,26 @@ export function SavingsProjectionTable({
     })
   }, [columns])
 
-  const [pickMode, setPickMode] = useState<'month' | 'year'>('month')
   const [pickYear, setPickYear] = useState(nowYear - 1)
-  const [pickMonth, setPickMonth] = useState(12)
   const [pickError, setPickError] = useState<string | null>(null)
   const [drafts, setDrafts] = useState<Record<string, string>>({})
 
   const yearOptions = useMemo(() => {
     const years: number[] = []
-    for (let y = nowYear; y >= nowYear - 40; y--) years.push(y)
+    for (let y = nowYear - 1; y >= nowYear - 40; y--) years.push(y)
     return years
   }, [nowYear])
 
   function handleAddPast() {
     setPickError(null)
-    const month = pickMode === 'year' ? 12 : pickMonth
-    const key = makePeriodKey(pickYear, month)
+    const key = makePeriodKey(pickYear, 12)
     if (key >= nowKey) {
-      setPickError('Pick a month before the current period (past only).')
+      setPickError('Pick a completed year (year-end before now).')
       return
     }
     const result = onAddPastPeriodKey(key)
     if (!result) {
-      setPickError('Could not add that period.')
+      setPickError('Could not add that year-end.')
       return
     }
   }
@@ -100,30 +82,7 @@ export function SavingsProjectionTable({
     <div className="space-y-3">
       <div className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
         <div>
-          <label className="label !mb-0.5 !text-[10px]">Add past actual</label>
-          <div className="flex gap-1">
-            <button
-              type="button"
-              className={`rounded-md px-2 py-1 text-xs ${
-                pickMode === 'month' ? 'bg-white text-black' : 'bg-white/5 text-white/60'
-              }`}
-              onClick={() => setPickMode('month')}
-            >
-              Month
-            </button>
-            <button
-              type="button"
-              className={`rounded-md px-2 py-1 text-xs ${
-                pickMode === 'year' ? 'bg-white text-black' : 'bg-white/5 text-white/60'
-              }`}
-              onClick={() => setPickMode('year')}
-            >
-              Year-end
-            </button>
-          </div>
-        </div>
-        <div>
-          <label className="label !mb-0.5 !text-[10px]">Year</label>
+          <label className="label !mb-0.5 !text-[10px]">Add past year-end</label>
           <select
             className="input !w-[5.5rem] !py-1 !text-xs"
             value={pickYear}
@@ -136,26 +95,9 @@ export function SavingsProjectionTable({
             ))}
           </select>
         </div>
-        {pickMode === 'month' ? (
-          <div>
-            <label className="label !mb-0.5 !text-[10px]">Month</label>
-            <select
-              className="input !w-[8rem] !py-1 !text-xs"
-              value={pickMonth}
-              onChange={(e) => setPickMonth(Number(e.target.value))}
-            >
-              {MONTHS.map((m) => (
-                <option key={m.value} value={m.value}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-          </div>
-        ) : (
-          <div className="pb-1 text-xs text-white/40">Uses December (end of year)</div>
-        )}
+        <div className="pb-1 text-xs text-white/40">December balance</div>
         <button type="button" className="btn-ghost !py-1.5 !text-xs" onClick={handleAddPast}>
-          + Add period
+          + Add year
         </button>
         {pickError ? <span className="text-xs text-red-400">{pickError}</span> : null}
       </div>
@@ -267,10 +209,11 @@ export function SavingsProjectionTable({
         </table>
       </div>
       <p className="text-[11px] text-white/35">
-        All figures are <span className="text-white/55">end-of-month</span> balances. Past columns
-        are editable actuals (pick month or year-end above; use <span className="text-white/55">×</span>{' '}
-        on a column header to remove it). Compounding applies only December → January; contributions
-        land in the month they are paid (yearly contribs in January after interest).
+        Past columns are <span className="text-white/55">year-end</span> only (December). Now is the
+        current month; later columns are projected. Prefer the{' '}
+        <span className="text-white/55">Actuals</span> tab for bulk year-end entry. Compounding
+        applies only December → January; contributions land in the month they are paid (yearly
+        contribs in January after interest).
       </p>
     </div>
   )

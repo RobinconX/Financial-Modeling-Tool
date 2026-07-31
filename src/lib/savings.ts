@@ -300,7 +300,30 @@ export function seriesForAccount(account: SavingsAccount, asOf: Date = new Date(
 }
 
 /**
- * Chart categories by resolution (past actuals + now always first):
+ * Past year-end period keys (YYYY-12) strictly before now, from stored actuals.
+ * Projection past columns / chart history use these only (not mid-year months).
+ */
+export function pastYearEndKeys(
+  accounts: SavingsAccount[],
+  asOf: Date = new Date(),
+): string[] {
+  const nowKey = currentPeriodKey(asOf)
+  const years = new Set<number>()
+  for (const a of accounts) {
+    for (const k of Object.keys(a.actuals)) {
+      const p = parsePeriodKey(k)
+      if (!p || comparePeriodKeys(k, nowKey) >= 0) continue
+      if (p.month === 12) years.add(p.year)
+    }
+  }
+  return [...years]
+    .map((y) => makePeriodKey(y, 12))
+    .filter((k) => comparePeriodKeys(k, nowKey) < 0)
+    .sort(comparePeriodKeys)
+}
+
+/**
+ * Chart categories by resolution (past year-end actuals + now always first):
  * - monthly: months 1–12, then year marks 2,3,4,5,10,15,20,25,30
  * - yearly: every year 1…30
  */
@@ -311,22 +334,16 @@ export function buildChartRows(
 ): ChartRow[] {
   const nowKey = currentPeriodKey(asOf)
   const ordered = sortedAccounts(accounts)
-
-  const pastKeys = new Set<string>()
-  for (const a of ordered) {
-    for (const k of Object.keys(a.actuals)) {
-      if (parsePeriodKey(k) && comparePeriodKeys(k, nowKey) < 0) pastKeys.add(k)
-    }
-  }
-  const pastSorted = [...pastKeys].sort(comparePeriodKeys)
+  const pastSorted = pastYearEndKeys(ordered, asOf)
 
   type Cat = { key: string; label: string; kind: PeriodKind; monthsFromNow: number | null }
   const cats: Cat[] = []
 
   for (const k of pastSorted) {
+    const p = parsePeriodKey(k)
     cats.push({
       key: k,
-      label: labelForPeriodKey(k, { short: true }),
+      label: p ? String(p.year) : labelForPeriodKey(k, { short: true }),
       kind: 'actual',
       monthsFromNow: null,
     })
@@ -423,18 +440,12 @@ export function buildTableColumns(
   asOf: Date = new Date(),
 ): TableColumn[] {
   const nowKey = currentPeriodKey(asOf)
-  const pastKeys = new Set<string>()
-  for (const a of accounts) {
-    for (const k of Object.keys(a.actuals)) {
-      if (parsePeriodKey(k) && comparePeriodKeys(k, nowKey) < 0) pastKeys.add(k)
-    }
-  }
-
   const cols: TableColumn[] = []
-  for (const k of [...pastKeys].sort(comparePeriodKeys)) {
+  for (const k of pastYearEndKeys(accounts, asOf)) {
+    const p = parsePeriodKey(k)
     cols.push({
       key: k,
-      label: labelForPeriodKey(k, { short: true }),
+      label: p ? String(p.year) : labelForPeriodKey(k, { short: true }),
       kind: 'actual',
       editable: true,
     })
@@ -491,15 +502,17 @@ export function cellBalance(
 }
 
 /**
- * Ensure a past period column exists (≤ now). Seeds 0 on the first account so the column appears.
- * Returns the key, or null if invalid/future.
+ * Ensure a past year-end column exists (December only, strictly before now).
+ * Seeds 0 on the first account so the column appears.
+ * Returns the key, or null if invalid/not year-end/future.
  */
 export function ensurePastPeriodKey(
   accounts: SavingsAccount[],
   periodKey: string,
   asOf: Date = new Date(),
 ): { key: string; accounts: SavingsAccount[] } | null {
-  if (!parsePeriodKey(periodKey)) return null
+  const p = parsePeriodKey(periodKey)
+  if (!p || p.month !== 12) return null
   const nowKey = currentPeriodKey(asOf)
   if (comparePeriodKeys(periodKey, nowKey) >= 0) return null
   if (accounts.length === 0) return { key: periodKey, accounts }

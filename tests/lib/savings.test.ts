@@ -163,7 +163,7 @@ describe('projection', () => {
 describe('chart + table + past period', () => {
   it('monthly chart: 12 months then year marks including 30y', () => {
     const accounts = [
-      acc({ id: 'x', actuals: { '2026-05': 100, [nowKey]: 200 }, sortOrder: 0 }),
+      acc({ id: 'x', actuals: { '2025-12': 100, '2026-05': 150, [nowKey]: 200 }, sortOrder: 0 }),
       acc({ id: 'y', actuals: { [nowKey]: 300 }, contribution: 0, sortOrder: 1 }),
     ]
     const rows = buildChartRows(accounts, asOf, 'monthly')
@@ -173,8 +173,11 @@ describe('chart + table + past period', () => {
     expect(Number(nowRow?.['x'])).toBe(200)
     expect(Number(nowRow?.['y'])).toBe(300)
 
-    const past = rows.find((r) => r.key === '2026-05')
-    expect(past?.kind).toBe('actual')
+    // Past: year-end only (Dec), not mid-year months
+    const pastYe = rows.find((r) => r.key === '2025-12')
+    expect(pastYe?.kind).toBe('actual')
+    expect(pastYe?.label).toBe('2025')
+    expect(rows.some((r) => r.key === '2026-05')).toBe(false)
 
     expect(rows.some((r) => r.key === addMonthsToKey(nowKey, 12))).toBe(true)
     expect(rows.some((r) => r.key === addMonthsToKey(nowKey, 13))).toBe(false)
@@ -193,13 +196,16 @@ describe('chart + table + past period', () => {
     expect(rows.some((r) => r.key === addMonthsToKey(nowKey, 1))).toBe(false)
   })
 
-  it('table: past editable, now not, future projected', () => {
-    const accounts = [acc({ actuals: { '2026-04': 1, [nowKey]: 2 } })]
+  it('table: past year-end editable, now not, mid-year past omitted', () => {
+    const accounts = [acc({ actuals: { '2025-12': 1, '2026-04': 9, [nowKey]: 2 } })]
     const cols = buildTableColumns(accounts, asOf)
-    const past = cols.find((c) => c.key === '2026-04')
+    const past = cols.find((c) => c.key === '2025-12')
+    const mid = cols.find((c) => c.key === '2026-04')
     const now = cols.find((c) => c.key === nowKey)
     const fut = cols.find((c) => c.kind === 'projected')
     expect(past?.editable).toBe(true)
+    expect(past?.label).toBe('2025')
+    expect(mid).toBeUndefined()
     expect(now?.editable).toBe(false)
     expect(now?.label).toBe('Now')
     expect(fut?.editable).toBe(false)
@@ -218,9 +224,10 @@ describe('chart + table + past period', () => {
     expect(cellBalance(a, next, 'projected', asOf)).toBe(1050)
   })
 
-  it('ensurePastPeriodKey rejects future and seeds column', () => {
+  it('ensurePastPeriodKey rejects non-year-end/future and seeds Dec column', () => {
     const accounts = [acc({ id: 'a', actuals: { [nowKey]: 1 } })]
     expect(ensurePastPeriodKey(accounts, '2027-01', asOf)).toBeNull()
+    expect(ensurePastPeriodKey(accounts, '2025-06', asOf)).toBeNull()
     const ok = ensurePastPeriodKey(accounts, '2025-12', asOf)
     expect(ok?.key).toBe('2025-12')
     expect(ok?.accounts[0].actuals['2025-12']).toBe(0)
