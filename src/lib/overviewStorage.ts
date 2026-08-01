@@ -4,7 +4,12 @@ import type {
   OverviewSeriesType,
   OverviewState,
 } from '../types'
-import { clampOverviewRange, defaultOverviewState, newOverviewScenario } from './overview'
+import {
+  clampOverviewRange,
+  defaultOverviewState,
+  ensurePermanentLeftover,
+  newOverviewScenario,
+} from './overview'
 
 export const OVERVIEW_STORAGE_KEY = 'grok-lab.overview.v1'
 
@@ -18,7 +23,14 @@ function asNumber(v: unknown, fallback = 0): number {
 }
 
 function normalizeType(v: unknown): OverviewSeriesType {
-  if (v === 'portfolio' || v === 'savings' || v === 'manual') return v
+  if (
+    v === 'portfolio' ||
+    v === 'savings' ||
+    v === 'manual' ||
+    v === 'incomeLeftover'
+  ) {
+    return v
+  }
   return 'manual'
 }
 
@@ -44,10 +56,57 @@ function normalizeSeries(raw: unknown, index: number): OverviewSeries | null {
     series.savingsAccountId =
       typeof raw.savingsAccountId === 'string' ? raw.savingsAccountId : null
   }
+  function parseBindings(
+    rawBindings: unknown,
+    withPercent: boolean,
+  ): { year: number; incomeCostScenarioId: string; percent?: number }[] {
+    const bindings: { year: number; incomeCostScenarioId: string; percent?: number }[] = []
+    if (!Array.isArray(rawBindings)) return bindings
+    for (const b of rawBindings) {
+      if (!isRecord(b)) continue
+      const year = Math.floor(asNumber(b.year, NaN))
+      const incomeCostScenarioId =
+        typeof b.incomeCostScenarioId === 'string' ? b.incomeCostScenarioId : ''
+      if (!Number.isFinite(year) || !incomeCostScenarioId) continue
+      const row: { year: number; incomeCostScenarioId: string; percent?: number } = {
+        year,
+        incomeCostScenarioId,
+      }
+      if (withPercent) {
+        const pct = asNumber(b.percent, NaN)
+        if (Number.isFinite(pct)) row.percent = Math.max(0, Math.min(100, pct))
+      }
+      bindings.push(row)
+    }
+    return bindings.sort((a, b) => a.year - b.year)
+  }
+
   if (type === 'manual') {
     series.baseChf = Math.max(0, asNumber(raw.baseChf, 0))
     series.annualRatePercent = asNumber(raw.annualRatePercent, 0)
     series.baseYear = Math.floor(asNumber(raw.baseYear, new Date().getFullYear()))
+    series.yearBindings = parseBindings(raw.yearBindings, true)
+  }
+  if (type === 'incomeLeftover') {
+    series.baseChf = Math.max(0, asNumber(raw.baseChf, 0))
+    series.annualRatePercent = asNumber(raw.annualRatePercent, 0)
+    series.baseYear = Math.floor(asNumber(raw.baseYear, new Date().getFullYear()))
+    series.perpetualYearlyChf = Math.max(0, asNumber(raw.perpetualYearlyChf, 0))
+    let bindings = parseBindings(raw.yearBindings, false)
+    if (
+      bindings.length === 0 &&
+      typeof raw.incomeCostScenarioId === 'string' &&
+      raw.incomeCostScenarioId
+    ) {
+      bindings = [
+        {
+          year: series.baseYear!,
+          incomeCostScenarioId: raw.incomeCostScenarioId,
+        },
+      ]
+    }
+    series.yearBindings = bindings
+    series.incomeCostScenarioId = null
   }
   return series
 }
@@ -62,9 +121,12 @@ function normalizeScenario(raw: unknown, index: number, asOf = new Date()): Over
     asOf,
   )
   const list = Array.isArray(raw.series) ? raw.series : []
-  const series = list
-    .map((s, i) => normalizeSeries(s, i))
-    .filter((s): s is OverviewSeries => s != null)
+  const series = ensurePermanentLeftover(
+    list
+      .map((s, i) => normalizeSeries(s, i))
+      .filter((s): s is OverviewSeries => s != null),
+    asOf,
+  )
   return {
     id: typeof raw.id === 'string' ? raw.id : crypto.randomUUID(),
     name: name || `Scenario ${index + 1}`,

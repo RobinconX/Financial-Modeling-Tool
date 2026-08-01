@@ -1,11 +1,13 @@
 import { useState } from 'react'
 import type { YearProjection } from '../../types'
 import {
+  advancedCagrGapYears,
   buildAdvancedProjections,
   equityValueAfterDilution,
   impliedFromPE,
   impliedFromPFCF,
   impliedFromPS,
+  materializeAdvancedCagrYears,
   newYearProjection,
   normalizeDilution,
   sortYearProjections,
@@ -82,6 +84,14 @@ export function AdvancedAssumptionsTable({
     setForceShow(true)
   }
 
+  const cagrGaps = advancedCagrGapYears(rows)
+
+  function fillIntermediateYears() {
+    if (cagrGaps.length === 0) return
+    commit(materializeAdvancedCagrYears(rows))
+    setForceShow(true)
+  }
+
   function enableAdvanced() {
     // Drop blank legacy placeholders; start with one clean year row
     if (rows.length === 0 || rows.every(isAdvancedRowBlank)) {
@@ -129,6 +139,21 @@ export function AdvancedAssumptionsTable({
           )}
         </div>
         <div className="flex flex-wrap items-center gap-1.5">
+          <button
+            type="button"
+            className="btn-ghost !py-1 !text-xs"
+            onClick={fillIntermediateYears}
+            disabled={cagrGaps.length === 0}
+            title={
+              cagrGaps.length === 0
+                ? 'Need at least two year rows with a gap between them'
+                : `Create ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} by CAGR on fundamentals`
+            }
+          >
+            {cagrGaps.length === 0
+              ? 'Fill intermediates (CAGR)'
+              : `Fill ${cagrGaps.length} intermediate${cagrGaps.length === 1 ? '' : 's'} (CAGR)`}
+          </button>
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={add}>
             + Year
           </button>

@@ -1,6 +1,8 @@
 import type { EasyProjection } from '../../types'
 import {
   buildEasyProjections,
+  easyCagrGapYears,
+  materializeEasyCagrYears,
   newEasyProjection,
   sortEasyProjections,
 } from '../../lib/valuation'
@@ -85,6 +87,13 @@ export function EasyAssumptionsTable({
     commit([...rows, newEasyProjection(last ? last.year + 1 : currentYear + 5)])
   }
 
+  const cagrGaps = easyCagrGapYears(rows)
+
+  function fillIntermediateYears() {
+    if (cagrGaps.length === 0) return
+    commit(materializeEasyCagrYears(rows))
+  }
+
   function setSharePrice(id: string, px: number | null) {
     if (px == null) {
       update(id, { projectedMarketCap: null })
@@ -96,13 +105,30 @@ export function EasyAssumptionsTable({
 
   return (
     <div className="space-y-2">
-      <div className="flex items-center justify-between gap-2">
+      <div className="flex flex-wrap items-center justify-between gap-2">
         <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
           Easy · mcap / share price
         </h3>
-        <button type="button" className="btn-ghost !py-1 !text-xs" onClick={add}>
-          + Year
-        </button>
+        <div className="flex flex-wrap items-center gap-2">
+          <button
+            type="button"
+            className="btn-ghost !py-1 !text-xs"
+            onClick={fillIntermediateYears}
+            disabled={cagrGaps.length === 0}
+            title={
+              cagrGaps.length === 0
+                ? 'Need at least two years with market cap and a gap between them'
+                : `Create ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} via implied CAGR`
+            }
+          >
+            {cagrGaps.length === 0
+              ? 'Fill intermediates (CAGR)'
+              : `Fill ${cagrGaps.length} intermediate${cagrGaps.length === 1 ? '' : 's'} (CAGR)`}
+          </button>
+          <button type="button" className="btn-ghost !py-1 !text-xs" onClick={add}>
+            + Year
+          </button>
+        </div>
       </div>
       <div className="overflow-x-auto rounded-xl border border-white/10">
         <table className="w-full min-w-[640px] text-left text-sm">

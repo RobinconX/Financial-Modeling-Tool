@@ -5,13 +5,16 @@ import {
   buildOverviewCompareRows,
   clampOverviewRange,
   manualValueAtYear,
+  residualCashValueAtYear,
   savingsValueAtYear,
   seriesValueChf,
+  seriesValueChfNow,
   yearKind,
   yearsInRange,
 } from '../../src/lib/overview'
-import { makeActualKey } from '../../src/lib/portfolio'
+import { makeActualKey, newOpeningDeposit } from '../../src/lib/portfolio'
 import type {
+  CashflowLine,
   OverviewScenario,
   OverviewSeries,
   SavedPortfolio,
@@ -55,10 +58,69 @@ describe('range helpers', () => {
 })
 
 describe('manual series', () => {
-  it('compounds yearly from baseYear', () => {
+  it('compounds yearly from baseYear and is zero before base year', () => {
+    expect(manualValueAtYear(10_000, 10, 2026, 2025)).toBe(0)
     expect(manualValueAtYear(10_000, 10, 2026, 2026)).toBe(10_000)
     expect(manualValueAtYear(10_000, 10, 2026, 2027)).toBeCloseTo(11_000, 6)
     expect(manualValueAtYear(10_000, 10, 2026, 2028)).toBeCloseTo(12_100, 6)
+  })
+
+  it('manual % of IC year leaves remainder on permanent leftover', () => {
+    const leftover: OverviewSeries = {
+      id: 'left',
+      name: 'Leftover cash',
+      enabled: true,
+      sortOrder: 0,
+      type: 'incomeLeftover',
+      yearBindings: [],
+      baseChf: 0,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      perpetualYearlyChf: 0,
+    }
+    const manual: OverviewSeries = {
+      id: 'm',
+      name: 'House',
+      enabled: true,
+      sortOrder: 1,
+      type: 'manual',
+      baseChf: 0,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      yearBindings: [
+        { year: 2027, incomeCostScenarioId: 'ic', percent: 75 },
+      ],
+    }
+    const deps = {
+      portfolios: [],
+      stockScenarios: [],
+      savingsAccounts: [],
+      incomeCostLines: [
+        {
+          id: 'i',
+          scenarioId: 'ic',
+          kind: 'income' as const,
+          name: 'Pay',
+          cadence: 'recurring' as const,
+          yearlyAmount: 50_000,
+        },
+        {
+          id: 'c',
+          scenarioId: 'ic',
+          kind: 'cost' as const,
+          name: 'Cost',
+          cadence: 'recurring' as const,
+          yearlyAmount: 10_000,
+        },
+      ],
+      usdToChf: 0.9,
+      asOf,
+      overviewPortfolioIds: [] as string[],
+      overviewSeries: [leftover, manual],
+    }
+    // IC net 40k; manual 75% → 30k; leftover 25% → 10k
+    expect(seriesValueChf(manual, 2027, deps)).toBeCloseTo(30_000, 4)
+    expect(seriesValueChf(leftover, 2027, deps)).toBeCloseTo(10_000, 4)
   })
 })
 
@@ -189,7 +251,13 @@ describe('buildOverviewChartRows', () => {
             type: 'portfolio',
             portfolioId: 'port-1',
           },
-          manualSeries({ id: 'm', baseChf: 10_000, annualRatePercent: 0, enabled: true }),
+          manualSeries({
+            id: 'm',
+            baseChf: 10_000,
+            annualRatePercent: 0,
+            enabled: true,
+            baseYear: 2024,
+          }),
         ],
       },
       deps,
@@ -207,12 +275,12 @@ describe('buildOverviewChartRows', () => {
 })
 
 describe('buildOverviewCompareRows', () => {
-  it('plots one total line per scenario on a shared year axis', () => {
+  it('plots one total line per scenario with Now between past and current', () => {
     const a: OverviewScenario = {
       id: 'sc-a',
       name: 'Base',
       sortOrder: 0,
-      startYear: 2026,
+      startYear: 2025,
       endYear: 2027,
       series: [manualSeries({ id: 'm1', baseChf: 1000, annualRatePercent: 0, enabled: true })],
     }
@@ -220,7 +288,7 @@ describe('buildOverviewCompareRows', () => {
       id: 'sc-b',
       name: 'High',
       sortOrder: 1,
-      startYear: 2026,
+      startYear: 2025,
       endYear: 2028,
       series: [manualSeries({ id: 'm2', baseChf: 2000, annualRatePercent: 0, enabled: true })],
     }
@@ -232,12 +300,161 @@ describe('buildOverviewCompareRows', () => {
       usdToChf: 0.9,
       asOf,
     }
+    // Union range 2025–2028: 2025 → Now → 2026 → 2027 → 2028
     const rows = buildOverviewCompareRows([a, b], deps)
-    expect(rows.map((r) => r.year)).toEqual([2026, 2027, 2028])
-    expect(rows[0]!['sc-a']).toBe(1000)
-    expect(rows[0]!['sc-b']).toBe(2000)
-    expect(rows[2]!['sc-a']).toBe(1000)
-    expect(rows[2]!['sc-b']).toBe(2000)
+    expect(rows.map((r) => r.xKey)).toEqual(['2025', 'now', '2026', '2027', '2028'])
+    const now = rows.find((r) => r.isNow)
+    expect(now?.kind).toBe('now')
+    expect(now?.['sc-a']).toBe(1000)
+    expect(now?.['sc-b']).toBe(2000)
+    expect(rows.find((r) => r.xKey === '2026')!['sc-a']).toBe(1000)
+    expect(rows.find((r) => r.xKey === '2028')!['sc-b']).toBe(2000)
+  })
+})
+
+describe('residual surplus / income leftover', () => {
+  const ic2027 = 'ic-2027'
+  const ic2028 = 'ic-2028'
+  const line = (
+    scenarioId: string,
+    kind: 'income' | 'cost',
+    amount: number,
+  ): CashflowLine => ({
+    id: `${scenarioId}-${kind}`,
+    scenarioId,
+    kind,
+    name: kind,
+    cadence: 'recurring',
+    yearlyAmount: amount,
+  })
+
+  const portfolioWithSurplus = (pct: number, year: number, scenarioId: string): SavedPortfolio => ({
+    id: 'p1',
+    name: 'Main',
+    currentCash: 0,
+    deposits: [
+      newOpeningDeposit(0, 2026),
+      {
+        id: 'd1',
+        year,
+        amount: 0,
+        source: 'surplus',
+        surplusScenarioId: scenarioId,
+        surplusPercent: pct,
+      },
+    ],
+    holdings: [],
+    actions: [],
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  })
+
+  it('leftover gets residual after portfolio surplus when bound; perpetual after last binding', () => {
+    const p = portfolioWithSurplus(40, 2027, ic2027)
+    const series: OverviewSeries = {
+      id: 'left',
+      name: 'Leftover cash',
+      enabled: true,
+      sortOrder: 0,
+      type: 'incomeLeftover',
+      yearBindings: [
+        { year: 2026, incomeCostScenarioId: ic2027 },
+        { year: 2027, incomeCostScenarioId: ic2027 },
+        { year: 2028, incomeCostScenarioId: ic2028 },
+      ],
+      baseChf: 5_000,
+      annualRatePercent: 0,
+      baseYear: 2026,
+      perpetualYearlyChf: 10_000,
+    }
+    const deps = {
+      portfolios: [p],
+      stockScenarios: [],
+      savingsAccounts: [],
+      incomeCostLines: [
+        line(ic2027, 'income', 150_000),
+        line(ic2027, 'cost', 50_000),
+        line(ic2028, 'income', 150_000),
+        line(ic2028, 'cost', 50_000),
+      ],
+      usdToChf: 0.9,
+      asOf,
+      overviewPortfolioIds: ['p1'],
+      overviewSeries: [series],
+    }
+    expect(seriesValueChfNow(series, deps)).toBe(5_000)
+    // 2026 residual full 100k (no deposit that year)
+    expect(residualCashValueAtYear(series, 2026, deps)).toBeCloseTo(105_000, 4)
+    // 2027: residual 60k after 40% portfolio claim
+    expect(residualCashValueAtYear(series, 2027, deps)).toBeCloseTo(165_000, 4)
+    expect(residualCashValueAtYear(series, 2028, deps)).toBeCloseTo(265_000, 4)
+    expect(residualCashValueAtYear(series, 2029, deps)).toBeCloseTo(275_000, 4)
+  })
+
+  it('no-portfolio: leftover gets full IC net for bound years then perpetual', () => {
+    const series: OverviewSeries = {
+      id: 'left',
+      name: 'Leftover cash',
+      enabled: true,
+      sortOrder: 0,
+      type: 'incomeLeftover',
+      yearBindings: [
+        { year: 2027, incomeCostScenarioId: ic2027 },
+        { year: 2028, incomeCostScenarioId: ic2028 },
+      ],
+      baseChf: 1_000,
+      annualRatePercent: 0,
+      baseYear: 2026,
+      perpetualYearlyChf: 10_000,
+    }
+    const deps = {
+      portfolios: [],
+      stockScenarios: [],
+      savingsAccounts: [],
+      incomeCostLines: [
+        line(ic2027, 'income', 50_000),
+        line(ic2027, 'cost', 10_000),
+        line(ic2028, 'income', 80_000),
+        line(ic2028, 'cost', 20_000),
+      ],
+      usdToChf: 0.9,
+      asOf,
+      overviewPortfolioIds: [],
+      overviewSeries: [series],
+    }
+    expect(residualCashValueAtYear(series, 2026, deps)).toBe(1_000)
+    expect(residualCashValueAtYear(series, 2027, deps)).toBeCloseTo(41_000, 4)
+    expect(residualCashValueAtYear(series, 2028, deps)).toBeCloseTo(101_000, 4)
+    expect(residualCashValueAtYear(series, 2029, deps)).toBeCloseTo(111_000, 4)
+  })
+
+  it('perpetual applies every year when leftover has no year bindings', () => {
+    const series: OverviewSeries = {
+      id: 'left',
+      name: 'Leftover cash',
+      enabled: true,
+      sortOrder: 0,
+      type: 'incomeLeftover',
+      yearBindings: [],
+      baseChf: 5_000,
+      annualRatePercent: 0,
+      baseYear: 2026,
+      perpetualYearlyChf: 12_000,
+    }
+    const deps = {
+      portfolios: [],
+      stockScenarios: [],
+      savingsAccounts: [],
+      incomeCostLines: [],
+      usdToChf: 0.9,
+      asOf,
+      overviewPortfolioIds: [] as string[],
+      overviewSeries: [series],
+    }
+    // base + perpetual in baseYear, then +perpetual each following year
+    expect(residualCashValueAtYear(series, 2026, deps)).toBeCloseTo(17_000, 4)
+    expect(residualCashValueAtYear(series, 2027, deps)).toBeCloseTo(29_000, 4)
+    expect(residualCashValueAtYear(series, 2028, deps)).toBeCloseTo(41_000, 4)
   })
 })
 

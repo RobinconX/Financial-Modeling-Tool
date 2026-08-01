@@ -56,6 +56,58 @@ export function resolveDepositAmount(
   return fixedAmountToUsd(d.amount, d.currency ?? 'USD', ctx?.usdToChf)
 }
 
+/**
+ * Already-deposited portion in USD book.
+ * Fixed: same currency as `amount`. Surplus: stored as CHF (income domain).
+ */
+export function resolveAlreadyDeposited(
+  d: PortfolioDeposit,
+  ctx?: DepositResolveContext | null,
+): number {
+  const raw = d.alreadyDeposited
+  if (raw == null || !Number.isFinite(raw) || raw <= 0) return 0
+  if (d.source === 'surplus') {
+    if (ctx?.usdToChf != null && ctx.usdToChf > 0) return raw / ctx.usdToChf
+    return raw
+  }
+  return fixedAmountToUsd(raw, d.currency, ctx?.usdToChf)
+}
+
+/** Planned deposit minus already deposited (USD book), floored at 0. */
+export function remainingDepositAmount(
+  d: PortfolioDeposit,
+  ctx?: DepositResolveContext | null,
+): number {
+  const planned = resolveDepositAmount(d, ctx)
+  const already = Math.min(planned, resolveAlreadyDeposited(d, ctx))
+  return Math.max(0, planned - already)
+}
+
+/**
+ * How much of a deposit counts toward cash at calendar year `asOfYear`, given
+ * `currentYear` (today). Current-year plans only add the remaining amount
+ * (already deposited is assumed to sit in opening cash).
+ */
+export function depositContributionTowardCash(
+  d: PortfolioDeposit,
+  asOfYear: number,
+  currentYear = new Date().getFullYear(),
+): number {
+  if (d.year > asOfYear) return 0
+  const planned = Number.isFinite(d.amount) ? Math.max(0, d.amount) : 0
+  if (d.isOpening) return planned
+  const already = Math.min(
+    planned,
+    Number.isFinite(d.alreadyDeposited) ? Math.max(0, d.alreadyDeposited!) : 0,
+  )
+  // Past years: full planned contribution
+  if (d.year < currentYear) return planned
+  // Current year: only what is still outstanding (already is in opening)
+  if (d.year === currentYear) return Math.max(0, planned - already)
+  // Future year already reached asOfYear: full plan
+  return planned
+}
+
 /** Resolve a perpetual yearly deposit config to a USD book amount. */
 export function resolvePerpetualYearlyAmount(
   p: PerpetualYearlyDeposit | null | undefined,
@@ -84,7 +136,12 @@ export function withResolvedDepositAmounts(
   const deposits = getDeposits(portfolio)
   const perpetual = portfolio.perpetualYearlyDeposit ?? null
   const needsResolve =
-    deposits.some((d) => d.source === 'surplus' || d.currency === 'CHF') ||
+    deposits.some(
+      (d) =>
+        d.source === 'surplus' ||
+        d.currency === 'CHF' ||
+        (d.alreadyDeposited != null && d.alreadyDeposited > 0),
+    ) ||
     (perpetual != null &&
       (perpetual.source === 'surplus' || perpetual.currency === 'CHF'))
 
@@ -92,12 +149,17 @@ export function withResolvedDepositAmounts(
 
   return {
     ...portfolio,
-    deposits: deposits.map((d) => ({
-      ...d,
-      amount: resolveDepositAmount(d, ctx),
-      currency: undefined,
-      source: 'fixed' as const,
-    })),
+    deposits: deposits.map((d) => {
+      const planned = resolveDepositAmount(d, ctx)
+      const already = Math.min(planned, resolveAlreadyDeposited(d, ctx))
+      return {
+        ...d,
+        amount: planned,
+        alreadyDeposited: already > 0 ? already : undefined,
+        currency: undefined,
+        source: 'fixed' as const,
+      }
+    }),
     perpetualYearlyDeposit: perpetual
       ? {
           amount: resolvePerpetualYearlyAmount(perpetual, ctx),
@@ -176,6 +238,9 @@ export function applyPortfolioValuesToTarget(
       if (d.source === 'surplus') {
         row.surplusScenarioId = d.surplusScenarioId ?? null
         row.surplusPercent = d.surplusPercent
+      }
+      if (d.alreadyDeposited != null && d.alreadyDeposited > 0) {
+        row.alreadyDeposited = d.alreadyDeposited
       }
       return row
     })
@@ -456,6 +521,9 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
       next.surplusScenarioId = d.surplusScenarioId ?? null
       next.surplusPercent = d.surplusPercent ?? 0
     }
+    if (d.alreadyDeposited != null && d.alreadyDeposited > 0) {
+      next.alreadyDeposited = d.alreadyDeposited
+    }
     return next
   })
 
@@ -670,15 +738,20 @@ export function getCurrentCash(portfolio: SavedPortfolio): number {
  * Cash from deposits only (no trades):
  *   sum of deposits with year <= Y (opening cash is a deposit)
  *   + perpetual yearly amount × years after last explicit deposit (if configured).
+ * Current-year non-opening deposits only contribute the remaining (planned − already).
  * Call with withResolvedDepositAmounts() first when surplus sources are used.
  */
-export function cashFromDeposits(portfolio: SavedPortfolio, year: number): number {
+export function cashFromDeposits(
+  portfolio: SavedPortfolio,
+  year: number,
+  currentYear = new Date().getFullYear(),
+): number {
   const deposits = getDeposits(portfolio)
   const hasOpening = deposits.some((d) => d.isOpening)
   // Legacy: currentCash not yet folded into deposits
   let sum = hasOpening ? 0 : getOpeningCash(portfolio)
   for (const d of deposits) {
-    if (d.year <= year && d.amount > 0) sum += d.amount
+    sum += depositContributionTowardCash(d, year, currentYear)
   }
   const last = lastExplicitDepositYear(portfolio, year)
   const perYear = resolvePerpetualYearlyAmount(portfolio.perpetualYearlyDeposit)
@@ -694,10 +767,14 @@ export function cashForYear(portfolio: SavedPortfolio, year: number): number {
 }
 
 /** Non-opening deposit amount scheduled in a specific year (not cumulative), incl. perpetual. */
-export function depositInYear(portfolio: SavedPortfolio, year: number): number {
+export function depositInYear(
+  portfolio: SavedPortfolio,
+  year: number,
+  currentYear = new Date().getFullYear(),
+): number {
   const explicit = getDeposits(portfolio)
     .filter((d) => d.year === year && !d.isOpening)
-    .reduce((s, d) => s + d.amount, 0)
+    .reduce((s, d) => s + depositContributionTowardCash(d, year, currentYear), 0)
   const last = lastExplicitDepositYear(portfolio, year)
   const perYear =
     year > last ? resolvePerpetualYearlyAmount(portfolio.perpetualYearlyDeposit) : 0
@@ -764,7 +841,7 @@ export function cashAtYear(
   scenarios: SavedScenario[] = [],
   currentYear = new Date().getFullYear(),
 ): number {
-  let sum = cashFromDeposits(portfolio, year)
+  let sum = cashFromDeposits(portfolio, year, currentYear)
   const byId = new Map(scenarios.map((s) => [s.id, s]))
   const holdingsById = new Map(portfolio.holdings.map((h) => [h.id, h]))
 

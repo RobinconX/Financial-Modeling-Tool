@@ -74,10 +74,19 @@ export function OverviewCompareChart({
           <LineChart data={rows} margin={{ top: 8, right: 16, left: 4, bottom: 4 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
-              dataKey="label"
+              dataKey="xKey"
               tick={{ fill: 'rgba(232,238,245,0.45)', fontSize: 11 }}
               tickLine={false}
               axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+              interval={0}
+              tickFormatter={(key: string) => {
+                if (key === 'now') return 'Now'
+                if (rows.length > 18) {
+                  const n = Number(key)
+                  if (Number.isFinite(n) && n % 2 !== 0) return ''
+                }
+                return key
+              }}
             />
             <YAxis
               tick={{ fill: 'rgba(232,238,245,0.4)', fontSize: 10 }}
@@ -93,12 +102,20 @@ export function OverviewCompareChart({
             <Tooltip
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null
-                const kind = (payload[0]?.payload as { kind?: string } | undefined)?.kind
+                const row = payload[0]?.payload as
+                  | { kind?: string; isNow?: boolean; label?: string }
+                  | undefined
+                const isNow = row?.isNow === true
+                const kind = row?.kind
                 return (
                   <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
                     <div className="flex items-center gap-2 font-semibold text-white">
-                      <span>{String(label ?? '')}</span>
-                      {kind === 'projected' ? (
+                      <span>{isNow ? 'Now' : String(label ?? row?.label ?? '')}</span>
+                      {isNow ? (
+                        <span className="rounded bg-sky-500/20 px-1.5 py-0.5 text-[10px] font-medium text-sky-300/90">
+                          Live
+                        </span>
+                      ) : kind === 'projected' ? (
                         <span className="rounded bg-white/10 px-1.5 py-0.5 text-[10px] font-medium text-white/50">
                           Projected
                         </span>
@@ -147,7 +164,28 @@ export function OverviewCompareChart({
                 name={sc.name}
                 stroke={colorById.get(sc.id) ?? '#94a3b8'}
                 strokeWidth={2.5}
-                dot={{ r: 3, strokeWidth: 0, fill: colorById.get(sc.id) ?? '#94a3b8' }}
+                dot={(props) => {
+                  const { cx, cy, payload, index } = props as {
+                    cx?: number
+                    cy?: number
+                    payload?: { isNow?: boolean }
+                    index?: number
+                  }
+                  if (cx == null || cy == null) return null
+                  const fill = colorById.get(sc.id) ?? '#94a3b8'
+                  const isNow = payload?.isNow === true
+                  return (
+                    <circle
+                      key={`dot-${sc.id}-${index}`}
+                      cx={cx}
+                      cy={cy}
+                      r={isNow ? 5 : 3}
+                      fill={fill}
+                      stroke={isNow ? 'rgba(255,255,255,0.7)' : undefined}
+                      strokeWidth={isNow ? 2 : 0}
+                    />
+                  )
+                }}
                 activeDot={{ r: 5 }}
                 isAnimationActive={false}
                 connectNulls
@@ -157,8 +195,8 @@ export function OverviewCompareChart({
         </ResponsiveContainer>
       </div>
       <p className="mt-2 text-[11px] text-white/35">
-        Each line is the total net worth of a scenario (enabled series only), in{' '}
-        {OVERVIEW_CURRENCY}.
+        Past years → <span className="text-white/55">Now</span> (live) → current / future. Each line
+        is total net worth for a scenario (enabled series only), in {OVERVIEW_CURRENCY}.
       </p>
     </div>
   )

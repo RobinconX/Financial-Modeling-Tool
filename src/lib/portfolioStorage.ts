@@ -97,6 +97,10 @@ function normalizeDeposits(raw: Record<string, unknown>): PortfolioDeposit[] {
             typeof d.surplusScenarioId === 'string' ? d.surplusScenarioId : null
           dep.surplusPercent = Math.max(0, asNumber(d.surplusPercent, 0))
         }
+        const already = asNumber(d.alreadyDeposited, NaN)
+        if (Number.isFinite(already) && already > 0) {
+          dep.alreadyDeposited = already
+        }
         return dep
       })
       .filter((d): d is PortfolioDeposit => d != null)

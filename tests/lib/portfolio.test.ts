@@ -5,6 +5,7 @@ import {
   buildPortfolioGrid,
   cashAtYear,
   cashFromDeposits,
+  depositContributionTowardCash,
   clonePortfolio,
   compoundWithGrowthAndDeposits,
   computeHoldingValues,
@@ -703,6 +704,38 @@ describe('applyPortfolioValuesToTarget', () => {
       { actuals: true },
     )
     expect(cleared.actuals).toBeUndefined()
+  })
+})
+
+describe('already deposited', () => {
+  it('current-year contribution is planned minus already; past years full', () => {
+    const d = {
+      id: 'd1',
+      year: 2026,
+      amount: 20_000,
+      alreadyDeposited: 8_000,
+    }
+    expect(depositContributionTowardCash(d, 2026, 2026)).toBe(12_000)
+    expect(depositContributionTowardCash(d, 2027, 2026)).toBe(12_000)
+    expect(depositContributionTowardCash({ ...d, year: 2025 }, 2026, 2026)).toBe(20_000)
+  })
+
+  it('cashFromDeposits does not double-count already deposited into opening', () => {
+    const p = basePortfolio({
+      deposits: [
+        { ...newOpeningDeposit(50_000, 2026), isOpening: true },
+        {
+          id: 'plan',
+          year: 2026,
+          amount: 20_000,
+          alreadyDeposited: 8_000, // already inside the 50k opening
+        },
+      ],
+      currentCash: 0,
+    })
+    // Opening 50k + remaining 12k = 62k (not 70k)
+    expect(cashFromDeposits(p, 2026, 2026)).toBe(62_000)
+    expect(cashAtYear(p, 2026, [], 2026)).toBe(62_000)
   })
 })
 

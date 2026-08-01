@@ -16,14 +16,27 @@ function asNumber(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback
 }
 
+function parseYearFromName(name: string): number | null {
+  const m = /^(\d{4})\b/.exec(name.trim())
+  if (!m) return null
+  const y = Number(m[1])
+  return y >= 1970 && y <= 2100 ? y : null
+}
+
 function normalizeScenario(raw: unknown, index: number): CashflowScenario | null {
   if (!isRecord(raw)) return null
   const name = typeof raw.name === 'string' ? raw.name.trim() : ''
   if (!name) return null
+  const fromField = Math.floor(asNumber(raw.year, NaN))
+  const year =
+    Number.isFinite(fromField) && fromField >= 1970 && fromField <= 2100
+      ? fromField
+      : (parseYearFromName(name) ?? new Date().getFullYear())
   return {
     id: typeof raw.id === 'string' ? raw.id : crypto.randomUUID(),
     name,
     sortOrder: Math.floor(asNumber(raw.sortOrder, index)),
+    year,
   }
 }
 
@@ -61,8 +74,8 @@ function migrateV1(raw: Record<string, unknown>): IncomeCostState {
   const years = [...yearSet].sort((a, b) => a - b)
   if (years.length === 0) return emptyIncomeCostState()
 
-  const scenarios: CashflowScenario[] = years.map((y, i) => newScenario(String(y), i))
-  const yearToId = new Map(years.map((y, i) => [y, scenarios[i].id]))
+  const scenarios: CashflowScenario[] = years.map((y, i) => newScenario(String(y), i, y))
+  const yearToId = new Map(years.map((y, i) => [y, scenarios[i]!.id]))
   const scenarioIds = new Set(scenarios.map((s) => s.id))
 
   const lines: CashflowLine[] = []

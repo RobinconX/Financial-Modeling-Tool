@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type {
   CashflowLine,
+  CashflowScenario,
   OverviewSeriesType,
   SavedPortfolio,
   SavedScenario,
@@ -19,6 +20,7 @@ type Props = {
   stockScenarios: SavedScenario[]
   savingsAccounts: SavingsAccount[]
   incomeCostLines: CashflowLine[]
+  incomeCostScenarios?: CashflowScenario[]
 }
 
 type ChartMode = 'stack' | 'compare'
@@ -28,6 +30,7 @@ export function OverviewView({
   stockScenarios,
   savingsAccounts,
   incomeCostLines,
+  incomeCostScenarios = [],
 }: Props) {
   const {
     scenarios,
@@ -47,6 +50,8 @@ export function OverviewView({
     updateSeries,
     removeSeries,
     toggleSeries,
+    reorderSeriesGroups,
+    reorderSavingsSeries,
   } = useOverview()
 
   const [usdToChf, setUsdToChf] = useState<number | null>(null)
@@ -144,21 +149,27 @@ export function OverviewView({
       return
     }
     if (type === 'savings') {
-      const a = savingsAccounts[0]
+      // Prefer unused account
+      const used = new Set(
+        series.filter((s) => s.type === 'savings').map((s) => s.savingsAccountId),
+      )
+      const a = savingsAccounts.find((x) => !used.has(x.id)) ?? savingsAccounts[0]
+      if (!a) return
       addSeries({
         type: 'savings',
-        name: a?.name?.trim() || '',
-        savingsAccountId: a?.id ?? null,
+        name: a.name?.trim() || '',
+        savingsAccountId: a.id,
       })
       return
     }
-    // Manual: no default text — grey placeholder only
+    // Manual: year → IC → % bindings (unclaimed → permanent leftover)
     addSeries({
       type: 'manual',
       name: '',
       baseChf: 0,
       annualRatePercent: 0,
       baseYear: asOf.getFullYear(),
+      yearBindings: [],
     })
   }
 
@@ -271,7 +282,7 @@ export function OverviewView({
             <p className="mt-0.5 text-xs text-white/35">
               {chartMode === 'stack'
                 ? 'Past years → Now (live) → current / future. CHF. Portfolio greens, savings blues, manual amber/violet.'
-                : 'Each line is total net worth for a scenario (enabled series only).'}
+                : 'Past years → Now (live) → current / future. Each line is total net worth for a scenario.'}
             </p>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -452,10 +463,25 @@ export function OverviewView({
           series={series}
           portfolios={portfolios}
           savingsAccounts={savingsAccounts}
+          incomeCostScenarios={incomeCostScenarios}
           onAdd={handleAdd}
+          onAddSavings={(accountId) => {
+            const a = savingsAccounts.find((x) => x.id === accountId)
+            if (!a) return
+            if (series.some((s) => s.type === 'savings' && s.savingsAccountId === accountId)) {
+              return
+            }
+            addSeries({
+              type: 'savings',
+              name: a.name?.trim() || '',
+              savingsAccountId: a.id,
+            })
+          }}
           onUpdate={updateSeries}
           onToggle={toggleSeries}
           onRemove={removeSeries}
+          onReorderGroups={reorderSeriesGroups}
+          onReorderSavings={reorderSavingsSeries}
         />
       </div>
     </div>

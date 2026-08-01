@@ -81,9 +81,15 @@ export function useIncomeCost() {
   )
 
   const addScenario = useCallback(
-    (name?: string) => {
+    (name?: string, year?: number) => {
       const maxOrder = scenarios.reduce((m, s) => Math.max(m, s.sortOrder), -1)
-      const sc = newScenario(name ?? `Scenario ${scenarios.length + 1}`, maxOrder + 1)
+      const usedYears = new Set(scenarios.map((s) => s.year))
+      let y =
+        year != null && Number.isFinite(year)
+          ? Math.floor(year)
+          : new Date().getFullYear()
+      while (usedYears.has(y)) y += 1
+      const sc = newScenario(name ?? `Scenario ${scenarios.length + 1}`, maxOrder + 1, y)
       const ok = persist([...scenarios, sc], lines)
       return ok ? sc : null
     },
@@ -96,6 +102,19 @@ export function useIncomeCost() {
       if (!trimmed) return false
       return persist(
         scenarios.map((s) => (s.id === id ? { ...s, name: trimmed } : s)),
+        lines,
+      )
+    },
+    [lines, scenarios, persist],
+  )
+
+  const setScenarioYear = useCallback(
+    (id: string, year: number) => {
+      if (!Number.isFinite(year) || year < 1970 || year > 2100) return false
+      return persist(
+        scenarios.map((s) =>
+          s.id === id ? { ...s, year: Math.floor(year) } : s,
+        ),
         lines,
       )
     },
@@ -144,6 +163,7 @@ export function useIncomeCost() {
     addLine,
     addScenario,
     renameScenario,
+    setScenarioYear,
     removeScenario,
     reorderScenariosByIds,
     copyScenario,

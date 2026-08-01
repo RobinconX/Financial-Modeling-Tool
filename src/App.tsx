@@ -147,6 +147,7 @@ export default function App() {
     addLine,
     addScenario,
     renameScenario,
+    setScenarioYear,
     removeScenario,
     reorderScenariosByIds,
     copyScenario,
@@ -376,6 +377,7 @@ export default function App() {
               stockScenarios={scenarios}
               savingsAccounts={savingsAccounts}
               incomeCostLines={incomeCostLines}
+              incomeCostScenarios={incomeCostScenarios}
             />
           )}
           {tab === 'income-cost' && (
@@ -388,6 +390,7 @@ export default function App() {
               addLine={addLine}
               addScenario={addScenario}
               renameScenario={renameScenario}
+              setScenarioYear={setScenarioYear}
               removeScenario={removeScenario}
               reorderScenariosByIds={reorderScenariosByIds}
               copyScenario={copyScenario}

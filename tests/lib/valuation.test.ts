@@ -1,12 +1,19 @@
 import { describe, expect, it } from 'vitest'
 import {
+  advancedCagrGapYears,
   buildAdvancedProjections,
+  buildChartSeries,
   buildEasyProjections,
   cagr,
+  cagrInterpolate,
+  easyCagrGapYears,
   equityValueAfterDilution,
   impliedFromPE,
   impliedFromPFCF,
   impliedFromPS,
+  interpolateByCagr,
+  materializeAdvancedCagrYears,
+  materializeEasyCagrYears,
   normalizeDilution,
   pickHeroRow,
   totalReturn,
@@ -33,6 +40,40 @@ describe('yearsUntil / cagr / totalReturn', () => {
   it('computes total return', () => {
     expect(totalReturn(100, 150)).toBeCloseTo(0.5)
     expect(totalReturn(0, 150)).toBeNaN()
+  })
+})
+
+describe('interpolateByCagr / cagrInterpolate', () => {
+  it('hits endpoints and midpoint of a double-in-4-years path', () => {
+    // 100 → 200 over 4 years; midpoint (2y) = 100 * sqrt(2)
+    expect(interpolateByCagr(2026, 100, 2030, 200, 2026)).toBeCloseTo(100)
+    expect(interpolateByCagr(2026, 100, 2030, 200, 2030)).toBeCloseTo(200)
+    expect(interpolateByCagr(2026, 100, 2030, 200, 2028)).toBeCloseTo(100 * Math.SQRT2, 10)
+  })
+
+  it('matches compound growth at each step', () => {
+    const r = cagr(100, 200, 4)
+    for (let y = 0; y <= 4; y++) {
+      const v = interpolateByCagr(0, 100, 4, 200, y)!
+      expect(v).toBeCloseTo(100 * Math.pow(1 + r, y), 10)
+    }
+  })
+
+  it('returns null for non-positive values', () => {
+    expect(interpolateByCagr(2026, 0, 2030, 200, 2028)).toBeNull()
+    expect(interpolateByCagr(2026, 100, 2030, -1, 2028)).toBeNull()
+  })
+
+  it('cagrInterpolate fills gaps between known points', () => {
+    const known = [
+      { year: 2026, value: 100 },
+      { year: 2030, value: 200 },
+      { year: 2034, value: 400 },
+    ]
+    expect(cagrInterpolate(known, 2028)).toBeCloseTo(100 * Math.SQRT2, 10)
+    expect(cagrInterpolate(known, 2032)).toBeCloseTo(200 * Math.SQRT2, 10)
+    expect(cagrInterpolate(known, 2026)).toBe(100)
+    expect(cagrInterpolate(known, 2035)).toBe(400) // clamp past end
   })
 })
 
@@ -64,7 +105,7 @@ describe('buildEasyProjections', () => {
     { id: 'c', year: year + 2, projectedMarketCap: null },
   ]
 
-  it('builds rows for future years with mcap', () => {
+  it('builds rows only for stated future years with mcap', () => {
     const out = buildEasyProjections(100, rows, year)
     expect(out).toHaveLength(1)
     expect(out[0].year).toBe(year + 4)
@@ -75,6 +116,67 @@ describe('buildEasyProjections', () => {
 
   it('returns empty when current mcap invalid', () => {
     expect(buildEasyProjections(0, rows, year)).toEqual([])
+  })
+})
+
+describe('materializeEasyCagrYears', () => {
+  it('lists and creates intermediate years between mcap anchors', () => {
+    const rows: EasyProjection[] = [
+      { id: 'a', year: 2030, projectedMarketCap: 200 },
+      { id: 'b', year: 2034, projectedMarketCap: 400 },
+    ]
+    expect(easyCagrGapYears(rows)).toEqual([2031, 2032, 2033])
+    const filled = materializeEasyCagrYears(rows)
+    expect(filled.map((r) => r.year)).toEqual([2030, 2031, 2032, 2033, 2034])
+    const mid = filled.find((r) => r.year === 2032)!
+    expect(mid.projectedMarketCap).toBeCloseTo(200 * Math.SQRT2, 10)
+  })
+
+  it('does not overwrite existing positive mcap years', () => {
+    const rows: EasyProjection[] = [
+      { id: 'a', year: 2030, projectedMarketCap: 200 },
+      { id: 'x', year: 2032, projectedMarketCap: 999 },
+      { id: 'b', year: 2034, projectedMarketCap: 400 },
+    ]
+    expect(easyCagrGapYears(rows)).toEqual([2031, 2033])
+    const filled = materializeEasyCagrYears(rows)
+    expect(filled.find((r) => r.year === 2032)!.projectedMarketCap).toBe(999)
+  })
+})
+
+describe('materializeAdvancedCagrYears', () => {
+  it('creates intermediate years with CAGR fundamentals', () => {
+    const rows: YearProjection[] = [
+      {
+        id: 'a',
+        year: 2030,
+        dilutionFactor: 1,
+        revenue: 100,
+        psMultiple: 10,
+        fcf: null,
+        pfcfMultiple: null,
+        profit: null,
+        peMultiple: null,
+      },
+      {
+        id: 'b',
+        year: 2032,
+        dilutionFactor: 1.21,
+        revenue: 121,
+        psMultiple: 10,
+        fcf: null,
+        pfcfMultiple: null,
+        profit: null,
+        peMultiple: null,
+      },
+    ]
+    expect(advancedCagrGapYears(rows)).toEqual([2031])
+    const filled = materializeAdvancedCagrYears(rows)
+    expect(filled.map((r) => r.year)).toEqual([2030, 2031, 2032])
+    const mid = filled.find((r) => r.year === 2031)!
+    expect(mid.revenue).toBeCloseTo(110, 10)
+    expect(mid.psMultiple).toBeCloseTo(10, 10)
+    expect(mid.dilutionFactor).toBeCloseTo(1.1, 10)
   })
 })
 
@@ -94,12 +196,13 @@ describe('buildAdvancedProjections', () => {
     },
   ]
 
-  it('emits PS/PFCF/PE bases', () => {
+  it('emits PS/PFCF/PE bases for stated years only', () => {
     const out = buildAdvancedProjections(50, rows, year)
     expect(out.map((r) => r.basis).sort()).toEqual(['pe', 'pfcf', 'ps'])
     const ps = out.find((r) => r.basis === 'ps')!
     expect(ps.marketCap).toBe(50)
     expect(ps.equityValue).toBe(50)
+    expect(out.filter((r) => r.basis === 'ps')).toHaveLength(1)
   })
 
   it('applies dilution to equity value', () => {
@@ -108,6 +211,24 @@ describe('buildAdvancedProjections', () => {
     const pe = out.find((r) => r.basis === 'pe')!
     expect(pe.marketCap).toBe(20)
     expect(pe.equityValue).toBe(10)
+  })
+})
+
+describe('buildChartSeries CAGR path', () => {
+  it('uses CAGR (not linear) between easy anchors for chart display only', () => {
+    const series = buildChartSeries(
+      100,
+      'easy',
+      [{ id: 'a', year: 2030, projectedMarketCap: 200 }],
+      [],
+      2026,
+    )
+    const mid = series.find((p) => p.year === 2028)!
+    expect(mid.easy).toBeCloseTo(100 * Math.SQRT2, 10)
+    expect(mid.easy).not.toBeCloseTo(150, 1)
+    expect(mid.easyActual).toBeUndefined()
+    const end = series.find((p) => p.year === 2030)!
+    expect(end.easyActual).toBe(true)
   })
 })
 

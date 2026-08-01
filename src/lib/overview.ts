@@ -4,11 +4,13 @@ import type {
   OverviewSeries,
   OverviewSeriesType,
   OverviewState,
+  OverviewYearBinding,
   SavedPortfolio,
   SavedScenario,
   SavingsAccount,
 } from '../types'
 import { toDisplay } from './fx'
+import { scenarioTotals } from './incomeCost'
 import {
   balanceNow,
   latestActual,
@@ -20,11 +22,13 @@ import {
 import {
   cashAtYear,
   getActions,
+  getDeposits,
   getOpeningCash,
   getPerpetualGrowthRate,
   holdingLiveValue,
   holdingPositionLabel,
   holdingValueAtYear,
+  lastExplicitDepositYear,
   lastStatedProjectionYear,
   portfolioTotalUsdAtYear as portfolioBookTotalUsdAtYear,
   withResolvedDepositAmounts,
@@ -60,6 +64,99 @@ export type OverviewBuildDeps = {
   incomeCostLines: CashflowLine[]
   usdToChf: number | null
   asOf?: Date
+  /**
+   * Portfolio ids from enabled portfolio series on the Overview scenario being
+   * evaluated. Empty / omitted → no-portfolio mode for income leftover.
+   */
+  overviewPortfolioIds?: string[]
+  /**
+   * Enabled series on the Overview scenario being evaluated (for leftover claims
+   * by manual yearly contributions).
+   */
+  overviewSeries?: OverviewSeries[]
+}
+
+export type { OverviewYearBinding }
+
+/** Sorted year bindings (migrates legacy single id). */
+export function getYearBindings(series: OverviewSeries): OverviewYearBinding[] {
+  const raw = series.yearBindings
+  if (Array.isArray(raw) && raw.length > 0) {
+    return raw
+      .filter(
+        (b) =>
+          b &&
+          Number.isFinite(b.year) &&
+          typeof b.incomeCostScenarioId === 'string' &&
+          b.incomeCostScenarioId,
+      )
+      .map((b) => ({
+        year: Math.floor(b.year),
+        incomeCostScenarioId: b.incomeCostScenarioId,
+        percent:
+          b.percent != null && Number.isFinite(b.percent)
+            ? Math.max(0, Math.min(100, b.percent))
+            : undefined,
+      }))
+      .sort((a, b) => a.year - b.year)
+  }
+  // Legacy single scenario id
+  if (series.incomeCostScenarioId) {
+    const y = Math.floor(series.baseYear ?? new Date().getFullYear())
+    return [{ year: y, incomeCostScenarioId: series.incomeCostScenarioId }]
+  }
+  return []
+}
+
+/** Permanent leftover series present on every Overview scenario. */
+export function isPermanentLeftover(s: OverviewSeries): boolean {
+  return s.type === 'incomeLeftover'
+}
+
+export function newPermanentLeftoverSeries(
+  sortOrder: number,
+  asOf: Date = new Date(),
+): OverviewSeries {
+  return newOverviewSeries(
+    {
+      type: 'incomeLeftover',
+      name: 'Leftover cash',
+      baseChf: 0,
+      annualRatePercent: 0,
+      baseYear: asOf.getFullYear(),
+      yearBindings: [],
+      perpetualYearlyChf: 0,
+    },
+    sortOrder,
+  )
+}
+
+/** Ensure exactly one leftover series exists (permanent, always enabled). */
+export function ensurePermanentLeftover(
+  series: OverviewSeries[],
+  asOf: Date = new Date(),
+): OverviewSeries[] {
+  const leftovers = series.filter((s) => s.type === 'incomeLeftover')
+  const others = series.filter((s) => s.type !== 'incomeLeftover')
+  if (leftovers.length === 0) {
+    const maxOrder = others.reduce((m, s) => Math.max(m, s.sortOrder), -1)
+    return [...others, newPermanentLeftoverSeries(maxOrder + 1, asOf)]
+  }
+  // Keep first leftover, merge bindings from extras, drop duplicates
+  const primary = { ...leftovers[0]!, enabled: true, name: leftovers[0]!.name || 'Leftover cash' }
+  return [...others, primary]
+}
+
+export function bindingForYear(
+  bindings: OverviewYearBinding[],
+  year: number,
+): OverviewYearBinding | null {
+  return bindings.find((b) => b.year === year) ?? null
+}
+
+export function lastBindingYear(bindings: OverviewYearBinding[]): number | null {
+  if (bindings.length === 0) return null
+  return bindings[bindings.length - 1]!.year
 }
 
 export function newOverviewScenario(
@@ -76,7 +173,7 @@ export function newOverviewScenario(
     sortOrder,
     startYear: range.startYear,
     endYear: range.endYear,
-    series,
+    series: ensurePermanentLeftover(series, asOf),
   }
 }
 
@@ -95,6 +192,7 @@ export function newOverviewSeries(
   sortOrder: number,
 ): OverviewSeries {
   return {
+    ...partial,
     id: crypto.randomUUID(),
     enabled: partial.enabled ?? true,
     sortOrder,
@@ -106,6 +204,8 @@ export function newOverviewSeries(
     baseChf: partial.baseChf ?? 0,
     annualRatePercent: partial.annualRatePercent ?? 0,
     baseYear: partial.baseYear ?? new Date().getFullYear(),
+    yearBindings: partial.yearBindings ?? [],
+    perpetualYearlyChf: partial.perpetualYearlyChf ?? 0,
   }
 }
 
@@ -168,9 +268,21 @@ const MANUAL_SHADES = [
   '#e9d5ff',
 ]
 
+const LEFTOVER_SHADES = [
+  '#f472b6',
+  '#fb7185',
+  '#e879f9',
+  '#f9a8d4',
+  '#c084fc',
+  '#f0abfc',
+  '#fda4af',
+  '#d8b4fe',
+]
+
 export function shadesForType(type: OverviewSeriesType): string[] {
   if (type === 'portfolio') return PORTFOLIO_SHADES
   if (type === 'savings') return SAVINGS_SHADES
+  if (type === 'incomeLeftover') return LEFTOVER_SHADES
   return MANUAL_SHADES
 }
 
@@ -183,6 +295,7 @@ export function assignOverviewSeriesColors(series: OverviewSeries[]): Map<string
     portfolio: 0,
     savings: 0,
     manual: 0,
+    incomeLeftover: 0,
   }
   const map = new Map<string, string>()
   for (const s of ordered) {
@@ -197,6 +310,266 @@ export function assignOverviewSeriesColors(series: OverviewSeries[]): Map<string
     map.set(s.id, shades[i]!)
   }
   return map
+}
+
+/**
+ * CHF of Income/Cost surplus claimed by surplus-linked deposits on the given
+ * portfolios (Overview-linked only) for a calendar year. Opening cash excluded.
+ */
+export function allocatedSurplusChf(
+  portfolios: SavedPortfolio[],
+  incomeCostScenarioId: string,
+  year: number,
+  surplusChf: number,
+): number {
+  if (!(surplusChf > 0) || !incomeCostScenarioId) return 0
+  let allocated = 0
+  for (const p of portfolios) {
+    for (const d of getDeposits(p)) {
+      if (d.isOpening) continue
+      if (d.source !== 'surplus') continue
+      if (d.surplusScenarioId !== incomeCostScenarioId) continue
+      if (d.year !== year) continue
+      const pct = Number.isFinite(d.surplusPercent) ? Math.max(0, d.surplusPercent!) : 0
+      allocated += surplusChf * (pct / 100)
+    }
+    const perpetual = p.perpetualYearlyDeposit
+    if (
+      perpetual &&
+      perpetual.source === 'surplus' &&
+      perpetual.surplusScenarioId === incomeCostScenarioId
+    ) {
+      const last = lastExplicitDepositYear(p, year)
+      if (year > last) {
+        const pct = Number.isFinite(perpetual.surplusPercent)
+          ? Math.max(0, perpetual.surplusPercent!)
+          : 0
+        allocated += surplusChf * (pct / 100)
+      }
+    }
+  }
+  return allocated
+}
+
+/**
+ * Yearly residual: IC net minus surplus deposits from the given portfolios only.
+ */
+export function residualSurplusChf(
+  lines: CashflowLine[],
+  incomeCostScenarioId: string,
+  portfolios: SavedPortfolio[],
+  year: number,
+): number {
+  if (!incomeCostScenarioId) return 0
+  const surplusChf = Math.max(0, scenarioTotals(lines, incomeCostScenarioId).netYearly)
+  const allocated = allocatedSurplusChf(portfolios, incomeCostScenarioId, year, surplusChf)
+  return Math.max(0, surplusChf - allocated)
+}
+
+/**
+ * Available IC cash for a scenario in calendar year Y (CHF).
+ * With overview portfolios: residual after surplus deposits.
+ * Without: full IC net.
+ */
+export function availableIcCashChf(
+  incomeCostScenarioId: string,
+  year: number,
+  deps: OverviewBuildDeps,
+): number {
+  if (!incomeCostScenarioId) return 0
+  const portfolioIds = deps.overviewPortfolioIds ?? []
+  if (portfolioIds.length > 0) {
+    const portfolios = deps.portfolios.filter((p) => portfolioIds.includes(p.id))
+    return residualSurplusChf(deps.incomeCostLines, incomeCostScenarioId, portfolios, year)
+  }
+  return Math.max(0, scenarioTotals(deps.incomeCostLines, incomeCostScenarioId).netYearly)
+}
+
+/** All year bindings from enabled manuals + leftover on this overview scenario. */
+export function allOverviewBindings(deps: OverviewBuildDeps): OverviewYearBinding[] {
+  const out: OverviewYearBinding[] = []
+  for (const s of deps.overviewSeries ?? []) {
+    if (!s.enabled) continue
+    if (s.type !== 'manual' && s.type !== 'incomeLeftover') continue
+    out.push(...getYearBindings(s))
+  }
+  return out.sort((a, b) => a.year - b.year)
+}
+
+export function lastOverviewBindingYear(deps: OverviewBuildDeps): number | null {
+  const all = allOverviewBindings(deps)
+  return lastBindingYear(all)
+}
+
+/**
+ * Gross pool for leftover in year Y = sum of available IC cash for every
+ * distinct IC scenario bound that year (by manuals or leftover).
+ */
+export function grossIcPoolAtYear(year: number, deps: OverviewBuildDeps): number {
+  const scenarioIds = new Set<string>()
+  for (const b of allOverviewBindings(deps)) {
+    if (b.year === year) scenarioIds.add(b.incomeCostScenarioId)
+  }
+  let sum = 0
+  for (const id of scenarioIds) {
+    sum += availableIcCashChf(id, year, deps)
+  }
+  return sum
+}
+
+/**
+ * Manual claim for year Y from year-scenario-% bindings.
+ * If multiple manuals bind the same IC scenario, percents are applied in sortOrder
+ * and capped so total claim ≤ available.
+ */
+export function manualYearlyAddition(
+  series: OverviewSeries,
+  year: number,
+  deps: OverviewBuildDeps,
+): number {
+  if (series.type !== 'manual' || !series.enabled) return 0
+  const baseYear = Math.floor(series.baseYear ?? year)
+  if (year < baseYear) return 0
+
+  const myBindings = getYearBindings(series).filter((b) => b.year === year)
+  if (myBindings.length === 0) return 0
+
+  // Group all manual claims for this year by IC scenario for fair capping
+  const manuals = (deps.overviewSeries ?? [])
+    .filter((s) => s.enabled && s.type === 'manual')
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
+
+  // Per-scenario remaining available
+  const remainingBySc = new Map<string, number>()
+  for (const b of allOverviewBindings(deps)) {
+    if (b.year !== year) continue
+    if (!remainingBySc.has(b.incomeCostScenarioId)) {
+      remainingBySc.set(
+        b.incomeCostScenarioId,
+        availableIcCashChf(b.incomeCostScenarioId, year, deps),
+      )
+    }
+  }
+
+  let myTotal = 0
+  for (const m of manuals) {
+    const binds = getYearBindings(m).filter((b) => b.year === year)
+    for (const b of binds) {
+      const pct = b.percent != null && Number.isFinite(b.percent) ? Math.max(0, b.percent) : 0
+      if (!(pct > 0)) continue
+      const avail = remainingBySc.get(b.incomeCostScenarioId) ?? 0
+      const full = availableIcCashChf(b.incomeCostScenarioId, year, deps)
+      const want = full * (pct / 100)
+      const got = Math.min(want, avail)
+      remainingBySc.set(b.incomeCostScenarioId, Math.max(0, avail - got))
+      if (m.id === series.id) myTotal += got
+    }
+  }
+  return myTotal
+}
+
+/**
+ * Leftover yearly addition = unclaimed IC cash for the year (after manual %),
+ * or perpetual after the last binding year across the overview scenario.
+ */
+export function leftoverNetYearlyAddition(
+  series: OverviewSeries,
+  year: number,
+  deps: OverviewBuildDeps,
+): number {
+  if (series.type !== 'incomeLeftover') return 0
+
+  const bindsThisYear = allOverviewBindings(deps).filter((b) => b.year === year)
+  if (bindsThisYear.length > 0) {
+    const scenarioIds = [...new Set(bindsThisYear.map((b) => b.incomeCostScenarioId))]
+    const manuals = (deps.overviewSeries ?? [])
+      .filter((s) => s.enabled && s.type === 'manual')
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
+
+    let leftover = 0
+    for (const scId of scenarioIds) {
+      const full = availableIcCashChf(scId, year, deps)
+      let remaining = full
+      for (const m of manuals) {
+        for (const b of getYearBindings(m)) {
+          if (b.year !== year || b.incomeCostScenarioId !== scId) continue
+          const pct = b.percent != null && Number.isFinite(b.percent) ? Math.max(0, b.percent) : 0
+          if (!(pct > 0)) continue
+          const want = full * (pct / 100)
+          const got = Math.min(want, remaining)
+          remaining -= got
+        }
+      }
+      leftover += Math.max(0, remaining)
+    }
+    return leftover
+  }
+
+  // No bindings this year → perpetual after last binding year.
+  // If the scenario has no IC bindings at all, perpetual applies every year
+  // (from baseYear onward via residualCashValueAtYear).
+  const lastY = lastOverviewBindingYear(deps)
+  if (lastY == null || year > lastY) {
+    const p = series.perpetualYearlyChf
+    return Number.isFinite(p) && p! > 0 ? p! : 0
+  }
+  return 0
+}
+
+/** @deprecated use leftoverNetYearlyAddition */
+export function leftoverYearlyAddition(
+  series: OverviewSeries,
+  year: number,
+  deps: OverviewBuildDeps,
+): number {
+  return leftoverNetYearlyAddition(series, year, deps)
+}
+
+/**
+ * Accumulating cash pile for permanent leftover.
+ */
+export function residualCashValueAtYear(
+  series: OverviewSeries,
+  year: number,
+  deps: OverviewBuildDeps,
+): number {
+  const asOf = deps.asOf ?? new Date()
+  const currentYear = asOf.getFullYear()
+  const baseYear = Math.floor(series.baseYear ?? currentYear)
+  const base = Math.max(0, series.baseChf ?? 0)
+  const rate = Number.isFinite(series.annualRatePercent) ? series.annualRatePercent! : 0
+  if (year < baseYear) return 0
+
+  let bal = base
+  for (let y = baseYear; y <= year; y++) {
+    if (y > baseYear) bal = bal * (1 + rate / 100)
+    bal += leftoverNetYearlyAddition(series, y, deps)
+  }
+  return bal
+}
+
+/**
+ * Manual series: base at baseYear, then each year compounds and adds
+ * year-binding % of IC available cash.
+ */
+export function manualAccumulatedValueAtYear(
+  series: OverviewSeries,
+  year: number,
+  deps: OverviewBuildDeps,
+): number {
+  const asOf = deps.asOf ?? new Date()
+  const currentYear = asOf.getFullYear()
+  const baseYear = Math.floor(series.baseYear ?? currentYear)
+  const base = Math.max(0, series.baseChf ?? 0)
+  const rate = Number.isFinite(series.annualRatePercent) ? series.annualRatePercent! : 0
+  if (year < baseYear) return 0
+
+  let bal = base
+  for (let y = baseYear; y <= year; y++) {
+    if (y > baseYear) bal = bal * (1 + rate / 100)
+    bal += manualYearlyAddition(series, y, deps)
+  }
+  return bal
 }
 
 export type PortfolioBreakdownLine = {
@@ -373,7 +746,9 @@ export function manualValueAtYear(
   const base = Number.isFinite(baseChf) ? Math.max(0, baseChf) : 0
   const rate = Number.isFinite(annualRatePercent) ? annualRatePercent : 0
   const by = Number.isFinite(baseYear) ? Math.floor(baseYear) : year
-  const steps = Math.max(0, year - by)
+  // Not on the chart before the stated base year
+  if (year < by) return 0
+  const steps = year - by
   return base * (1 + rate / 100) ** steps
 }
 
@@ -454,12 +829,7 @@ export function seriesValueChf(
   const currentYear = asOf.getFullYear()
 
   if (series.type === 'manual') {
-    return manualValueAtYear(
-      series.baseChf ?? 0,
-      series.annualRatePercent ?? 0,
-      series.baseYear ?? currentYear,
-      year,
-    )
+    return manualAccumulatedValueAtYear(series, year, deps)
   }
 
   if (series.type === 'savings') {
@@ -495,6 +865,10 @@ export function seriesValueChf(
     return toDisplay(usd, 'CHF', deps.usdToChf)
   }
 
+  if (series.type === 'incomeLeftover') {
+    return residualCashValueAtYear(series, year, deps)
+  }
+
   return 0
 }
 
@@ -504,6 +878,7 @@ export function seriesValueChfNow(series: OverviewSeries, deps: OverviewBuildDep
   const currentYear = asOf.getFullYear()
 
   if (series.type === 'manual') {
+    // Now = base pile only (yearly additions land on calendar year bars)
     return manualValueAtYear(
       series.baseChf ?? 0,
       series.annualRatePercent ?? 0,
@@ -524,6 +899,13 @@ export function seriesValueChfNow(series: OverviewSeries, deps: OverviewBuildDep
     return portfolioLiveTotalChf(p, deps)
   }
 
+  // Unallocated cash pile as held today (only once base year is reached)
+  if (series.type === 'incomeLeftover') {
+    const baseYear = Math.floor(series.baseYear ?? currentYear)
+    if (currentYear < baseYear) return 0
+    return Math.max(0, series.baseChf ?? 0)
+  }
+
   return 0
 }
 
@@ -531,6 +913,25 @@ export function enabledSeries(series: OverviewSeries[]): OverviewSeries[] {
   return [...series]
     .filter((s) => s.enabled)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+}
+
+function overviewPortfolioIdsFromSeries(series: OverviewSeries[]): string[] {
+  const ids: string[] = []
+  for (const s of series) {
+    if (s.enabled && s.type === 'portfolio' && s.portfolioId) ids.push(s.portfolioId)
+  }
+  return ids
+}
+
+function withOverviewContext(
+  deps: OverviewBuildDeps,
+  series: OverviewSeries[],
+): OverviewBuildDeps {
+  return {
+    ...deps,
+    overviewPortfolioIds: overviewPortfolioIdsFromSeries(series),
+    overviewSeries: series.filter((s) => s.enabled),
+  }
 }
 
 function fillSeriesRow(
@@ -561,6 +962,7 @@ export function buildOverviewChartRows(
   const currentYear = asOf.getFullYear()
   const years = yearsInRange(state.startYear, state.endYear, asOf)
   const active = enabledSeries(state.series)
+  const scoped = withOverviewContext(deps, state.series)
 
   const nowRow = (): OverviewChartRow =>
     fillSeriesRow(
@@ -573,7 +975,7 @@ export function buildOverviewChartRows(
         total: 0,
       },
       active,
-      (s) => seriesValueChfNow(s, deps),
+      (s) => seriesValueChfNow(s, scoped),
     )
 
   const yearRow = (year: number): OverviewChartRow =>
@@ -587,7 +989,7 @@ export function buildOverviewChartRows(
         total: 0,
       },
       active,
-      (s) => seriesValueChf(s, year, deps),
+      (s) => seriesValueChf(s, year, scoped),
     )
 
   const rows: OverviewChartRow[] = []
@@ -612,9 +1014,24 @@ export function scenarioTotalAtYear(
   year: number,
   deps: OverviewBuildDeps,
 ): number {
+  const scoped = withOverviewContext(deps, scenario.series)
   let total = 0
   for (const s of enabledSeries(scenario.series)) {
-    const v = seriesValueChf(s, year, deps)
+    const v = seriesValueChf(s, year, scoped)
+    if (Number.isFinite(v) && v > 0) total += v
+  }
+  return total
+}
+
+/** Live Now total for a scenario (enabled series, positions as held). */
+export function scenarioTotalNow(
+  scenario: OverviewScenario,
+  deps: OverviewBuildDeps,
+): number {
+  const scoped = withOverviewContext(deps, scenario.series)
+  let total = 0
+  for (const s of enabledSeries(scenario.series)) {
+    const v = seriesValueChfNow(s, scoped)
     if (Number.isFinite(v) && v > 0) total += v
   }
   return total
@@ -622,15 +1039,18 @@ export function scenarioTotalAtYear(
 
 export type OverviewCompareRow = {
   year: number
+  /** Stable X-axis key: "now" or "2026" */
+  xKey: string
   label: string
   kind: OverviewYearKind
+  isNow: boolean
   /** Per-scenario totals keyed by scenario id */
-  [scenarioId: string]: number | string
+  [scenarioId: string]: number | string | boolean
 }
 
 /**
  * Line-chart rows for comparing named overview scenarios.
- * Shared year axis = provided range, or union of each scenario’s range.
+ * Shared axis: past years → **Now** (live) → current / future years.
  */
 export function buildOverviewCompareRows(
   scenarios: OverviewScenario[],
@@ -639,6 +1059,7 @@ export function buildOverviewCompareRows(
 ): OverviewCompareRow[] {
   if (scenarios.length === 0) return []
   const asOf = deps.asOf ?? new Date()
+  const currentYear = asOf.getFullYear()
   let start: number
   let end: number
   if (range) {
@@ -650,17 +1071,47 @@ export function buildOverviewCompareRows(
   }
   const years = yearsInRange(start, end, asOf)
 
-  return years.map((year) => {
+  const nowRow = (): OverviewCompareRow => {
+    const row: OverviewCompareRow = {
+      year: currentYear,
+      xKey: 'now',
+      label: 'Now',
+      kind: 'now',
+      isNow: true,
+    }
+    for (const sc of scenarios) {
+      row[sc.id] = scenarioTotalNow(sc, deps)
+    }
+    return row
+  }
+
+  const yearRow = (year: number): OverviewCompareRow => {
     const row: OverviewCompareRow = {
       year,
+      xKey: String(year),
       label: String(year),
       kind: yearKind(year, asOf),
+      isNow: false,
     }
     for (const sc of scenarios) {
       row[sc.id] = scenarioTotalAtYear(sc, year, deps)
     }
     return row
-  })
+  }
+
+  const rows: OverviewCompareRow[] = []
+  let nowInserted = false
+  for (const year of years) {
+    if (!nowInserted && year >= currentYear) {
+      rows.push(nowRow())
+      nowInserted = true
+    }
+    rows.push(yearRow(year))
+  }
+  if (!nowInserted) {
+    rows.push(nowRow())
+  }
+  return rows
 }
 
 /** Distinct line colors for scenario comparison (not origin-based). */
@@ -689,5 +1140,6 @@ export function assignScenarioCompareColors(scenarios: OverviewScenario[]): Map<
 export function sourceLabel(type: OverviewSeries['type']): string {
   if (type === 'portfolio') return 'Portfolio'
   if (type === 'savings') return 'Savings'
+  if (type === 'incomeLeftover') return 'Leftover'
   return 'Manual'
 }

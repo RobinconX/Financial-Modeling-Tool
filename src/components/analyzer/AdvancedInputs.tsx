@@ -1,7 +1,9 @@
 import { useEffect, useState, type ReactNode } from 'react'
 import type { YearProjection } from '../../types'
 import {
+  advancedCagrGapYears,
   equityValueAfterDilution,
+  materializeAdvancedCagrYears,
   newYearProjection,
   sortYearProjections,
 } from '../../lib/valuation'
@@ -71,6 +73,13 @@ export function AdvancedInputs({
     const last = sorted.length ? sorted[sorted.length - 1] : null
     const nextYear = last ? last.year + 1 : currentYear + 5
     commit([...rows, newYearProjection(nextYear, last?.dilutionFactor ?? 1)])
+  }
+
+  const cagrGaps = advancedCagrGapYears(rows)
+
+  function fillIntermediateYears() {
+    if (cagrGaps.length === 0) return
+    commit(materializeAdvancedCagrYears(rows))
   }
 
   function toggle(id: string) {
@@ -255,9 +264,26 @@ export function AdvancedInputs({
         )
       })}
 
-      <button type="button" className="btn-ghost w-full" onClick={addRow}>
-        + Add year
-      </button>
+      <div className="flex flex-col gap-2 sm:flex-row">
+        <button type="button" className="btn-ghost flex-1" onClick={addRow}>
+          + Add year
+        </button>
+        <button
+          type="button"
+          className="btn-ghost flex-1"
+          onClick={fillIntermediateYears}
+          disabled={cagrGaps.length === 0}
+          title={
+            cagrGaps.length === 0
+              ? 'Need at least two year rows with a gap between them'
+              : `Create ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} by CAGR on fundamentals (saved into this projection)`
+          }
+        >
+          {cagrGaps.length === 0
+            ? 'Fill intermediate years (CAGR)'
+            : `Fill ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} (CAGR)`}
+        </button>
+      </div>
     </div>
   )
 }

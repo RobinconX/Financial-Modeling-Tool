@@ -3,6 +3,8 @@ import type { OverviewScenario, OverviewSeries, OverviewState } from '../types'
 import {
   clampOverviewRange,
   cloneSeriesList,
+  ensurePermanentLeftover,
+  isPermanentLeftover,
   newOverviewScenario,
   newOverviewSeries,
   sortedOverviewScenarios,
@@ -210,11 +212,16 @@ export function useOverview() {
       return persistUpdate((prev) => {
         const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
         if (!sid) return prev
-        const scenarios = prev.scenarios.map((sc) =>
-          sc.id === sid
-            ? { ...sc, series: sc.series.filter((s) => s.id !== id) }
-            : sc,
-        )
+        const scenarios = prev.scenarios.map((sc) => {
+          if (sc.id !== sid) return sc
+          const target = sc.series.find((s) => s.id === id)
+          // Leftover cash is permanent
+          if (target && isPermanentLeftover(target)) return sc
+          return {
+            ...sc,
+            series: ensurePermanentLeftover(sc.series.filter((s) => s.id !== id)),
+          }
+        })
         return { ...prev, scenarios }
       })
     },
@@ -230,10 +237,100 @@ export function useOverview() {
           if (sc.id !== sid) return sc
           return {
             ...sc,
-            series: sc.series.map((s) =>
-              s.id === id ? { ...s, enabled: !s.enabled } : s,
-            ),
+            series: sc.series.map((s) => {
+              if (s.id !== id) return s
+              // Leftover always stays enabled
+              if (isPermanentLeftover(s)) return { ...s, enabled: true }
+              return { ...s, enabled: !s.enabled }
+            }),
           }
+        })
+        return { ...prev, scenarios }
+      })
+    },
+    [persistUpdate],
+  )
+
+  /**
+   * Reorder series groups for the selected scenario.
+   * Group keys: "savings" (all savings series as one block) or a series id.
+   * Updates sortOrder so the bar chart stack matches this order.
+   */
+  const reorderSeriesGroups = useCallback(
+    (groupKeys: string[]) => {
+      return persistUpdate((prev) => {
+        const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
+        if (!sid) return prev
+        const scenarios = prev.scenarios.map((sc) => {
+          if (sc.id !== sid) return sc
+          const byId = new Map(sc.series.map((s) => [s.id, s]))
+          const savings = sc.series
+            .filter((s) => s.type === 'savings')
+            .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+          const next: OverviewSeries[] = []
+          let order = 0
+          const seen = new Set<string>()
+          for (const key of groupKeys) {
+            if (key === 'savings') {
+              for (const s of savings) {
+                if (seen.has(s.id)) continue
+                next.push({ ...s, sortOrder: order++ })
+                seen.add(s.id)
+              }
+            } else {
+              const s = byId.get(key)
+              if (!s || s.type === 'savings' || seen.has(s.id)) continue
+              next.push({ ...s, sortOrder: order++ })
+              seen.add(s.id)
+            }
+          }
+          for (const s of sc.series) {
+            if (seen.has(s.id)) continue
+            next.push({ ...s, sortOrder: order++ })
+            seen.add(s.id)
+          }
+          return { ...sc, series: ensurePermanentLeftover(next) }
+        })
+        return { ...prev, scenarios }
+      })
+    },
+    [persistUpdate],
+  )
+
+  /** Reorder savings accounts within the savings group (relative stack order). */
+  const reorderSavingsSeries = useCallback(
+    (orderedIds: string[]) => {
+      return persistUpdate((prev) => {
+        const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
+        if (!sid) return prev
+        const scenarios = prev.scenarios.map((sc) => {
+          if (sc.id !== sid) return sc
+          const savings = sc.series.filter((s) => s.type === 'savings')
+          if (savings.length === 0) return sc
+          const nonSavings = sc.series.filter((s) => s.type !== 'savings')
+          const byId = new Map(savings.map((s) => [s.id, s]))
+          const orderedSavings: OverviewSeries[] = []
+          for (const id of orderedIds) {
+            const s = byId.get(id)
+            if (s) orderedSavings.push(s)
+          }
+          for (const s of savings) {
+            if (!orderedSavings.some((x) => x.id === s.id)) orderedSavings.push(s)
+          }
+          // Place savings block at min sortOrder of previous savings cluster
+          const blockStart = Math.min(...savings.map((s) => s.sortOrder))
+          const before = nonSavings
+            .filter((s) => s.sortOrder < blockStart)
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+          const after = nonSavings
+            .filter((s) => s.sortOrder >= blockStart)
+            .sort((a, b) => a.sortOrder - b.sortOrder)
+          let order = 0
+          const next: OverviewSeries[] = []
+          for (const s of before) next.push({ ...s, sortOrder: order++ })
+          for (const s of orderedSavings) next.push({ ...s, sortOrder: order++ })
+          for (const s of after) next.push({ ...s, sortOrder: order++ })
+          return { ...sc, series: ensurePermanentLeftover(next) }
         })
         return { ...prev, scenarios }
       })
@@ -259,5 +356,7 @@ export function useOverview() {
     updateSeries,
     removeSeries,
     toggleSeries,
+    reorderSeriesGroups,
+    reorderSavingsSeries,
   }
 }

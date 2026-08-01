@@ -32,9 +32,9 @@ import {
   type PropagatePortfolioFields,
   withResolvedDepositAmounts,
 } from '../../lib/portfolio'
-import { scenarioTotals } from '../../lib/incomeCost'
+import { scenarioDisplayName, scenarioTotals } from '../../lib/incomeCost'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
-import { amountToDisplay, fromDisplay, toDisplay } from '../../lib/fx'
+import { amountToDisplay, fixedAmountToUsd, fromDisplay, toDisplay } from '../../lib/fx'
 import { HoldingActionsEditor } from './PortfolioActionsEditor'
 
 export type PortfolioEditorPanel = 'cash' | 'positions' | 'growth' | 'all'
@@ -613,7 +613,7 @@ export function PortfolioHoldingsEditor({
         <div className="hidden grid-cols-[5.5rem_6.5rem_minmax(0,1fr)_auto_auto] gap-2 px-0.5 text-[10px] uppercase tracking-wider text-white/40 sm:grid">
           <span>Year</span>
           <span>Source</span>
-          <span>Amount / surplus</span>
+          <span>Plan · already deposited · remaining</span>
           <span className="text-right">Cash after</span>
           <span />
         </div>
@@ -1518,7 +1518,7 @@ function PerpetualDepositRow({
                   </option>
                   {orderedScenarios.map((s) => (
                     <option key={s.id} value={s.id}>
-                      {s.name}
+                      {scenarioDisplayName(s)}
                     </option>
                   ))}
                 </select>
@@ -1618,6 +1618,22 @@ function DepositRow({
       ? String(deposit.surplusPercent)
       : '',
   )
+  const alreadyDisplay = (): string => {
+    const a = deposit.alreadyDeposited
+    if (a == null || !(a > 0)) return ''
+    if (source === 'surplus') {
+      // stored as CHF
+      return String(
+        roundInput(amountToDisplay(a, 'CHF', displayCurrency, usdToChf)),
+      )
+    }
+    return String(
+      roundInput(
+        amountToDisplay(a, deposit.currency, displayCurrency, usdToChf),
+      ),
+    )
+  }
+  const [alreadyText, setAlreadyText] = useState(alreadyDisplay)
 
   // Sync from parent only when this deposit's committed values change (not while typing)
   useEffect(() => {
@@ -1643,6 +1659,18 @@ function DepositRow({
         : '',
     )
   }, [deposit.id, deposit.surplusPercent])
+
+  useEffect(() => {
+    setAlreadyText(alreadyDisplay())
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- recompute from deposit fields
+  }, [
+    deposit.id,
+    deposit.alreadyDeposited,
+    deposit.currency,
+    deposit.source,
+    displayCurrency,
+    usdToChf,
+  ])
 
   const orderedScenarios = useMemo(
     () => [...incomeCostScenarios].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name)),
@@ -1720,6 +1748,36 @@ function DepositRow({
     if (n !== deposit.surplusPercent) onCommit({ surplusPercent: n })
   }
 
+  function commitAlready() {
+    const raw = alreadyText.trim()
+    if (!raw) {
+      if ((deposit.alreadyDeposited ?? 0) !== 0) onCommit({ alreadyDeposited: 0 })
+      return
+    }
+    const parsed = parseMoney(raw)
+    if (parsed == null || parsed < 0) {
+      setAlreadyText(alreadyDisplay())
+      return
+    }
+    // Store like fixed amount (display currency) or CHF for surplus
+    let stored = parsed
+    if (source === 'surplus') {
+      // User types in display currency → CHF
+      if (displayCurrency === 'USD' && usdToChf != null && usdToChf > 0) {
+        stored = parsed * usdToChf
+      }
+    } else {
+      // fixed: store in display currency (same as amount commit)
+      stored = parsed
+    }
+    if (stored !== (deposit.alreadyDeposited ?? 0)) {
+      onCommit({
+        alreadyDeposited: stored,
+        ...(source === 'fixed' ? { currency: displayCurrency } : {}),
+      })
+    }
+  }
+
   function setSource(next: PortfolioDepositSource) {
     if (next === source) return
     if (next === 'fixed') {
@@ -1738,6 +1796,16 @@ function DepositRow({
       })
     }
   }
+
+  const remainingUsd = Math.max(
+    0,
+    resolvedAmount -
+      (source === 'surplus'
+        ? usdToChf != null && usdToChf > 0
+          ? (deposit.alreadyDeposited ?? 0) / usdToChf
+          : (deposit.alreadyDeposited ?? 0)
+        : fixedAmountToUsd(deposit.alreadyDeposited ?? 0, deposit.currency, usdToChf)),
+  )
 
   return (
     <div
@@ -1817,7 +1885,7 @@ function DepositRow({
                   const net = scenarioTotals(incomeCostLines, s.id).netYearly
                   return (
                     <option key={s.id} value={s.id}>
-                      {s.name}
+                      {scenarioDisplayName(s)}
                       {net >= 0 ? ` · surplus CHF ${Math.round(net).toLocaleString()}` : ' · deficit'}
                     </option>
                   )
@@ -1848,7 +1916,7 @@ function DepositRow({
                 <span className="tabular-nums text-white/60">
                   {formatMoney(surplusPreview.surplusChf, 'CHF')}
                 </span>
-                /yr → deposit{' '}
+                /yr → plan{' '}
                 <span className="tabular-nums text-emerald-400/85">
                   {formatMoney(
                     toDisplay(resolvedAmount, displayCurrency, usdToChf),
@@ -1864,6 +1932,31 @@ function DepositRow({
                 Pick an Income/Cost scenario and % of yearly surplus (left over).
               </p>
             )}
+          </div>
+        )}
+
+        {!isOpening && (
+          <div className="mt-1.5 flex flex-wrap items-center gap-2">
+            <label className="text-[10px] text-white/40">Already deposited</label>
+            <input
+              className="input !w-28 !py-1 !text-xs tabular-nums"
+              type="text"
+              inputMode="decimal"
+              placeholder="0"
+              value={alreadyText}
+              onChange={(e) => setAlreadyText(e.target.value)}
+              onBlur={commitAlready}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') e.currentTarget.blur()
+              }}
+              title="How much of this year's plan is already in opening cash"
+            />
+            <span className="text-[10px] text-white/40">
+              Remaining{' '}
+              <span className="tabular-nums text-white/70">
+                {formatMoney(toDisplay(remainingUsd, displayCurrency, usdToChf), displayCurrency)}
+              </span>
+            </span>
           </div>
         )}
       </div>

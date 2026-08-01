@@ -37,12 +37,28 @@ export function yearlyFromMonthly(monthly: number): number {
   return monthly * 12
 }
 
-export function newScenario(name: string, sortOrder: number): CashflowScenario {
+export function newScenario(
+  name: string,
+  sortOrder: number,
+  year?: number,
+): CashflowScenario {
+  const y =
+    year != null && Number.isFinite(year)
+      ? Math.floor(year)
+      : new Date().getFullYear()
   return {
     id: crypto.randomUUID(),
     name: name.trim() || DEFAULT_SCENARIO_NAME,
     sortOrder,
+    year: y,
   }
+}
+
+/** Label for pickers: "2025 · Base". */
+export function scenarioDisplayName(s: CashflowScenario): string {
+  const y = Number.isFinite(s.year) ? s.year : new Date().getFullYear()
+  const n = s.name.trim() || DEFAULT_SCENARIO_NAME
+  return `${y} · ${n}`
 }
 
 export function newCashflowLine(
@@ -157,9 +173,15 @@ export function copyScenarioAsNew(
   lines: CashflowLine[],
   fromScenarioId: string,
   newName: string,
+  year?: number,
 ): { scenarios: CashflowScenario[]; lines: CashflowLine[]; newScenario: CashflowScenario } {
   const maxOrder = scenarios.reduce((m, s) => Math.max(m, s.sortOrder), -1)
-  const created = newScenario(newName, maxOrder + 1)
+  const source = scenarios.find((s) => s.id === fromScenarioId)
+  const y =
+    year != null && Number.isFinite(year)
+      ? Math.floor(year)
+      : (source?.year ?? new Date().getFullYear()) + 1
+  const created = newScenario(newName, maxOrder + 1, y)
   const clones = linesForScenario(lines, fromScenarioId).map((l) => ({
     ...l,
     id: crypto.randomUUID(),

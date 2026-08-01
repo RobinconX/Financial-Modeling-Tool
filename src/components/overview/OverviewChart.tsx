@@ -107,10 +107,20 @@ export function OverviewChart({
   const overPanelRef = useRef(false)
   const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
 
-  const active = useMemo(
-    () => series.filter((s) => s.enabled).sort((a, b) => a.sortOrder - b.sortOrder),
+  // List order (low sortOrder first = top of editor). Recharts paints first Bar at
+  // the stack bottom, so reverse when rendering bars so list-top = chart-top.
+  // Keep ALL series mounted in stack order — filtering by enabled remounts a Bar as the
+  // last child, which Recharts treats as the top of the stack regardless of sortOrder.
+  const sorted = useMemo(
+    () =>
+      [...series].sort(
+        (a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id),
+      ),
     [series],
   )
+  const active = useMemo(() => sorted.filter((s) => s.enabled), [sorted])
+  // Paint order: last in list (high sortOrder) first → bottom of stack
+  const stackOrder = useMemo(() => [...sorted].reverse(), [sorted])
 
   const rows = useMemo(
     () => buildOverviewChartRows({ startYear, endYear, series }, deps),
@@ -159,6 +169,7 @@ export function OverviewChart({
     const portfolios: HoverState['portfolios'] = []
     let total = 0
 
+    // Top of stack first (matches visual top of bar / list top)
     for (const s of active) {
       const value = Number(row[s.id]) || 0
       if (value === 0) continue
@@ -327,7 +338,7 @@ export function OverviewChart({
               cursor={{ fill: 'rgba(255,255,255,0.06)' }}
               isAnimationActive={false}
             />
-            {active.map((s) => (
+            {stackOrder.map((s) => (
               <Bar
                 key={s.id}
                 dataKey={s.id}
@@ -335,16 +346,21 @@ export function OverviewChart({
                 stackId="overview"
                 fill={colorById.get(s.id) ?? '#94a3b8'}
                 isAnimationActive={false}
+                // Disabled series stay mounted (0 height — no values in rows) so stack
+                // order is stable when re-enabled.
+                legendType={s.enabled ? 'rect' : 'none'}
               >
-                {rows.map((r) => (
-                  <Cell
-                    key={`${s.id}-${r.xKey}`}
-                    fill={colorById.get(s.id) ?? '#94a3b8'}
-                    fillOpacity={r.isNow ? 1 : r.kind === 'actual' ? 0.92 : 0.4}
-                    stroke={r.isNow ? 'rgba(255,255,255,0.45)' : undefined}
-                    strokeWidth={r.isNow ? 1.5 : 0}
-                  />
-                ))}
+                {s.enabled
+                  ? rows.map((r) => (
+                      <Cell
+                        key={`${s.id}-${r.xKey}`}
+                        fill={colorById.get(s.id) ?? '#94a3b8'}
+                        fillOpacity={r.isNow ? 1 : r.kind === 'actual' ? 0.92 : 0.4}
+                        stroke={r.isNow ? 'rgba(255,255,255,0.45)' : undefined}
+                        strokeWidth={r.isNow ? 1.5 : 0}
+                      />
+                    ))
+                  : null}
               </Bar>
             ))}
           </BarChart>

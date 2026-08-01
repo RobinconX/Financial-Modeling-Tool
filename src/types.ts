@@ -100,12 +100,14 @@ export type CashflowKind = 'income' | 'cost'
 export type CashflowCadence = 'recurring' | 'one-time'
 export type MoneyEditField = 'monthly' | 'yearly'
 
-/** Named budget scenario (not necessarily a calendar year). */
+/** Named budget scenario for a specific calendar year. */
 export type CashflowScenario = {
   id: string
   name: string
   /** Lower = earlier in the top bar */
   sortOrder: number
+  /** Calendar year this budget describes */
+  year: number
 }
 
 export type CashflowLine = {
@@ -161,7 +163,19 @@ export type SavingsState = {
 
 // --- Overview (net-worth stack config; display CHF) ---
 
-export type OverviewSeriesType = 'portfolio' | 'savings' | 'manual'
+export type OverviewSeriesType = 'portfolio' | 'savings' | 'manual' | 'incomeLeftover'
+
+/**
+ * Calendar year → Income/Cost scenario binding.
+ * Manual series also set `percent` of that year's available IC cash for this position;
+ * anything unclaimed becomes leftover cash.
+ */
+export type OverviewYearBinding = {
+  year: number
+  incomeCostScenarioId: string
+  /** type === 'manual': percent of available IC cash (0–100). Ignored on leftover. */
+  percent?: number
+}
 
 export type OverviewSeries = {
   id: string
@@ -171,18 +185,46 @@ export type OverviewSeries = {
   type: OverviewSeriesType
   /**
    * Optional custom stack color (#rrggbb). When unset, a shade is chosen by origin
-   * (portfolio greens / savings blues / manual amber–violet).
+   * (portfolio greens / savings blues / manual amber–violet / leftover pinks).
    */
   color?: string | null
   /** type === 'portfolio' */
   portfolioId?: string | null
   /** type === 'savings' */
   savingsAccountId?: string | null
-  /** type === 'manual' */
+  /**
+   * @deprecated Prefer yearBindings. Migrated on load for incomeLeftover.
+   */
+  incomeCostScenarioId?: string | null
+  /**
+   * type === 'incomeLeftover' | 'manual': map calendar year → Income/Cost scenario.
+   * Manual bindings include percent of available cash for this position.
+   * Leftover is permanent; net residual after all manual % claims.
+   */
+  yearBindings?: OverviewYearBinding[]
+  /**
+   * type === 'incomeLeftover': CHF added each year after the last year that has
+   * any IC binding (manual or leftover) on this Overview scenario.
+   * When there are no IC bindings at all, added every year from baseYear onward.
+   */
+  perpetualYearlyChf?: number
+  /**
+   * type === 'manual' | 'incomeLeftover': opening balance (CHF).
+   * For leftover: current unallocated cash pile (Now).
+   */
   baseChf?: number
+  /** type === 'manual' | 'incomeLeftover': optional annual compound % */
   annualRatePercent?: number
   /** Year when baseChf applies (defaults to year of creation) */
   baseYear?: number
+  /**
+   * @deprecated Manual funding is yearBindings + percent.
+   */
+  manualYearlyChf?: number
+  /**
+   * @deprecated Manual funding is yearBindings + percent.
+   */
+  manualYearlySource?: 'leftover' | 'fixed'
 }
 
 /** Named combination of asset series (+ year range) for the Overview chart. */
@@ -284,6 +326,12 @@ export type PortfolioDeposit = {
   surplusScenarioId?: string | null
   /** Percent of that scenario’s yearly surplus (e.g. 50 = half of left-over) */
   surplusPercent?: number
+  /**
+   * How much of this planned deposit is already in the portfolio (same units as
+   * `amount` for fixed; CHF for surplus before resolve). Current-year cash math
+   * only adds the remainder so opening cash is not double-counted.
+   */
+  alreadyDeposited?: number
 }
 
 /**

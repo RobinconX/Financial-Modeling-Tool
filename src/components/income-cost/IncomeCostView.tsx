@@ -22,8 +22,9 @@ type Props = {
     kind: CashflowKind,
     cadence?: CashflowCadence,
   ) => CashflowLine | null
-  addScenario: (name?: string) => CashflowScenario | null
+  addScenario: (name?: string, year?: number) => CashflowScenario | null
   renameScenario: (id: string, name: string) => boolean
+  setScenarioYear: (id: string, year: number) => boolean
   removeScenario: (id: string) => boolean
   reorderScenariosByIds: (orderedIds: string[]) => boolean
   copyScenario: (fromId: string, newName: string) => CashflowScenario | null
@@ -38,6 +39,7 @@ export function IncomeCostView({
   addLine,
   addScenario,
   renameScenario,
+  setScenarioYear,
   removeScenario,
   reorderScenariosByIds,
   copyScenario,
@@ -219,7 +221,7 @@ export function IncomeCostView({
                 ) : (
                   <button
                     type="button"
-                    className={`max-w-[10rem] truncate px-2 py-1 text-left text-sm font-medium ${
+                    className={`max-w-[12rem] truncate px-2 py-1 text-left text-sm font-medium ${
                       active ? 'text-white' : 'text-white/70'
                     }`}
                     onClick={() => setSelectedId(s.id)}
@@ -229,6 +231,8 @@ export function IncomeCostView({
                     }}
                     title="Drag to reorder · double-click to rename"
                   >
+                    <span className="tabular-nums text-white/45">{s.year}</span>
+                    <span className="mx-1 text-white/25">·</span>
                     {s.name}
                   </button>
                 )}
@@ -252,13 +256,30 @@ export function IncomeCostView({
             )
           })}
         </ul>
-        <p className="text-[10px] text-white/30">
-          Drag scenarios to reorder · double-click to rename · amounts in CHF
-        </p>
+        <div className="flex flex-wrap items-end gap-3">
+          <div>
+            <label className="label !mb-0.5 !text-[10px]">Year for “{selected.name}”</label>
+            <input
+              className="input !w-24 !py-1 !text-xs tabular-nums"
+              type="number"
+              min={1970}
+              max={2100}
+              value={selected.year}
+              onChange={(e) => {
+                const y = Math.floor(Number(e.target.value))
+                if (Number.isFinite(y)) setScenarioYear(selected.id, y)
+              }}
+              title="Calendar year this budget describes"
+            />
+          </div>
+          <p className="pb-1 text-[10px] text-white/30">
+            Drag scenarios to reorder · double-click to rename · amounts in CHF
+          </p>
+        </div>
       </div>
 
       <div className="card p-5">
-        <YearOverview title={selected.name} totals={totals} />
+        <YearOverview title={`${selected.year} · ${selected.name}`} totals={totals} />
       </div>
 
       <div className="grid gap-5 xl:grid-cols-2">
