@@ -21,6 +21,7 @@ import { PortfolioValueTable } from './PortfolioValueTable'
 import { PortfolioChart } from './PortfolioChart'
 import { PortfolioActualsEditor } from './PortfolioActualsEditor'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { InfoTip } from '../common/InfoTip'
 
 const CURRENCY_KEY = 'grok-lab-portfolio-currency'
 const SELECTED_PORTFOLIO_KEY = 'grok-lab-selected-portfolio'
@@ -381,7 +382,7 @@ export function PortfolioView({
   return (
     <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-3">
       {/* Top bar — z-index so portfolio/manage menus paint above the workspace panel */}
-      <div className="card relative z-40 flex flex-wrap items-center gap-3 overflow-visible px-3 py-2.5 sm:px-4">
+      <div className="relative z-40 flex flex-wrap items-center gap-3 border-b border-white/5 pb-3">
         <div className="relative z-50 min-w-0 flex-1" ref={pickerRef}>
           <label className="sr-only" htmlFor="portfolio-picker">
             Portfolio
@@ -389,7 +390,7 @@ export function PortfolioView({
           <button
             id="portfolio-picker"
             type="button"
-            className="flex w-full max-w-xl items-center gap-2 rounded-lg border border-white/15 bg-black/30 px-3 py-2 text-left hover:border-white/25"
+            className="flex w-full max-w-xl items-center gap-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-left hover:border-white/20"
             onClick={() => {
               setPickerOpen((o) => !o)
               setManageOpen(false)
@@ -578,28 +579,29 @@ export function PortfolioView({
                     })}
                   </ul>
                 )}
-                {portfolios.length > 1 && (
-                  <p className="mt-2 text-[10px] text-white/30">Drag ⠿ or use ▲▼ to reorder</p>
-                )}
               </div>
             )}
           </div>
         </div>
 
         <div className="ml-auto flex flex-wrap items-center gap-2">
-          <div className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5">
+          <div
+            className="inline-flex gap-1 border-b border-white/10"
+            role="group"
+            aria-label="Display currency"
+          >
             {(['USD', 'CHF'] as const).map((c) => (
               <button
                 key={c}
                 type="button"
                 onClick={() => setCurrency(c)}
-                className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
                   displayCurrency === c
-                    ? 'bg-white text-black shadow'
-                    : 'text-white/60 hover:text-white'
+                    ? 'border-emerald-400 text-white'
+                    : 'border-transparent text-white/50 hover:text-white/80'
                 }`}
               >
-                {c === 'USD' ? 'USD ($)' : 'CHF'}
+                {c === 'USD' ? 'USD' : 'CHF'}
               </button>
             ))}
           </div>
@@ -626,14 +628,14 @@ export function PortfolioView({
       )}
 
       {!selected ? (
-        <div className="card flex flex-1 items-center justify-center p-8 text-sm text-white/40">
+        <div className="flex flex-1 items-center justify-center p-8 text-sm text-white/40">
           Create or select a portfolio to get started.
         </div>
       ) : (
         <div className="relative z-0 flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
           {/* Side / top tabs */}
           <nav
-            className="flex shrink-0 gap-1 overflow-x-auto md:w-28 md:flex-col md:overflow-visible"
+            className="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 md:w-28 md:flex-col md:overflow-visible md:border-b-0 md:border-r md:border-white/10 md:pr-2"
             aria-label="Portfolio sections"
           >
             {TABS.map((t) => {
@@ -645,10 +647,10 @@ export function PortfolioView({
                   role="tab"
                   aria-selected={active}
                   onClick={() => setPanel(t.id)}
-                  className={`rounded-lg px-3 py-2 text-left text-sm font-medium transition md:px-3 ${
+                  className={`-mb-px border-b-2 px-3 py-2 text-left text-sm font-medium transition md:mb-0 md:border-b-0 md:border-l-2 md:pl-3 ${
                     active
-                      ? 'bg-emerald-500/15 text-emerald-200 ring-1 ring-emerald-500/40'
-                      : 'text-white/55 hover:bg-white/5 hover:text-white/85'
+                      ? 'border-emerald-400 text-white md:border-emerald-400'
+                      : 'border-transparent text-white/50 hover:text-white/80'
                   }`}
                 >
                   <span className="md:hidden">{t.short}</span>
@@ -659,32 +661,29 @@ export function PortfolioView({
           </nav>
 
           {/* Active panel */}
-          <div className="card min-h-0 min-w-0 flex-1 overflow-y-auto p-4 sm:p-5">
+          <div className="panel min-h-0 min-w-0 flex-1 overflow-y-auto">
             {panel === 'chart' && grid && (
               <div className="space-y-5">
                 <div className="flex flex-wrap items-end justify-between gap-3">
-                  <div>
-                    <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
-                      Portfolio value
-                    </h3>
-                    <p className="mt-0.5 text-[11px] text-white/35">
-                      Order: past → <span className="text-white/55">Now</span> (live) → current /
-                      future. Past years use Actuals (last month of year) in portfolio value mode.
-                      Extend <span className="text-white/50">To</span> for growth.
-                    </p>
+                  <div className="flex items-center gap-1.5">
+                    <h3 className="section-title">Portfolio value</h3>
+                    <InfoTip label="About portfolio chart">
+                      Timeline: past → Now (live) → future. Past years use Actuals (last month of
+                      year) in portfolio value mode. Extend To for growth projections.
+                    </InfoTip>
                   </div>
                   <div className="flex flex-wrap items-center gap-2">
                     <div
-                      className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5"
+                      className="inline-flex gap-1 border-b border-white/10"
                       role="group"
                       aria-label="Chart display mode"
                     >
                       <button
                         type="button"
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                        className={`-mb-px border-b-2 px-2.5 py-1 text-[11px] font-medium transition ${
                           chartMode === 'stacked'
-                            ? 'bg-white text-black shadow'
-                            : 'text-white/55 hover:text-white'
+                            ? 'border-emerald-400 text-white'
+                            : 'border-transparent text-white/50 hover:text-white/80'
                         }`}
                         onClick={() => setChartMode('stacked')}
                       >
@@ -692,10 +691,10 @@ export function PortfolioView({
                       </button>
                       <button
                         type="button"
-                        className={`rounded-md px-2.5 py-1 text-[11px] font-medium transition ${
+                        className={`-mb-px border-b-2 px-2.5 py-1 text-[11px] font-medium transition ${
                           chartMode === 'total'
-                            ? 'bg-white text-black shadow'
-                            : 'text-white/55 hover:text-white'
+                            ? 'border-emerald-400 text-white'
+                            : 'border-transparent text-white/50 hover:text-white/80'
                         }`}
                         onClick={() => setChartMode('total')}
                       >
@@ -766,10 +765,8 @@ export function PortfolioView({
                     toYear={periodTo}
                   />
                 </FullscreenChart>
-                <div>
-                  <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-                    Value by year
-                  </h3>
+                <div className="border-t border-white/[0.06] pt-4">
+                  <h3 className="section-title mb-2">Value by year</h3>
                   <PortfolioValueTable
                     grid={grid}
                     portfolio={resolvedSelected ?? selected}

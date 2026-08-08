@@ -30,7 +30,6 @@ export function EasyInputs({
   currency = 'USD',
   currentMarketCap,
   sharesOutstanding,
-  currentPrice,
 }: Props) {
   const currentYear = new Date().getFullYear()
   const sorted = sortEasyProjections(rows)
@@ -74,24 +73,16 @@ export function EasyInputs({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-white/50">
-        Enter target years and projected <strong className="font-medium text-white/70">market cap</strong>{' '}
-        or <strong className="font-medium text-white/70">share price</strong>. The other is calculated
-        from shares outstanding
-        {canConvert
-          ? ` (${sharesOutstanding!.toLocaleString(undefined, { maximumFractionDigits: 0 })})`
-          : ''}
-        {currentPrice != null && currentPrice > 0
-          ? ` · live price ${formatPrice(currentPrice, currency)}`
-          : ''}
-        . ROI uses market cap vs today.
-      </p>
       {!canConvert && (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+        <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
           Share price conversion needs shares outstanding (fetch a ticker with mcap/price, or set a
           market cap override so shares ≈ mcap ÷ price).
         </p>
       )}
+
+      {sorted.length === 0 ? (
+        <p className="py-2 text-center text-xs text-white/40">No easy targets yet.</p>
+      ) : null}
 
       {sorted.map((row, index) => {
         const horizon =
@@ -114,7 +105,7 @@ export function EasyInputs({
         return (
           <div
             key={row.id}
-            className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-3"
+            className="space-y-3 rounded-lg border border-white/[0.06] bg-white/[0.02] p-3"
           >
             <div className="flex flex-wrap items-center justify-between gap-2">
               <div className="flex flex-wrap items-baseline gap-x-2">
@@ -137,15 +128,14 @@ export function EasyInputs({
                   </span>
                 )}
               </div>
-              {rows.length > 1 && (
-                <button
-                  type="button"
-                  className="btn-ghost !py-1 !text-xs"
-                  onClick={() => removeRow(row.id)}
-                >
-                  Remove
-                </button>
-              )}
+              <button
+                type="button"
+                className="btn-ghost !py-1 !text-xs text-white/45 hover:text-red-300"
+                onClick={() => removeRow(row.id)}
+                title="Remove this target"
+              >
+                Remove
+              </button>
             </div>
 
             <div className="grid gap-3 sm:grid-cols-3">
@@ -170,7 +160,7 @@ export function EasyInputs({
                 value={row.projectedMarketCap}
                 onChange={(projectedMarketCap) => updateRow(row.id, { projectedMarketCap })}
                 placeholder="e.g. 5T"
-                currency="USD"
+                currency={currency}
                 hint={
                   row.projectedMarketCap != null
                     ? `= ${formatMoney(row.projectedMarketCap, 'USD')}`
@@ -182,7 +172,7 @@ export function EasyInputs({
                 value={sharePx}
                 onChange={(px) => setSharePrice(row.id, px)}
                 placeholder="e.g. 450"
-                currency="USD"
+                currency={currency}
                 disabled={!canConvert}
                 commitOnBlur
                 displayDecimals={4}

@@ -13,6 +13,7 @@ import {
 } from '../../lib/incomeCost'
 import { formatMoney, parseMoney } from '../../lib/format'
 import { formatInputNumber } from '../common/MoneyInput'
+import { InfoTip } from '../common/InfoTip'
 
 type Props = {
   kind: CashflowKind
@@ -68,10 +69,15 @@ export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onA
     return sortDir === 'asc' ? ' ↑' : ' ↓'
   }
 
+  const edge =
+    kind === 'cost'
+      ? 'border-l-2 border-l-amber-400/50'
+      : 'border-l-2 border-l-emerald-400/50'
+
   return (
-    <div className="card space-y-3 p-4">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <h3 className={`text-sm font-semibold uppercase tracking-wider ${accent}`}>{title}</h3>
+    <div className={`panel space-y-4 ${edge}`}>
+      <div className="section-header">
+        <h3 className={`text-sm font-semibold tracking-wide ${accent}`}>{title}</h3>
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"
@@ -91,7 +97,7 @@ export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onA
       </div>
 
       <Section
-        label="Recurring (monthly / yearly)"
+        label="Recurring"
         monthColumnLabel={monthColumnLabel}
         monthHint={
           isIncome
@@ -105,21 +111,23 @@ export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onA
         onChange={onChange}
         onRemove={onRemove}
       />
-      <Section
-        label="One-time (this scenario only)"
-        monthColumnLabel={monthColumnLabel}
-        monthHint={
-          isIncome
-            ? 'Pick the month the full amount is received. Empty = annual total only (not on monthly path).'
-            : 'Pick the month the full amount is paid. Empty = annual total only (not on monthly path).'
-        }
-        rows={oneTime}
-        showMonthly={false}
-        sortMark={sortMark}
-        onToggleSort={toggleSort}
-        onChange={onChange}
-        onRemove={onRemove}
-      />
+      <div className="border-t border-white/[0.06] pt-4">
+        <Section
+          label="One-time"
+          monthColumnLabel={monthColumnLabel}
+          monthHint={
+            isIncome
+              ? 'Pick the month the full amount is received. Empty = annual total only (not on monthly path).'
+              : 'Pick the month the full amount is paid. Empty = annual total only (not on monthly path).'
+          }
+          rows={oneTime}
+          showMonthly={false}
+          sortMark={sortMark}
+          onToggleSort={toggleSort}
+          onChange={onChange}
+          onRemove={onRemove}
+        />
+      </div>
     </div>
   )
 }
@@ -147,15 +155,18 @@ function Section({
 }) {
   return (
     <div className="space-y-1.5">
-      <p className="text-[11px] font-medium uppercase tracking-wider text-white/40">{label}</p>
+      <div className="flex items-center gap-1.5">
+        <p className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</p>
+        <InfoTip label={`About ${label}`}>{monthHint}</InfoTip>
+      </div>
       {rows.length === 0 ? (
         <p className="text-xs text-white/35">None yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-lg border border-white/10">
-          <table className="w-full min-w-[400px] text-left text-xs">
-            <thead className="bg-white/5 text-[10px] uppercase tracking-wider text-white/45">
-              <tr>
-                <th className="px-1.5 py-1.5">
+        <div className="table-shell">
+          <table className="min-w-[400px] text-xs">
+            <thead className="text-[10px] uppercase tracking-wider text-white/45">
+              <tr className="border-b border-white/10">
+                <th className="px-1.5 py-1.5 font-medium">
                   <button
                     type="button"
                     className="font-medium hover:text-white"
@@ -164,11 +175,11 @@ function Section({
                     Position{sortMark('name')}
                   </button>
                 </th>
-                <th className="px-1.5 py-1.5" title={monthHint}>
+                <th className="px-1.5 py-1.5 font-medium" title={monthHint}>
                   {monthColumnLabel}
                 </th>
                 {showMonthly && (
-                  <th className="px-1.5 py-1.5 text-right">
+                  <th className="px-1.5 py-1.5 text-right font-medium">
                     <button
                       type="button"
                       className="font-medium hover:text-white"
@@ -178,7 +189,7 @@ function Section({
                     </button>
                   </th>
                 )}
-                <th className="px-1.5 py-1.5 text-right">
+                <th className="px-1.5 py-1.5 text-right font-medium">
                   <button
                     type="button"
                     className="font-medium hover:text-white"
@@ -203,9 +214,6 @@ function Section({
             </tbody>
           </table>
         </div>
-      )}
-      {rows.length > 0 && (
-        <p className="text-[10px] leading-snug text-white/30">{monthHint}</p>
       )}
     </div>
   )

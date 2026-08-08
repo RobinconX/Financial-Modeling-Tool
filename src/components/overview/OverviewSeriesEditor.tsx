@@ -16,6 +16,7 @@ import {
   shadesForType,
   sourceLabel,
 } from '../../lib/overview'
+import { InfoTip } from '../common/InfoTip'
 import { NumberInput } from '../common/MoneyInput'
 
 type Props = {
@@ -527,15 +528,13 @@ export function OverviewSeriesEditor({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
-            Asset series
-          </h3>
-          <p className="mt-0.5 text-xs text-white/35">
+      <div className="section-header">
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title text-violet-300/90">Asset series</h3>
+          <InfoTip label="About asset series">
             Drag groups (⋮⋮) to set stack order; expand (▸) to edit. Leftover is permanent; manuals
             take year → IC → %; remainder goes to leftover.
-          </p>
+          </InfoTip>
         </div>
         <div className="flex flex-wrap gap-1.5">
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => onAdd('portfolio')}>
@@ -548,7 +547,7 @@ export function OverviewSeriesEditor({
       </div>
 
       {displayGroups.length === 0 ? (
-        <div className="rounded-xl border border-dashed border-white/10 px-4 py-8 text-center text-sm text-white/40">
+        <div className="px-4 py-8 text-center text-sm text-white/40">
           Add a portfolio or manual series to build the net-worth chart.
         </div>
       ) : (

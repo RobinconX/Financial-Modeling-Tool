@@ -7,6 +7,7 @@ import type {
   PortfolioDeposit,
   PortfolioDepositSource,
   PortfolioHolding,
+  PortfolioHoldingSort,
   SavedPortfolio,
   SavedScenario,
   ValuationBasis,
@@ -33,6 +34,7 @@ import {
   withResolvedDepositAmounts,
 } from '../../lib/portfolio'
 import { scenarioDisplayName, scenarioTotals } from '../../lib/incomeCost'
+import { InfoTip } from '../common/InfoTip'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
 import { amountToDisplay, fixedAmountToUsd, fromDisplay, toDisplay } from '../../lib/fx'
 import { HoldingActionsEditor } from './PortfolioActionsEditor'
@@ -115,13 +117,20 @@ export function PortfolioHoldingsEditor({
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
   /**
    * Display order only — does not rewrite portfolio.holdings storage order.
-   * 'symbol' = A–Z, 'value' = high→low by current $ value.
+   * Persisted per portfolio as holdingSort.
    */
-  const [holdingSort, setHoldingSort] = useState<'manual' | 'symbol' | 'value'>('manual')
+  const holdingSort: PortfolioHoldingSort =
+    portfolio.holdingSort === 'symbol' || portfolio.holdingSort === 'value'
+      ? portfolio.holdingSort
+      : 'manual'
   const [showRenameHint, setShowRenameHint] = useState(false)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const knownHoldingIdsRef = useRef<Set<string> | null>(null)
   const lastPortfolioIdRef = useRef(portfolio.id)
+
+  function setHoldingSort(next: PortfolioHoldingSort) {
+    onChange({ holdingSort: next })
+  }
 
   useEffect(() => {
     if (!autoFocusName) return
@@ -508,12 +517,10 @@ export function PortfolioHoldingsEditor({
   }
 
   return (
-    <div className="space-y-4">
+    <div className="space-y-5">
       {showConfig && (
-        <div>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-            Configuration
-          </h3>
+        <div className="space-y-3">
+          <h3 className="section-title">Configuration</h3>
           <div className="grid gap-3 sm:grid-cols-2">
             <div>
               <label className="label">Portfolio name</label>
@@ -537,19 +544,23 @@ export function PortfolioHoldingsEditor({
             <div>
               <label className="label">Display currency</label>
               <div className="flex flex-wrap items-center gap-2">
-                <div className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5">
+                <div
+                  className="inline-flex gap-1 border-b border-white/10"
+                  role="group"
+                  aria-label="Display currency"
+                >
                   {(['USD', 'CHF'] as const).map((c) => (
                     <button
                       key={c}
                       type="button"
                       onClick={() => onDisplayCurrencyChange?.(c)}
-                      className={`rounded-md px-3 py-1.5 text-xs font-medium transition ${
+                      className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
                         displayCurrency === c
-                          ? 'bg-white text-black shadow'
-                          : 'text-white/60 hover:text-white'
+                          ? 'border-emerald-400 text-white'
+                          : 'border-transparent text-white/50 hover:text-white/80'
                       }`}
                     >
-                      {c === 'USD' ? 'USD ($)' : 'CHF'}
+                      {c === 'USD' ? 'USD' : 'CHF'}
                     </button>
                   ))}
                 </div>
@@ -578,15 +589,15 @@ export function PortfolioHoldingsEditor({
       )}
 
       {showCash && (
-      <div className="space-y-3 rounded-xl border border-white/10 bg-black/20 p-3">
+      <div className="space-y-3">
         <div className="flex flex-wrap items-center justify-between gap-2">
-          <div>
-            <h3 className="text-sm font-semibold text-white/85">Cash & deposits</h3>
-            <p className="text-[11px] text-white/40">
-              First row is current cash (opening). Amounts are stored in the currency you enter
-              (no FX drift if you stay in CHF). Deposits can be fixed or % of Income/Cost surplus.
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title text-sky-300/90">Cash & deposits</h3>
+            <InfoTip label="About cash and deposits">
+              First row is current cash (opening). Amounts are stored in the currency you enter (no
+              FX drift if you stay in CHF). Deposits can be fixed or % of Income/Cost surplus.
               Optionally repeat a yearly amount after the last explicit deposit year.
-            </p>
+            </InfoTip>
           </div>
           <div className="flex flex-wrap gap-1">
             {otherPortfolios.length > 0 && onUpdateOtherPortfolio && (
@@ -698,16 +709,16 @@ export function PortfolioHoldingsEditor({
       )}
 
       {showGrowth && (
-        <div className="space-y-3 rounded-xl border border-violet-500/25 bg-violet-500/[0.06] p-4">
-          <div>
-            <h3 className="text-sm font-semibold text-white/85">
+        <div className="space-y-3">
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title text-violet-300/90">
               Perpetual growth after last projection
             </h3>
-            <p className="mt-1 text-[11px] text-white/40">
+            <InfoTip label="About perpetual growth">
               Compounds the full portfolio after the last year with specific inputs (projections,
-              deposits, actions). Leave empty or 0 to turn off. Use the Chart tab period{' '}
-              <span className="text-white/55">To</span> year to see growth bars.
-            </p>
+              deposits, actions). Leave empty or 0 to turn off. Use the Chart tab period To year to
+              see growth bars.
+            </InfoTip>
           </div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative w-28">
@@ -746,11 +757,11 @@ export function PortfolioHoldingsEditor({
       <>
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">Holdings</h3>
+          <h3 className="section-title text-amber-300/90">Holdings</h3>
           {portfolio.holdings.length > 0 && (
-            <div className="flex flex-wrap items-center gap-1">
+            <div className="flex flex-wrap items-center gap-2">
               <div
-                className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5"
+                className="inline-flex gap-0.5"
                 role="group"
                 aria-label="Sort holdings"
               >
@@ -764,10 +775,10 @@ export function PortfolioHoldingsEditor({
                   <button
                     key={opt.id}
                     type="button"
-                    className={`rounded-md px-2 py-0.5 text-[11px] font-medium transition ${
+                    className={`rounded px-2 py-0.5 text-[11px] font-medium transition ${
                       holdingSort === opt.id
-                        ? 'bg-white text-black shadow'
-                        : 'text-white/55 hover:text-white'
+                        ? 'text-white'
+                        : 'text-white/40 hover:text-white/70'
                     }`}
                     onClick={() => setHoldingSort(opt.id)}
                     aria-pressed={holdingSort === opt.id}
@@ -776,19 +787,22 @@ export function PortfolioHoldingsEditor({
                   </button>
                 ))}
               </div>
+              <span className="text-white/15" aria-hidden>
+                |
+              </span>
               <button
                 type="button"
-                className="btn-ghost !px-2 !py-0.5 !text-[11px]"
+                className="text-[11px] text-white/40 hover:text-white/70"
                 onClick={collapseAll}
               >
-                Collapse all
+                Collapse
               </button>
               <button
                 type="button"
-                className="btn-ghost !px-2 !py-0.5 !text-[11px]"
+                className="text-[11px] text-white/40 hover:text-white/70"
                 onClick={expandAll}
               >
-                Expand all
+                Expand
               </button>
             </div>
           )}
@@ -854,14 +868,13 @@ export function PortfolioHoldingsEditor({
         </p>
       )}
 
-      {scenarios.length === 0 && (
-        <p className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2 text-xs text-white/45">
-          No saved stock projections yet — you can still add manual / option positions. Save
-          scenarios from the Analyzer to link equities.
+      {scenarios.length === 0 && showPositions && (
+        <p className="text-xs text-white/45">
+          No saved stock projections yet — you can still add manual / option positions.
         </p>
       )}
 
-      <div className="space-y-3" key={`holdings-${holdingSort}`}>
+      <div className="divide-y divide-white/[0.06]" key={`holdings-${holdingSort}`}>
         {sortedHoldings.map((h) => {
           const symbolScenarios = scenariosForSymbol(h.symbol)
           const linked =
@@ -886,23 +899,16 @@ export function PortfolioHoldingsEditor({
           const displayName = holdingDisplayName(h)
 
           return (
-            <div
-              key={h.id}
-              className={`rounded-xl border transition-colors ${
-                h.manualOnly
-                  ? 'border-amber-500/25 bg-amber-500/[0.04]'
-                  : 'border-white/10 bg-black/20'
-              }`}
-            >
-              <div className="flex items-start gap-2 p-3">
+            <div key={h.id} className="py-2 first:pt-0 last:pb-0">
+              <div className="flex items-start gap-2">
                 <button
                   type="button"
                   onClick={() => toggleExpand(h.id)}
-                  className="flex min-w-0 flex-1 items-start gap-2 rounded-lg text-left transition hover:bg-white/[0.03] -m-1 p-1"
+                  className="flex min-w-0 flex-1 items-start gap-2 rounded-lg py-1 text-left transition hover:bg-white/[0.03]"
                   aria-expanded={isOpen}
                 >
                   <span
-                    className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-xs text-white/70 transition-transform ${
+                    className={`mt-0.5 inline-flex h-5 w-5 shrink-0 items-center justify-center text-[10px] text-white/40 transition-transform ${
                       isOpen ? 'rotate-90' : ''
                     }`}
                     aria-hidden
@@ -957,7 +963,7 @@ export function PortfolioHoldingsEditor({
                 </button>
                 <button
                   type="button"
-                  className="btn-ghost shrink-0 !py-1 !text-xs text-red-300/80"
+                  className="shrink-0 px-1.5 py-1 text-xs text-white/35 hover:text-red-300"
                   onClick={() => removeHolding(h.id)}
                 >
                   Remove
@@ -965,14 +971,17 @@ export function PortfolioHoldingsEditor({
               </div>
 
               {isOpen && (
-                <div className="space-y-3 border-t border-white/5 px-3 pb-3 pt-3">
+                <div className="space-y-3 pb-2 pl-7 pt-2">
                   {h.manualOnly ? (
                     <>
-                      <p className="text-[11px] text-amber-200/70">
-                        Manual position — valued with unit mark × quantity, or absolute $ by year.
-                        Negative qty/mark/totals allowed (shorts, liabilities). Not linked to stock
-                        projections.
-                      </p>
+                      <div className="flex items-center gap-1.5">
+                        <span className="text-[11px] text-amber-200/70">Manual position</span>
+                        <InfoTip label="About manual positions">
+                          Valued with unit mark × quantity, or absolute $ by year. Negative
+                          qty/mark/totals allowed (shorts, liabilities). Not linked to stock
+                          projections.
+                        </InfoTip>
+                      </div>
                       <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <div className="sm:col-span-2 lg:col-span-1">
                           <label className="label">Name / label</label>

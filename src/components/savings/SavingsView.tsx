@@ -1,6 +1,7 @@
 import { useMemo, useState } from 'react'
 import { useSavings } from '../../hooks/useSavings'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { InfoTip } from '../common/InfoTip'
 import { SavingsActualsEditor } from './SavingsActualsEditor'
 import { SavingsChart } from './SavingsChart'
 import { SavingsProjectionTable } from './SavingsProjectionTable'
@@ -8,22 +9,10 @@ import { SavingsTable } from './SavingsTable'
 
 type SubTab = 'inputs' | 'actuals' | 'projection'
 
-const SUB_TABS: { id: SubTab; label: string; hint: string }[] = [
-  {
-    id: 'inputs',
-    label: 'Inputs',
-    hint: 'Accounts, current balances, contributions, and rates',
-  },
-  {
-    id: 'actuals',
-    label: 'Actuals',
-    hint: 'Year-end balances and current amount for each account',
-  },
-  {
-    id: 'projection',
-    label: 'Projection',
-    hint: 'Progression table and stacked chart',
-  },
+const SUB_TABS: { id: SubTab; label: string }[] = [
+  { id: 'inputs', label: 'Inputs' },
+  { id: 'actuals', label: 'Actuals' },
+  { id: 'projection', label: 'Projection' },
 ]
 
 export function SavingsView() {
@@ -53,7 +42,11 @@ export function SavingsView() {
         </div>
       ) : null}
 
-      <div className="flex flex-wrap items-center gap-1 rounded-xl border border-white/10 bg-white/[0.03] p-1">
+      <div
+        className="inline-flex gap-1 border-b border-white/10"
+        role="group"
+        aria-label="Savings view"
+      >
         {SUB_TABS.map((t) => {
           const active = subTab === t.id
           return (
@@ -61,30 +54,29 @@ export function SavingsView() {
               key={t.id}
               type="button"
               onClick={() => setSubTab(t.id)}
-              className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+              className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
                 active
-                  ? 'bg-white text-black shadow'
-                  : 'text-white/60 hover:bg-white/5 hover:text-white'
+                  ? 'border-emerald-400 text-white'
+                  : 'border-transparent text-white/50 hover:text-white/80'
               }`}
             >
               {t.label}
             </button>
           )
         })}
-        <span className="ml-2 hidden text-xs text-white/35 sm:inline">
-          {SUB_TABS.find((t) => t.id === subTab)?.hint}
-        </span>
       </div>
 
       {subTab === 'inputs' && (
-        <div className="card p-5">
-          <div className="mb-4">
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
-              Accounts & compounding
-            </h3>
-            <p className="mt-0.5 text-xs text-white/35">
-              Current end-of-month balances, contribution cadence, and annual rate (CHF).
-            </p>
+        <div className="panel space-y-3">
+          <div className="section-header">
+            <div className="flex items-center gap-1.5">
+              <h3 className="section-title text-sky-300/90">Accounts & compounding</h3>
+              <InfoTip label="About savings inputs">
+                Current end-of-month balances, contribution cadence, and annual rate (CHF).
+                Compounding is always yearly (December → January). Year-end history is on Actuals;
+                forward path on Projection.
+              </InfoTip>
+            </div>
           </div>
           <SavingsTable
             accounts={accounts}
@@ -102,22 +94,22 @@ export function SavingsView() {
       )}
 
       {subTab === 'actuals' && (
-        <div className="card p-5">
+        <div className="panel space-y-3">
           <SavingsActualsEditor accounts={accounts} asOf={asOf} onActual={setActual} />
         </div>
       )}
 
       {subTab === 'projection' && (
-        <>
-          <div className="card p-5">
-            <div className="mb-4">
-              <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
-                Balance progression
-              </h3>
-              <p className="mt-0.5 text-xs text-white/35">
-                Review past actuals and forward projections. Year-end and current balances are on
-                the Actuals tab.
-              </p>
+        <div className="space-y-5">
+          <div className="panel space-y-3">
+            <div className="flex items-center gap-1.5">
+              <h3 className="section-title">Balance progression</h3>
+              <InfoTip label="About balance progression">
+                Past columns are year-end (December). Now is the current month; later columns are
+                projected. Prefer Actuals for bulk year-end entry. Compounding applies only
+                December → January; contributions land when paid (yearly contribs in January after
+                interest).
+              </InfoTip>
             </div>
             <SavingsProjectionTable
               accounts={accounts}
@@ -128,29 +120,28 @@ export function SavingsView() {
             />
           </div>
 
-          <div className="card p-5">
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-              All accounts · stacked
+          <div className="panel space-y-3">
+            <h3 className="section-title">
+              All accounts
+              <span className="ml-2 font-normal text-white/40">· stacked</span>
             </h3>
             <FullscreenChart title="Savings · all accounts">
               <SavingsChart accounts={accounts} asOf={asOf} />
             </FullscreenChart>
-            <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-white/40">
+            <div className="flex flex-wrap gap-3 text-[11px] text-white/40">
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-sm bg-emerald-400/80" /> Year-end actual
               </span>
               <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-sm ring-1 ring-white/50 bg-sky-400/80" /> Now (live)
+                <span className="h-2 w-2 rounded-sm bg-sky-400/80 ring-1 ring-white/50" /> Now
+                (live)
               </span>
               <span className="inline-flex items-center gap-1.5">
                 <span className="h-2 w-2 rounded-sm bg-white/25" /> Projected
               </span>
-              <span className="text-white/30">
-                Timeline: past years → Now → forward · Expand for full view
-              </span>
             </div>
           </div>
-        </>
+        </div>
       )}
     </div>
   )

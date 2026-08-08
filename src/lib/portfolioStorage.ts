@@ -209,6 +209,13 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
       ? raw.actualsCurrency
       : undefined
 
+  const holdingSort =
+    raw.holdingSort === 'manual' ||
+    raw.holdingSort === 'symbol' ||
+    raw.holdingSort === 'value'
+      ? raw.holdingSort
+      : undefined
+
   return normalizePortfolioCashModel({
     id,
     name,
@@ -218,6 +225,7 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     perpetualGrowthPercent,
     actions,
     holdings,
+    holdingSort,
     actuals,
     actualsCurrency,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,

@@ -58,10 +58,10 @@ export function SavingsTable({
         </div>
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-white/10">
-        <table className="w-full min-w-[640px] border-collapse text-left text-xs">
+      <div className="table-shell">
+        <table className="min-w-[640px] border-collapse text-xs">
           <thead>
-            <tr className="border-b border-white/10 bg-white/[0.03] text-[11px] uppercase tracking-wide text-white/40">
+            <tr className="border-b border-white/10 text-[11px] uppercase tracking-wide text-white/40">
               <th className="px-2 py-2 font-medium">Account</th>
               <th className="px-2 py-2 font-medium tabular-nums text-emerald-400/70">
                 Amount (now)
@@ -212,7 +212,7 @@ export function SavingsTable({
           </tbody>
           {accounts.length > 0 ? (
             <tfoot>
-              <tr className="border-t border-white/10 bg-white/[0.03] text-xs font-medium">
+              <tr className="border-t border-white/10 text-xs font-medium">
                 <td className="px-2 py-2 text-white/60">Total</td>
                 <td className="px-2 py-2 tabular-nums text-emerald-400/90">
                   {formatMoney(total, SAVINGS_CURRENCY)}
@@ -223,11 +223,6 @@ export function SavingsTable({
           ) : null}
         </table>
       </div>
-      <p className="text-[11px] text-white/35">
-        Amount is end-of-month balance (CHF). Contributions can be monthly or yearly;{' '}
-        <span className="text-white/55">compounding is always yearly</span> (applied December →
-        January). Year-end history is on the Actuals tab; projections on Projection.
-      </p>
     </div>
   )
 }

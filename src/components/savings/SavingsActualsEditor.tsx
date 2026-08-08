@@ -9,6 +9,7 @@ import {
   SAVINGS_CURRENCY,
 } from '../../lib/savings'
 import type { SavingsAccount } from '../../types'
+import { InfoTip } from '../common/InfoTip'
 
 type Props = {
   accounts: SavingsAccount[]
@@ -117,7 +118,7 @@ export function SavingsActualsEditor({
 
   if (accounts.length === 0) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
+      <div className="flex h-40 items-center justify-center text-sm text-white/40">
         Add accounts on the Inputs tab to enter actuals
       </div>
     )
@@ -125,13 +126,17 @@ export function SavingsActualsEditor({
 
   return (
     <div className="space-y-4">
-      <div>
-        <h3 className="text-sm font-semibold text-white/85">Yearly actuals</h3>
-        <p className="mt-1 text-[11px] text-white/40">
-          Enter <span className="text-white/55">year-end</span> balances (December) for past years,
-          plus the <span className="text-white/55">current</span> end-of-month balance. Amounts in{' '}
-          {SAVINGS_CURRENCY}; they feed the Projection chart and table.
-        </p>
+      <div className="section-header">
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title text-emerald-300/90">Yearly actuals</h3>
+          <InfoTip label="About yearly actuals">
+            Enter year-end balances (December) for past years, plus the current end-of-month
+            balance. Amounts in {SAVINGS_CURRENCY}; they feed the Projection chart and table.
+          </InfoTip>
+        </div>
+        <div className="text-xs text-white/40">
+          {pastYears.length} past year{pastYears.length === 1 ? '' : 's'} · {SAVINGS_CURRENCY}
+        </div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">
@@ -155,16 +160,13 @@ export function SavingsActualsEditor({
             </button>
           </div>
         </div>
-        <div className="pb-0.5 text-xs text-white/40">
-          {pastYears.length} past year{pastYears.length === 1 ? '' : 's'} · {SAVINGS_CURRENCY}
-        </div>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-white/5 text-[11px] uppercase tracking-wider text-white/45">
-            <tr>
-              <th className="sticky left-0 z-10 bg-[#121820] px-3 py-2 font-medium">Period</th>
+      <div className="table-shell">
+        <table className="min-w-[640px] text-sm">
+          <thead className="text-[11px] uppercase tracking-wider text-white/45">
+            <tr className="border-b border-white/10">
+              <th className="sticky left-0 z-10 bg-[#0b0f14] px-3 py-2 font-medium">Period</th>
               {accounts.map((a) => (
                 <th key={a.id} className="px-3 py-2 font-medium text-white/70">
                   {a.name.trim() || 'Untitled'}
@@ -193,7 +195,7 @@ export function SavingsActualsEditor({
                     isNow ? 'bg-emerald-500/[0.06]' : ''
                   }`}
                 >
-                  <td className="sticky left-0 z-10 bg-[#0f141b] px-3 py-1.5 font-medium text-white/80">
+                  <td className="sticky left-0 z-10 bg-[#0b0f14] px-3 py-1.5 font-medium text-white/80">
                     {row.label}
                     {isNow && (
                       <span className="ml-1.5 text-[10px] font-normal text-emerald-400/80">

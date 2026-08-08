@@ -114,20 +114,14 @@ export function PortfolioValueTable({
 
   return (
     <div className="space-y-2">
-      <p className="text-xs text-white/40">
-        <span className="text-white/55">Now</span> = live holdings + opening cash. Later columns are
-        projections (cash includes deposits − buys + sells). Empty equity cells mean no projection
-        that year. Values in {displayCurrency}.
-      </p>
       {hasNegativeCash && (
-        <p className="rounded-lg border border-amber-500/40 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
-          Cash is negative in one or more years — planned buys exceed cash + deposits. Allowed, but
-          review your actions.
+        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200">
+          Cash is negative in one or more years — planned buys exceed cash + deposits.
         </p>
       )}
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full min-w-[480px] text-left text-sm">
-          <thead className="bg-white/5 text-[11px] uppercase tracking-wider text-white/45">
+      <div className="table-shell">
+        <table className="min-w-[480px] text-sm">
+          <thead className="text-[11px] uppercase tracking-wider text-white/45">
             <tr>
               <th className="sticky left-0 z-10 bg-[#141a22] px-3 py-2 font-medium">Position</th>
               {pastYears.map(({ y }) => (

@@ -9,6 +9,7 @@ import type {
 } from '../../types'
 import { scenarioTotals } from '../../lib/incomeCost'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { InfoTip } from '../common/InfoTip'
 import { YearOverview } from './YearOverview'
 import { CashflowTable } from './CashflowTable'
 import { YearSankey } from './YearSankey'
@@ -138,7 +139,7 @@ export function IncomeCostView({
 
   if (!selected || !totals) {
     return (
-      <div className="card p-8 text-center text-sm text-white/40">
+      <div className="py-12 text-center text-sm text-white/40">
         No scenarios yet.
         <div className="mt-3">
           <button type="button" className="btn-primary" onClick={handleAddScenario}>
@@ -150,19 +151,41 @@ export function IncomeCostView({
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-8">
       {storageError && (
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {storageError}
         </p>
       )}
 
-      <div className="card space-y-3 p-4">
-        <div className="flex flex-wrap items-center justify-between gap-2">
-          <span className="text-xs font-semibold uppercase tracking-wider text-white/45">
-            Scenarios
-          </span>
-          <div className="flex flex-wrap gap-1.5">
+      {/* Scenario strip — open, not a card */}
+      <div className="section border-b border-white/5 pb-5">
+        <div className="section-header">
+          <div className="flex items-center gap-1.5">
+            <span className="section-title">Scenarios</span>
+            <InfoTip label="Scenario tips" align="start">
+              Drag chips to reorder. Double-click a name to rename. Amounts are in CHF.
+            </InfoTip>
+          </div>
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <label className="text-[10px] uppercase tracking-wider text-white/40" htmlFor="ic-year">
+                Year
+              </label>
+              <input
+                id="ic-year"
+                className="input !w-20 !py-1 !text-xs tabular-nums"
+                type="number"
+                min={1970}
+                max={2100}
+                value={selected.year}
+                onChange={(e) => {
+                  const y = Math.floor(Number(e.target.value))
+                  if (Number.isFinite(y)) setScenarioYear(selected.id, y)
+                }}
+                title="Calendar year this budget describes"
+              />
+            </div>
             <button
               type="button"
               className="btn-ghost !py-1 !text-xs"
@@ -180,7 +203,7 @@ export function IncomeCostView({
           </div>
         </div>
 
-        <ul className="flex flex-wrap gap-1.5">
+        <ul className="flex flex-wrap gap-1">
           {scenarios.map((s) => {
             const active = s.id === selected.id
             const renaming = renamingId === s.id
@@ -214,12 +237,12 @@ export function IncomeCostView({
                   e.preventDefault()
                   onDropOn(s.id)
                 }}
-                className={`flex cursor-grab items-center gap-0.5 rounded-lg border px-1.5 py-0.5 transition active:cursor-grabbing ${
+                className={`flex cursor-grab items-center gap-0.5 rounded-lg px-1 py-0.5 transition active:cursor-grabbing ${
                   active
-                    ? 'border-emerald-500/40 bg-emerald-500/10'
+                    ? 'bg-white/10 text-white'
                     : isDragOver
-                      ? 'border-sky-500/50 bg-sky-500/10'
-                      : 'border-white/10 bg-white/[0.03] hover:border-white/20'
+                      ? 'bg-sky-500/15 text-white/90'
+                      : 'text-white/60 hover:bg-white/5 hover:text-white/80'
                 } ${dragId === s.id ? 'opacity-50' : ''}`}
               >
                 {renaming ? (
@@ -239,7 +262,7 @@ export function IncomeCostView({
                   <button
                     type="button"
                     className={`max-w-[12rem] truncate px-2 py-1 text-left text-sm font-medium ${
-                      active ? 'text-white' : 'text-white/70'
+                      active ? 'text-white' : ''
                     }`}
                     onClick={() => setSelectedId(s.id)}
                     onDoubleClick={(e) => {
@@ -273,40 +296,21 @@ export function IncomeCostView({
             )
           })}
         </ul>
-        <div className="flex flex-wrap items-end gap-3">
-          <div>
-            <label className="label !mb-0.5 !text-[10px]">Year for “{selected.name}”</label>
-            <input
-              className="input !w-24 !py-1 !text-xs tabular-nums"
-              type="number"
-              min={1970}
-              max={2100}
-              value={selected.year}
-              onChange={(e) => {
-                const y = Math.floor(Number(e.target.value))
-                if (Number.isFinite(y)) setScenarioYear(selected.id, y)
-              }}
-              title="Calendar year this budget describes"
-            />
-          </div>
-          <p className="pb-1 text-[10px] text-white/30">
-            Drag scenarios to reorder · double-click to rename · amounts in CHF
-          </p>
-        </div>
       </div>
 
+      {/* Light tabs */}
       <div
-        className="inline-flex rounded-xl border border-white/10 bg-black/30 p-1"
+        className="inline-flex gap-1 border-b border-white/10"
         role="group"
         aria-label="Income/Cost view"
       >
         <button
           type="button"
           onClick={() => setWorkspaceTab('budget')}
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+          className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
             workspaceTab === 'budget'
-              ? 'bg-white text-black'
-              : 'text-white/60 hover:text-white'
+              ? 'border-emerald-400 text-white'
+              : 'border-transparent text-white/50 hover:text-white/80'
           }`}
         >
           Budget
@@ -314,10 +318,10 @@ export function IncomeCostView({
         <button
           type="button"
           onClick={() => setWorkspaceTab('monthly')}
-          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+          className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
             workspaceTab === 'monthly'
-              ? 'bg-white text-black'
-              : 'text-white/60 hover:text-white'
+              ? 'border-emerald-400 text-white'
+              : 'border-transparent text-white/50 hover:text-white/80'
           }`}
         >
           Monthly
@@ -325,10 +329,8 @@ export function IncomeCostView({
       </div>
 
       {workspaceTab === 'budget' ? (
-        <>
-          <div className="card p-5">
-            <YearOverview title={`${selected.year} · ${selected.name}`} totals={totals} />
-          </div>
+        <div className="space-y-5">
+          <YearOverview title={`${selected.year} · ${selected.name}`} totals={totals} />
 
           <div className="grid gap-5 xl:grid-cols-2">
             <CashflowTable
@@ -349,9 +351,10 @@ export function IncomeCostView({
             />
           </div>
 
-          <div className="card p-5">
-            <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-white/50">
-              Cash flow · {selected.name}
+          <div className="panel space-y-3">
+            <h3 className="section-title">
+              Cash flow
+              <span className="ml-2 font-normal text-white/40">· {selected.name}</span>
             </h3>
             <FullscreenChart title={`Cash flow · ${selected.name}`}>
               <YearSankey
@@ -361,25 +364,23 @@ export function IncomeCostView({
               />
             </FullscreenChart>
           </div>
-        </>
-      ) : (
-        <div className="card p-5">
-          <MonthlyBudgetView
-            scenario={selected}
-            lines={lines}
-            draws={draws}
-            savingsAccounts={savingsAccounts}
-            onUpsertDraw={(d) => {
-              upsertDraw(d)
-            }}
-            onRemoveDraw={(id) => {
-              removeDraw(id)
-            }}
-            onAddDraw={() => {
-              addDraw(selected.id)
-            }}
-          />
         </div>
+      ) : (
+        <MonthlyBudgetView
+          scenario={selected}
+          lines={lines}
+          draws={draws}
+          savingsAccounts={savingsAccounts}
+          onUpsertDraw={(d) => {
+            upsertDraw(d)
+          }}
+          onRemoveDraw={(id) => {
+            removeDraw(id)
+          }}
+          onAddDraw={() => {
+            addDraw(selected.id)
+          }}
+        />
       )}
 
       <CopyScenarioDialog

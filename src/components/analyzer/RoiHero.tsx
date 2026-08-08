@@ -39,7 +39,7 @@ export function RoiHero({
     : ['ps', 'pfcf', 'pe']
 
   return (
-    <div className="relative overflow-hidden rounded-2xl border border-emerald-500/20 bg-gradient-to-br from-emerald-500/15 via-white/[0.03] to-transparent p-5">
+    <div className="panel relative overflow-hidden border-emerald-500/15 bg-gradient-to-br from-emerald-500/10 via-white/[0.02] to-transparent">
       <div className="pointer-events-none absolute -right-8 -top-8 h-32 w-32 rounded-full bg-emerald-400/10 blur-2xl" />
 
       {showBasisTabs && onSelectBasis && (
@@ -95,16 +95,14 @@ export function RoiHero({
         )}
       </div>
 
-      {currentMarketCap != null && currentMarketCap > 0 && (
+      {currentMarketCap != null && currentMarketCap > 0 && hero ? (
         <p className="mt-3 text-xs text-white/40">
-          From current mcap {formatMoney(currentMarketCap, currency)}
-          {hero
-            ? hero.basis !== 'easy' && Math.abs(hero.dilutionFactor - 1) >= 1e-9
-              ? ` → mcap ${formatMoney(hero.marketCap, currency)} / dilution ${hero.dilutionFactor.toFixed(2)}× = equity ${formatMoney(hero.equityValue, currency)} in ${hero.year}`
-              : ` → ${formatMoney(hero.marketCap, currency)} in ${hero.year}`
-            : ''}
+          {formatMoney(currentMarketCap, currency)}
+          {hero.basis !== 'easy' && Math.abs(hero.dilutionFactor - 1) >= 1e-9
+            ? ` → equity ${formatMoney(hero.equityValue, currency)} in ${hero.year}`
+            : ` → ${formatMoney(hero.marketCap, currency)} in ${hero.year}`}
         </p>
-      )}
+      ) : null}
 
       {secondary.length > 0 && (
         <div className="mt-4 flex flex-wrap gap-2">

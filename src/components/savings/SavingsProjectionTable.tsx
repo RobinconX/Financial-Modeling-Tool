@@ -72,7 +72,7 @@ export function SavingsProjectionTable({
 
   if (accounts.length === 0) {
     return (
-      <div className="flex h-40 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
+      <div className="flex h-40 items-center justify-center text-sm text-white/40">
         Add accounts on the Inputs tab to see projected balances
       </div>
     )
@@ -80,7 +80,7 @@ export function SavingsProjectionTable({
 
   return (
     <div className="space-y-3">
-      <div className="flex flex-wrap items-end gap-2 rounded-lg border border-white/10 bg-white/[0.02] p-3">
+      <div className="flex flex-wrap items-end gap-2">
         <div>
           <label className="label !mb-0.5 !text-[10px]">Add past year-end</label>
           <select
@@ -95,18 +95,17 @@ export function SavingsProjectionTable({
             ))}
           </select>
         </div>
-        <div className="pb-1 text-xs text-white/40">December balance</div>
         <button type="button" className="btn-ghost !py-1.5 !text-xs" onClick={handleAddPast}>
           + Add year
         </button>
         {pickError ? <span className="text-xs text-red-400">{pickError}</span> : null}
       </div>
 
-      <div className="overflow-x-auto rounded-lg border border-white/10">
-        <table className="w-full min-w-[720px] border-collapse text-left text-xs">
+      <div className="table-shell">
+        <table className="min-w-[720px] border-collapse text-xs">
           <thead>
-            <tr className="border-b border-white/10 bg-white/[0.03] text-[11px] uppercase tracking-wide text-white/40">
-              <th className="sticky left-0 z-10 bg-[#121820] px-2 py-2 font-medium">Account</th>
+            <tr className="border-b border-white/10 text-[11px] uppercase tracking-wide text-white/40">
+              <th className="sticky left-0 z-10 bg-[#0b0f14] px-2 py-2 font-medium">Account</th>
               {displayColumns.map((col) => (
                 <th
                   key={col.key}
@@ -142,7 +141,7 @@ export function SavingsProjectionTable({
           <tbody>
             {accounts.map((a) => (
               <tr key={a.id} className="border-b border-white/5">
-                <td className="sticky left-0 z-10 bg-[#0f141b] px-2 py-1.5 font-medium text-white/85">
+                <td className="sticky left-0 z-10 bg-[#0b0f14] px-2 py-1.5 font-medium text-white/85">
                   {a.name.trim() || 'Untitled'}
                 </td>
                 {displayColumns.map((col) => {
@@ -189,8 +188,8 @@ export function SavingsProjectionTable({
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t border-white/10 bg-white/[0.03] text-xs font-medium">
-              <td className="sticky left-0 z-10 bg-[#121820] px-2 py-2 text-white/60">Total</td>
+            <tr className="border-t border-white/10 text-xs font-medium">
+              <td className="sticky left-0 z-10 bg-[#0b0f14] px-2 py-2 text-white/60">Total</td>
               {displayColumns.map((col) => {
                 const sum = columnTotal(accounts, col, asOf)
                 return (
@@ -208,13 +207,6 @@ export function SavingsProjectionTable({
           </tfoot>
         </table>
       </div>
-      <p className="text-[11px] text-white/35">
-        Past columns are <span className="text-white/55">year-end</span> only (December). Now is the
-        current month; later columns are projected. Prefer the{' '}
-        <span className="text-white/55">Actuals</span> tab for bulk year-end entry. Compounding
-        applies only December → January; contributions land in the month they are paid (yearly
-        contribs in January after interest).
-      </p>
     </div>
   )
 }

@@ -262,7 +262,7 @@ export function OverviewChart({
         className={
           fillContainer
             ? 'flex h-full min-h-[16rem] items-center justify-center text-sm text-white/40'
-            : 'flex h-72 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40'
+            : 'flex h-72 items-center justify-center text-sm text-white/40'
         }
       >
         Enable or add series to see your stacked net worth
@@ -490,9 +490,6 @@ export function OverviewChart({
             <span className="text-white/30">· {sourceLabel(s.type)}</span>
           </span>
         ))}
-        <span className="text-[10px] text-white/30">
-          Hover a bar for totals next to it · portfolio holdings scroll inside the panel
-        </span>
       </div>
     </div>
   )

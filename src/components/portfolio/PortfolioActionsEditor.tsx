@@ -9,6 +9,7 @@ import type {
 import { actionTradePrice, getActions, newAction } from '../../lib/portfolio'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
 import { fromDisplay, toDisplay } from '../../lib/fx'
+import { InfoTip } from '../common/InfoTip'
 
 type Props = {
   portfolio: SavedPortfolio
@@ -64,16 +65,16 @@ export function HoldingActionsEditor({
   }
 
   return (
-    <div className="space-y-2 rounded-lg border border-white/10 bg-black/25 p-2.5">
+    <div className="space-y-2 border-t border-white/[0.06] pt-3">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <div>
-          <h4 className="text-[11px] font-semibold uppercase tracking-wider text-white/50">
+        <div className="flex items-center gap-1.5">
+          <h4 className="text-[11px] font-semibold tracking-wide text-white/60">
             Intended actions
           </h4>
-          <p className="text-[10px] text-white/35">
-            Buy / sell from a year on — set an optional trade price, or leave blank to use the
-            scenario/live price. Adjusts shares and cash in the totals chart.
-          </p>
+          <InfoTip label="About intended actions">
+            Buy / sell from a year on — optional trade price, or blank to use scenario/live price.
+            Adjusts shares and cash on the chart.
+          </InfoTip>
         </div>
         <div className="flex flex-wrap gap-1.5">
           <button
@@ -94,7 +95,7 @@ export function HoldingActionsEditor({
       </div>
 
       {actions.length === 0 && (
-        <p className="text-[11px] text-white/35">No planned buys or sells for this position.</p>
+        <p className="text-[11px] text-white/35">No planned buys or sells.</p>
       )}
 
       <div className="space-y-1.5">
@@ -184,7 +185,7 @@ function ActionRow({
   }
 
   return (
-    <div className="flex flex-wrap items-end gap-2 rounded-md border border-white/5 bg-white/[0.02] px-2 py-1.5">
+    <div className="flex flex-wrap items-end gap-2 py-1">
       <div className="w-[5.5rem]">
         <label className="label !mb-0.5 !text-[9px]">Type</label>
         <select
@@ -257,7 +258,7 @@ function ActionRow({
       <p className="min-w-0 flex-1 pb-1.5 text-[10px] text-white/45">{preview}</p>
       <button
         type="button"
-        className="btn-ghost shrink-0 !px-2 !py-1 !text-xs text-red-300/80"
+        className="shrink-0 px-1.5 py-1 text-xs text-white/35 hover:text-red-300"
         onClick={onRemove}
         title="Remove action"
       >

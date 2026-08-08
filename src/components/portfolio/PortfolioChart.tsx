@@ -212,7 +212,7 @@ export function PortfolioChart({
 
   if (data.length < 1 || !data.some((d) => d.total > 0 || d.isNow)) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
+      <div className="flex h-64 w-full items-center justify-center text-sm text-white/40">
         Portfolio value chart appears once you have shares, cash, or actuals
       </div>
     )
@@ -476,17 +476,11 @@ export function PortfolioChart({
         )}
       </div>
 
-      <p className="mt-1 shrink-0 text-[10px] text-white/35">
-        Order: past years → <span className="text-white/55">Now</span> (live) → current / future.
-        {hasActuals && (
-          <>
-            {' '}
-            <span className="text-amber-300/90">Amber</span> = manual actuals (year-end).
-          </>
-        )}
-        {chartMode === 'total' && <> Single color = whole portfolio.</>}
-        {chartMode === 'stacked' && <> Stacked = by position.</>}
-      </p>
+      {hasActuals ? (
+        <p className="mt-1 shrink-0 text-[10px] text-white/35">
+          <span className="text-amber-300/90">Amber</span> = manual actuals (year-end)
+        </p>
+      ) : null}
     </div>
   )
 }

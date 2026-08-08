@@ -91,18 +91,15 @@ export function AdvancedInputs({
 
   return (
     <div className="space-y-3">
-      <p className="text-sm text-white/50">
-        For each year, enter fundamentals and multiples. Implied market cap = metric × multiple.
-        Share dilution factor scales ROI: 1.0 = none, 1.1 = 10% more shares by that year
-        (shareholder return uses mcap growth ÷ dilution). Leave unused bases blank.
-      </p>
-
+      {sorted.length === 0 ? (
+        <p className="py-2 text-center text-xs text-white/40">No advanced years yet.</p>
+      ) : null}
       {sorted.map((row, index) => {
         const isOpen = expanded[row.id] ?? false
         return (
           <div
             key={row.id}
-            className="rounded-xl border border-white/10 bg-black/20 transition-colors"
+            className="rounded-lg border border-white/[0.06] bg-white/[0.02] transition-colors"
           >
             <div className="flex items-start gap-2 p-3">
               <button
@@ -128,15 +125,14 @@ export function AdvancedInputs({
                 </div>
               </button>
 
-              {rows.length > 1 && (
-                <button
-                  type="button"
-                  className="btn-ghost shrink-0 !py-1 !text-xs"
-                  onClick={() => removeRow(row.id)}
-                >
-                  Remove
-                </button>
-              )}
+              <button
+                type="button"
+                className="btn-ghost shrink-0 !py-1 !text-xs text-white/45 hover:text-red-300"
+                onClick={() => removeRow(row.id)}
+                title="Remove this year"
+              >
+                Remove
+              </button>
             </div>
 
             {isOpen && (

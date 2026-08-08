@@ -30,9 +30,9 @@ export function ProjectionTable({
   const showPrice = sharesOutstanding != null && sharesOutstanding > 0
 
   return (
-    <div className="overflow-x-auto rounded-xl border border-white/10">
-      <table className="w-full min-w-[480px] text-left text-sm">
-        <thead className="bg-white/5 text-xs uppercase tracking-wider text-white/45">
+    <div className="table-shell">
+      <table className="min-w-[480px] text-sm">
+        <thead className="text-xs uppercase tracking-wider text-white/45">
           <tr>
             <th className="px-3 py-2 font-medium">Year</th>
             <th className="px-3 py-2 font-medium">Basis</th>

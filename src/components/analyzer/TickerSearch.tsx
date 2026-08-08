@@ -40,7 +40,7 @@ export function TickerSearch({ quote, loading, error, onFetch }: Props) {
       )}
 
       {quote && !error && (
-        <div className="grid grid-cols-2 gap-2 rounded-xl border border-white/10 bg-black/20 p-3 sm:grid-cols-4">
+        <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
           <Metric label="Name" value={quote.name} wide />
           <Metric label="Price" value={formatPrice(quote.price, quote.currency)} />
           <Metric

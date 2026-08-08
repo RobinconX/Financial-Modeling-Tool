@@ -123,21 +123,23 @@ export function ProjectionsView({
 
   return (
     <div className="space-y-5">
-      <div className="flex flex-wrap items-end justify-between gap-3 rounded-xl border border-white/10 bg-black/20 px-3 py-3">
+      <div className="section-header border-b border-white/5 pb-4">
         <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
           <Selector value={selA} onChange={setSelA} id="proj-select-a" />
           {compare && <Selector value={selB} onChange={setSelB} id="proj-select-b" />}
         </div>
         <div
-          className="inline-flex rounded-xl border border-white/10 bg-black/30 p-1"
+          className="inline-flex gap-1 border-b border-white/10"
           role="group"
           aria-label="Layout"
         >
           <button
             type="button"
             onClick={() => setCompare(false)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              !compare ? 'bg-white text-black' : 'text-white/60 hover:text-white'
+            className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
+              !compare
+                ? 'border-emerald-400 text-white'
+                : 'border-transparent text-white/50 hover:text-white/80'
             }`}
           >
             Single
@@ -145,8 +147,10 @@ export function ProjectionsView({
           <button
             type="button"
             onClick={() => setCompare(true)}
-            className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-              compare ? 'bg-white text-black' : 'text-white/60 hover:text-white'
+            className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
+              compare
+                ? 'border-emerald-400 text-white'
+                : 'border-transparent text-white/50 hover:text-white/80'
             }`}
           >
             Compare
@@ -160,7 +164,7 @@ export function ProjectionsView({
         </p>
       )}
 
-      <div className={`grid gap-6 ${compare ? 'xl:grid-cols-2' : 'max-w-4xl'}`}>
+      <div className={`grid min-w-0 gap-5 ${compare ? 'xl:grid-cols-2' : ''}`}>
         <ProjectionPanel
           key={`a-${selA}`}
           title={compare ? 'Panel A' : undefined}

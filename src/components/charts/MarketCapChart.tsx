@@ -102,7 +102,7 @@ export function MarketCapChart({
 
   if (data.length < 2 || !hasSeries) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
+      <div className="flex h-64 w-full items-center justify-center text-sm text-white/40">
         Enter projections to see evolution
       </div>
     )
@@ -118,7 +118,13 @@ export function MarketCapChart({
   if (ticks[ticks.length - 1] !== maxYear) ticks.push(maxYear)
 
   return (
-    <div className={fillContainer ? 'flex h-full min-h-0 w-full flex-col gap-2' : 'w-full'}>
+    <div
+      className={
+        fillContainer
+          ? 'flex h-full min-h-0 w-full min-w-0 flex-col gap-2'
+          : 'w-full min-w-0'
+      }
+    >
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div
           className="inline-flex rounded-lg border border-white/10 bg-black/30 p-0.5"
@@ -167,8 +173,8 @@ export function MarketCapChart({
         )}
       </div>
 
-      <div className={fillContainer ? 'min-h-0 flex-1' : 'h-72 w-full'}>
-        <ResponsiveContainer width="100%" height="100%">
+      <div className={fillContainer ? 'min-h-0 w-full min-w-0 flex-1' : 'h-72 w-full min-w-0'}>
+        <ResponsiveContainer width="100%" height="100%" debounce={50}>
           <LineChart data={chartData} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
             <XAxis

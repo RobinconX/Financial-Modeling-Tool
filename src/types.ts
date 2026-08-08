@@ -392,6 +392,9 @@ export type PortfolioAction = {
   note?: string
 }
 
+/** Display order of holdings on the Positions tab (does not reorder stored array). */
+export type PortfolioHoldingSort = 'manual' | 'symbol' | 'value'
+
 export type SavedPortfolio = {
   id: string
   name: string
@@ -426,6 +429,11 @@ export type SavedPortfolio = {
   /** Planned buy/sell trades by year. */
   actions: PortfolioAction[]
   holdings: PortfolioHolding[]
+  /**
+   * Positions tab sort preference for this portfolio.
+   * Missing = manual (storage order).
+   */
+  holdingSort?: PortfolioHoldingSort
   /**
    * End-of-month whole-portfolio totals (manual actuals).
    * Keys: `YYYY-MM`. Amounts in `actualsCurrency` (default USD).

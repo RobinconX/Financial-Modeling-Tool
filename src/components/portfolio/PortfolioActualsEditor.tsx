@@ -9,6 +9,7 @@ import {
 } from '../../lib/portfolio'
 import { amountToDisplay } from '../../lib/fx'
 import { formatMoney, parseMoney } from '../../lib/format'
+import { InfoTip } from '../common/InfoTip'
 
 const MONTHS = [
   'Jan',
@@ -146,14 +147,13 @@ export function PortfolioActualsEditor({
 
   return (
     <div className="space-y-4">
-      <div className="flex flex-wrap items-start justify-between gap-2">
-        <div>
-          <h3 className="text-sm font-semibold text-white/85">Monthly actuals</h3>
-          <p className="mt-1 text-[11px] text-white/40">
+      <div className="section-header">
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title text-emerald-300/90">Monthly actuals</h3>
+          <InfoTip label="About portfolio actuals">
             Enter end-of-month portfolio totals (once per month). Stored in {entryCurrency}. Chart
-            uses the <span className="text-white/55">last actual of each year</span> for past years
-            in portfolio value mode.
-          </p>
+            uses the last actual of each year for past years in portfolio value mode.
+          </InfoTip>
         </div>
         {otherPortfolios.length > 0 && onUpdateOtherPortfolio && (
           <button
@@ -287,10 +287,10 @@ export function PortfolioActualsEditor({
         )}
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full min-w-[640px] text-left text-sm">
-          <thead className="bg-white/5 text-[11px] uppercase tracking-wider text-white/45">
-            <tr>
+      <div className="table-shell">
+        <table className="min-w-[640px] text-sm">
+          <thead className="text-[11px] uppercase tracking-wider text-white/45">
+            <tr className="border-b border-white/10">
               <th className="px-3 py-2 font-medium">Month</th>
               <th className="px-3 py-2 font-medium">
                 End-of-month total ({entryCurrency})

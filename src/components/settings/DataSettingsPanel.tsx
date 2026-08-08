@@ -15,6 +15,7 @@ import {
   writeLinkedSnapshot,
   type LinkedFileStatus,
 } from '../../lib/linkedDataFile'
+import { InfoTip } from '../common/InfoTip'
 
 type Props = {
   onClose?: () => void
@@ -49,7 +50,6 @@ export function DataSettingsPanel({ onClose }: Props) {
     await refreshStatus()
     if (result.action === 'loaded') {
       setMessage(`Loaded data from ${result.fileName}.`)
-      // Soft remount keeps FS permission; full reload would force a second prompt.
       remountApp()
       return
     }
@@ -152,14 +152,14 @@ export function DataSettingsPanel({ onClose }: Props) {
     status?.linked === true && status.permission !== 'granted'
 
   return (
-    <div className="card max-w-xl space-y-4 p-5">
+    <div className="max-w-xl space-y-5">
       <div className="flex items-start justify-between gap-3">
-        <div>
+        <div className="flex items-center gap-1.5">
           <h2 className="text-lg font-semibold text-white">Data &amp; backup</h2>
-          <p className="mt-1 text-sm text-white/45">
-            Your data stays on this device. Link a JSON file you control (e.g. in Documents or
-            OneDrive), or use Export / Import. No multi-user cloud database.
-          </p>
+          <InfoTip label="About data storage">
+            Your data stays on this device. Link a JSON file you control (Documents, OneDrive, etc.)
+            or use Export / Import. No multi-user cloud database.
+          </InfoTip>
         </div>
         {onClose && (
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={onClose}>
@@ -168,28 +168,36 @@ export function DataSettingsPanel({ onClose }: Props) {
         )}
       </div>
 
-      <section className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-white/50">
-          Browser storage
-        </h3>
-        <p className="text-[12px] text-white/40">
-          Always used as a fast local mirror. Cleared if you wipe site data — use a linked file or
-          export for safety.
+      <section className="panel space-y-3">
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title">Browser storage</h3>
+          <InfoTip label="About browser storage">
+            Always used as a fast local mirror. Cleared if you wipe site data — use a linked file or
+            export for safety.
+          </InfoTip>
+        </div>
+        <p className="text-sm text-white/50">
+          Active. Data is mirrored here while you work.
         </p>
       </section>
 
-      <section className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-white/50">
-          Linked data file
-        </h3>
+      <section className="panel space-y-3">
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title text-emerald-300/90">Linked data file</h3>
+          <InfoTip label="About linked file">
+            Open / link loads an existing file into the app. Create new writes current browser data
+            to a new path. After linking, edits wait ~4s of idle, then save once. Put the file in
+            OneDrive/Dropbox for multi-PC backup.
+          </InfoTip>
+        </div>
         {!fsa ? (
-          <p className="text-[12px] text-amber-200/80">
+          <p className="text-sm text-amber-200/80">
             This browser does not support linking a file for continuous save (use Chrome or Edge).
             Export / Import still works here.
           </p>
         ) : (
           <>
-            <p className="text-[12px] text-white/50">
+            <p className="text-sm text-white/60">
               Status:{' '}
               {status == null ? (
                 '…'
@@ -207,13 +215,13 @@ export function DataSettingsPanel({ onClose }: Props) {
               )}
             </p>
             {needsAccess && (
-              <p className="text-[12px] text-amber-200/80">
-                This browser session must re-allow the file (normal after a refresh). Use the
-                button below — you should not need to pick the file again.
+              <p className="text-sm text-amber-200/80">
+                This session must re-allow the file (normal after a refresh). Use Allow file
+                access — you should not need to pick the file again.
               </p>
             )}
             {status?.lastError && status.permission === 'granted' && (
-              <p className="text-[12px] text-amber-200/80">{status.lastError}</p>
+              <p className="text-sm text-amber-200/80">{status.lastError}</p>
             )}
             <div className="flex flex-wrap gap-2">
               {needsAccess && (
@@ -228,7 +236,9 @@ export function DataSettingsPanel({ onClose }: Props) {
               )}
               <button
                 type="button"
-                className={needsAccess ? 'btn-ghost !py-1.5 !text-xs' : 'btn-primary !py-1.5 !text-xs'}
+                className={
+                  needsAccess ? 'btn-ghost !py-1.5 !text-xs' : 'btn-primary !py-1.5 !text-xs'
+                }
                 disabled={busy}
                 onClick={() => void handleLink()}
               >
@@ -263,24 +273,17 @@ export function DataSettingsPanel({ onClose }: Props) {
                 </>
               )}
             </div>
-            <p className="text-[11px] text-white/30">
-              <strong className="font-medium text-white/45">Open / link</strong> loads an existing
-              file into the app (does not overwrite it with empty browser data).{' '}
-              <strong className="font-medium text-white/45">Create new</strong> writes current
-              browser data to a new path. After linking, edits wait ~4s of idle, then save once.
-              Put the file in OneDrive/Dropbox for multi-PC backup.
-            </p>
           </>
         )}
       </section>
 
-      <section className="space-y-2 rounded-xl border border-white/10 bg-black/20 p-3">
-        <h3 className="text-xs font-semibold uppercase tracking-wider text-white/50">
-          Export / Import
-        </h3>
-        <p className="text-[12px] text-white/40">
-          Works in every browser. Use for backup or to move data into another browser profile.
-        </p>
+      <section className="panel space-y-3">
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title">Export / Import</h3>
+          <InfoTip label="About export and import">
+            Works in every browser. Use for backup or to move data into another browser profile.
+          </InfoTip>
+        </div>
         <div className="flex flex-wrap gap-2">
           <button
             type="button"

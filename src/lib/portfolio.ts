@@ -555,6 +555,7 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
     perpetualGrowthPercent: source.perpetualGrowthPercent ?? null,
     actions,
     holdings,
+    holdingSort: source.holdingSort,
     actuals: source.actuals ? { ...source.actuals } : undefined,
     actualsCurrency: source.actualsCurrency,
     createdAt: now,

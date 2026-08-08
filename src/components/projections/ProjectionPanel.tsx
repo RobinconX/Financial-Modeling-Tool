@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type {
   EasyProjection,
   Quote,
@@ -12,7 +12,6 @@ import {
   buildChartSeries,
   buildEasyProjections,
   newEasyProjection,
-  newYearProjection,
   pickHeroRow,
 } from '../../lib/valuation'
 import { formatMoney, formatPrice } from '../../lib/format'
@@ -29,6 +28,7 @@ import { ProjectionTable } from '../analyzer/ProjectionTable'
 import { SaveScenarioButton } from '../analyzer/SaveScenarioButton'
 import { MarketCapChart } from '../charts/MarketCapChart'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { InfoTip } from '../common/InfoTip'
 import { MoneyInput } from '../common/MoneyInput'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
@@ -77,12 +77,15 @@ export function ProjectionPanel({
   const [draftQuote, setDraftQuote] = useState<Quote | null>(null)
   const [draftMcapOverride, setDraftMcapOverride] = useState<number | null>(null)
   const [draftEasy, setDraftEasy] = useState<EasyProjection[]>([newEasyProjection()])
-  const [draftAdvanced, setDraftAdvanced] = useState<YearProjection[]>([newYearProjection()])
+  const [draftAdvanced, setDraftAdvanced] = useState<YearProjection[]>([])
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
   const [selectedBasis, setSelectedBasis] = useState<ValuationBasis | 'easy'>('easy')
+  /** Assumptions collapsed by default so ROI / charts lead; expand to edit. */
+  const [easyOpen, setEasyOpen] = useState(isDraft)
+  const [advancedOpen, setAdvancedOpen] = useState(false)
 
   // Reset draft when switching into draft mode
   useEffect(() => {
@@ -90,17 +93,21 @@ export function ProjectionPanel({
     setDraftQuote(null)
     setDraftMcapOverride(null)
     setDraftEasy([newEasyProjection()])
-    setDraftAdvanced([newYearProjection()])
+    setDraftAdvanced([])
     setFetchError(null)
     setRefreshError(null)
     setSelectedBasis('easy')
+    setEasyOpen(true)
+    setAdvancedOpen(false)
   }, [isDraft, scenarioId])
 
-  // Prefer easy hero when switching saved scenario
+  // Prefer easy hero when switching saved scenario; collapse assumptions
   useEffect(() => {
     if (!scenario) return
     setSelectedBasis('easy')
     setRefreshError(null)
+    setEasyOpen(false)
+    setAdvancedOpen(false)
   }, [scenario?.id]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const quote: Quote | null = isDraft ? draftQuote : scenario ? scenarioToQuote(scenario) : null
@@ -165,7 +172,7 @@ export function ProjectionPanel({
       setDraftMcapOverride(null)
       if (prevSymbol !== q.symbol.toUpperCase()) {
         setDraftEasy([newEasyProjection()])
-        setDraftAdvanced([newYearProjection()])
+        setDraftAdvanced([])
         setSelectedBasis('easy')
       }
     } catch (err) {
@@ -283,26 +290,24 @@ export function ProjectionPanel({
 
   const hasAdvData = advancedProjections.length > 0
 
+  const easyFilled = easyRows.filter(
+    (r) => r.projectedMarketCap != null && r.projectedMarketCap > 0,
+  ).length
+  const advFilled = advancedRows.filter((r) =>
+    [r.revenue, r.fcf, r.profit].some((v) => v != null && v > 0),
+  ).length
+
   return (
-    <section className="card flex flex-col gap-5 p-5">
+    <section className="panel flex flex-col gap-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
-          {title ? (
-            <p className="text-[10px] font-semibold uppercase tracking-[0.2em] text-white/35">
-              {title}
-            </p>
-          ) : null}
+          {title ? <p className="section-kicker">{title}</p> : null}
           {isDraft ? (
-            <h2 className="text-lg font-semibold tracking-tight text-white">
-              New projection
-            </h2>
+            <h2 className="text-lg font-semibold tracking-tight text-white">New projection</h2>
           ) : (
             <>
-              <p className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-400/80">
+              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-400/80">
                 {scenario!.symbol}
-                <span className="ml-2 font-normal normal-case tracking-normal text-white/35">
-                  ticker locked
-                </span>
               </p>
               <input
                 className="mt-0.5 w-full max-w-md border-0 bg-transparent text-xl font-bold text-white outline-none focus:ring-0"
@@ -320,7 +325,7 @@ export function ProjectionPanel({
           {(quote?.symbol || scenario?.symbol) && (
             <button
               type="button"
-              className="btn-ghost"
+              className="btn-ghost !py-1.5 !text-xs"
               disabled={refreshing}
               onClick={() => void refreshQuote()}
             >
@@ -345,7 +350,6 @@ export function ProjectionPanel({
                 buttonLabel="Save as…"
                 defaultName={`Copy of ${scenario!.name}`}
                 onSave={(input) =>
-                  // Save as copy under new name (upsert by symbol+name); ticker stays locked
                   onUpsertScenario({
                     ...input,
                     symbol: scenario!.symbol,
@@ -377,7 +381,8 @@ export function ProjectionPanel({
 
       {refreshError && <p className="text-sm text-red-300">{refreshError}</p>}
 
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
+      {/* Quote context — always visible to read ROI */}
+      <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
         <MoneyInput
           label="Market cap (override)"
           value={mcapOverride}
@@ -388,7 +393,7 @@ export function ProjectionPanel({
             mcapOverride != null
               ? `Override · ${formatMoney(mcapOverride, currency)}`
               : liveMcap != null
-                ? `Live ${formatMoney(liveMcap, currency)} — edit to override`
+                ? `Live ${formatMoney(liveMcap, currency)}`
                 : 'Enter mcap or fetch ticker'
           }
         />
@@ -403,27 +408,25 @@ export function ProjectionPanel({
           displayDecimals={4}
           hint={
             sharesOutstanding == null
-              ? 'Needs shares (mcap ÷ price) to convert'
+              ? 'Needs shares (mcap ÷ price)'
               : mcapOverride != null
                 ? `→ mcap ${formatMoney(currentMarketCap, currency)}`
                 : quote?.price != null
-                  ? `Live ${formatPrice(quote.price, currency)} — edit to set mcap override`
+                  ? `Live ${formatPrice(quote.price, currency)}`
                   : 'Price × shares = mcap'
           }
         />
-        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+        <div className="min-w-0">
           <div className="text-[10px] uppercase tracking-wider text-white/40">
-            Effective current mcap
+            Effective mcap
           </div>
-          <div className="text-lg font-semibold tabular-nums text-white">
+          <div className="mt-0.5 text-lg font-semibold tabular-nums text-white">
             {currentMarketCap != null ? formatMoney(currentMarketCap, currency) : '—'}
           </div>
         </div>
-        <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
-          <div className="text-[10px] uppercase tracking-wider text-white/40">
-            Shares / price
-          </div>
-          <div className="text-sm font-semibold tabular-nums text-white">
+        <div className="min-w-0">
+          <div className="text-[10px] uppercase tracking-wider text-white/40">Shares / price</div>
+          <div className="mt-0.5 text-sm font-semibold tabular-nums text-white">
             {sharesOutstanding != null
               ? sharesOutstanding.toLocaleString(undefined, { maximumFractionDigits: 0 })
               : '—'}{' '}
@@ -435,6 +438,7 @@ export function ProjectionPanel({
         </div>
       </div>
 
+      {/* Results first */}
       <RoiHero
         hero={hero}
         secondary={secondary}
@@ -446,40 +450,79 @@ export function ProjectionPanel({
         currentMarketCap={currentMarketCap}
       />
 
-      <div className="space-y-6">
-        <div>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-            Easy assumptions
-          </h3>
-          <EasyInputs
-            rows={easyRows.length ? easyRows : [newEasyProjection()]}
-            onChange={setEasyRows}
-            currency={currency}
-            currentMarketCap={currentMarketCap}
-            sharesOutstanding={sharesOutstanding}
-            currentPrice={quote?.price ?? scenario?.currentPrice ?? null}
-          />
-        </div>
-        <div>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-            Advanced assumptions
-          </h3>
-          <AdvancedInputs
-            rows={advancedRows}
-            onChange={setAdvancedRows}
-            currency={currency}
-            sharesOutstanding={sharesOutstanding}
-            currentMarketCap={currentMarketCap}
-          />
-        </div>
+      {/* Assumptions — collapsed by default on saved scenarios */}
+      <div className="space-y-1 border-t border-white/[0.06] pt-2">
+        <AssumptionToggle
+          title="Easy assumptions"
+          open={easyOpen}
+          onToggle={() => setEasyOpen((v) => !v)}
+          summary={
+            easyFilled > 0
+              ? `${easyFilled} target${easyFilled === 1 ? '' : 's'}`
+              : 'No targets yet'
+          }
+          tip={
+            <InfoTip label="About easy assumptions">
+              Enter target years and projected market cap or share price. The other is calculated
+              from shares outstanding. ROI uses market cap vs today.
+            </InfoTip>
+          }
+        />
+        {easyOpen ? (
+          <div className="pb-3 pt-1">
+            <EasyInputs
+              rows={easyRows}
+              onChange={setEasyRows}
+              currency={currency}
+              currentMarketCap={currentMarketCap}
+              sharesOutstanding={sharesOutstanding}
+              currentPrice={quote?.price ?? scenario?.currentPrice ?? null}
+            />
+          </div>
+        ) : null}
+
+        <AssumptionToggle
+          title="Advanced assumptions"
+          open={advancedOpen}
+          onToggle={() => setAdvancedOpen((v) => !v)}
+          summary={
+            advancedRows.length === 0
+              ? 'No years'
+              : `${advancedRows.length} year${advancedRows.length === 1 ? '' : 's'}${
+                  advFilled > 0 ? ` · ${advFilled} with metrics` : ''
+                }`
+          }
+          tip={
+            <InfoTip label="About advanced assumptions">
+              Per year: fundamentals × multiples for implied mcap. Dilution factor scales
+              shareholder ROI (1.0 = none). Leave unused bases blank.
+            </InfoTip>
+          }
+        />
+        {advancedOpen ? (
+          <div className="pb-1 pt-1">
+            <AdvancedInputs
+              rows={advancedRows}
+              onChange={setAdvancedRows}
+              currency={currency}
+              sharesOutstanding={sharesOutstanding}
+              currentMarketCap={currentMarketCap}
+            />
+          </div>
+        ) : null}
       </div>
 
-      <div className="grid gap-5 lg:grid-cols-2">
-        <div>
-          <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-            Easy · path
+      <div
+        className={`grid w-full min-w-0 gap-5 border-t border-white/[0.06] pt-4 ${
+          hasAdvData ? 'lg:grid-cols-2' : ''
+        }`}
+      >
+        <div className="min-w-0 w-full">
+          <h3 className="section-title mb-2">
+            Easy
+            <span className="ml-2 font-normal text-white/40">· path</span>
           </h3>
-          <FullscreenChart title="Easy · path">
+          <FullscreenChart title="Easy · path" className="w-full min-w-0">
             <MarketCapChart
               data={easyChart}
               mode="easy"
@@ -489,11 +532,12 @@ export function ProjectionPanel({
           </FullscreenChart>
         </div>
         {hasAdvData && (
-          <div>
-            <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-              Advanced · path
+          <div className="min-w-0 w-full">
+            <h3 className="section-title mb-2">
+              Advanced
+              <span className="ml-2 font-normal text-white/40">· path</span>
             </h3>
-            <FullscreenChart title="Advanced · path">
+            <FullscreenChart title="Advanced · path" className="w-full min-w-0">
               <MarketCapChart
                 data={advancedChart}
                 mode="advanced"
@@ -505,10 +549,8 @@ export function ProjectionPanel({
         )}
       </div>
 
-      <div>
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
-          Projection table
-        </h3>
+      <div className="border-t border-white/[0.06] pt-4">
+        <h3 className="section-title mb-2">Projection table</h3>
         <ProjectionTable
           rows={allProjections}
           currency={currency}
@@ -516,5 +558,44 @@ export function ProjectionPanel({
         />
       </div>
     </section>
+  )
+}
+
+function AssumptionToggle({
+  title,
+  open,
+  onToggle,
+  summary,
+  tip,
+}: {
+  title: string
+  open: boolean
+  onToggle: () => void
+  summary: string
+  tip: ReactNode
+}) {
+  return (
+    <div className="flex flex-wrap items-center gap-2 py-1.5">
+      <button
+        type="button"
+        onClick={onToggle}
+        className="flex min-w-0 items-center gap-1.5 text-left"
+        aria-expanded={open}
+      >
+        <span
+          className={`inline-flex h-5 w-5 items-center justify-center text-[10px] text-white/45 transition-transform ${
+            open ? 'rotate-90' : ''
+          }`}
+          aria-hidden
+        >
+          ▸
+        </span>
+        <span className="section-title">{title}</span>
+        {!open ? (
+          <span className="text-xs font-normal text-white/40">· {summary}</span>
+        ) : null}
+      </button>
+      {tip}
+    </div>
   )
 }

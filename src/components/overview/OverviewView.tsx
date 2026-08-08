@@ -11,6 +11,7 @@ import { useOverview } from '../../hooks/useOverview'
 import { fetchFxRateClient } from '../../lib/fx'
 import { OVERVIEW_CURRENCY, type OverviewBuildDeps } from '../../lib/overview'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { InfoTip } from '../common/InfoTip'
 import { OverviewChart } from './OverviewChart'
 import { OverviewCompareChart } from './OverviewCompareChart'
 import { OverviewSeriesEditor } from './OverviewSeriesEditor'
@@ -197,16 +198,48 @@ export function OverviewView({
         </div>
       ) : null}
 
-      {/* Scenario bar */}
-      <div className="card space-y-2 p-3">
+      {/* Scenario strip — open toolbar */}
+      <div className="section border-b border-white/5 pb-5">
+        <div className="section-header">
+          <div className="flex items-center gap-1.5">
+            <span className="section-title">Scenarios</span>
+            <InfoTip label="About overview scenarios">
+              Each scenario is a net-worth stack (portfolios, savings, manuals). Stacked mode shows
+              one scenario; Compare plots totals as lines. Optional notes store assumptions only.
+            </InfoTip>
+          </div>
+          <div className="flex flex-wrap items-center gap-1.5">
+            <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => addScenario()}>
+              + New
+            </button>
+            <button
+              type="button"
+              className="btn-ghost !py-1 !text-xs"
+              onClick={() => {
+                setSaveAsName(`Copy of ${selectedScenario?.name ?? 'scenario'}`)
+                setShowSaveAs((v) => !v)
+              }}
+            >
+              Save as…
+            </button>
+            <button
+              type="button"
+              className="btn-ghost !py-1 !text-xs text-red-300/80 disabled:opacity-40"
+              disabled={scenarios.length <= 1 || !selectedScenarioId}
+              onClick={() => selectedScenarioId && removeScenario(selectedScenarioId)}
+              title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete scenario'}
+            >
+              Delete
+            </button>
+          </div>
+        </div>
+
         <div className="flex flex-wrap items-center gap-2">
-          <span className="text-[11px] font-medium uppercase tracking-wider text-white/40">
-            Scenario
-          </span>
           <select
             className="input !w-auto min-w-[10rem] !py-1.5 !text-xs"
             value={selectedScenarioId ?? ''}
             onChange={(e) => selectScenario(e.target.value)}
+            aria-label="Select scenario"
           >
             {scenarios.map((s) => (
               <option key={s.id} value={s.id}>
@@ -223,28 +256,6 @@ export function OverviewView({
               aria-label="Scenario name"
             />
           ) : null}
-          <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => addScenario()}>
-            + New
-          </button>
-          <button
-            type="button"
-            className="btn-ghost !py-1 !text-xs"
-            onClick={() => {
-              setSaveAsName(`Copy of ${selectedScenario?.name ?? 'scenario'}`)
-              setShowSaveAs((v) => !v)
-            }}
-          >
-            Save as…
-          </button>
-          <button
-            type="button"
-            className="btn-ghost !py-1 !text-xs text-red-300/80 disabled:opacity-40"
-            disabled={scenarios.length <= 1 || !selectedScenarioId}
-            onClick={() => selectedScenarioId && removeScenario(selectedScenarioId)}
-            title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete scenario'}
-          >
-            Delete
-          </button>
           {showSaveAs ? (
             <div className="flex flex-wrap items-center gap-1.5 border-l border-white/10 pl-2">
               <input
@@ -269,44 +280,55 @@ export function OverviewView({
             </div>
           ) : null}
         </div>
+
         {selectedScenario ? (
-          <div>
-            <label className="label !mb-1 !text-[10px]" htmlFor="overview-scenario-description">
-              Assumptions / notes
-            </label>
-            <textarea
-              id="overview-scenario-description"
-              className="input min-h-[3.25rem] w-full resize-y !py-1.5 !text-xs leading-relaxed"
-              rows={2}
-              value={selectedScenario.description ?? ''}
-              placeholder="Optional: what this scenario assumes (growth rates, deposits, leftovers…)"
-              onChange={(e) =>
-                updateScenario(selectedScenario.id, { description: e.target.value })
-              }
-            />
-          </div>
+          <textarea
+            id="overview-scenario-description"
+            className="input min-h-[2.75rem] w-full resize-y !py-1.5 !text-xs leading-relaxed"
+            rows={2}
+            value={selectedScenario.description ?? ''}
+            placeholder="Notes / assumptions (optional)"
+            onChange={(e) =>
+              updateScenario(selectedScenario.id, { description: e.target.value })
+            }
+            aria-label="Scenario notes"
+          />
         ) : null}
       </div>
 
-      <div className="card relative z-10 overflow-visible p-5">
-        <div className="mb-4 flex flex-wrap items-end justify-between gap-3">
-          <div>
-            <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
-              {chartMode === 'stack' ? 'Net worth · stacked' : 'Compare scenarios · lines'}
-              {chartMode === 'stack' && selectedScenario ? (
-                <span className="ml-2 font-normal normal-case tracking-normal text-white/35">
-                  · {selectedScenario.name}
-                </span>
-              ) : null}
+      {/* Chart */}
+      <div className="panel relative z-10 space-y-3 overflow-visible">
+        <div className="flex flex-wrap items-end justify-between gap-3">
+          <div className="flex items-center gap-1.5">
+            <h3 className="section-title">
+              {chartMode === 'stack' ? (
+                <>
+                  Net worth
+                  {selectedScenario ? (
+                    <span className="ml-2 font-normal text-white/40">
+                      · {selectedScenario.name}
+                    </span>
+                  ) : null}
+                </>
+              ) : (
+                <>
+                  Compare
+                  <span className="ml-2 font-normal text-white/40">· scenarios</span>
+                </>
+              )}
             </h3>
-            <p className="mt-0.5 text-xs text-white/35">
+            <InfoTip label="About overview chart">
               {chartMode === 'stack'
-                ? 'Past years → Now (live) → current / future. CHF. Portfolio greens, savings blues, manual amber/violet.'
-                : 'Past years → Now (live) → current / future. Each line is total net worth for a scenario.'}
-            </p>
+                ? 'Past years → Now (live) → future. CHF. Portfolio greens, savings blues, manual amber/violet.'
+                : 'Past years → Now (live) → future. Each line is total net worth for a scenario (enabled series only).'}
+            </InfoTip>
           </div>
           <div className="flex flex-wrap items-center gap-2">
-            <div className="flex rounded-lg border border-white/10 bg-white/[0.03] p-0.5">
+            <div
+              className="inline-flex gap-1 border-b border-white/10"
+              role="group"
+              aria-label="Chart mode"
+            >
               {(
                 [
                   { id: 'stack' as const, label: 'Stacked' },
@@ -317,10 +339,10 @@ export function OverviewView({
                   key={opt.id}
                   type="button"
                   onClick={() => setChartMode(opt.id)}
-                  className={`rounded-md px-2.5 py-1 text-xs font-medium transition ${
+                  className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
                     chartMode === opt.id
-                      ? 'bg-white text-black shadow'
-                      : 'text-white/55 hover:text-white'
+                      ? 'border-emerald-400 text-white'
+                      : 'border-transparent text-white/50 hover:text-white/80'
                   }`}
                 >
                   {opt.label}
@@ -379,26 +401,22 @@ export function OverviewView({
                 }}
               />
             </label>
-            <span className="rounded-md border border-white/10 bg-white/5 px-2 py-1 text-[11px] text-white/45">
-              {OVERVIEW_CURRENCY}
-            </span>
+            <span className="text-[11px] text-white/40">{OVERVIEW_CURRENCY}</span>
           </div>
         </div>
 
         {chartMode === 'compare' && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-white/10 bg-white/[0.02] px-3 py-2">
-            <span className="text-[11px] font-medium uppercase tracking-wider text-white/40">
-              Show lines
-            </span>
+          <div className="flex flex-wrap items-center gap-2">
+            <span className="text-[11px] font-medium text-white/45">Show</span>
             {scenarios.map((s) => {
               const on = compareIds.includes(s.id)
               return (
                 <label
                   key={s.id}
-                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md border px-2 py-1 text-xs transition ${
+                  className={`inline-flex cursor-pointer items-center gap-1.5 rounded-md px-2 py-1 text-xs transition ${
                     on
-                      ? 'border-white/20 bg-white/10 text-white/90'
-                      : 'border-white/5 bg-transparent text-white/40'
+                      ? 'bg-white/10 text-white/90'
+                      : 'text-white/40 hover:bg-white/5 hover:text-white/70'
                   }`}
                 >
                   <input
@@ -420,7 +438,7 @@ export function OverviewView({
         )}
 
         {needsFx && usdToChf == null && (
-          <div className="mb-3 flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
+          <div className="flex flex-wrap items-center gap-2 rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-200/90">
             <span>
               Portfolio series need a USD→CHF rate
               {fxError ? `: ${fxError}` : fxLoading ? ' (loading…)' : ''}.
@@ -462,7 +480,7 @@ export function OverviewView({
           )}
         </FullscreenChart>
 
-        <div className="mt-2 flex flex-wrap gap-3 text-[11px] text-white/40">
+        <div className="flex flex-wrap gap-3 text-[11px] text-white/40">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-sm bg-emerald-400/80" /> Actual (≤ this year)
           </span>
@@ -472,11 +490,10 @@ export function OverviewView({
         </div>
       </div>
 
-      <div className="card p-5">
+      <div className="panel space-y-3">
         {chartMode === 'compare' && selectedScenario ? (
-          <p className="mb-3 text-xs text-white/40">
+          <p className="text-xs text-white/45">
             Editing series for <span className="text-white/75">{selectedScenario.name}</span>
-            — the compare chart uses each scenario’s total (enabled series only).
           </p>
         ) : null}
         <OverviewSeriesEditor

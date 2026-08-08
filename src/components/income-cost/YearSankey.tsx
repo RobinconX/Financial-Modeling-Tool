@@ -309,7 +309,7 @@ export function YearSankey({
         className={
           fillContainer
             ? 'flex h-full min-h-[16rem] items-center justify-center text-sm text-white/40'
-            : 'flex h-64 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40'
+            : 'flex h-64 items-center justify-center text-sm text-white/40'
         }
       >
         Add income and costs for “{scenarioName}” to see where money goes

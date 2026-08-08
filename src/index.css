@@ -33,8 +33,40 @@ input[type='number']::-webkit-outer-spin-button {
   opacity: 0.5;
 }
 
+/* Floating surfaces (dialogs, empty states). Prefer open sections for page content. */
 .card {
   @apply rounded-2xl border border-white/10 bg-white/[0.03] shadow-xl shadow-black/20 backdrop-blur-sm;
+}
+
+/* Open content blocks — spacing + optional hairline, not a full box */
+.section {
+  @apply space-y-3;
+}
+
+.section-header {
+  @apply flex flex-wrap items-center justify-between gap-2;
+}
+
+.section-kicker {
+  @apply text-[10px] font-semibold uppercase tracking-[0.14em] text-white/40;
+}
+
+.section-title {
+  @apply text-sm font-semibold tracking-wide text-white/85;
+}
+
+/* Quiet content panel — one level of structure (not nested cards) */
+.panel {
+  @apply rounded-xl border border-white/[0.08] bg-white/[0.025] p-4 sm:p-5;
+}
+
+/* Tables without outer card chrome */
+.table-shell {
+  @apply overflow-x-auto;
+}
+
+.table-shell table {
+  @apply w-full text-left;
 }
 
 .input {

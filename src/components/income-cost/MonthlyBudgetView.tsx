@@ -32,6 +32,7 @@ import {
 import { formatMoney, parseMoney } from '../../lib/format'
 import { formatInputNumber } from '../common/MoneyInput'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { InfoTip } from '../common/InfoTip'
 
 type Props = {
   scenario: CashflowScenario
@@ -143,7 +144,7 @@ function MonthlyFlowChart({
         }
       >
         {!hasAnyCash ? (
-          <div className="flex h-full items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
+          <div className="flex h-full items-center justify-center text-sm text-white/40">
             Add income, costs, or draws to see the monthly path
           </div>
         ) : (
@@ -257,15 +258,17 @@ function DrawsEditor({
   )
 
   return (
-    <div className="space-y-2">
-      <div className="flex flex-wrap items-center justify-between gap-2">
+    <div className="panel space-y-3">
+      <div className="section-header">
         <div>
-          <h3 className="text-sm font-semibold uppercase tracking-wider text-white/50">
-            Working balance draws
-          </h3>
-          <p className="mt-0.5 text-[11px] text-white/35">
-            Informative only — does not change Income/Cost budget, Sankey, or portfolio deposits.
-          </p>
+          <p className="section-kicker">Draws</p>
+          <div className="mt-0.5 flex items-center gap-1.5">
+            <h3 className="section-title">Working balance</h3>
+            <InfoTip label="About draws">
+              Informative only — does not change Income/Cost budget, Sankey, or portfolio deposits.
+              Enter CHF to take from working balance each month.
+            </InfoTip>
+          </div>
         </div>
         <button type="button" className="btn-ghost !py-1 !text-xs" onClick={onAddDraw}>
           + Draw
@@ -273,11 +276,9 @@ function DrawsEditor({
       </div>
 
       {rows.length === 0 ? (
-        <p className="rounded-lg border border-dashed border-white/10 px-3 py-4 text-center text-xs text-white/40">
-          Add a named draw and enter CHF to take from working balance each month.
-        </p>
+        <p className="py-3 text-center text-xs text-white/40">No draws yet.</p>
       ) : (
-        <div className="overflow-x-auto rounded-xl border border-white/10">
+        <div className="table-shell">
           <table className="w-max min-w-full border-collapse text-left text-xs">
             <colgroup>
               <col className="w-[9.5rem]" />
@@ -287,9 +288,9 @@ function DrawsEditor({
               <col className="w-[5.5rem]" />
               <col className="w-8" />
             </colgroup>
-            <thead className="bg-white/5 text-[10px] uppercase tracking-wider text-white/45">
+            <thead className="text-[10px] uppercase tracking-wider text-white/45">
               <tr>
-                <th className="sticky left-0 z-10 border-b border-white/10 bg-[#141a22] px-2 py-2 text-left font-medium">
+                <th className="sticky left-0 z-10 border-b border-white/10 bg-[#0b0f14] px-2 py-2 text-left font-medium">
                   Position
                 </th>
                 {MONTH_LABELS.map((m) => (
@@ -312,7 +313,7 @@ function DrawsEditor({
                 const total = amounts.reduce((s, n) => s + n, 0)
                 return (
                   <tr key={draw.id} className="border-t border-white/5">
-                    <td className="sticky left-0 z-10 bg-[#0f141b] px-2 py-1.5 align-middle">
+                    <td className="sticky left-0 z-10 bg-[#0b0f14] px-2 py-1.5 align-middle">
                       <input
                         className="input box-border !w-full !min-w-0 !py-1 !text-xs"
                         placeholder="e.g. Vacation"
@@ -411,65 +412,79 @@ export function MonthlyBudgetView({
   const drawsYearTotal = schedule.reduce((s, r) => s + r.draw, 0)
 
   return (
-    <div className="space-y-5">
-      <div className="grid grid-cols-2 gap-2 sm:grid-cols-3 lg:grid-cols-6">
-        <Meta
-          label={`Opening cash (Dec ${priorYear})`}
-          value={formatMoney(openingCash, INCOME_COST_CURRENCY)}
-          accent="text-emerald-300/90"
-        />
-        <Meta
-          label="Annual income"
-          value={formatMoney(totals.incomeYearly, INCOME_COST_CURRENCY)}
-        />
-        <Meta
-          label="Annual cost"
-          value={formatMoney(totals.costYearly, INCOME_COST_CURRENCY)}
-        />
-        <Meta
-          label="Annual net"
-          value={formatMoney(totals.netYearly, INCOME_COST_CURRENCY)}
-          accent={totals.netYearly >= 0 ? 'text-emerald-400' : 'text-red-300'}
-        />
-        <Meta
-          label="Year-end balance"
-          value={formatMoney(yearEndWorking, INCOME_COST_CURRENCY)}
-          accent={yearEndWorking >= 0 ? 'text-sky-300' : 'text-red-300'}
-        />
-        <Meta
-          label="After draws (Dec)"
-          value={formatMoney(yearEndAfterDraws, INCOME_COST_CURRENCY)}
-          accent={yearEndAfterDraws >= 0 ? 'text-pink-300' : 'text-red-300'}
-        />
+    <div className="space-y-8">
+      <div className="panel space-y-3">
+        <div className="section-header">
+          <div>
+            <p className="section-kicker">Summary</p>
+            <h3 className="section-title mt-0.5">
+              {scenario.year}
+              <span className="ml-2 font-normal text-white/40">· monthly</span>
+            </h3>
+          </div>
+          <InfoTip label="About monthly working balance" align="end">
+            Opening working balance is permanent Cash savings, year-end of {priorYear} (Savings →
+            Actuals as {priorYear}-12). Budget inflows/outflows come from Income/Cost positions.
+            Draws reduce “After draws” only and never change annual budget net or deposits.
+          </InfoTip>
+        </div>
+        <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
+          <Meta
+            label={`Opening cash (Dec ${priorYear})`}
+            value={formatMoney(openingCash, INCOME_COST_CURRENCY)}
+            accent="text-emerald-300/90"
+          />
+          <Meta
+            label="Annual income"
+            value={formatMoney(totals.incomeYearly, INCOME_COST_CURRENCY)}
+          />
+          <Meta
+            label="Annual cost"
+            value={formatMoney(totals.costYearly, INCOME_COST_CURRENCY)}
+          />
+          <Meta
+            label="Annual net"
+            value={formatMoney(totals.netYearly, INCOME_COST_CURRENCY)}
+            accent={totals.netYearly >= 0 ? 'text-emerald-400' : 'text-red-300'}
+          />
+          <Meta
+            label="Year-end balance"
+            value={formatMoney(yearEndWorking, INCOME_COST_CURRENCY)}
+            accent={yearEndWorking >= 0 ? 'text-sky-300' : 'text-red-300'}
+          />
+          <Meta
+            label="After draws (Dec)"
+            value={formatMoney(yearEndAfterDraws, INCOME_COST_CURRENCY)}
+            accent={yearEndAfterDraws >= 0 ? 'text-pink-300' : 'text-red-300'}
+          />
+        </div>
       </div>
 
-      <p className="text-[11px] text-white/40">
-        Opening working balance = permanent <strong className="text-white/55">Cash</strong>{' '}
-        savings account, year-end of {priorYear} (set under Savings → Actuals as{' '}
-        {priorYear}-12). Budget income/cost and draws build on top of that.
-      </p>
-
       {missingMonths > 0 && (
-        <p className="rounded-lg border border-amber-500/30 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
+        <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
           {missingMonths} one-time position{missingMonths === 1 ? '' : 's'} have no month set —
           they still count in the annual budget but not here. Set Paid in / Received in on the
-          Budget tab (full amount in that month only).
+          Budget tab.
         </p>
       )}
 
-      <div>
-        <h3 className="mb-2 text-sm font-semibold uppercase tracking-wider text-white/50">
-          {scenario.year} · monthly cash flow
-        </h3>
+      <div className="panel space-y-3">
+        <div>
+          <p className="section-kicker">Chart</p>
+          <h3 className="section-title mt-0.5">
+            {scenario.year}
+            <span className="ml-2 font-normal text-white/40">· monthly cash flow</span>
+          </h3>
+        </div>
         <FullscreenChart title={`${scenario.year} · monthly cash flow`}>
           <MonthlyFlowChart schedule={schedule} />
         </FullscreenChart>
       </div>
 
-      <div className="overflow-x-auto rounded-xl border border-white/10">
-        <table className="w-full min-w-[560px] text-left text-sm">
-          <thead className="bg-white/5 text-[11px] uppercase tracking-wider text-white/45">
-            <tr>
+      <div className="table-shell">
+        <table className="min-w-[560px] text-sm">
+          <thead className="text-[11px] uppercase tracking-wider text-white/45">
+            <tr className="border-b border-white/10">
               <th className="px-3 py-2 font-medium">Month</th>
               <th className="px-3 py-2 text-right font-medium">Inflow</th>
               <th className="px-3 py-2 text-right font-medium">Outflow</th>
@@ -519,7 +534,7 @@ export function MonthlyBudgetView({
             ))}
           </tbody>
           <tfoot>
-            <tr className="border-t border-white/15 bg-white/[0.03] text-xs font-medium text-white/70">
+            <tr className="border-t border-white/10 text-xs font-medium text-white/70">
               <td className="px-3 py-2">Year total / end</td>
               <td className="px-3 py-2 text-right tabular-nums text-emerald-300/90">
                 {formatMoney(
@@ -552,11 +567,6 @@ export function MonthlyBudgetView({
           </tfoot>
         </table>
       </div>
-      <p className="text-[11px] text-white/35">
-        Budget inflows/outflows come from Income/Cost positions. Draws reduce the “After draws”
-        balance only and never change annual budget net or deposits. Working balance starts from
-        permanent Cash (Dec prior year).
-      </p>
 
       <DrawsEditor
         draws={scenarioDraws}
@@ -567,7 +577,7 @@ export function MonthlyBudgetView({
 
       {drawsYearTotal > 0 && (
         <p className="text-[11px] text-violet-300/80">
-          Draws this year: {formatMoney(drawsYearTotal, INCOME_COST_CURRENCY)} (informative)
+          Draws this year: {formatMoney(drawsYearTotal, INCOME_COST_CURRENCY)}
         </p>
       )}
     </div>
@@ -584,7 +594,7 @@ function Meta({
   accent?: string
 }) {
   return (
-    <div className="rounded-lg border border-white/10 bg-black/20 px-3 py-2">
+    <div className="min-w-0">
       <div className="text-[10px] uppercase tracking-wider text-white/40">{label}</div>
       <div className={`truncate text-sm font-semibold tabular-nums ${accent ?? 'text-white/90'}`}>
         {value}

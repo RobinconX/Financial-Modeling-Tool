@@ -47,7 +47,7 @@ export function OverviewCompareChart({
         className={
           fillContainer
             ? 'flex h-full min-h-[16rem] items-center justify-center text-sm text-white/40'
-            : 'flex h-72 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40'
+            : 'flex h-72 items-center justify-center text-sm text-white/40'
         }
       >
         Select at least one scenario to compare
@@ -194,10 +194,6 @@ export function OverviewCompareChart({
           </LineChart>
         </ResponsiveContainer>
       </div>
-      <p className="mt-2 text-[11px] text-white/35">
-        Past years → <span className="text-white/55">Now</span> (live) → current / future. Each line
-        is total net worth for a scenario (enabled series only), in {OVERVIEW_CURRENCY}.
-      </p>
     </div>
   )
 }
