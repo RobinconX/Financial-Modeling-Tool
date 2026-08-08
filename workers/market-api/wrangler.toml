@@ -1,0 +1,6 @@
+name = "fmt-market-api"
+main = "src/index.ts"
+compatibility_date = "2025-01-01"
+
+# Free tier is enough for personal use.
+# Deploy: cd workers/market-api && npx wrangler deploy

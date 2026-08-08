@@ -38,6 +38,9 @@ jobs:
           # Set if the site is served from https://<user>.github.io/<repo>/
           # Leave empty for a custom domain or user/org root site.
           VITE_BASE: ${{ vars.VITE_BASE }}
+          # Quote/FX proxy for static Pages (Cloudflare Worker URL, no trailing slash).
+          # Example: https://fmt-market-api.<account>.workers.dev
+          VITE_API_BASE: ${{ vars.VITE_API_BASE }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

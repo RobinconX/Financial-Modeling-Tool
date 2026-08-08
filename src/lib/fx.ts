@@ -1,4 +1,5 @@
 import type { DisplayCurrency } from '../types'
+import { apiUrl } from './apiBase'
 
 export type FxQuote = {
   from: string
@@ -65,18 +66,46 @@ export function amountToDisplay(
   return toDisplay(usd, displayCurrency, usdToChf)
 }
 
+/**
+ * Prefer same-origin / external proxy; fall back to Frankfurter in the browser
+ * (CORS-friendly) so CHF display still works on static GitHub Pages.
+ */
 export async function fetchFxRateClient(
   from = 'USD',
   to = 'CHF',
 ): Promise<FxQuote> {
-  const url = `/api/fx?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
-  const res = await fetch(url)
-  const data = (await res.json()) as FxQuote & { error?: string }
-  if (!res.ok) {
-    throw new Error(data.error || `FX failed (${res.status})`)
+  const path = `/api/fx?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
+  try {
+    const res = await fetch(apiUrl(path))
+    if (res.ok) {
+      const data = (await res.json()) as FxQuote & { error?: string }
+      if (Number.isFinite(data.rate) && data.rate > 0) return data
+    }
+  } catch {
+    /* try direct */
   }
-  if (!Number.isFinite(data.rate) || data.rate <= 0) {
-    throw new Error('Invalid FX rate')
+  return fetchFxRateDirect(from, to)
+}
+
+async function fetchFxRateDirect(from: string, to: string): Promise<FxQuote> {
+  const base = from.trim().toUpperCase()
+  const quote = to.trim().toUpperCase()
+  if (!base || !quote) throw new Error('Missing currency codes')
+  if (base === quote) {
+    return { from: base, to: quote, rate: 1, asOf: new Date().toISOString().slice(0, 10) }
   }
-  return data
+  const url = `https://api.frankfurter.app/latest?from=${encodeURIComponent(base)}&to=${encodeURIComponent(quote)}`
+  const res = await fetch(url, { headers: { Accept: 'application/json' } })
+  if (!res.ok) throw new Error(`FX request failed (${res.status})`)
+  const data = (await res.json()) as { date?: string; rates?: Record<string, number> }
+  const rate = data.rates?.[quote]
+  if (rate == null || !Number.isFinite(rate) || rate <= 0) {
+    throw new Error(`No rate for ${base}/${quote}`)
+  }
+  return {
+    from: base,
+    to: quote,
+    rate,
+    asOf: data.date ?? new Date().toISOString().slice(0, 10),
+  }
 }
