@@ -207,6 +207,53 @@ describe('scenario projection share prices on portfolio', () => {
     expect(prices.get(2030)).toBeCloseTo(40, 6)
   })
 
+  it('uses current-year projection for year-end but not for Now (live)', () => {
+    const sc = scenario({
+      currentPrice: 10,
+      currentMarketCap: 1_000_000,
+      easyRows: [
+        { id: 'e0', year: 2026, projectedMarketCap: 1_500_000 }, // year-end
+        { id: 'e1', year: 2027, projectedMarketCap: 2_000_000 },
+      ],
+    })
+    // year-end 2026 price = 1.5e6 / 1e5 = 15
+    const prices = getScenarioSharePriceByYear(sc, 'easy', 2026)
+    expect(prices.get(2026)).toBeCloseTo(15, 6)
+
+    const holding: PortfolioHolding = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 100,
+      scenarioId: sc.id,
+      basis: 'easy',
+      manualCurrentPrice: null,
+    }
+    // Year-end 2026 uses projection; Now uses live $10
+    const values = computeHoldingValues(holding, sc, [], 2026)
+    expect(values.get(2026)).toBeCloseTo(1_500, 6) // 100 × $15
+    expect(holdingLiveValue(holding, sc, [], 2026)).toBeCloseTo(1_000, 6) // 100 × $10
+
+    const grid = buildPortfolioGrid(
+      basePortfolio({
+        deposits: [newOpeningDeposit(0, 2026)],
+        holdings: [holding],
+      }),
+      [sc],
+      2026,
+    )
+    const eq = grid.rows.find((r) => r.kind === 'equity')!
+    expect(eq.values[grid.years.indexOf(2026)]).toBeCloseTo(1_500, 6)
+
+    const chart = buildPortfolioChartData(grid, basePortfolio({
+      deposits: [newOpeningDeposit(0, 2026)],
+      holdings: [holding],
+    }), [sc], 2026)
+    const now = chart.find((p) => p.isNow)!
+    const y2026 = chart.find((p) => p.year === 2026)!
+    expect(now.total).toBeCloseTo(1_000, 6)
+    expect(y2026.total).toBeCloseTo(1_500, 6)
+  })
+
   it('shows holding values for 2027 and 2030 on the grid', () => {
     const sc = scenario()
     const holding: PortfolioHolding = {

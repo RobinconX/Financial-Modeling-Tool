@@ -125,11 +125,26 @@ describe('materializeEasyCagrYears', () => {
       { id: 'a', year: 2030, projectedMarketCap: 200 },
       { id: 'b', year: 2034, projectedMarketCap: 400 },
     ]
+    // Without current mcap: only between the two stated years
     expect(easyCagrGapYears(rows)).toEqual([2031, 2032, 2033])
     const filled = materializeEasyCagrYears(rows)
     expect(filled.map((r) => r.year)).toEqual([2030, 2031, 2032, 2033, 2034])
     const mid = filled.find((r) => r.year === 2032)!
     expect(mid.projectedMarketCap).toBeCloseTo(200 * Math.SQRT2, 10)
+  })
+
+  it('fills from today when only one future year is present', () => {
+    const rows: EasyProjection[] = [
+      { id: 'a', year: 2030, projectedMarketCap: 200 },
+    ]
+    expect(easyCagrGapYears(rows, 100, 2026)).toEqual([2027, 2028, 2029])
+    const filled = materializeEasyCagrYears(rows, 100, 2026)
+    expect(filled.map((r) => r.year)).toEqual([2027, 2028, 2029, 2030])
+    // 100 → 200 over 4 years; midpoint 2028 = 100 * √2
+    expect(filled.find((r) => r.year === 2028)!.projectedMarketCap).toBeCloseTo(
+      100 * Math.SQRT2,
+      10,
+    )
   })
 
   it('does not overwrite existing positive mcap years', () => {
@@ -177,6 +192,29 @@ describe('materializeAdvancedCagrYears', () => {
     expect(mid.revenue).toBeCloseTo(110, 10)
     expect(mid.psMultiple).toBeCloseTo(10, 10)
     expect(mid.dilutionFactor).toBeCloseTo(1.1, 10)
+  })
+
+  it('fills from today with one future year using current mcap', () => {
+    const rows: YearProjection[] = [
+      {
+        id: 'a',
+        year: 2030,
+        dilutionFactor: 1,
+        revenue: 20, // mcap 200 at 10x
+        psMultiple: 10,
+        fcf: null,
+        pfcfMultiple: null,
+        profit: null,
+        peMultiple: null,
+      },
+    ]
+    // today mcap 100 → back out revenue 10 at same 10x; path 10→20 over 4y
+    expect(advancedCagrGapYears(rows, 100, 2026)).toEqual([2027, 2028, 2029])
+    const filled = materializeAdvancedCagrYears(rows, 100, 2026)
+    expect(filled.map((r) => r.year)).toEqual([2027, 2028, 2029, 2030])
+    const mid = filled.find((r) => r.year === 2028)!
+    expect(mid.revenue).toBeCloseTo(10 * Math.SQRT2, 10)
+    expect(mid.psMultiple).toBeCloseTo(10, 10)
   })
 })
 

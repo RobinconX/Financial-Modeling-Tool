@@ -86,6 +86,7 @@ function normalizeSeries(raw: unknown, index: number): OverviewSeries | null {
     series.annualRatePercent = asNumber(raw.annualRatePercent, 0)
     series.baseYear = Math.floor(asNumber(raw.baseYear, new Date().getFullYear()))
     series.yearBindings = parseBindings(raw.yearBindings, true)
+    series.perpetualYearlyChf = Math.max(0, asNumber(raw.perpetualYearlyChf, 0))
   }
   if (type === 'incomeLeftover') {
     series.baseChf = Math.max(0, asNumber(raw.baseChf, 0))
@@ -127,9 +128,12 @@ function normalizeScenario(raw: unknown, index: number, asOf = new Date()): Over
       .filter((s): s is OverviewSeries => s != null),
     asOf,
   )
+  const description =
+    typeof raw.description === 'string' ? raw.description : ''
   return {
     id: typeof raw.id === 'string' ? raw.id : crypto.randomUUID(),
     name: name || `Scenario ${index + 1}`,
+    description,
     sortOrder: Math.floor(asNumber(raw.sortOrder, index)),
     startYear: range.startYear,
     endYear: range.endYear,

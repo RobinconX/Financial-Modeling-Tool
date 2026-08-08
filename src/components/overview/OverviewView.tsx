@@ -44,6 +44,7 @@ export function OverviewView({
     addScenario,
     saveAsScenario,
     renameScenario,
+    updateScenario,
     removeScenario,
     setRange,
     addSeries,
@@ -197,73 +198,92 @@ export function OverviewView({
       ) : null}
 
       {/* Scenario bar */}
-      <div className="card flex flex-wrap items-center gap-2 p-3">
-        <span className="text-[11px] font-medium uppercase tracking-wider text-white/40">
-          Scenario
-        </span>
-        <select
-          className="input !w-auto min-w-[10rem] !py-1.5 !text-xs"
-          value={selectedScenarioId ?? ''}
-          onChange={(e) => selectScenario(e.target.value)}
-        >
-          {scenarios.map((s) => (
-            <option key={s.id} value={s.id}>
-              {s.name}
-            </option>
-          ))}
-        </select>
-        {selectedScenario ? (
-          <input
-            className="input !w-40 !py-1.5 !text-xs"
-            value={selectedScenario.name}
-            onChange={(e) => renameScenario(selectedScenario.id, e.target.value)}
-            title="Rename scenario"
-            aria-label="Scenario name"
-          />
-        ) : null}
-        <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => addScenario()}>
-          + New
-        </button>
-        <button
-          type="button"
-          className="btn-ghost !py-1 !text-xs"
-          onClick={() => {
-            setSaveAsName(`Copy of ${selectedScenario?.name ?? 'scenario'}`)
-            setShowSaveAs((v) => !v)
-          }}
-        >
-          Save as…
-        </button>
-        <button
-          type="button"
-          className="btn-ghost !py-1 !text-xs text-red-300/80 disabled:opacity-40"
-          disabled={scenarios.length <= 1 || !selectedScenarioId}
-          onClick={() => selectedScenarioId && removeScenario(selectedScenarioId)}
-          title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete scenario'}
-        >
-          Delete
-        </button>
-        {showSaveAs ? (
-          <div className="flex flex-wrap items-center gap-1.5 border-l border-white/10 pl-2">
+      <div className="card space-y-2 p-3">
+        <div className="flex flex-wrap items-center gap-2">
+          <span className="text-[11px] font-medium uppercase tracking-wider text-white/40">
+            Scenario
+          </span>
+          <select
+            className="input !w-auto min-w-[10rem] !py-1.5 !text-xs"
+            value={selectedScenarioId ?? ''}
+            onChange={(e) => selectScenario(e.target.value)}
+          >
+            {scenarios.map((s) => (
+              <option key={s.id} value={s.id}>
+                {s.name}
+              </option>
+            ))}
+          </select>
+          {selectedScenario ? (
             <input
-              className="input !w-44 !py-1 !text-xs"
-              value={saveAsName}
-              onChange={(e) => setSaveAsName(e.target.value)}
-              placeholder="Scenario name"
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') handleSaveAs()
-              }}
+              className="input !w-40 !py-1.5 !text-xs"
+              value={selectedScenario.name}
+              onChange={(e) => renameScenario(selectedScenario.id, e.target.value)}
+              title="Rename scenario"
+              aria-label="Scenario name"
             />
-            <button type="button" className="btn-primary !py-1 !text-xs" onClick={handleSaveAs}>
-              Save
-            </button>
-            <button
-              type="button"
-              className="btn-ghost !py-1 !text-xs"
-              onClick={() => setShowSaveAs(false)}
-            >
-              Cancel
-            </button>
+          ) : null}
+          <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => addScenario()}>
+            + New
+          </button>
+          <button
+            type="button"
+            className="btn-ghost !py-1 !text-xs"
+            onClick={() => {
+              setSaveAsName(`Copy of ${selectedScenario?.name ?? 'scenario'}`)
+              setShowSaveAs((v) => !v)
+            }}
+          >
+            Save as…
+          </button>
+          <button
+            type="button"
+            className="btn-ghost !py-1 !text-xs text-red-300/80 disabled:opacity-40"
+            disabled={scenarios.length <= 1 || !selectedScenarioId}
+            onClick={() => selectedScenarioId && removeScenario(selectedScenarioId)}
+            title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete scenario'}
+          >
+            Delete
+          </button>
+          {showSaveAs ? (
+            <div className="flex flex-wrap items-center gap-1.5 border-l border-white/10 pl-2">
+              <input
+                className="input !w-44 !py-1 !text-xs"
+                value={saveAsName}
+                onChange={(e) => setSaveAsName(e.target.value)}
+                placeholder="Scenario name"
+                onKeyDown={(e) => {
+                  if (e.key === 'Enter') handleSaveAs()
+                }}
+              />
+              <button type="button" className="btn-primary !py-1 !text-xs" onClick={handleSaveAs}>
+                Save
+              </button>
+              <button
+                type="button"
+                className="btn-ghost !py-1 !text-xs"
+                onClick={() => setShowSaveAs(false)}
+              >
+                Cancel
+              </button>
+            </div>
+          ) : null}
+        </div>
+        {selectedScenario ? (
+          <div>
+            <label className="label !mb-1 !text-[10px]" htmlFor="overview-scenario-description">
+              Assumptions / notes
+            </label>
+            <textarea
+              id="overview-scenario-description"
+              className="input min-h-[3.25rem] w-full resize-y !py-1.5 !text-xs leading-relaxed"
+              rows={2}
+              value={selectedScenario.description ?? ''}
+              placeholder="Optional: what this scenario assumes (growth rates, deposits, leftovers…)"
+              onChange={(e) =>
+                updateScenario(selectedScenario.id, { description: e.target.value })
+              }
+            />
           </div>
         ) : null}
       </div>

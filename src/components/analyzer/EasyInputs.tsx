@@ -54,11 +54,11 @@ export function EasyInputs({
     commit([...rows, newEasyProjection(nextYear, null)])
   }
 
-  const cagrGaps = easyCagrGapYears(rows)
+  const cagrGaps = easyCagrGapYears(rows, currentMarketCap, currentYear)
 
   function fillIntermediateYears() {
     if (cagrGaps.length === 0) return
-    commit(materializeEasyCagrYears(rows))
+    commit(materializeEasyCagrYears(rows, currentMarketCap, currentYear))
   }
 
   function setSharePrice(id: string, sharePrice: number | null) {
@@ -152,9 +152,17 @@ export function EasyInputs({
               <NumberInput
                 label="Target year"
                 value={row.year}
-                min={currentYear + 1}
+                min={currentYear}
                 step="1"
-                onChange={(year) => updateRow(row.id, { year: year ?? currentYear + 5 })}
+                commitOnBlur
+                onChange={(year) =>
+                  updateRow(row.id, {
+                    year:
+                      year != null && Number.isFinite(year)
+                        ? Math.floor(year)
+                        : currentYear + 5,
+                  })
+                }
                 placeholder={String(currentYear + 5)}
               />
               <MoneyInput
@@ -202,8 +210,8 @@ export function EasyInputs({
           disabled={cagrGaps.length === 0}
           title={
             cagrGaps.length === 0
-              ? 'Need at least two years with market cap and a gap between them'
-              : `Create ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} via implied CAGR (saved into this projection)`
+              ? 'Need a future year with market cap (and today’s mcap, or a second year) with a multi-year gap'
+              : `Create ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} via implied CAGR from today / between years`
           }
         >
           {cagrGaps.length === 0

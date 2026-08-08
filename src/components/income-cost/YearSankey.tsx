@@ -13,6 +13,8 @@ type Props = {
   lines: CashflowLine[]
   scenarioId: string
   scenarioName: string
+  /** Grow to parent height (fullscreen overlay) */
+  fillContainer?: boolean
 }
 
 type TipContent = {
@@ -258,7 +260,12 @@ function makeLinkShape(byKey: Map<string, SankeyNode>, hover: HoverHandlers) {
   }
 }
 
-export function YearSankey({ lines, scenarioId, scenarioName }: Props) {
+export function YearSankey({
+  lines,
+  scenarioId,
+  scenarioName,
+  fillContainer = false,
+}: Props) {
   const data = buildScenarioSankeyData(lines, scenarioId)
   const containerRef = useRef<HTMLDivElement>(null)
   const [tip, setTip] = useState<TipState | null>(null)
@@ -298,7 +305,13 @@ export function YearSankey({ lines, scenarioId, scenarioName }: Props) {
 
   if (!data) {
     return (
-      <div className="flex h-64 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
+      <div
+        className={
+          fillContainer
+            ? 'flex h-full min-h-[16rem] items-center justify-center text-sm text-white/40'
+            : 'flex h-64 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40'
+        }
+      >
         Add income and costs for “{scenarioName}” to see where money goes
       </div>
     )
@@ -306,20 +319,38 @@ export function YearSankey({ lines, scenarioId, scenarioName }: Props) {
 
   const nodeCount = data.nodes.length
   const height = Math.max(320, Math.min(560, 120 + nodeCount * 36))
+  // Fullscreen: denser node padding so the diagram uses the tall canvas
+  const nodePadding = fillContainer
+    ? Math.max(12, Math.min(48, 420 / Math.max(nodeCount, 1)))
+    : Math.max(18, Math.min(36, 280 / Math.max(nodeCount, 1)))
 
   // Keep tooltip inside the chart area
-  const tipLeft = tip ? Math.min(tip.x + 14, Math.max(8, (containerRef.current?.clientWidth ?? 320) - 180)) : 0
+  const tipLeft = tip
+    ? Math.min(tip.x + 14, Math.max(8, (containerRef.current?.clientWidth ?? 320) - 180))
+    : 0
   const tipTop = tip ? Math.max(8, tip.y - 12) : 0
 
   return (
-    <div className="w-full">
-      <div ref={containerRef} className="relative w-full" style={{ height }}>
-        <ResponsiveContainer width="100%" height="100%">
+    <div
+      className={
+        fillContainer ? 'flex h-full min-h-0 w-full flex-col' : 'w-full'
+      }
+    >
+      <div
+        ref={containerRef}
+        className={
+          fillContainer
+            ? 'relative min-h-0 w-full flex-1'
+            : 'relative w-full'
+        }
+        style={fillContainer ? undefined : { height }}
+      >
+        <ResponsiveContainer width="100%" height="100%" minHeight={fillContainer ? 280 : undefined}>
           <Sankey
             data={data}
             nameKey="displayName"
             nodeWidth={14}
-            nodePadding={Math.max(18, Math.min(36, 280 / Math.max(nodeCount, 1)))}
+            nodePadding={nodePadding}
             linkCurvature={0.45}
             iterations={64}
             margin={{ top: 12, right: 140, bottom: 12, left: 140 }}
@@ -339,7 +370,11 @@ export function YearSankey({ lines, scenarioId, scenarioName }: Props) {
         ) : null}
       </div>
 
-      <div className="mt-2 flex flex-wrap items-center justify-center gap-3 text-[11px] text-white/40">
+      <div
+        className={`flex flex-wrap items-center justify-center gap-3 text-[11px] text-white/40 ${
+          fillContainer ? 'mt-3 shrink-0' : 'mt-2'
+        }`}
+      >
         <span className="inline-flex items-center gap-1.5">
           <span className="h-2 w-2 rounded-sm bg-emerald-400" /> Income
         </span>

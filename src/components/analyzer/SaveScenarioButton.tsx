@@ -11,6 +11,10 @@ type Props = {
   onSave: (
     input: SaveInput,
   ) => { scenario: SavedScenario; overwritten: boolean } | { error: string }
+  /** Button label (default Save scenario) */
+  buttonLabel?: string
+  /** Prefill scenario name in the dialog */
+  defaultName?: string
 }
 
 export function SaveScenarioButton({
@@ -19,16 +23,18 @@ export function SaveScenarioButton({
   easyRows,
   advancedRows,
   onSave,
+  buttonLabel = 'Save scenario',
+  defaultName = 'Base',
 }: Props) {
   const [open, setOpen] = useState(false)
-  const [name, setName] = useState('Base')
+  const [name, setName] = useState(defaultName)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
   const canSave = Boolean(quote?.symbol)
 
   function handleOpen() {
-    setName('Base')
+    setName(defaultName)
     setMessage(null)
     setError(null)
     setOpen(true)
@@ -75,7 +81,7 @@ export function SaveScenarioButton({
         onClick={handleOpen}
         title={canSave ? 'Save Easy + Advanced assumptions for this ticker' : 'Fetch a ticker first'}
       >
-        Save scenario
+        {buttonLabel}
       </button>
 
       {open && (

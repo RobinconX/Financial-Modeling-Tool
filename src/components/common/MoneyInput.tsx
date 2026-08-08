@@ -119,13 +119,19 @@ export function MoneyInput({
 }
 
 type NumberProps = {
-  label: string
+  label?: string
   value: number | null
   onChange: (value: number | null) => void
   placeholder?: string
   step?: string
   min?: number
   disabled?: boolean
+  className?: string
+  /**
+   * When true, parent is only updated on blur/Enter. Use for fields that
+   * reorder a list by value (e.g. projection years) so typing stays stable.
+   */
+  commitOnBlur?: boolean
 }
 
 export function NumberInput({
@@ -136,26 +142,66 @@ export function NumberInput({
   step = 'any',
   min,
   disabled,
+  className = 'input',
+  commitOnBlur = false,
 }: NumberProps) {
+  const [text, setText] = useState(() => (value == null ? '' : String(value)))
+  const [focused, setFocused] = useState(false)
+
+  useEffect(() => {
+    if (focused) return
+    setText(value == null ? '' : String(value))
+  }, [value, focused])
+
+  function commit(raw: string) {
+    const trimmed = raw.trim()
+    if (!trimmed) {
+      // Keep previous committed value (e.g. year fields should not clear)
+      setText(value == null ? '' : String(value))
+      return
+    }
+    const n = Number(trimmed)
+    if (!Number.isFinite(n)) {
+      setText(value == null ? '' : String(value))
+      return
+    }
+    onChange(n)
+    setText(String(n))
+  }
+
   return (
     <div>
-      <label className="label">{label}</label>
+      {label != null && label !== '' ? <label className="label">{label}</label> : null}
       <input
-        className="input"
+        className={className}
         type="number"
         step={step}
         min={min}
         disabled={disabled}
         placeholder={placeholder}
-        value={value ?? ''}
+        value={commitOnBlur ? text : (value ?? '')}
+        onFocus={() => setFocused(true)}
         onChange={(e) => {
           const v = e.target.value
+          if (commitOnBlur) {
+            setText(v)
+            return
+          }
           if (v === '') {
             onChange(null)
             return
           }
           const n = Number(v)
           onChange(Number.isFinite(n) ? n : null)
+        }}
+        onBlur={() => {
+          setFocused(false)
+          if (commitOnBlur) commit(text)
+        }}
+        onKeyDown={(e) => {
+          if (commitOnBlur && e.key === 'Enter') {
+            e.currentTarget.blur()
+          }
         }}
       />
     </div>

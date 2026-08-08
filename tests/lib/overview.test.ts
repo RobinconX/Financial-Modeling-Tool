@@ -122,6 +122,82 @@ describe('manual series', () => {
     expect(seriesValueChf(manual, 2027, deps)).toBeCloseTo(30_000, 4)
     expect(seriesValueChf(leftover, 2027, deps)).toBeCloseTo(10_000, 4)
   })
+
+  it('manual flat perpetual after last stated binding year', () => {
+    const manual: OverviewSeries = {
+      id: 'm',
+      name: 'House fund',
+      enabled: true,
+      sortOrder: 0,
+      type: 'manual',
+      baseChf: 1_000,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      perpetualYearlyChf: 5_000,
+      yearBindings: [{ year: 2027, incomeCostScenarioId: 'ic', percent: 50 }],
+    }
+    const deps = {
+      portfolios: [],
+      stockScenarios: [],
+      savingsAccounts: [],
+      incomeCostLines: [
+        {
+          id: 'i',
+          scenarioId: 'ic',
+          kind: 'income' as const,
+          name: 'Pay',
+          cadence: 'recurring' as const,
+          yearlyAmount: 40_000,
+        },
+        {
+          id: 'c',
+          scenarioId: 'ic',
+          kind: 'cost' as const,
+          name: 'Cost',
+          cadence: 'recurring' as const,
+          yearlyAmount: 0,
+        },
+      ],
+      usdToChf: 0.9,
+      asOf,
+      overviewPortfolioIds: [] as string[],
+      overviewSeries: [manual],
+    }
+    // 2026: base only (no binding, but last binding is 2027 so no perpetual yet)
+    expect(seriesValueChf(manual, 2026, deps)).toBeCloseTo(1_000, 4)
+    // 2027: base + 50% of 40k IC
+    expect(seriesValueChf(manual, 2027, deps)).toBeCloseTo(21_000, 4)
+    // 2028+: +5k perpetual each year
+    expect(seriesValueChf(manual, 2028, deps)).toBeCloseTo(26_000, 4)
+    expect(seriesValueChf(manual, 2029, deps)).toBeCloseTo(31_000, 4)
+  })
+
+  it('manual perpetual every year when no year bindings', () => {
+    const manual: OverviewSeries = {
+      id: 'm',
+      name: 'Flat contrib',
+      enabled: true,
+      sortOrder: 0,
+      type: 'manual',
+      baseChf: 0,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      perpetualYearlyChf: 12_000,
+      yearBindings: [],
+    }
+    const deps = {
+      portfolios: [],
+      stockScenarios: [],
+      savingsAccounts: [],
+      incomeCostLines: [],
+      usdToChf: 0.9,
+      asOf,
+      overviewPortfolioIds: [] as string[],
+      overviewSeries: [manual],
+    }
+    expect(seriesValueChf(manual, 2026, deps)).toBeCloseTo(12_000, 4)
+    expect(seriesValueChf(manual, 2027, deps)).toBeCloseTo(24_000, 4)
+  })
 })
 
 describe('buildOverviewChartRows', () => {

@@ -136,7 +136,8 @@ export function buildEasyProjections(
   for (const easy of easyRows) {
     if (easy.projectedMarketCap == null || easy.projectedMarketCap <= 0) continue
     const years = yearsUntil(easy.year, currentYear)
-    if (years <= 0) continue
+    // Include current year (year-end projection); skip past years only
+    if (years < 0) continue
     results.push({
       year: easy.year,
       basis: 'easy',
@@ -144,7 +145,7 @@ export function buildEasyProjections(
       equityValue: easy.projectedMarketCap,
       dilutionFactor: 1,
       totalReturn: totalReturn(currentMarketCap, easy.projectedMarketCap),
-      cagr: cagr(currentMarketCap, easy.projectedMarketCap, years),
+      cagr: years > 0 ? cagr(currentMarketCap, easy.projectedMarketCap, years) : NaN,
       years,
     })
   }
@@ -163,7 +164,8 @@ export function buildAdvancedProjections(
 
   for (const row of rows) {
     const years = yearsUntil(row.year, currentYear)
-    if (years <= 0) continue
+    // Include current year (year-end projection); skip past years only
+    if (years < 0) continue
     const dilution = normalizeDilution(row.dilutionFactor)
     for (const basis of bases) {
       const mcap = impliedForBasis(row, basis)
@@ -177,7 +179,7 @@ export function buildAdvancedProjections(
         equityValue,
         dilutionFactor: dilution,
         totalReturn: totalReturn(currentMarketCap, equityValue),
-        cagr: cagr(currentMarketCap, equityValue, years),
+        cagr: years > 0 ? cagr(currentMarketCap, equityValue, years) : NaN,
         years,
       })
     }
@@ -199,14 +201,41 @@ function interpPositiveField(
   return interpolateByCagr(fromYear, fromVal, toYear, toVal, year)
 }
 
+type EasyMcapAnchor = { year: number; projectedMarketCap: number }
+
 /**
- * Calendar years that sit in a gap between two easy anchors with mcap,
- * and are missing (or have no usable mcap). Used to enable the fill button.
+ * Easy mcap anchors: optional today (current mcap) plus stated years with mcap.
+ * Stated year-end for the current calendar year overwrites the live mcap anchor.
  */
-export function easyCagrGapYears(rows: EasyProjection[]): number[] {
-  const anchors = sortEasyProjections(rows).filter(
-    (r) => r.projectedMarketCap != null && r.projectedMarketCap > 0,
-  )
+function easyMcapAnchors(
+  rows: EasyProjection[],
+  currentMarketCap?: number | null,
+  currentYear = new Date().getFullYear(),
+): EasyMcapAnchor[] {
+  const byYear = new Map<number, number>()
+  if (currentMarketCap != null && currentMarketCap > 0) {
+    byYear.set(currentYear, currentMarketCap)
+  }
+  for (const r of sortEasyProjections(rows)) {
+    if (r.year < currentYear) continue
+    if (r.projectedMarketCap == null || !(r.projectedMarketCap > 0)) continue
+    byYear.set(r.year, r.projectedMarketCap)
+  }
+  return [...byYear.entries()]
+    .map(([year, projectedMarketCap]) => ({ year, projectedMarketCap }))
+    .sort((a, b) => a.year - b.year)
+}
+
+/**
+ * Calendar years that sit in a gap between easy anchors (including today→first
+ * projection when current mcap is known) and are missing a usable mcap.
+ */
+export function easyCagrGapYears(
+  rows: EasyProjection[],
+  currentMarketCap?: number | null,
+  currentYear = new Date().getFullYear(),
+): number[] {
+  const anchors = easyMcapAnchors(rows, currentMarketCap, currentYear)
   const existing = new Map(rows.map((r) => [r.year, r]))
   const gaps: number[] = []
   for (let i = 0; i < anchors.length - 1; i++) {
@@ -224,13 +253,17 @@ export function easyCagrGapYears(rows: EasyProjection[]): number[] {
 
 /**
  * Insert real easy projection rows for intermediate years between anchors,
- * using the implied CAGR on projected market cap. Does not overwrite years
- * that already have a positive mcap. Chart-only interpolation is unchanged.
+ * using the implied CAGR on projected market cap.
+ * When `currentMarketCap` is set, also fills from today to the first stated year
+ * (works with a single future projection). Does not overwrite years that already
+ * have a positive mcap.
  */
-export function materializeEasyCagrYears(rows: EasyProjection[]): EasyProjection[] {
-  const anchors = sortEasyProjections(rows).filter(
-    (r) => r.projectedMarketCap != null && r.projectedMarketCap > 0,
-  )
+export function materializeEasyCagrYears(
+  rows: EasyProjection[],
+  currentMarketCap?: number | null,
+  currentYear = new Date().getFullYear(),
+): EasyProjection[] {
+  const anchors = easyMcapAnchors(rows, currentMarketCap, currentYear)
   if (anchors.length < 2) return sortEasyProjections(rows)
 
   const byYear = new Map<number, EasyProjection>()
@@ -242,9 +275,9 @@ export function materializeEasyCagrYears(rows: EasyProjection[]): EasyProjection
     for (let y = a.year + 1; y < b.year; y++) {
       const mcap = interpolateByCagr(
         a.year,
-        a.projectedMarketCap!,
+        a.projectedMarketCap,
         b.year,
-        b.projectedMarketCap!,
+        b.projectedMarketCap,
         y,
       )
       if (mcap == null) continue
@@ -264,38 +297,149 @@ export function materializeEasyCagrYears(rows: EasyProjection[]): EasyProjection
 }
 
 /**
- * Intermediate years missing between consecutive advanced rows (by calendar year).
+ * Synthetic "today" advanced row so CAGR can run from current mcap to the first
+ * stated year: keep end multiples constant and back out metrics from current mcap.
  */
-export function advancedCagrGapYears(rows: YearProjection[]): number[] {
-  const sorted = sortYearProjections(rows)
-  if (sorted.length < 2) return []
+function syntheticAdvancedStartFromMcap(
+  currentYear: number,
+  currentMarketCap: number,
+  first: YearProjection,
+): YearProjection {
+  let revenue: number | null = null
+  let psMultiple: number | null = null
+  let fcf: number | null = null
+  let pfcfMultiple: number | null = null
+  let profit: number | null = null
+  let peMultiple: number | null = null
+
+  if (
+    first.revenue != null &&
+    first.revenue > 0 &&
+    first.psMultiple != null &&
+    first.psMultiple > 0
+  ) {
+    psMultiple = first.psMultiple
+    revenue = currentMarketCap / psMultiple
+  }
+  if (first.fcf != null && first.fcf > 0 && first.pfcfMultiple != null && first.pfcfMultiple > 0) {
+    pfcfMultiple = first.pfcfMultiple
+    fcf = currentMarketCap / pfcfMultiple
+  }
+  if (
+    first.profit != null &&
+    first.profit > 0 &&
+    first.peMultiple != null &&
+    first.peMultiple > 0
+  ) {
+    peMultiple = first.peMultiple
+    profit = currentMarketCap / peMultiple
+  }
+
+  return {
+    id: '__cagr_start__',
+    year: currentYear,
+    dilutionFactor: 1,
+    revenue,
+    psMultiple,
+    fcf,
+    pfcfMultiple,
+    profit,
+    peMultiple,
+  }
+}
+
+function advancedHasFillableBasis(row: YearProjection): boolean {
+  return (
+    (row.revenue != null &&
+      row.revenue > 0 &&
+      row.psMultiple != null &&
+      row.psMultiple > 0) ||
+    (row.fcf != null && row.fcf > 0 && row.pfcfMultiple != null && row.pfcfMultiple > 0) ||
+    (row.profit != null &&
+      row.profit > 0 &&
+      row.peMultiple != null &&
+      row.peMultiple > 0)
+  )
+}
+
+/**
+ * Intermediate years missing between consecutive advanced rows, and (when
+ * current mcap is known) between today and the first fillable projection year.
+ */
+export function advancedCagrGapYears(
+  rows: YearProjection[],
+  currentMarketCap?: number | null,
+  currentYear = new Date().getFullYear(),
+): number[] {
+  const sorted = sortYearProjections(rows).filter((r) => r.year >= currentYear)
   const existing = new Set(sorted.map((r) => r.year))
   const gaps: number[] = []
+
+  const firstFillable = sorted.find(advancedHasFillableBasis)
+  if (
+    currentMarketCap != null &&
+    currentMarketCap > 0 &&
+    firstFillable != null &&
+    firstFillable.year > currentYear + 1
+  ) {
+    for (let y = currentYear + 1; y < firstFillable.year; y++) {
+      if (!existing.has(y)) gaps.push(y)
+    }
+  }
+
   for (let i = 0; i < sorted.length - 1; i++) {
     const a = sorted[i]
     const b = sorted[i + 1]
     for (let y = a.year + 1; y < b.year; y++) {
-      if (!existing.has(y)) gaps.push(y)
+      if (!existing.has(y) && !gaps.includes(y)) gaps.push(y)
     }
   }
-  return gaps
+  return gaps.sort((a, b) => a - b)
 }
 
 /**
  * Insert real advanced year rows between consecutive stated years, interpolating
- * fundamentals / multiples / dilution by implied CAGR so portfolio projections
- * pick them up. Does not overwrite existing year rows.
+ * fundamentals / multiples / dilution by implied CAGR.
+ * With `currentMarketCap`, also fills from today to the first fillable year
+ * (works with a single future projection). Does not overwrite existing years.
  */
-export function materializeAdvancedCagrYears(rows: YearProjection[]): YearProjection[] {
-  const sorted = sortYearProjections(rows)
-  if (sorted.length < 2) return sorted
+export function materializeAdvancedCagrYears(
+  rows: YearProjection[],
+  currentMarketCap?: number | null,
+  currentYear = new Date().getFullYear(),
+): YearProjection[] {
+  const sorted = sortYearProjections(rows).filter((r) => r.year >= currentYear)
+  const anchors: YearProjection[] = []
+
+  const firstFillable = sorted.find(advancedHasFillableBasis)
+  if (
+    currentMarketCap != null &&
+    currentMarketCap > 0 &&
+    firstFillable != null &&
+    firstFillable.year > currentYear
+  ) {
+    // Only inject a synthetic start when the first fillable year is after today
+    // and we do not already have a row at currentYear with fillable data.
+    const atToday = sorted.find((r) => r.year === currentYear)
+    if (atToday == null || !advancedHasFillableBasis(atToday)) {
+      anchors.push(syntheticAdvancedStartFromMcap(currentYear, currentMarketCap, firstFillable))
+    }
+  }
+
+  for (const r of sorted) anchors.push(r)
+  // Dedupe by year (prefer last = stated)
+  const byYearAnchors = new Map<number, YearProjection>()
+  for (const a of anchors) byYearAnchors.set(a.year, a)
+  const uniqueAnchors = [...byYearAnchors.values()].sort((a, b) => a.year - b.year)
+
+  if (uniqueAnchors.length < 2) return sortYearProjections(rows)
 
   const byYear = new Map<number, YearProjection>()
-  for (const r of sorted) byYear.set(r.year, r)
+  for (const r of rows) byYear.set(r.year, r)
 
-  for (let i = 0; i < sorted.length - 1; i++) {
-    const a = sorted[i]
-    const b = sorted[i + 1]
+  for (let i = 0; i < uniqueAnchors.length - 1; i++) {
+    const a = uniqueAnchors[i]
+    const b = uniqueAnchors[i + 1]
     for (let y = a.year + 1; y < b.year; y++) {
       if (byYear.has(y)) continue
       const dilution =
@@ -379,25 +523,30 @@ export function buildChartSeries(
 
   if (mode === 'easy') {
     let maxYear = currentYear
+    let hasStated = false
     for (const easy of easyRows) {
       if (
         easy.projectedMarketCap == null ||
         easy.projectedMarketCap <= 0 ||
-        easy.year <= currentYear
+        easy.year < currentYear
       ) {
         continue
       }
+      hasStated = true
       maxYear = Math.max(maxYear, easy.year)
       const point = sparse.get(easy.year) ?? { year: easy.year }
       point.easy = easy.projectedMarketCap
       point.easyActual = true
       sparse.set(easy.year, point)
     }
-    if (maxYear <= currentYear) return [{ year: currentYear, current: currentMarketCap }]
+    if (!hasStated) return [{ year: currentYear, current: currentMarketCap }]
 
     const start = sparse.get(currentYear)!
-    start.easy = currentMarketCap
-    start.easyActual = true
+    // Path starts at today's mcap unless a year-end projection was stated for this year
+    if (start.easy == null) {
+      start.easy = currentMarketCap
+      start.easyActual = true
+    }
 
     return expandContinuousSeries(sparse, ['easy'], currentYear, maxYear)
   }
@@ -409,7 +558,7 @@ export function buildChartSeries(
   let hasPe = false
 
   for (const row of sortYearProjections(advancedRows)) {
-    if (row.year <= currentYear) continue
+    if (row.year < currentYear) continue
     const ps = impliedForBasis(row, 'ps')
     const pfcf = impliedForBasis(row, 'pfcf')
     const pe = impliedForBasis(row, 'pe')
@@ -435,22 +584,26 @@ export function buildChartSeries(
     sparse.set(row.year, point)
   }
 
-  if (maxYear <= currentYear) return [{ year: currentYear, current: currentMarketCap }]
-
   const keys: ChartSeriesKey[] = []
   if (hasPs) {
-    start.ps = currentMarketCap
-    start.psActual = true
+    if (start.ps == null) {
+      start.ps = currentMarketCap
+      start.psActual = true
+    }
     keys.push('ps')
   }
   if (hasPfcf) {
-    start.pfcf = currentMarketCap
-    start.pfcfActual = true
+    if (start.pfcf == null) {
+      start.pfcf = currentMarketCap
+      start.pfcfActual = true
+    }
     keys.push('pfcf')
   }
   if (hasPe) {
-    start.pe = currentMarketCap
-    start.peActual = true
+    if (start.pe == null) {
+      start.pe = currentMarketCap
+      start.peActual = true
+    }
     keys.push('pe')
   }
   if (keys.length === 0) return [{ year: currentYear, current: currentMarketCap }]

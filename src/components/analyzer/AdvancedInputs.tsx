@@ -16,6 +16,8 @@ type Props = {
   onChange: (rows: YearProjection[]) => void
   currency?: string
   sharesOutstanding?: number | null
+  /** Today’s mcap — enables CAGR fill from now when only one future year is set */
+  currentMarketCap?: number | null
 }
 
 export function AdvancedInputs({
@@ -23,6 +25,7 @@ export function AdvancedInputs({
   onChange,
   currency = 'USD',
   sharesOutstanding = null,
+  currentMarketCap = null,
 }: Props) {
   const currentYear = new Date().getFullYear()
   const sorted = sortYearProjections(rows)
@@ -75,11 +78,11 @@ export function AdvancedInputs({
     commit([...rows, newYearProjection(nextYear, last?.dilutionFactor ?? 1)])
   }
 
-  const cagrGaps = advancedCagrGapYears(rows)
+  const cagrGaps = advancedCagrGapYears(rows, currentMarketCap, currentYear)
 
   function fillIntermediateYears() {
     if (cagrGaps.length === 0) return
-    commit(materializeAdvancedCagrYears(rows))
+    commit(materializeAdvancedCagrYears(rows, currentMarketCap, currentYear))
   }
 
   function toggle(id: string) {
@@ -142,9 +145,17 @@ export function AdvancedInputs({
                   <NumberInput
                     label="Year"
                     value={row.year}
-                    min={currentYear + 1}
+                    min={currentYear}
                     step="1"
-                    onChange={(year) => updateRow(row.id, { year: year ?? currentYear + 5 })}
+                    commitOnBlur
+                    onChange={(year) =>
+                      updateRow(row.id, {
+                        year:
+                          year != null && Number.isFinite(year)
+                            ? Math.floor(year)
+                            : currentYear + 5,
+                      })
+                    }
                   />
                   <div>
                     <NumberInput
@@ -275,8 +286,8 @@ export function AdvancedInputs({
           disabled={cagrGaps.length === 0}
           title={
             cagrGaps.length === 0
-              ? 'Need at least two year rows with a gap between them'
-              : `Create ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} by CAGR on fundamentals (saved into this projection)`
+              ? 'Need a fillable future year (and today’s mcap, or a second year) with a multi-year gap'
+              : `Create ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} via implied CAGR from today / between years`
           }
         >
           {cagrGaps.length === 0

@@ -170,6 +170,7 @@ export function newOverviewScenario(
   return {
     id: crypto.randomUUID(),
     name: name.trim() || 'Base',
+    description: '',
     sortOrder,
     startYear: range.startYear,
     endYear: range.endYear,
@@ -431,41 +432,51 @@ export function manualYearlyAddition(
   const baseYear = Math.floor(series.baseYear ?? year)
   if (year < baseYear) return 0
 
-  const myBindings = getYearBindings(series).filter((b) => b.year === year)
-  if (myBindings.length === 0) return 0
+  const allMine = getYearBindings(series)
+  const myBindings = allMine.filter((b) => b.year === year)
+  if (myBindings.length > 0) {
+    // Group all manual claims for this year by IC scenario for fair capping
+    const manuals = (deps.overviewSeries ?? [])
+      .filter((s) => s.enabled && s.type === 'manual')
+      .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
 
-  // Group all manual claims for this year by IC scenario for fair capping
-  const manuals = (deps.overviewSeries ?? [])
-    .filter((s) => s.enabled && s.type === 'manual')
-    .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
-
-  // Per-scenario remaining available
-  const remainingBySc = new Map<string, number>()
-  for (const b of allOverviewBindings(deps)) {
-    if (b.year !== year) continue
-    if (!remainingBySc.has(b.incomeCostScenarioId)) {
-      remainingBySc.set(
-        b.incomeCostScenarioId,
-        availableIcCashChf(b.incomeCostScenarioId, year, deps),
-      )
+    // Per-scenario remaining available
+    const remainingBySc = new Map<string, number>()
+    for (const b of allOverviewBindings(deps)) {
+      if (b.year !== year) continue
+      if (!remainingBySc.has(b.incomeCostScenarioId)) {
+        remainingBySc.set(
+          b.incomeCostScenarioId,
+          availableIcCashChf(b.incomeCostScenarioId, year, deps),
+        )
+      }
     }
+
+    let myTotal = 0
+    for (const m of manuals) {
+      const binds = getYearBindings(m).filter((b) => b.year === year)
+      for (const b of binds) {
+        const pct = b.percent != null && Number.isFinite(b.percent) ? Math.max(0, b.percent) : 0
+        if (!(pct > 0)) continue
+        const avail = remainingBySc.get(b.incomeCostScenarioId) ?? 0
+        const full = availableIcCashChf(b.incomeCostScenarioId, year, deps)
+        const want = full * (pct / 100)
+        const got = Math.min(want, avail)
+        remainingBySc.set(b.incomeCostScenarioId, Math.max(0, avail - got))
+        if (m.id === series.id) myTotal += got
+      }
+    }
+    return myTotal
   }
 
-  let myTotal = 0
-  for (const m of manuals) {
-    const binds = getYearBindings(m).filter((b) => b.year === year)
-    for (const b of binds) {
-      const pct = b.percent != null && Number.isFinite(b.percent) ? Math.max(0, b.percent) : 0
-      if (!(pct > 0)) continue
-      const avail = remainingBySc.get(b.incomeCostScenarioId) ?? 0
-      const full = availableIcCashChf(b.incomeCostScenarioId, year, deps)
-      const want = full * (pct / 100)
-      const got = Math.min(want, avail)
-      remainingBySc.set(b.incomeCostScenarioId, Math.max(0, avail - got))
-      if (m.id === series.id) myTotal += got
-    }
+  // No binding this year → flat perpetual after this series' last stated year
+  // (or every year from baseYear when this series has no year bindings).
+  const lastY = lastBindingYear(allMine)
+  if (lastY == null || year > lastY) {
+    const p = series.perpetualYearlyChf
+    return Number.isFinite(p) && p! > 0 ? p! : 0
   }
-  return myTotal
+  return 0
 }
 
 /**
@@ -550,7 +561,8 @@ export function residualCashValueAtYear(
 
 /**
  * Manual series: base at baseYear, then each year compounds and adds
- * year-binding % of IC available cash.
+ * year-binding % of IC available cash, then flat perpetual after the last
+ * stated year for this series.
  */
 export function manualAccumulatedValueAtYear(
   series: OverviewSeries,

@@ -84,8 +84,7 @@ export type StoragePayload = {
 }
 
 export type AppTab =
-  | 'analyzer'
-  | 'saved'
+  | 'projections'
   | 'portfolio'
   | 'overview'
   | 'income-cost'
@@ -203,9 +202,11 @@ export type OverviewSeries = {
    */
   yearBindings?: OverviewYearBinding[]
   /**
-   * type === 'incomeLeftover': CHF added each year after the last year that has
-   * any IC binding (manual or leftover) on this Overview scenario.
-   * When there are no IC bindings at all, added every year from baseYear onward.
+   * Flat CHF added each year after the last stated year for this series:
+   * - incomeLeftover: after the last IC binding on the Overview scenario
+   *   (any manual/leftover); if none, every year from baseYear onward.
+   * - manual: after this series' last year-binding; if none, every year from
+   *   baseYear onward (in addition to any year-binding % claims).
    */
   perpetualYearlyChf?: number
   /**
@@ -231,6 +232,10 @@ export type OverviewSeries = {
 export type OverviewScenario = {
   id: string
   name: string
+  /**
+   * Free-text note of assumptions for this scenario (UI only; not used in math).
+   */
+  description?: string
   sortOrder: number
   startYear: number
   endYear: number
@@ -243,18 +248,7 @@ export type OverviewState = {
   selectedScenarioId: string | null
 }
 
-/** Payload to load a scenario into an analyzer panel */
-export type AnalyzerLoadState = {
-  symbol: string
-  companyName: string | null
-  currency: string
-  currentPrice: number | null
-  currentMarketCap: number | null
-  sharesOutstanding: number | null
-  mcapOverride: number | null
-  easyRows: EasyProjection[]
-  advancedRows: YearProjection[]
-}
+
 
 export type PortfolioYearOverride = {
   year: number

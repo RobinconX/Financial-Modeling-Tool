@@ -104,7 +104,8 @@ export function useSavedScenarios() {
           ...s,
           ...patch,
           id: s.id,
-          symbol: (patch.symbol ?? s.symbol).toUpperCase(),
+          // Ticker is immutable after save (portfolio links / locked UI)
+          symbol: s.symbol,
           updatedAt: now,
         }
         if (patch.easyRows) merged.easyRows = sortEasyProjections(patch.easyRows)

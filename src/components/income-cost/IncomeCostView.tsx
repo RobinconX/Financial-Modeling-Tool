@@ -6,6 +6,7 @@ import type {
   CashflowScenario,
 } from '../../types'
 import { scenarioTotals } from '../../lib/incomeCost'
+import { FullscreenChart } from '../common/FullscreenChart'
 import { YearOverview } from './YearOverview'
 import { CashflowTable } from './CashflowTable'
 import { YearSankey } from './YearSankey'
@@ -302,14 +303,16 @@ export function IncomeCostView({
       </div>
 
       <div className="card p-5">
-        <h3 className="mb-3 text-sm font-semibold uppercase tracking-wider text-white/50">
+        <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-white/50">
           Cash flow · {selected.name}
         </h3>
-        <YearSankey
-          lines={lines}
-          scenarioId={selected.id}
-          scenarioName={selected.name}
-        />
+        <FullscreenChart title={`Cash flow · ${selected.name}`}>
+          <YearSankey
+            lines={lines}
+            scenarioId={selected.id}
+            scenarioName={selected.name}
+          />
+        </FullscreenChart>
       </div>
 
       <CopyScenarioDialog

@@ -16,6 +16,7 @@ import {
   shadesForType,
   sourceLabel,
 } from '../../lib/overview'
+import { NumberInput } from '../common/MoneyInput'
 
 type Props = {
   series: OverviewSeries[]
@@ -73,8 +74,16 @@ function YearBindingsEditor({
 }) {
   const bindings = getYearBindings(series)
 
-  function setBindings(next: OverviewYearBinding[]) {
-    onChange([...next].sort((a, b) => a.year - b.year))
+  /** Sort only when finishing a year edit (or after add/remove/scenario pick). */
+  function setBindings(next: OverviewYearBinding[], sort = true) {
+    onChange(sort ? [...next].sort((a, b) => a.year - b.year) : next)
+  }
+
+  function patchAt(idx: number, patch: Partial<OverviewYearBinding>, sort = true) {
+    setBindings(
+      bindings.map((row, i) => (i === idx ? { ...row, ...patch } : row)),
+      sort,
+    )
   }
 
   return (
@@ -89,7 +98,7 @@ function YearBindingsEditor({
           onClick={() => {
             const lastY =
               bindings.length > 0
-                ? bindings[bindings.length - 1]!.year
+                ? Math.max(...bindings.map((b) => b.year))
                 : (series.baseYear ?? new Date().getFullYear())
             const sc =
               incomeCostScenarios.find((c) => c.year === lastY + 1) ?? incomeCostScenarios[0]
@@ -116,20 +125,18 @@ function YearBindingsEditor({
         <div className="space-y-1.5">
           {bindings.map((b, idx) => (
             <div
-              key={`${b.year}-${b.incomeCostScenarioId}-${idx}`}
+              key={`bind-${idx}-${b.incomeCostScenarioId}`}
               className="flex flex-wrap items-center gap-2"
             >
-              <input
+              <NumberInput
                 className="input !w-20 !py-1 !text-xs tabular-nums"
-                type="number"
                 value={b.year}
-                onChange={(e) => {
-                  const y = Math.floor(Number(e.target.value))
-                  setBindings(
-                    bindings.map((row, i) =>
-                      i === idx ? { ...row, year: Number.isFinite(y) ? y : row.year } : row,
-                    ),
-                  )
+                step="1"
+                commitOnBlur
+                onChange={(year) => {
+                  const y =
+                    year != null && Number.isFinite(year) ? Math.floor(year) : b.year
+                  patchAt(idx, { year: y }, true)
                 }}
               />
               <select
@@ -138,16 +145,13 @@ function YearBindingsEditor({
                 onChange={(e) => {
                   const id = e.target.value
                   const sc = incomeCostScenarios.find((c) => c.id === id)
-                  setBindings(
-                    bindings.map((row, i) =>
-                      i === idx
-                        ? {
-                            ...row,
-                            year: sc?.year ?? row.year,
-                            incomeCostScenarioId: id,
-                          }
-                        : row,
-                    ),
+                  patchAt(
+                    idx,
+                    {
+                      year: sc?.year ?? b.year,
+                      incomeCostScenarioId: id,
+                    },
+                    true,
                   )
                 }}
               >
@@ -168,19 +172,17 @@ function YearBindingsEditor({
                     value={b.percent != null && b.percent !== 0 ? String(b.percent) : ''}
                     onChange={(e) => {
                       const n = Number(e.target.value.replace(/%/g, ''))
-                      setBindings(
-                        bindings.map((row, i) =>
-                          i === idx
-                            ? {
-                                ...row,
-                                percent: Number.isFinite(n)
-                                  ? Math.max(0, Math.min(100, n))
-                                  : 0,
-                              }
-                            : row,
-                        ),
+                      patchAt(
+                        idx,
+                        {
+                          percent: Number.isFinite(n)
+                            ? Math.max(0, Math.min(100, n))
+                            : 0,
+                        },
+                        false,
                       )
                     }}
+                    onBlur={() => setBindings(bindings, true)}
                   />
                   <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-white/35">
                     %
@@ -906,6 +908,29 @@ export function OverviewSeriesEditor({
                                   new Date().getFullYear(),
                               })
                             }
+                            onMouseDown={(e) => e.stopPropagation()}
+                          />
+                        </div>
+                        <div>
+                          <label className="label !mb-0.5 !text-[10px]">
+                            Perpetual after last year (CHF/yr)
+                          </label>
+                          <input
+                            className="input !py-1.5 !text-xs tabular-nums"
+                            type="text"
+                            inputMode="decimal"
+                            value={
+                              s.perpetualYearlyChf != null && s.perpetualYearlyChf !== 0
+                                ? String(s.perpetualYearlyChf)
+                                : ''
+                            }
+                            placeholder="0"
+                            onChange={(e) => {
+                              const n = Number(e.target.value.replace(/,/g, ''))
+                              onUpdate(s.id, {
+                                perpetualYearlyChf: Number.isFinite(n) && n >= 0 ? n : 0,
+                              })
+                            }}
                             onMouseDown={(e) => e.stopPropagation()}
                           />
                         </div>

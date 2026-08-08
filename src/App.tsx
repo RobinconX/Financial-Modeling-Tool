@@ -1,6 +1,5 @@
-import { useCallback, useEffect, useState } from 'react'
-import { CompanyPanel } from './components/analyzer/CompanyPanel'
-import { SavedView } from './components/saved/SavedView'
+import { useEffect, useState } from 'react'
+import { ProjectionsView } from './components/projections/ProjectionsView'
 import { PortfolioView } from './components/portfolio/PortfolioView'
 import { useSavedScenarios } from './hooks/useSavedScenarios'
 import { useSavedPortfolios } from './hooks/useSavedPortfolios'
@@ -10,14 +9,13 @@ import { IncomeCostView } from './components/income-cost/IncomeCostView'
 import { SavingsView } from './components/savings/SavingsView'
 import { OverviewView } from './components/overview/OverviewView'
 import { useSavings } from './hooks/useSavings'
-import type { AnalyzerLoadState, AppTab } from './types'
+import type { AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
 const APP_TAB_KEY = 'grok-lab-app-tab'
 
 const ALL_TABS: AppTab[] = [
-  'analyzer',
-  'saved',
+  'projections',
   'portfolio',
   'overview',
   'income-cost',
@@ -35,19 +33,19 @@ function readNavCollapsed(): boolean {
 function readAppTab(): AppTab {
   try {
     const v = localStorage.getItem(APP_TAB_KEY)
-    // Migrate renamed tab id
+    // Migrate renamed tab ids
     if (v === 'pension-funds') return 'savings'
+    if (v === 'analyzer' || v === 'saved') return 'projections'
     if (v && (ALL_TABS as string[]).includes(v)) return v as AppTab
   } catch {
     /* ignore */
   }
-  return 'analyzer'
+  return 'projections'
 }
 
 const NAV_MARKS: Record<AppTab, string> = {
-  analyzer: 'A',
-  saved: 'S',
-  portfolio: 'P',
+  projections: 'P',
+  portfolio: 'F',
   overview: 'O',
   'income-cost': 'I',
   savings: 'V',
@@ -67,13 +65,10 @@ type NavSection = {
 }
 
 const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
-  analyzer: {
-    title: 'Analyzer',
-    subtitle: 'Look up a ticker, project mcap or share price, and estimate ROI p.a.',
-  },
-  saved: {
-    title: 'Saved projections',
-    subtitle: 'Browse and edit named scenarios by ticker with tables and charts.',
+  projections: {
+    title: 'Projections',
+    subtitle:
+      'Fetch a ticker or open a saved scenario — Easy + Advanced assumptions, charts, and ROI.',
   },
   portfolio: {
     title: 'Portfolio',
@@ -95,9 +90,6 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
 
 export default function App() {
   const [tab, setTab] = useState<AppTab>(readAppTab)
-  const [compare, setCompare] = useState(false)
-  const [loadA, setLoadA] = useState<AnalyzerLoadState | null>(null)
-  const [loadB, setLoadB] = useState<AnalyzerLoadState | null>(null)
   const [navCollapsed, setNavCollapsed] = useState(readNavCollapsed)
 
   useEffect(() => {
@@ -118,7 +110,6 @@ export default function App() {
 
   const {
     scenarios,
-    grouped,
     error: storageError,
     upsertScenario,
     updateScenario,
@@ -155,20 +146,23 @@ export default function App() {
 
   const { accounts: savingsAccounts } = useSavings()
 
-  const handleOpenInAnalyzer = useCallback((state: AnalyzerLoadState) => {
-    setLoadA(state)
-    setTab('analyzer')
-  }, [])
-
   const sections: NavSection[] = [
+    {
+      id: 'other',
+      label: 'Life',
+      items: [
+        { id: 'overview', label: 'Overview' },
+        { id: 'income-cost', label: 'Income / Cost' },
+        { id: 'savings', label: 'Savings' },
+      ],
+    },
     {
       id: 'investing',
       label: 'Investing',
       items: [
-        { id: 'analyzer', label: 'Analyzer' },
         {
-          id: 'saved',
-          label: 'Saved projections',
+          id: 'projections',
+          label: 'Projections',
           count: scenarios.length || undefined,
           countClass: 'bg-emerald-500/20 text-emerald-300',
         },
@@ -178,15 +172,6 @@ export default function App() {
           count: portfolios.length || undefined,
           countClass: 'bg-sky-500/20 text-sky-300',
         },
-      ],
-    },
-    {
-      id: 'other',
-      label: 'Life',
-      items: [
-        { id: 'overview', label: 'Overview' },
-        { id: 'income-cost', label: 'Income / Cost' },
-        { id: 'savings', label: 'Savings' },
       ],
     },
   ]
@@ -241,18 +226,16 @@ export default function App() {
       >
         <div className={`mb-4 ${navCollapsed ? 'px-0 text-center' : 'px-2'}`}>
           {navCollapsed ? (
-            <p className="text-xs font-bold text-emerald-400/90" title="Grok Lab · Stock ROI">
-              GL
+            <p
+              className="text-xs font-bold text-emerald-400/90"
+              title="Financial Modeling Tool"
+            >
+              FM
             </p>
           ) : (
-            <>
-              <p className="text-[10px] font-semibold uppercase tracking-[0.25em] text-emerald-400/80">
-                Grok Lab
-              </p>
-              <h1 className="mt-1 text-lg font-bold leading-tight tracking-tight text-white">
-                Stock ROI
-              </h1>
-            </>
+            <h1 className="text-base font-bold leading-snug tracking-tight text-emerald-400/90">
+              Financial Modeling Tool
+            </h1>
           )}
         </div>
 
@@ -301,58 +284,14 @@ export default function App() {
         </header>
 
         <main className="flex-1 overflow-auto px-6 py-6">
-          {tab === 'analyzer' && (
-            <>
-              <div className="mb-6 flex justify-end">
-                <div className="inline-flex rounded-xl border border-white/10 bg-black/30 p-1">
-                  <button
-                    type="button"
-                    onClick={() => setCompare(false)}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                      !compare ? 'bg-white text-black' : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    1 company
-                  </button>
-                  <button
-                    type="button"
-                    onClick={() => setCompare(true)}
-                    className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
-                      compare ? 'bg-white text-black' : 'text-white/60 hover:text-white'
-                    }`}
-                  >
-                    Compare
-                  </button>
-                </div>
-              </div>
-
-              <div className={`grid gap-6 ${compare ? 'xl:grid-cols-2' : 'max-w-4xl'}`}>
-                <CompanyPanel
-                  title={compare ? 'Company A' : 'Company'}
-                  onSaveScenario={upsertScenario}
-                  loadState={loadA}
-                  onLoadConsumed={() => setLoadA(null)}
-                />
-                {compare && (
-                  <CompanyPanel
-                    title="Company B"
-                    onSaveScenario={upsertScenario}
-                    loadState={loadB}
-                    onLoadConsumed={() => setLoadB(null)}
-                  />
-                )}
-              </div>
-            </>
-          )}
-
-          {tab === 'saved' && (
-            <SavedView
+          {tab === 'projections' && (
+            <ProjectionsView
               scenarios={scenarios}
-              grouped={grouped}
+              portfolios={portfolios}
               storageError={storageError}
+              upsertScenario={upsertScenario}
               updateScenario={updateScenario}
               deleteScenario={deleteScenario}
-              onOpenInAnalyzer={handleOpenInAnalyzer}
             />
           )}
 
@@ -366,8 +305,8 @@ export default function App() {
               deletePortfolio={deletePortfolio}
               copyPortfolio={copyPortfolio}
               reorderPortfolios={reorderPortfolios}
-              incomeCostScenarios={incomeCostScenarios}
               incomeCostLines={incomeCostLines}
+              incomeCostScenarios={incomeCostScenarios}
             />
           )}
 
@@ -380,6 +319,7 @@ export default function App() {
               incomeCostScenarios={incomeCostScenarios}
             />
           )}
+
           {tab === 'income-cost' && (
             <IncomeCostView
               scenarios={incomeCostScenarios}
@@ -396,6 +336,7 @@ export default function App() {
               copyScenario={copyScenario}
             />
           )}
+
           {tab === 'savings' && <SavingsView />}
         </main>
       </div>

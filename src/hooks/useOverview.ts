@@ -117,6 +117,7 @@ export function useOverview() {
         const sc = newOverviewScenario(name, maxOrder + 1)
         sc.startYear = sel.startYear
         sc.endYear = sel.endYear
+        sc.description = sel.description ?? ''
         sc.series = cloneSeriesList(sel.series)
         created = sc
         return {
@@ -350,6 +351,7 @@ export function useOverview() {
     addScenario,
     saveAsScenario,
     renameScenario,
+    updateScenario,
     removeScenario,
     setRange,
     addSeries,

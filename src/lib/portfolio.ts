@@ -917,6 +917,9 @@ export function holdingPositionLabel(
  * Projected shareholder equity value (post-dilution) by calendar year for a basis.
  * Easy: projected mcap rows. Advanced: PS / PFCF / PE implied mcap / dilution.
  * Does not require current mcap for easy rows (Saved tab can show mcap-only inputs).
+ *
+ * Includes the current calendar year when a year-end projection is stated
+ * (used for portfolio year-end columns, not the live Now bar).
  */
 export function getProjectedEquityByYear(
   scenario: SavedScenario,
@@ -929,7 +932,8 @@ export function getProjectedEquityByYear(
     for (const easy of scenario.easyRows ?? []) {
       const year = Number(easy.year)
       const projected = easy.projectedMarketCap
-      if (!Number.isFinite(year) || year <= currentYear) continue
+      // Past years only are excluded; current year = year-end projection
+      if (!Number.isFinite(year) || year < currentYear) continue
       if (projected == null || !Number.isFinite(projected) || projected <= 0) continue
       map.set(year, projected)
     }
@@ -1048,10 +1052,14 @@ export function compoundWithGrowthAndDeposits(
 }
 
 /**
- * Position values by year for one holding.
+ * Position values by calendar year for one holding (year-end style).
  * Uses action-adjusted share counts × price; absolute $ overrides always win.
  * Manual-only holdings (options etc.) skip scenario prices and rely on
  * manualCurrentPrice × qty and yearOverrides.
+ *
+ * Current calendar year uses the scenario year-end projection when present;
+ * otherwise falls back to the live mark. The live Now bar uses
+ * {@link holdingLiveValue} instead (never the year-end projection).
  */
 export function computeHoldingValues(
   holding: PortfolioHolding,
@@ -1080,12 +1088,26 @@ export function computeHoldingValues(
     const sh = sharesAtYear(holding, actions, year)
     // Manual: allow negative qty (shorts). Equity: long-only shares.
     if (isManual ? sh === 0 : sh <= 0) continue
-    const px =
-      year <= currentYear
-        ? resolveCurrentPrice(holding, useScenario ? scenario : null)
-        : useScenario
-          ? (priceByYear.get(year) ?? tradePriceForYear(holding, scenario, year, currentYear))
-          : resolveCurrentPrice(holding, null) // manual: carry unit mark if no override
+
+    let px: number | null = null
+    if (year < currentYear) {
+      // Past years are not projected here (chart uses actuals); keep live if needed
+      px = resolveCurrentPrice(holding, useScenario ? scenario : null)
+    } else if (useScenario) {
+      // Current year and future: prefer stated year-end projection, else live fallback
+      const projected = priceByYear.get(year)
+      if (projected != null && projected > 0) {
+        px = projected
+      } else if (year === currentYear) {
+        px = resolveCurrentPrice(holding, scenario)
+      } else {
+        px = tradePriceForYear(holding, scenario, year, currentYear)
+      }
+    } else {
+      // Manual: unit mark for all years unless overridden below
+      px = resolveCurrentPrice(holding, null)
+    }
+
     // Manual: any finite mark (incl. 0 / negative). Equity: positive price only.
     if (px != null && Number.isFinite(px) && (isManual || px > 0)) {
       values.set(year, sh * px)
@@ -1108,7 +1130,8 @@ export function computeHoldingValues(
 }
 
 /**
- * Live / Now value for a holding (current year map entry).
+ * Live / Now value for a holding (today's mark × shares as held).
+ * Never uses year-end scenario projections for the current calendar year.
  * Pass `actions: []` for the Now bar so planned buy/sells are not applied —
  * only the position as currently held (`sharesHeld` × mark / overrides).
  */
@@ -1118,8 +1141,26 @@ export function holdingLiveValue(
   actions: PortfolioAction[] = [],
   currentYear = new Date().getFullYear(),
 ): number | null {
-  const v = computeHoldingValues(holding, scenario, actions, currentYear).get(currentYear)
-  return v != null && Number.isFinite(v) ? v : null
+  const isManual = holding.manualOnly === true
+  // Absolute $ override for this year wins (same as year-end grid)
+  for (const o of holding.yearOverrides ?? []) {
+    if (
+      o.year === currentYear &&
+      Number.isFinite(o.valueDollars) &&
+      (isManual || o.valueDollars >= 0)
+    ) {
+      return o.valueDollars
+    }
+  }
+
+  const sh = sharesAtYear(holding, actions, currentYear)
+  if (isManual ? sh === 0 : sh <= 0) return null
+
+  const px = resolveCurrentPrice(holding, isManual ? null : scenario)
+  if (px != null && Number.isFinite(px) && (isManual || px > 0)) {
+    return sh * px
+  }
+  return null
 }
 
 /**
