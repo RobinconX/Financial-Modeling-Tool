@@ -2,8 +2,13 @@ import type {
   CashflowLine,
   CashflowScenario,
   IncomeCostState,
+  WorkingBalanceDraw,
 } from '../types'
-import { emptyIncomeCostState, newScenario } from './incomeCost'
+import {
+  emptyIncomeCostState,
+  newScenario,
+  normalizeAmounts12,
+} from './incomeCost'
 
 export const INCOME_COST_STORAGE_KEY = 'grok-lab.income-cost.v1'
 
@@ -59,6 +64,12 @@ function normalizeLine(raw: unknown, scenarioIds: Set<string>): CashflowLine | n
   if (raw.lastEdited === 'monthly' || raw.lastEdited === 'yearly') {
     line.lastEdited = raw.lastEdited
   }
+  const month = Math.floor(asNumber(raw.month, NaN))
+  if (Number.isFinite(month) && month >= 1 && month <= 12) {
+    line.month = month
+  } else {
+    line.month = null
+  }
   return line
 }
 
@@ -101,7 +112,48 @@ function migrateV1(raw: Record<string, unknown>): IncomeCostState {
     if (scenarioIds.has(line.scenarioId)) lines.push(line)
   }
 
-  return { version: 2, scenarios, lines }
+  return { version: 3, scenarios, lines, draws: [] }
+}
+
+function normalizeDraw(
+  raw: unknown,
+  scenarioIds: Set<string>,
+  index: number,
+): WorkingBalanceDraw | null {
+  if (!isRecord(raw)) return null
+  const scenarioId = typeof raw.scenarioId === 'string' ? raw.scenarioId : null
+  if (!scenarioId || !scenarioIds.has(scenarioId)) return null
+  return {
+    id: typeof raw.id === 'string' ? raw.id : crypto.randomUUID(),
+    scenarioId,
+    name: typeof raw.name === 'string' ? raw.name : '',
+    sortOrder: Math.floor(asNumber(raw.sortOrder, index)),
+    amounts: normalizeAmounts12(raw.amounts),
+  }
+}
+
+function loadScenariosAndLines(parsed: Record<string, unknown>): {
+  scenarios: CashflowScenario[]
+  lines: CashflowLine[]
+  draws: WorkingBalanceDraw[]
+} | null {
+  if (!Array.isArray(parsed.scenarios)) return null
+  const scenarios = parsed.scenarios
+    .map((s, i) => normalizeScenario(s, i))
+    .filter((s): s is CashflowScenario => s != null)
+  if (scenarios.length === 0) return null
+  const ids = new Set(scenarios.map((s) => s.id))
+  const lines = Array.isArray(parsed.lines)
+    ? parsed.lines
+        .map((l) => normalizeLine(l, ids))
+        .filter((l): l is CashflowLine => l != null)
+    : []
+  const draws = Array.isArray(parsed.draws)
+    ? parsed.draws
+        .map((d, i) => normalizeDraw(d, ids, i))
+        .filter((d): d is WorkingBalanceDraw => d != null)
+    : []
+  return { scenarios, lines, draws }
 }
 
 export function loadIncomeCost(): IncomeCostState {
@@ -111,19 +163,14 @@ export function loadIncomeCost(): IncomeCostState {
     const parsed: unknown = JSON.parse(raw)
     if (!isRecord(parsed)) return emptyIncomeCostState()
 
-    // v2
-    if (parsed.version === 2 && Array.isArray(parsed.scenarios)) {
-      const scenarios = parsed.scenarios
-        .map((s, i) => normalizeScenario(s, i))
-        .filter((s): s is CashflowScenario => s != null)
-      if (scenarios.length === 0) return emptyIncomeCostState()
-      const ids = new Set(scenarios.map((s) => s.id))
-      const lines = Array.isArray(parsed.lines)
-        ? parsed.lines
-            .map((l) => normalizeLine(l, ids))
-            .filter((l): l is CashflowLine => l != null)
-        : []
-      return { version: 2, scenarios, lines }
+    // v3 (with draws) or v2 (no draws)
+    if (
+      (parsed.version === 3 || parsed.version === 2) &&
+      Array.isArray(parsed.scenarios)
+    ) {
+      const loaded = loadScenariosAndLines(parsed)
+      if (!loaded) return emptyIncomeCostState()
+      return { version: 3, ...loaded }
     }
 
     // v1 or unversioned with year-based lines
@@ -142,9 +189,10 @@ export function saveIncomeCost(
 ): { ok: true } | { ok: false; error: string } {
   try {
     const payload: IncomeCostState = {
-      version: 2,
+      version: 3,
       scenarios: state.scenarios,
       lines: state.lines,
+      draws: state.draws ?? [],
     }
     localStorage.setItem(INCOME_COST_STORAGE_KEY, JSON.stringify(payload))
     return { ok: true }

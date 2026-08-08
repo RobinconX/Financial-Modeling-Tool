@@ -4,17 +4,24 @@ import type {
   CashflowKind,
   CashflowLine,
   CashflowScenario,
+  SavingsAccount,
+  WorkingBalanceDraw,
 } from '../../types'
 import { scenarioTotals } from '../../lib/incomeCost'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { YearOverview } from './YearOverview'
 import { CashflowTable } from './CashflowTable'
 import { YearSankey } from './YearSankey'
+import { MonthlyBudgetView } from './MonthlyBudgetView'
 import { CopyScenarioDialog } from './CopyScenarioDialog'
+
+type WorkspaceTab = 'budget' | 'monthly'
 
 type Props = {
   scenarios: CashflowScenario[]
   lines: CashflowLine[]
+  draws: WorkingBalanceDraw[]
+  savingsAccounts: SavingsAccount[]
   storageError: string | null
   upsertLine: (line: CashflowLine) => boolean
   removeLine: (id: string) => boolean
@@ -23,6 +30,9 @@ type Props = {
     kind: CashflowKind,
     cadence?: CashflowCadence,
   ) => CashflowLine | null
+  upsertDraw: (draw: WorkingBalanceDraw) => boolean
+  removeDraw: (id: string) => boolean
+  addDraw: (scenarioId: string) => WorkingBalanceDraw | null
   addScenario: (name?: string, year?: number) => CashflowScenario | null
   renameScenario: (id: string, name: string) => boolean
   setScenarioYear: (id: string, year: number) => boolean
@@ -34,10 +44,15 @@ type Props = {
 export function IncomeCostView({
   scenarios,
   lines,
+  draws,
+  savingsAccounts,
   storageError,
   upsertLine,
   removeLine,
   addLine,
+  upsertDraw,
+  removeDraw,
+  addDraw,
   addScenario,
   renameScenario,
   setScenarioYear,
@@ -48,6 +63,7 @@ export function IncomeCostView({
   const [selectedId, setSelectedId] = useState<string | null>(
     () => scenarios[0]?.id ?? null,
   )
+  const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('budget')
   const [copyOpen, setCopyOpen] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
@@ -279,41 +295,92 @@ export function IncomeCostView({
         </div>
       </div>
 
-      <div className="card p-5">
-        <YearOverview title={`${selected.year} · ${selected.name}`} totals={totals} />
+      <div
+        className="inline-flex rounded-xl border border-white/10 bg-black/30 p-1"
+        role="group"
+        aria-label="Income/Cost view"
+      >
+        <button
+          type="button"
+          onClick={() => setWorkspaceTab('budget')}
+          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+            workspaceTab === 'budget'
+              ? 'bg-white text-black'
+              : 'text-white/60 hover:text-white'
+          }`}
+        >
+          Budget
+        </button>
+        <button
+          type="button"
+          onClick={() => setWorkspaceTab('monthly')}
+          className={`rounded-lg px-3 py-1.5 text-sm font-medium transition ${
+            workspaceTab === 'monthly'
+              ? 'bg-white text-black'
+              : 'text-white/60 hover:text-white'
+          }`}
+        >
+          Monthly
+        </button>
       </div>
 
-      <div className="grid gap-5 xl:grid-cols-2">
-        <CashflowTable
-          kind="cost"
-          scenarioId={selected.id}
-          lines={lines}
-          onChange={upsertLine}
-          onRemove={removeLine}
-          onAdd={(cadence) => addLine(selected.id, 'cost', cadence)}
-        />
-        <CashflowTable
-          kind="income"
-          scenarioId={selected.id}
-          lines={lines}
-          onChange={upsertLine}
-          onRemove={removeLine}
-          onAdd={(cadence) => addLine(selected.id, 'income', cadence)}
-        />
-      </div>
+      {workspaceTab === 'budget' ? (
+        <>
+          <div className="card p-5">
+            <YearOverview title={`${selected.year} · ${selected.name}`} totals={totals} />
+          </div>
 
-      <div className="card p-5">
-        <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-white/50">
-          Cash flow · {selected.name}
-        </h3>
-        <FullscreenChart title={`Cash flow · ${selected.name}`}>
-          <YearSankey
+          <div className="grid gap-5 xl:grid-cols-2">
+            <CashflowTable
+              kind="cost"
+              scenarioId={selected.id}
+              lines={lines}
+              onChange={upsertLine}
+              onRemove={removeLine}
+              onAdd={(cadence) => addLine(selected.id, 'cost', cadence)}
+            />
+            <CashflowTable
+              kind="income"
+              scenarioId={selected.id}
+              lines={lines}
+              onChange={upsertLine}
+              onRemove={removeLine}
+              onAdd={(cadence) => addLine(selected.id, 'income', cadence)}
+            />
+          </div>
+
+          <div className="card p-5">
+            <h3 className="mb-1 text-sm font-semibold uppercase tracking-wider text-white/50">
+              Cash flow · {selected.name}
+            </h3>
+            <FullscreenChart title={`Cash flow · ${selected.name}`}>
+              <YearSankey
+                lines={lines}
+                scenarioId={selected.id}
+                scenarioName={selected.name}
+              />
+            </FullscreenChart>
+          </div>
+        </>
+      ) : (
+        <div className="card p-5">
+          <MonthlyBudgetView
+            scenario={selected}
             lines={lines}
-            scenarioId={selected.id}
-            scenarioName={selected.name}
+            draws={draws}
+            savingsAccounts={savingsAccounts}
+            onUpsertDraw={(d) => {
+              upsertDraw(d)
+            }}
+            onRemoveDraw={(id) => {
+              removeDraw(id)
+            }}
+            onAddDraw={() => {
+              addDraw(selected.id)
+            }}
           />
-        </FullscreenChart>
-      </div>
+        </div>
+      )}
 
       <CopyScenarioDialog
         open={copyOpen}

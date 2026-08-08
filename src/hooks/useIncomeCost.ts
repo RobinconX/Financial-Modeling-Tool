@@ -4,12 +4,15 @@ import type {
   CashflowKind,
   CashflowLine,
   CashflowScenario,
+  WorkingBalanceDraw,
 } from '../types'
 import {
   copyScenarioAsNew,
   emptyIncomeCostState,
   newCashflowLine,
   newScenario,
+  newWorkingBalanceDraw,
+  normalizeAmounts12,
   reorderScenarios,
   sortedScenarios,
 } from '../lib/incomeCost'
@@ -23,23 +26,33 @@ export function useIncomeCost() {
   const initial = loadIncomeCost()
   const [scenarios, setScenarios] = useState<CashflowScenario[]>(() => initial.scenarios)
   const [lines, setLines] = useState<CashflowLine[]>(() => initial.lines)
+  const [draws, setDraws] = useState<WorkingBalanceDraw[]>(() => initial.draws ?? [])
   const [error, setError] = useState<string | null>(null)
 
-  const persist = useCallback((nextScenarios: CashflowScenario[], nextLines: CashflowLine[]) => {
-    const result = saveIncomeCost({
-      version: 2,
-      scenarios: nextScenarios,
-      lines: nextLines,
-    })
-    if (!result.ok) {
-      setError(result.error)
-      return false
-    }
-    setError(null)
-    setScenarios(nextScenarios)
-    setLines(nextLines)
-    return true
-  }, [])
+  const persist = useCallback(
+    (
+      nextScenarios: CashflowScenario[],
+      nextLines: CashflowLine[],
+      nextDraws: WorkingBalanceDraw[],
+    ) => {
+      const result = saveIncomeCost({
+        version: 3,
+        scenarios: nextScenarios,
+        lines: nextLines,
+        draws: nextDraws,
+      })
+      if (!result.ok) {
+        setError(result.error)
+        return false
+      }
+      setError(null)
+      setScenarios(nextScenarios)
+      setLines(nextLines)
+      setDraws(nextDraws)
+      return true
+    },
+    [],
+  )
 
   useEffect(() => {
     function onStorage(e: StorageEvent) {
@@ -47,6 +60,7 @@ export function useIncomeCost() {
       const s = loadIncomeCost()
       setScenarios(s.scenarios)
       setLines(s.lines)
+      setDraws(s.draws ?? [])
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -60,24 +74,57 @@ export function useIncomeCost() {
       const next = exists
         ? lines.map((l) => (l.id === line.id ? line : l))
         : [...lines, line]
-      return persist(scenarios, next)
+      return persist(scenarios, next, draws)
     },
-    [lines, scenarios, persist],
+    [lines, scenarios, draws, persist],
   )
 
   const removeLine = useCallback(
-    (id: string) => persist(scenarios, lines.filter((l) => l.id !== id)),
-    [lines, scenarios, persist],
+    (id: string) => persist(scenarios, lines.filter((l) => l.id !== id), draws),
+    [lines, scenarios, draws, persist],
   )
 
   const addLine = useCallback(
     (scenarioId: string, kind: CashflowKind, cadence: CashflowCadence = 'recurring') => {
       if (!scenarios.some((s) => s.id === scenarioId)) return null
       const line = newCashflowLine(scenarioId, kind, cadence)
-      const ok = persist(scenarios, [...lines, line])
+      const ok = persist(scenarios, [...lines, line], draws)
       return ok ? line : null
     },
-    [lines, scenarios, persist],
+    [lines, scenarios, draws, persist],
+  )
+
+  const upsertDraw = useCallback(
+    (draw: WorkingBalanceDraw) => {
+      const normalized: WorkingBalanceDraw = {
+        ...draw,
+        amounts: normalizeAmounts12(draw.amounts),
+      }
+      const exists = draws.some((d) => d.id === normalized.id)
+      const next = exists
+        ? draws.map((d) => (d.id === normalized.id ? normalized : d))
+        : [...draws, normalized]
+      return persist(scenarios, lines, next)
+    },
+    [draws, scenarios, lines, persist],
+  )
+
+  const removeDraw = useCallback(
+    (id: string) => persist(scenarios, lines, draws.filter((d) => d.id !== id)),
+    [draws, scenarios, lines, persist],
+  )
+
+  const addDraw = useCallback(
+    (scenarioId: string) => {
+      if (!scenarios.some((s) => s.id === scenarioId)) return null
+      const maxOrder = draws
+        .filter((d) => d.scenarioId === scenarioId)
+        .reduce((m, d) => Math.max(m, d.sortOrder), -1)
+      const draw = newWorkingBalanceDraw(scenarioId, maxOrder + 1)
+      const ok = persist(scenarios, lines, [...draws, draw])
+      return ok ? draw : null
+    },
+    [draws, scenarios, lines, persist],
   )
 
   const addScenario = useCallback(
@@ -90,10 +137,10 @@ export function useIncomeCost() {
           : new Date().getFullYear()
       while (usedYears.has(y)) y += 1
       const sc = newScenario(name ?? `Scenario ${scenarios.length + 1}`, maxOrder + 1, y)
-      const ok = persist([...scenarios, sc], lines)
+      const ok = persist([...scenarios, sc], lines, draws)
       return ok ? sc : null
     },
-    [lines, scenarios, persist],
+    [lines, scenarios, draws, persist],
   )
 
   const renameScenario = useCallback(
@@ -103,9 +150,10 @@ export function useIncomeCost() {
       return persist(
         scenarios.map((s) => (s.id === id ? { ...s, name: trimmed } : s)),
         lines,
+        draws,
       )
     },
-    [lines, scenarios, persist],
+    [lines, scenarios, draws, persist],
   )
 
   const setScenarioYear = useCallback(
@@ -116,9 +164,10 @@ export function useIncomeCost() {
           s.id === id ? { ...s, year: Math.floor(year) } : s,
         ),
         lines,
+        draws,
       )
     },
-    [lines, scenarios, persist],
+    [lines, scenarios, draws, persist],
   )
 
   const removeScenario = useCallback(
@@ -127,40 +176,45 @@ export function useIncomeCost() {
       return persist(
         scenarios.filter((s) => s.id !== id),
         lines.filter((l) => l.scenarioId !== id),
+        draws.filter((d) => d.scenarioId !== id),
       )
     },
-    [lines, scenarios, persist],
+    [lines, scenarios, draws, persist],
   )
 
   const reorderScenariosByIds = useCallback(
     (orderedIds: string[]) => {
-      return persist(reorderScenarios(scenarios, orderedIds), lines)
+      return persist(reorderScenarios(scenarios, orderedIds), lines, draws)
     },
-    [lines, scenarios, persist],
+    [lines, scenarios, draws, persist],
   )
 
   const copyScenario = useCallback(
     (fromId: string, newName: string) => {
       if (!scenarios.some((s) => s.id === fromId)) return null
-      const result = copyScenarioAsNew(scenarios, lines, fromId, newName)
-      const ok = persist(result.scenarios, result.lines)
+      const result = copyScenarioAsNew(scenarios, lines, fromId, newName, undefined, draws)
+      const ok = persist(result.scenarios, result.lines, result.draws)
       return ok ? result.newScenario : null
     },
-    [lines, scenarios, persist],
+    [lines, scenarios, draws, persist],
   )
 
   const reset = useCallback(() => {
     const empty = emptyIncomeCostState()
-    return persist(empty.scenarios, empty.lines)
+    return persist(empty.scenarios, empty.lines, empty.draws)
   }, [persist])
 
   return {
     scenarios: orderedScenarios,
     lines,
+    draws,
     error,
     upsertLine,
     removeLine,
     addLine,
+    upsertDraw,
+    removeDraw,
+    addDraw,
     addScenario,
     renameScenario,
     setScenarioYear,

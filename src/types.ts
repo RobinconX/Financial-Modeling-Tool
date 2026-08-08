@@ -124,12 +124,37 @@ export type CashflowLine = {
    */
   yearlyAmount: number
   lastEdited?: MoneyEditField
+  /**
+   * Calendar month in the scenario year (1 = Jan … 12 = Dec).
+   * When set, the full yearlyAmount is paid/received in that month only
+   * (other months get none of this line). When null:
+   * - recurring: spread yearly÷12 across all months
+   * - one-time: omitted from monthly schedule (still in annual totals)
+   */
+  month?: number | null
+}
+
+/**
+ * Informative monthly draw from working balance.
+ * Not part of Income/Cost budget net, Sankey, or portfolio surplus deposits.
+ */
+export type WorkingBalanceDraw = {
+  id: string
+  scenarioId: string
+  name: string
+  sortOrder: number
+  /**
+   * CHF taken in each calendar month (index 0 = Jan … 11 = Dec).
+   * Always length 12; invalid entries treated as 0.
+   */
+  amounts: number[]
 }
 
 export type IncomeCostState = {
-  version: 2
+  version: 3
   scenarios: CashflowScenario[]
   lines: CashflowLine[]
+  draws: WorkingBalanceDraw[]
 }
 
 // --- Savings (amounts always stored in CHF; end-of-month balances) ---
@@ -153,6 +178,11 @@ export type SavingsAccount = {
   annualRatePercent: number
   /** Lower = earlier in the table */
   sortOrder: number
+  /**
+   * Permanent system role. `cash` is always present, cannot be deleted, and
+   * supplies prior-year Dec balance for Income/Cost working capital.
+   */
+  role?: 'cash' | null
 }
 
 export type SavingsState = {

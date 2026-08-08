@@ -1,10 +1,13 @@
 import { describe, expect, it } from 'vitest'
 import {
+  amountInMonth,
+  buildMonthlySchedule,
   buildScenarioSankeyData,
   copyScenarioAsNew,
   monthlyFromYearly,
   moveScenario,
   newScenario,
+  oneTimeMissingMonthCount,
   scenarioTotals,
   setAmountFromMonthly,
   setAmountFromYearly,
@@ -25,6 +28,7 @@ function line(
     lastEdited: partial.lastEdited,
     kind: partial.kind,
     scenarioId: partial.scenarioId,
+    month: partial.month ?? null,
   }
 }
 
@@ -90,6 +94,119 @@ describe('scenarioTotals', () => {
     expect(t.incomeMonthly).toBe(10000)
     expect(t.netYearly).toBe(93000)
     expect(t.netMonthly).toBe(8000)
+  })
+})
+
+describe('amountInMonth / buildMonthlySchedule', () => {
+  const sid = 's1'
+
+  it('spreads recurring evenly; one-time only in set month', () => {
+    const salary = line({
+      kind: 'income',
+      scenarioId: sid,
+      yearlyAmount: 120_000,
+      cadence: 'recurring',
+    })
+    const trip = line({
+      kind: 'cost',
+      scenarioId: sid,
+      yearlyAmount: 3_000,
+      cadence: 'one-time',
+      month: 6,
+    })
+    expect(amountInMonth(salary, 1)).toBeCloseTo(10_000, 6)
+    expect(amountInMonth(salary, 12)).toBeCloseTo(10_000, 6)
+    expect(amountInMonth(trip, 6)).toBe(3_000)
+    expect(amountInMonth(trip, 5)).toBe(0)
+    expect(amountInMonth({ ...trip, month: null }, 6)).toBe(0)
+
+    const sched = buildMonthlySchedule([salary, trip], sid)
+    expect(sched).toHaveLength(12)
+    expect(sched[0]!.income).toBeCloseTo(10_000, 6)
+    expect(sched[0]!.cost).toBe(0)
+    expect(sched[5]!.cost).toBeCloseTo(3_000, 6)
+    expect(sched[5]!.net).toBeCloseTo(7_000, 6)
+    // After June: balance accumulates
+    expect(sched[11]!.balance).toBeCloseTo(120_000 - 3_000, 4)
+  })
+
+  it('recurring with Paid-in month charges full yearly amount that month only', () => {
+    const insurance = line({
+      kind: 'cost',
+      scenarioId: sid,
+      yearlyAmount: 12_000,
+      cadence: 'recurring',
+      month: 3, // full lump in March
+    })
+    expect(amountInMonth(insurance, 2)).toBe(0)
+    expect(amountInMonth(insurance, 3)).toBe(12_000)
+    expect(amountInMonth(insurance, 4)).toBe(0)
+    const sched = buildMonthlySchedule([insurance], sid)
+    expect(sched[2]!.cost).toBe(12_000)
+    expect(sched[11]!.balance).toBeCloseTo(-12_000, 4)
+  })
+
+  it('counts one-time lines missing month', () => {
+    const lines = [
+      line({
+        kind: 'cost',
+        scenarioId: sid,
+        yearlyAmount: 100,
+        cadence: 'one-time',
+        month: null,
+      }),
+      line({
+        kind: 'cost',
+        scenarioId: sid,
+        yearlyAmount: 50,
+        cadence: 'one-time',
+        month: 3,
+      }),
+    ]
+    expect(oneTimeMissingMonthCount(lines, sid)).toBe(1)
+  })
+
+  it('draws reduce balanceAfterDraws only; not budget net', () => {
+    const salary = line({
+      kind: 'income',
+      scenarioId: sid,
+      yearlyAmount: 12_000,
+      cadence: 'recurring',
+    })
+    const draws = [
+      {
+        id: 'd1',
+        scenarioId: sid,
+        name: 'Vacation',
+        sortOrder: 0,
+        amounts: [0, 0, 2000, 0, 0, 0, 0, 0, 0, 0, 0, 0],
+      },
+    ]
+    const sched = buildMonthlySchedule([salary], sid, draws)
+    expect(sched[0]!.income).toBeCloseTo(1000, 6)
+    expect(sched[0]!.draw).toBe(0)
+    expect(sched[0]!.balance).toBeCloseTo(1000, 6)
+    expect(sched[0]!.balanceAfterDraws).toBeCloseTo(1000, 6)
+    expect(sched[2]!.draw).toBe(2000)
+    expect(sched[2]!.balance).toBeCloseTo(3000, 6)
+    expect(sched[2]!.balanceAfterDraws).toBeCloseTo(1000, 6)
+    // Annual totals ignore draws
+    const t = scenarioTotals([salary], sid)
+    expect(t.incomeYearly).toBe(12_000)
+    expect(t.costYearly).toBe(0)
+  })
+
+  it('opening cash seeds both working balances', () => {
+    const salary = line({
+      kind: 'income',
+      scenarioId: sid,
+      yearlyAmount: 12_000,
+      cadence: 'recurring',
+    })
+    const sched = buildMonthlySchedule([salary], sid, [], 5_000)
+    expect(sched[0]!.balance).toBeCloseTo(6_000, 6)
+    expect(sched[0]!.balanceAfterDraws).toBeCloseTo(6_000, 6)
+    expect(sched[11]!.balance).toBeCloseTo(17_000, 6)
   })
 })
 

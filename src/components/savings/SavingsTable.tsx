@@ -1,6 +1,11 @@
 import { useState } from 'react'
 import { formatMoney } from '../../lib/format'
-import { balanceNow, currentPeriodKey, SAVINGS_CURRENCY } from '../../lib/savings'
+import {
+  balanceNow,
+  currentPeriodKey,
+  isPermanentCashAccount,
+  SAVINGS_CURRENCY,
+} from '../../lib/savings'
 import type { SavingsAccount, SavingsCadence } from '../../types'
 
 type Props = {
@@ -77,15 +82,23 @@ export function SavingsTable({
             ) : (
               accounts.map((a) => {
                 const nowVal = balanceNow(a, asOf)
+                const isCash = isPermanentCashAccount(a)
                 return (
                   <tr key={a.id} className="border-b border-white/5 hover:bg-white/[0.02]">
                     <td className="px-2 py-1.5">
-                      <input
-                        className="input !min-w-[8rem] !py-1 !text-xs"
-                        value={a.name}
-                        placeholder="Account name"
-                        onChange={(e) => onName(a.id, e.target.value)}
-                      />
+                      <div className="flex min-w-[8rem] flex-col gap-0.5">
+                        <input
+                          className="input !min-w-[8rem] !py-1 !text-xs"
+                          value={a.name}
+                          placeholder="Account name"
+                          onChange={(e) => onName(a.id, e.target.value)}
+                        />
+                        {isCash ? (
+                          <span className="text-[10px] text-emerald-400/70">
+                            Permanent · IC working cash
+                          </span>
+                        ) : null}
+                      </div>
                     </td>
                     <td className="px-2 py-1.5">
                       {(() => {
@@ -174,14 +187,23 @@ export function SavingsTable({
                       />
                     </td>
                     <td className="px-2 py-1.5">
-                      <button
-                        type="button"
-                        className="text-white/35 transition hover:text-red-400"
-                        title="Remove account"
-                        onClick={() => onRemove(a.id)}
-                      >
-                        ×
-                      </button>
+                      {isCash ? (
+                        <span
+                          className="text-[10px] text-white/25"
+                          title="Cash is permanent and cannot be removed"
+                        >
+                          —
+                        </span>
+                      ) : (
+                        <button
+                          type="button"
+                          className="text-white/35 transition hover:text-red-400"
+                          title="Remove account"
+                          onClick={() => onRemove(a.id)}
+                        >
+                          ×
+                        </button>
+                      )}
                     </td>
                   </tr>
                 )

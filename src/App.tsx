@@ -132,10 +132,14 @@ export default function App() {
   const {
     scenarios: incomeCostScenarios,
     lines: incomeCostLines,
+    draws: incomeCostDraws,
     error: incomeCostError,
     upsertLine,
     removeLine,
     addLine,
+    upsertDraw,
+    removeDraw,
+    addDraw,
     addScenario,
     renameScenario,
     setScenarioYear,
@@ -145,6 +149,7 @@ export default function App() {
   } = useIncomeCost()
 
   const { accounts: savingsAccounts } = useSavings()
+  // savingsAccounts always includes permanent Cash (ensured on load)
 
   const sections: NavSection[] = [
     {
@@ -255,12 +260,6 @@ export default function App() {
           ))}
         </nav>
 
-        {!navCollapsed && (
-          <p className="mt-4 px-2 text-[10px] leading-relaxed text-white/25">
-            Local only · not investment advice
-          </p>
-        )}
-
         <button
           type="button"
           onClick={() => setNavCollapsed((c) => !c)}
@@ -324,10 +323,15 @@ export default function App() {
             <IncomeCostView
               scenarios={incomeCostScenarios}
               lines={incomeCostLines}
+              draws={incomeCostDraws}
+              savingsAccounts={savingsAccounts}
               storageError={incomeCostError}
               upsertLine={upsertLine}
               removeLine={removeLine}
               addLine={addLine}
+              upsertDraw={upsertDraw}
+              removeDraw={removeDraw}
+              addDraw={addDraw}
               addScenario={addScenario}
               renameScenario={renameScenario}
               setScenarioYear={setScenarioYear}

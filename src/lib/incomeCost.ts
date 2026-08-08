@@ -5,6 +5,7 @@ import type {
   CashflowScenario,
   IncomeCostState,
   MoneyEditField,
+  WorkingBalanceDraw,
 } from '../types'
 
 export const INCOME_COST_CURRENCY = 'CHF' as const
@@ -75,12 +76,171 @@ export function newCashflowLine(
     cadence,
     yearlyAmount: 0,
     lastEdited: 'monthly',
+    month: null,
   }
+}
+
+/** Valid calendar month 1–12, else null. */
+export function normalizeMonth(v: unknown): number | null {
+  if (v == null || v === '') return null
+  const n = Math.floor(Number(v))
+  if (!Number.isFinite(n) || n < 1 || n > 12) return null
+  return n
+}
+
+export const MONTH_LABELS = [
+  'Jan',
+  'Feb',
+  'Mar',
+  'Apr',
+  'May',
+  'Jun',
+  'Jul',
+  'Aug',
+  'Sep',
+  'Oct',
+  'Nov',
+  'Dec',
+] as const
+
+/**
+ * Positive CHF amount this line contributes in calendar month `month` (1–12).
+ * Kind is not applied here — caller splits income vs cost.
+ *
+ * - month set → full yearlyAmount in that month only
+ * - recurring + no month → yearly÷12 every month
+ * - one-time + no month → 0 on monthly path
+ */
+export function amountInMonth(line: CashflowLine, month: number): number {
+  if (!(month >= 1 && month <= 12)) return 0
+  const amt = line.yearlyAmount > 0 && Number.isFinite(line.yearlyAmount) ? line.yearlyAmount : 0
+  if (!(amt > 0)) return 0
+
+  const due = normalizeMonth(line.month)
+  if (due != null) {
+    return due === month ? amt : 0
+  }
+  if (line.cadence === 'one-time') return 0
+  return monthlyFromYearly(amt)
+}
+
+export type MonthlyCashflowPoint = {
+  month: number
+  label: string
+  income: number
+  cost: number
+  net: number
+  /** Cumulative IC working balance (budget lines only; no draws) */
+  balance: number
+  /** Sum of informative working-balance draws this month */
+  draw: number
+  /** Cumulative balance after draws */
+  balanceAfterDraws: number
+}
+
+export function emptyMonthAmounts(): number[] {
+  return Array.from({ length: 12 }, () => 0)
+}
+
+export function normalizeAmounts12(raw: unknown): number[] {
+  const out = emptyMonthAmounts()
+  if (!Array.isArray(raw)) return out
+  for (let i = 0; i < 12; i++) {
+    const n = Number(raw[i])
+    out[i] = Number.isFinite(n) && n > 0 ? n : 0
+  }
+  return out
+}
+
+export function newWorkingBalanceDraw(
+  scenarioId: string,
+  sortOrder = 0,
+): WorkingBalanceDraw {
+  return {
+    id: crypto.randomUUID(),
+    scenarioId,
+    name: '',
+    sortOrder,
+    amounts: emptyMonthAmounts(),
+  }
+}
+
+export function drawsForScenario(
+  draws: WorkingBalanceDraw[],
+  scenarioId: string,
+): WorkingBalanceDraw[] {
+  return draws
+    .filter((d) => d.scenarioId === scenarioId)
+    .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+}
+
+export function drawAmountInMonth(draw: WorkingBalanceDraw, month: number): number {
+  if (!(month >= 1 && month <= 12)) return 0
+  const n = draw.amounts[month - 1]
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
+/**
+ * Jan–Dec inflows/outflows from budget lines, plus optional informative draws.
+ * `openingBalance` is typically permanent Cash savings year-end of prior year.
+ * `balance` ignores draws; `balanceAfterDraws` subtracts them.
+ */
+export function buildMonthlySchedule(
+  lines: CashflowLine[],
+  scenarioId: string,
+  draws: WorkingBalanceDraw[] = [],
+  openingBalance = 0,
+): MonthlyCashflowPoint[] {
+  const ys = linesForScenario(lines, scenarioId)
+  const ds = drawsForScenario(draws, scenarioId)
+  const open =
+    Number.isFinite(openingBalance) && openingBalance > 0 ? openingBalance : 0
+  const points: MonthlyCashflowPoint[] = []
+  let balance = open
+  let balanceAfterDraws = open
+  for (let month = 1; month <= 12; month++) {
+    let income = 0
+    let cost = 0
+    for (const l of ys) {
+      const a = amountInMonth(l, month)
+      if (!(a > 0)) continue
+      if (l.kind === 'income') income += a
+      else cost += a
+    }
+    let draw = 0
+    for (const d of ds) {
+      draw += drawAmountInMonth(d, month)
+    }
+    const net = income - cost
+    balance += net
+    balanceAfterDraws += net - draw
+    points.push({
+      month,
+      label: MONTH_LABELS[month - 1]!,
+      income,
+      cost,
+      net,
+      balance,
+      draw,
+      balanceAfterDraws,
+    })
+  }
+  return points
+}
+
+/** One-time lines with amount but no month (missing from monthly path). */
+export function oneTimeMissingMonthCount(lines: CashflowLine[], scenarioId: string): number {
+  return linesForScenario(lines, scenarioId).filter(
+    (l) =>
+      l.cadence === 'one-time' &&
+      l.yearlyAmount > 0 &&
+      normalizeMonth(l.month) == null,
+  ).length
 }
 
 export function emptyIncomeCostState(): IncomeCostState {
   const base = newScenario(DEFAULT_SCENARIO_NAME, 0)
-  return { version: 2, scenarios: [base], lines: [] }
+  return { version: 3, scenarios: [base], lines: [], draws: [] }
 }
 
 export function sortedScenarios(scenarios: CashflowScenario[]): CashflowScenario[] {
@@ -167,14 +327,20 @@ export function scenarioTotals(lines: CashflowLine[], scenarioId: string): Scena
   }
 }
 
-/** Clone all lines from source into a new scenario (new scenario + new line ids). */
+/** Clone all lines + draws from source into a new scenario (new ids). */
 export function copyScenarioAsNew(
   scenarios: CashflowScenario[],
   lines: CashflowLine[],
   fromScenarioId: string,
   newName: string,
   year?: number,
-): { scenarios: CashflowScenario[]; lines: CashflowLine[]; newScenario: CashflowScenario } {
+  draws: WorkingBalanceDraw[] = [],
+): {
+  scenarios: CashflowScenario[]
+  lines: CashflowLine[]
+  draws: WorkingBalanceDraw[]
+  newScenario: CashflowScenario
+} {
   const maxOrder = scenarios.reduce((m, s) => Math.max(m, s.sortOrder), -1)
   const source = scenarios.find((s) => s.id === fromScenarioId)
   const y =
@@ -187,9 +353,16 @@ export function copyScenarioAsNew(
     id: crypto.randomUUID(),
     scenarioId: created.id,
   }))
+  const drawClones = drawsForScenario(draws, fromScenarioId).map((d) => ({
+    ...d,
+    id: crypto.randomUUID(),
+    scenarioId: created.id,
+    amounts: normalizeAmounts12(d.amounts),
+  }))
   return {
     scenarios: [...scenarios, created],
     lines: [...lines, ...clones],
+    draws: [...draws, ...drawClones],
     newScenario: created,
   }
 }

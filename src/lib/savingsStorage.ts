@@ -1,5 +1,9 @@
 import type { SavingsAccount, SavingsCadence, SavingsState } from '../types'
-import { emptySavingsState, periodKeyFromDate } from './savings'
+import {
+  emptySavingsState,
+  ensurePermanentCashAccount,
+  periodKeyFromDate,
+} from './savings'
 
 export const SAVINGS_STORAGE_KEY = 'grok-lab.savings.v1'
 
@@ -36,6 +40,7 @@ function normalizeAccount(raw: unknown, index: number): SavingsAccount | null {
     const now = periodKeyFromDate(new Date())
     actuals[now] = Math.max(0, asNumber(raw.amount, 0))
   }
+  const role = raw.role === 'cash' ? 'cash' : null
   return {
     id: typeof raw.id === 'string' ? raw.id : crypto.randomUUID(),
     name: typeof raw.name === 'string' ? raw.name : '',
@@ -44,6 +49,7 @@ function normalizeAccount(raw: unknown, index: number): SavingsAccount | null {
     cadence: normalizeCadence(raw.cadence),
     annualRatePercent: asNumber(raw.annualRatePercent, 0),
     sortOrder: Math.floor(asNumber(raw.sortOrder, index)),
+    role,
   }
 }
 
@@ -54,9 +60,11 @@ export function loadSavings(): SavingsState {
     const parsed: unknown = JSON.parse(raw)
     if (!isRecord(parsed)) return emptySavingsState()
     const list = Array.isArray(parsed.accounts) ? parsed.accounts : []
-    const accounts = list
-      .map((a, i) => normalizeAccount(a, i))
-      .filter((a): a is SavingsAccount => a != null)
+    const accounts = ensurePermanentCashAccount(
+      list
+        .map((a, i) => normalizeAccount(a, i))
+        .filter((a): a is SavingsAccount => a != null),
+    )
     return { version: 1, accounts }
   } catch {
     return emptySavingsState()
@@ -65,9 +73,10 @@ export function loadSavings(): SavingsState {
 
 export function saveSavings(state: SavingsState): { ok: true } | { ok: false; error: string } {
   try {
+    const accounts = ensurePermanentCashAccount(state.accounts)
     const payload: SavingsState = {
       version: 1,
-      accounts: state.accounts.map((a, i) => ({
+      accounts: accounts.map((a, i) => ({
         id: a.id,
         name: a.name,
         actuals: a.actuals,
@@ -75,6 +84,7 @@ export function saveSavings(state: SavingsState): { ok: true } | { ok: false; er
         cadence: a.cadence,
         annualRatePercent: a.annualRatePercent,
         sortOrder: a.sortOrder ?? i,
+        role: a.role === 'cash' ? 'cash' : null,
       })),
     }
     localStorage.setItem(SAVINGS_STORAGE_KEY, JSON.stringify(payload))

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SavingsAccount, SavingsCadence } from '../types'
 import {
   ensurePastPeriodKey,
+  ensurePermanentCashAccount,
+  isPermanentCashAccount,
   newSavingsAccount,
   removePastPeriodKey,
   sortedAccounts,
@@ -11,28 +13,31 @@ import { loadSavings, saveSavings, SAVINGS_STORAGE_KEY } from '../lib/savingsSto
 
 export function useSavings() {
   const initial = loadSavings()
-  const [accounts, setAccounts] = useState<SavingsAccount[]>(() => initial.accounts)
+  const [accounts, setAccounts] = useState<SavingsAccount[]>(() =>
+    ensurePermanentCashAccount(initial.accounts),
+  )
   const [error, setError] = useState<string | null>(null)
   /** Always-current list so consecutive cell edits stack correctly. */
   const accountsRef = useRef(accounts)
   accountsRef.current = accounts
 
   const persist = useCallback((next: SavingsAccount[]) => {
-    const result = saveSavings({ version: 1, accounts: next })
+    const ensured = ensurePermanentCashAccount(next)
+    const result = saveSavings({ version: 1, accounts: ensured })
     if (!result.ok) {
       setError(result.error)
       return false
     }
     setError(null)
-    accountsRef.current = next
-    setAccounts(next)
+    accountsRef.current = ensured
+    setAccounts(ensured)
     return true
   }, [])
 
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key !== SAVINGS_STORAGE_KEY) return
-      const loaded = loadSavings().accounts
+      const loaded = ensurePermanentCashAccount(loadSavings().accounts)
       accountsRef.current = loaded
       setAccounts(loaded)
     }
@@ -47,17 +52,32 @@ export function useSavings() {
   const upsertAccount = useCallback(
     (account: SavingsAccount) => {
       const current = accountsRef.current
-      const exists = current.some((a) => a.id === account.id)
+      // Permanent cash keeps role + id
+      const prev = current.find((a) => a.id === account.id)
+      const nextAccount =
+        prev && isPermanentCashAccount(prev)
+          ? {
+              ...account,
+              id: prev.id,
+              role: 'cash' as const,
+              name: account.name.trim() || 'Cash',
+            }
+          : account
+      const exists = current.some((a) => a.id === nextAccount.id)
       const next = exists
-        ? current.map((a) => (a.id === account.id ? account : a))
-        : [...current, account]
+        ? current.map((a) => (a.id === nextAccount.id ? nextAccount : a))
+        : [...current, nextAccount]
       return persist(next)
     },
     [persist],
   )
 
   const removeAccount = useCallback(
-    (id: string) => persist(accountsRef.current.filter((a) => a.id !== id)),
+    (id: string) => {
+      const acc = accountsRef.current.find((a) => a.id === id)
+      if (acc && isPermanentCashAccount(acc)) return false
+      return persist(accountsRef.current.filter((a) => a.id !== id))
+    },
     [persist],
   )
 

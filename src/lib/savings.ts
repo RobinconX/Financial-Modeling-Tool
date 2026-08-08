@@ -115,8 +115,69 @@ export function currentPeriodKey(asOf: Date = new Date()): string {
 
 // --- Account helpers ---
 
+/** Stable id for the permanent Cash account (survives reloads). */
+export const PERMANENT_CASH_ACCOUNT_ID = 'savings-cash'
+
+export function isPermanentCashAccount(account: SavingsAccount): boolean {
+  return account.role === 'cash' || account.id === PERMANENT_CASH_ACCOUNT_ID
+}
+
+export function newPermanentCashAccount(asOf: Date = new Date()): SavingsAccount {
+  const now = currentPeriodKey(asOf)
+  return {
+    id: PERMANENT_CASH_ACCOUNT_ID,
+    name: 'Cash',
+    role: 'cash',
+    actuals: { [now]: 0 },
+    contribution: 0,
+    cadence: 'monthly',
+    annualRatePercent: 0,
+    sortOrder: -1,
+  }
+}
+
+/** Ensure exactly one permanent Cash account exists (first in list). */
+export function ensurePermanentCashAccount(
+  accounts: SavingsAccount[],
+  asOf: Date = new Date(),
+): SavingsAccount[] {
+  const cash = accounts.find(isPermanentCashAccount)
+  if (cash) {
+    // Normalize id/role/name so it stays identifiable
+    const fixed: SavingsAccount = {
+      ...cash,
+      id: PERMANENT_CASH_ACCOUNT_ID,
+      role: 'cash',
+      name: cash.name.trim() || 'Cash',
+      sortOrder: Math.min(cash.sortOrder, -1),
+    }
+    const others = accounts.filter((a) => !isPermanentCashAccount(a) && a.id !== fixed.id)
+    return [fixed, ...others]
+  }
+  return [newPermanentCashAccount(asOf), ...accounts]
+}
+
+export function getPermanentCashAccount(
+  accounts: SavingsAccount[],
+): SavingsAccount | null {
+  return accounts.find(isPermanentCashAccount) ?? null
+}
+
+/**
+ * End-of-year cash balance for calendar `year` (Dec actual, or latest ≤ Dec).
+ * Used as opening working capital for Income/Cost scenario year `year + 1`.
+ */
+export function yearEndBalance(account: SavingsAccount, year: number): number {
+  const y = Math.floor(year)
+  if (!Number.isFinite(y)) return 0
+  const key = makePeriodKey(y, 12)
+  const direct = getActual(account, key)
+  if (direct != null) return Math.max(0, direct)
+  return Math.max(0, latestActual(account, key))
+}
+
 export function emptySavingsState(): SavingsState {
-  return { version: 1, accounts: [] }
+  return { version: 1, accounts: ensurePermanentCashAccount([]) }
 }
 
 export function newSavingsAccount(sortOrder: number, asOf: Date = new Date()): SavingsAccount {
@@ -124,6 +185,7 @@ export function newSavingsAccount(sortOrder: number, asOf: Date = new Date()): S
   return {
     id: crypto.randomUUID(),
     name: '',
+    role: null,
     actuals: { [now]: 0 },
     contribution: 0,
     cadence: 'monthly',
@@ -133,7 +195,13 @@ export function newSavingsAccount(sortOrder: number, asOf: Date = new Date()): S
 }
 
 export function sortedAccounts(accounts: SavingsAccount[]): SavingsAccount[] {
-  return [...accounts].sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+  return [...accounts].sort(
+    (a, b) =>
+      // Cash always first
+      (isPermanentCashAccount(a) ? -1 : 0) - (isPermanentCashAccount(b) ? -1 : 0) ||
+      a.sortOrder - b.sortOrder ||
+      a.name.localeCompare(b.name),
+  )
 }
 
 /** Balance for a period if stored; undefined if missing. */
