@@ -20,48 +20,12 @@ describe('fetchQuote', () => {
     await expect(fetchQuote('!!!')).rejects.toThrow(/Invalid ticker/)
   })
 
-  it('uses Yahoo batch quote when available', async () => {
+  it('uses chart + Nasdaq for single quote', async () => {
     vi.stubGlobal(
       'fetch',
       vi.fn(async (url: string) => {
         const u = String(url)
-        if (u.includes('/v7/finance/quote')) {
-          return jsonResponse({
-            quoteResponse: {
-              result: [
-                {
-                  symbol: 'AAPL',
-                  regularMarketPrice: 200,
-                  longName: 'Apple Inc.',
-                  currency: 'USD',
-                  marketCap: 3_000_000_000_000,
-                  sharesOutstanding: 15_000_000_000,
-                },
-              ],
-            },
-          })
-        }
-        return jsonResponse({}, false)
-      }),
-    )
-
-    const q = await fetchQuote('aapl')
-    expect(q.symbol).toBe('AAPL')
-    expect(q.price).toBe(200)
-    expect(q.name).toBe('Apple Inc.')
-    expect(q.marketCap).toBe(3_000_000_000_000)
-    expect(q.sharesOutstanding).toBe(15_000_000_000)
-  })
-
-  it('falls back to chart + Nasdaq when batch misses', async () => {
-    vi.stubGlobal(
-      'fetch',
-      vi.fn(async (url: string) => {
-        const u = String(url)
-        if (u.includes('/v7/finance/quote')) {
-          return jsonResponse({ quoteResponse: { result: [] } })
-        }
-        if (u.includes('finance.yahoo.com') && u.includes('/chart/')) {
+        if (u.includes('/chart/')) {
           return jsonResponse({
             chart: {
               result: [
@@ -97,7 +61,9 @@ describe('fetchQuote', () => {
     const q = await fetchQuote('aapl')
     expect(q.symbol).toBe('AAPL')
     expect(q.price).toBe(200)
+    expect(q.name).toBe('Apple Inc.')
     expect(q.marketCap).toBe(3_000_000_000_000)
+    expect(q.sharesOutstanding).toBeCloseTo(3_000_000_000_000 / 200)
   })
 
   it('throws when no price available', async () => {
@@ -105,8 +71,8 @@ describe('fetchQuote', () => {
       'fetch',
       vi.fn(async (url: string) => {
         const u = String(url)
-        if (u.includes('/v7/finance/quote')) {
-          return jsonResponse({ quoteResponse: { result: [] } })
+        if (u.includes('/spark')) {
+          return jsonResponse({ spark: { result: [] } })
         }
         return jsonResponse({ chart: { result: [] } })
       }),
@@ -116,28 +82,40 @@ describe('fetchQuote', () => {
 })
 
 describe('fetchQuotes', () => {
-  it('batches many symbols in one Yahoo request', async () => {
+  it('batches many symbols via Yahoo spark', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const u = String(url)
-      if (u.includes('/v7/finance/quote')) {
+      if (u.includes('/v7/finance/spark')) {
         expect(u).toContain('AAPL')
         expect(u).toContain('MSFT')
         return jsonResponse({
-          quoteResponse: {
+          spark: {
             result: [
               {
                 symbol: 'AAPL',
-                regularMarketPrice: 200,
-                longName: 'Apple Inc.',
-                currency: 'USD',
-                marketCap: 3e12,
+                response: [
+                  {
+                    meta: {
+                      symbol: 'AAPL',
+                      regularMarketPrice: 200,
+                      longName: 'Apple Inc.',
+                      currency: 'USD',
+                    },
+                  },
+                ],
               },
               {
                 symbol: 'MSFT',
-                regularMarketPrice: 400,
-                longName: 'Microsoft',
-                currency: 'USD',
-                marketCap: 3e12,
+                response: [
+                  {
+                    meta: {
+                      symbol: 'MSFT',
+                      regularMarketPrice: 400,
+                      longName: 'Microsoft',
+                      currency: 'USD',
+                    },
+                  },
+                ],
               },
             ],
           },
@@ -150,8 +128,63 @@ describe('fetchQuotes', () => {
     const quotes = await fetchQuotes(['aapl', 'MSFT', 'aapl'])
     expect(quotes).toHaveLength(2)
     expect(quotes.map((q) => q.symbol)).toEqual(['AAPL', 'MSFT'])
-    // One batch call; no per-symbol chart/nasdaq
+    expect(quotes[0]!.price).toBe(200)
+    expect(quotes[1]!.price).toBe(400)
+    // One spark call; no per-symbol fallbacks
     expect(fetchMock).toHaveBeenCalledTimes(1)
+  })
+
+  it('falls back when spark misses a symbol', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url)
+        if (u.includes('/spark')) {
+          return jsonResponse({
+            spark: {
+              result: [
+                {
+                  symbol: 'AAPL',
+                  response: [
+                    {
+                      meta: {
+                        symbol: 'AAPL',
+                        regularMarketPrice: 200,
+                        longName: 'Apple Inc.',
+                        currency: 'USD',
+                      },
+                    },
+                  ],
+                },
+              ],
+            },
+          })
+        }
+        if (u.includes('/chart/MSFT')) {
+          return jsonResponse({
+            chart: {
+              result: [
+                {
+                  meta: {
+                    symbol: 'MSFT',
+                    regularMarketPrice: 400,
+                    longName: 'Microsoft',
+                    currency: 'USD',
+                  },
+                },
+              ],
+            },
+          })
+        }
+        if (u.includes('nasdaq.com')) {
+          return jsonResponse({ data: {} })
+        }
+        return jsonResponse({}, false)
+      }),
+    )
+
+    const quotes = await fetchQuotes(['AAPL', 'MSFT'])
+    expect(quotes.map((q) => q.symbol).sort()).toEqual(['AAPL', 'MSFT'])
   })
 
   it('returns empty for only invalid symbols', async () => {

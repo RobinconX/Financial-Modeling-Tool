@@ -24,18 +24,22 @@ type YahooChartResponse = {
   }
 }
 
-type YahooQuoteResponse = {
-  quoteResponse?: {
+/** Yahoo spark — multi-symbol price (v7/quote is unauthorized now). */
+type YahooSparkResponse = {
+  spark?: {
     result?: Array<{
       symbol?: string
-      longName?: string
-      shortName?: string
-      regularMarketPrice?: number
-      postMarketPrice?: number
-      preMarketPrice?: number
-      currency?: string
-      marketCap?: number
-      sharesOutstanding?: number
+      response?: Array<{
+        meta?: {
+          symbol?: string
+          currency?: string
+          regularMarketPrice?: number
+          chartPreviousClose?: number
+          previousClose?: number
+          longName?: string
+          shortName?: string
+        }
+      }>
     }>
     error?: { description?: string } | null
   }
@@ -66,7 +70,7 @@ const YAHOO_HEADERS = {
   Accept: 'application/json',
 }
 
-/** Yahoo batch quote URL length / practical limit. */
+/** Symbols per spark request (URL length + practical limit). */
 const YAHOO_BATCH_SIZE = 40
 
 const SYMBOL_RE = /^[A-Z0-9.^=_-]{1,15}$/
@@ -90,7 +94,7 @@ function normalizeSymbol(raw: string): string | null {
   return symbol
 }
 
-function quoteFromYahooFields(fields: {
+function quoteFromFields(fields: {
   symbol: string
   name?: string | null
   price: number
@@ -190,34 +194,36 @@ async function fetchNasdaqMarketCap(symbol: string): Promise<{
 }
 
 /**
- * One Yahoo request for many symbols (price, mcap, shares, name).
- * Returns only symbols that had a usable price.
+ * One Yahoo spark request for many symbols (price + name + currency).
+ * Does not include market cap — callers keep prior mcap or use fallback.
  */
-async function fetchYahooQuotesBatch(symbols: string[]): Promise<Map<string, Quote>> {
+async function fetchYahooSparkBatch(symbols: string[]): Promise<Map<string, Quote>> {
   const out = new Map<string, Quote>()
   if (symbols.length === 0) return out
 
-  const url = `https://query1.finance.yahoo.com/v7/finance/quote?symbols=${symbols
+  const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbols
     .map((s) => encodeURIComponent(s))
-    .join(',')}`
+    .join(',')}&range=1d&interval=1d`
   const res = await fetch(url, { headers: YAHOO_HEADERS })
   if (!res.ok) return out
 
-  const json = (await res.json()) as YahooQuoteResponse
-  for (const row of json.quoteResponse?.result ?? []) {
-    const symbol = row.symbol?.toUpperCase()
+  const json = (await res.json()) as YahooSparkResponse
+  for (const row of json.spark?.result ?? []) {
+    const meta = row.response?.[0]?.meta
+    const symbol = (meta?.symbol ?? row.symbol)?.toUpperCase()
     if (!symbol) continue
-    const price = row.regularMarketPrice ?? row.postMarketPrice ?? row.preMarketPrice
+    const price =
+      meta?.regularMarketPrice ?? meta?.chartPreviousClose ?? meta?.previousClose ?? null
     if (price == null || !Number.isFinite(price)) continue
     out.set(
       symbol,
-      quoteFromYahooFields({
+      quoteFromFields({
         symbol,
-        name: row.longName ?? row.shortName ?? symbol,
+        name: meta?.longName ?? meta?.shortName ?? symbol,
         price,
-        currency: row.currency,
-        marketCap: row.marketCap ?? null,
-        sharesOutstanding: row.sharesOutstanding ?? null,
+        currency: meta?.currency,
+        marketCap: null,
+        sharesOutstanding: null,
       }),
     )
   }
@@ -234,7 +240,7 @@ async function fetchQuoteFallback(symbol: string): Promise<Quote | null> {
   const price = yahoo?.price ?? nasdaq.price
   if (price == null) return null
 
-  return quoteFromYahooFields({
+  return quoteFromFields({
     symbol,
     name: yahoo?.name ?? nasdaq.name ?? symbol,
     price,
@@ -246,8 +252,8 @@ async function fetchQuoteFallback(symbol: string): Promise<Quote | null> {
 
 /**
  * Fetch quotes for many tickers efficiently:
- * 1. Yahoo batch API (1 request per ~40 symbols)
- * 2. Parallel per-symbol fallback only for misses
+ * 1. Yahoo spark batch (1 request per ~40 symbols) for price/name
+ * 2. Parallel per-symbol fallback only for misses (includes mcap via Nasdaq)
  */
 export async function fetchQuotes(rawSymbols: string[]): Promise<Quote[]> {
   const unique: string[] = []
@@ -265,7 +271,7 @@ export async function fetchQuotes(rawSymbols: string[]): Promise<Quote[]> {
   for (let i = 0; i < unique.length; i += YAHOO_BATCH_SIZE) {
     const chunk = unique.slice(i, i + YAHOO_BATCH_SIZE)
     try {
-      const batch = await fetchYahooQuotesBatch(chunk)
+      const batch = await fetchYahooSparkBatch(chunk)
       for (const [sym, q] of batch) bySymbol.set(sym, q)
     } catch {
       // fall through to per-symbol
@@ -288,13 +294,16 @@ export async function fetchQuotes(rawSymbols: string[]): Promise<Quote[]> {
     }
   }
 
-  // Preserve request order (unique list order)
   return unique.map((s) => bySymbol.get(s)).filter((q): q is Quote => q != null)
 }
 
 export async function fetchQuote(rawSymbol: string): Promise<Quote> {
   const symbol = normalizeSymbol(rawSymbol)
   if (!symbol) throw new Error('Invalid ticker symbol')
+
+  // Prefer full single-symbol path (price + mcap) for interactive loads.
+  const full = await fetchQuoteFallback(symbol)
+  if (full) return full
 
   const [q] = await fetchQuotes([symbol])
   if (!q) throw new Error(`No data for symbol ${symbol}`)
