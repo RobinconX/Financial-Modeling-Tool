@@ -82,7 +82,7 @@ describe('fetchQuote', () => {
 })
 
 describe('fetchQuotes', () => {
-  it('batches many symbols via Yahoo spark', async () => {
+  it('batches many symbols via Yahoo spark + Nasdaq mcap', async () => {
     const fetchMock = vi.fn(async (url: string) => {
       const u = String(url)
       if (u.includes('/v7/finance/spark')) {
@@ -121,6 +121,16 @@ describe('fetchQuotes', () => {
           },
         })
       }
+      if (u.includes('nasdaq.com') && u.includes('/summary') && u.includes('AAPL')) {
+        return jsonResponse({
+          data: { summaryData: { MarketCap: { value: '$3,000,000,000,000' } } },
+        })
+      }
+      if (u.includes('nasdaq.com') && u.includes('/summary') && u.includes('MSFT')) {
+        return jsonResponse({
+          data: { summaryData: { MarketCap: { value: '$2,000,000,000,000' } } },
+        })
+      }
       return jsonResponse({}, false)
     })
     vi.stubGlobal('fetch', fetchMock)
@@ -129,9 +139,13 @@ describe('fetchQuotes', () => {
     expect(quotes).toHaveLength(2)
     expect(quotes.map((q) => q.symbol)).toEqual(['AAPL', 'MSFT'])
     expect(quotes[0]!.price).toBe(200)
+    expect(quotes[0]!.marketCap).toBe(3_000_000_000_000)
+    expect(quotes[0]!.sharesOutstanding).toBeCloseTo(3_000_000_000_000 / 200)
     expect(quotes[1]!.price).toBe(400)
-    // One spark call; no per-symbol fallbacks
-    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(quotes[1]!.marketCap).toBe(2_000_000_000_000)
+    // 1 spark + parallel nasdaq summary calls (stocks, maybe etf) — not chart fallbacks
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('/spark'))).toBe(true)
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('nasdaq.com'))).toBe(true)
   })
 
   it('falls back when spark misses a symbol', async () => {

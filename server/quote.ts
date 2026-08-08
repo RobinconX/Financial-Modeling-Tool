@@ -195,7 +195,7 @@ async function fetchNasdaqMarketCap(symbol: string): Promise<{
 
 /**
  * One Yahoo spark request for many symbols (price + name + currency).
- * Does not include market cap — callers keep prior mcap or use fallback.
+ * Market cap is not in spark — filled separately via Nasdaq.
  */
 async function fetchYahooSparkBatch(symbols: string[]): Promise<Map<string, Quote>> {
   const out = new Map<string, Quote>()
@@ -230,6 +230,59 @@ async function fetchYahooSparkBatch(symbols: string[]): Promise<Map<string, Quot
   return out
 }
 
+/** Lightweight mcap-only (summary endpoint). Parallelized for batch enrichment. */
+async function fetchNasdaqMarketCapOnly(symbol: string): Promise<number | null> {
+  const assetClasses = ['stocks', 'etf'] as const
+  for (const assetClass of assetClasses) {
+    try {
+      const res = await fetch(
+        `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/summary?assetclass=${assetClass}`,
+        { headers: YAHOO_HEADERS },
+      )
+      if (!res.ok) continue
+      const json = (await res.json()) as NasdaqSummaryResponse
+      const mcap = parseNasdaqMoney(json.data?.summaryData?.MarketCap?.value)
+      if (mcap != null) return mcap
+    } catch {
+      // try next
+    }
+  }
+  return null
+}
+
+/** Attach market cap (+ derived shares) to spark quotes in parallel. */
+async function enrichQuotesWithMarketCap(quotes: Map<string, Quote>): Promise<void> {
+  const entries = [...quotes.entries()]
+  if (entries.length === 0) return
+
+  const caps = await Promise.all(
+    entries.map(async ([symbol]) => {
+      try {
+        return await fetchNasdaqMarketCapOnly(symbol)
+      } catch {
+        return null
+      }
+    }),
+  )
+
+  for (let i = 0; i < entries.length; i++) {
+    const [symbol, q] = entries[i]!
+    const marketCap = caps[i] ?? null
+    if (marketCap == null) continue
+    quotes.set(
+      symbol,
+      quoteFromFields({
+        symbol: q.symbol,
+        name: q.name,
+        price: q.price,
+        currency: q.currency,
+        marketCap,
+        sharesOutstanding: null, // derived in quoteFromFields from mcap/price
+      }),
+    )
+  }
+}
+
 /** Per-symbol fallback (chart + Nasdaq) when batch misses a ticker. */
 async function fetchQuoteFallback(symbol: string): Promise<Quote | null> {
   const [yahoo, nasdaq] = await Promise.all([
@@ -253,7 +306,8 @@ async function fetchQuoteFallback(symbol: string): Promise<Quote | null> {
 /**
  * Fetch quotes for many tickers efficiently:
  * 1. Yahoo spark batch (1 request per ~40 symbols) for price/name
- * 2. Parallel per-symbol fallback only for misses (includes mcap via Nasdaq)
+ * 2. Parallel Nasdaq summary for market cap / shares on those hits
+ * 3. Full per-symbol fallback only for misses
  */
 export async function fetchQuotes(rawSymbols: string[]): Promise<Quote[]> {
   const unique: string[] = []
@@ -272,6 +326,7 @@ export async function fetchQuotes(rawSymbols: string[]): Promise<Quote[]> {
     const chunk = unique.slice(i, i + YAHOO_BATCH_SIZE)
     try {
       const batch = await fetchYahooSparkBatch(chunk)
+      await enrichQuotesWithMarketCap(batch)
       for (const [sym, q] of batch) bySymbol.set(sym, q)
     } catch {
       // fall through to per-symbol
