@@ -2,7 +2,7 @@
 import { defineConfig, type Connect, type Plugin } from 'vite'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
-import { fetchQuote } from './server/quote'
+import { fetchQuote, fetchQuotes } from './server/quote'
 import { fetchFxRate } from './server/fx'
 
 function apiPlugin(): Plugin {
@@ -34,15 +34,34 @@ function apiPlugin(): Plugin {
         return
       }
 
+      const symbolsParam = url.searchParams.get('symbols')?.trim()
       const symbol = url.searchParams.get('symbol')?.trim()
-      if (!symbol) {
-        res.statusCode = 400
-        res.setHeader('Content-Type', 'application/json')
-        res.end(JSON.stringify({ error: 'Missing symbol query parameter' }))
-        return
-      }
 
       try {
+        if (symbolsParam) {
+          const list = symbolsParam
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+          const quotes = await fetchQuotes(list)
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Cache-Control', 'no-store')
+          res.end(JSON.stringify({ quotes }))
+          return
+        }
+
+        if (!symbol) {
+          res.statusCode = 400
+          res.setHeader('Content-Type', 'application/json')
+          res.end(
+            JSON.stringify({
+              error: 'Missing symbol or symbols query parameter',
+            }),
+          )
+          return
+        }
+
         const quote = await fetchQuote(symbol)
         res.statusCode = 200
         res.setHeader('Content-Type', 'application/json')

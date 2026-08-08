@@ -7,7 +7,7 @@
  * Then set GitHub Actions variable VITE_API_BASE to the worker URL
  * (no trailing slash), e.g. https://fmt-market-api.<you>.workers.dev
  */
-import { fetchQuote } from '../../../server/quote'
+import { fetchQuote, fetchQuotes } from '../../../server/quote'
 import { fetchFxRate } from '../../../server/fx'
 
 const corsHeaders: Record<string, string> = {
@@ -43,7 +43,11 @@ export default {
       return json({
         ok: true,
         service: 'fmt-market-api',
-        routes: ['/api/quote?symbol=AAPL', '/api/fx?from=USD&to=CHF'],
+        routes: [
+          '/api/quote?symbol=AAPL',
+          '/api/quote?symbols=AAPL,MSFT,GOOG',
+          '/api/fx?from=USD&to=CHF',
+        ],
       })
     }
 
@@ -60,11 +64,20 @@ export default {
     }
 
     if (path.endsWith('/api/quote') || path === '/api/quote') {
+      const symbolsParam = url.searchParams.get('symbols')?.trim()
       const symbol = url.searchParams.get('symbol')?.trim()
-      if (!symbol) {
-        return json({ error: 'Missing symbol query parameter' }, 400)
-      }
       try {
+        if (symbolsParam) {
+          const list = symbolsParam
+            .split(',')
+            .map((s) => s.trim())
+            .filter(Boolean)
+          const quotes = await fetchQuotes(list)
+          return json({ quotes }, 200, { 'Cache-Control': 'no-store' })
+        }
+        if (!symbol) {
+          return json({ error: 'Missing symbol or symbols query parameter' }, 400)
+        }
         const quote = await fetchQuote(symbol)
         return json(quote, 200, { 'Cache-Control': 'no-store' })
       } catch (err) {
