@@ -299,13 +299,89 @@ export async function readLinkedSnapshot(): Promise<
 }
 
 let writeTimer: ReturnType<typeof setTimeout> | null = null
+/** True while a debounce window is open (pending → until write finishes). */
+let debounceActive = false
+
+export type LinkedFileSaveEvent = {
+  status: 'pending' | 'saving' | 'saved' | 'error' | 'idle'
+  /** Short label for UI toast */
+  message: string
+  fileName?: string | null
+}
+
+type SaveListener = (event: LinkedFileSaveEvent) => void
+const saveListeners = new Set<SaveListener>()
+
+export function subscribeLinkedFileSave(listener: SaveListener): () => void {
+  saveListeners.add(listener)
+  return () => {
+    saveListeners.delete(listener)
+  }
+}
+
+function emitSaveEvent(event: LinkedFileSaveEvent): void {
+  for (const fn of saveListeners) {
+    try {
+      fn(event)
+    } catch {
+      /* ignore listener errors */
+    }
+  }
+}
+
+/** Wait this long after the last edit before writing the linked file. */
+export const LINKED_FILE_SAVE_DEBOUNCE_MS = 4000
 
 /** Debounced write of current localStorage snapshot to the linked file. */
-export function scheduleLinkedFileWrite(delayMs = 600): void {
+export function scheduleLinkedFileWrite(
+  delayMs = LINKED_FILE_SAVE_DEBOUNCE_MS,
+): void {
   if (writeTimer) clearTimeout(writeTimer)
+  // Announce “pending” only once per save cycle (not every keystroke)
+  if (!debounceActive) {
+    debounceActive = true
+    void (async () => {
+      if (!cachedHandle) cachedHandle = await idbGetHandle()
+      if (!cachedHandle) {
+        debounceActive = false
+        return
+      }
+      emitSaveEvent({
+        status: 'pending',
+        message: 'Will save after you pause editing…',
+        fileName: cachedHandle.name,
+      })
+    })()
+  }
   writeTimer = setTimeout(() => {
     writeTimer = null
-    void writeLinkedSnapshot()
+    void (async () => {
+      if (!cachedHandle) cachedHandle = await idbGetHandle()
+      if (!cachedHandle) {
+        debounceActive = false
+        return
+      }
+      emitSaveEvent({
+        status: 'saving',
+        message: 'Saving to data file…',
+        fileName: cachedHandle.name,
+      })
+      const result = await writeLinkedSnapshot()
+      debounceActive = false
+      if (result.ok) {
+        emitSaveEvent({
+          status: 'saved',
+          message: `Saved · ${cachedHandle.name}`,
+          fileName: cachedHandle.name,
+        })
+      } else {
+        emitSaveEvent({
+          status: 'error',
+          message: result.error,
+          fileName: cachedHandle?.name,
+        })
+      }
+    })()
   }, delayMs)
 }
 

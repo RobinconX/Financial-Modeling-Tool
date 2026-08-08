@@ -212,8 +212,9 @@ export function DataSettingsPanel({ onClose }: Props) {
               )}
             </div>
             <p className="text-[11px] text-white/30">
-              After linking, edits are written to the file automatically (debounced). Put the file
-              in OneDrive/Dropbox if you want it on multiple PCs.
+              After linking, edits wait ~4 seconds of idle time, then write the full snapshot once
+              (so typing doesn’t spam saves). A small “Data file” toast appears bottom-right.
+              Put the file in OneDrive/Dropbox if you want it on multiple PCs.
             </p>
           </>
         )}
