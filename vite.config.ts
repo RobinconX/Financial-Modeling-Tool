@@ -68,7 +68,13 @@ function apiPlugin(): Plugin {
   }
 }
 
+// GitHub project Pages: set VITE_BASE=/repo-name/ in the workflow or .env
+const base =
+  (globalThis as unknown as { process?: { env?: { VITE_BASE?: string } } }).process?.env
+    ?.VITE_BASE?.trim() || '/'
+
 export default defineConfig({
+  base,
   plugins: [react(), tailwindcss(), apiPlugin()],
   test: {
     environment: 'node',

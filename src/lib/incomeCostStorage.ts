@@ -195,6 +195,7 @@ export function saveIncomeCost(
       draws: state.draws ?? [],
     }
     localStorage.setItem(INCOME_COST_STORAGE_KEY, JSON.stringify(payload))
+    void import('./dataSync').then((m) => m.notifyAppDataChanged())
     return { ok: true }
   } catch (err) {
     return {

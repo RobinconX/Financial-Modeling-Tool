@@ -88,6 +88,7 @@ export function saveSavings(state: SavingsState): { ok: true } | { ok: false; er
       })),
     }
     localStorage.setItem(SAVINGS_STORAGE_KEY, JSON.stringify(payload))
+    void import('./dataSync').then((m) => m.notifyAppDataChanged())
     return { ok: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to save savings'

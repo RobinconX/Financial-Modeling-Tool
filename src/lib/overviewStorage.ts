@@ -207,6 +207,7 @@ export function saveOverview(state: OverviewState): { ok: true } | { ok: false; 
       selectedScenarioId: state.selectedScenarioId,
     }
     localStorage.setItem(OVERVIEW_STORAGE_KEY, JSON.stringify(payload))
+    void import('./dataSync').then((m) => m.notifyAppDataChanged())
     return { ok: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to save overview'

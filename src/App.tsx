@@ -9,6 +9,7 @@ import { IncomeCostView } from './components/income-cost/IncomeCostView'
 import { SavingsView } from './components/savings/SavingsView'
 import { OverviewView } from './components/overview/OverviewView'
 import { useSavings } from './hooks/useSavings'
+import { DataSettingsPanel } from './components/settings/DataSettingsPanel'
 import type { AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
@@ -20,6 +21,7 @@ const ALL_TABS: AppTab[] = [
   'overview',
   'income-cost',
   'savings',
+  'settings',
 ]
 
 function readNavCollapsed(): boolean {
@@ -49,6 +51,7 @@ const NAV_MARKS: Record<AppTab, string> = {
   overview: 'O',
   'income-cost': 'I',
   savings: 'V',
+  settings: '⚙',
 }
 
 type NavItem = {
@@ -85,6 +88,10 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
   savings: {
     title: 'Savings',
     subtitle: 'Balances, contributions, and compound projections (CHF).',
+  },
+  settings: {
+    title: 'Data & backup',
+    subtitle: 'Link a data file, export/import JSON — your data stays on this device.',
   },
 }
 
@@ -178,6 +185,11 @@ export default function App() {
           countClass: 'bg-sky-500/20 text-sky-300',
         },
       ],
+    },
+    {
+      id: 'system',
+      label: 'System',
+      items: [{ id: 'settings', label: 'Data & backup' }],
     },
   ]
 
@@ -342,6 +354,8 @@ export default function App() {
           )}
 
           {tab === 'savings' && <SavingsView />}
+
+          {tab === 'settings' && <DataSettingsPanel />}
         </main>
       </div>
     </div>

@@ -251,6 +251,8 @@ export function savePortfolios(
       PORTFOLIO_STORAGE_KEY,
       JSON.stringify({ version: 1, portfolios }),
     )
+    // Lazy import avoids circular init if dataSync loads storage modules
+    void import('./dataSync').then((m) => m.notifyAppDataChanged())
     return { ok: true }
   } catch (err) {
     const message =

@@ -1,6 +1,27 @@
-# Stock ROI Dashboard
+# Financial Modeling Tool
 
-Simple local dashboard to look up a live stock price/market cap and estimate **ROI p.a. (CAGR)** from projected future value.
+Local-first dashboard for stock projections, portfolios, income/cost, savings, and net-worth overview.
+
+## Data storage
+
+- **Browser localStorage** — fast mirror while you work.
+- **Linked data file** (Chrome/Edge) — optional JSON file you choose (e.g. under Documents or OneDrive). Edits are written there automatically. See **Data & backup** in the app.
+- **Export / Import JSON** — works in every browser; use for backup or moving profiles.
+
+No multi-user cloud database: one person, files you control.
+
+## GitHub Pages (no dev server)
+
+Deploy the static UI so you open a URL instead of `npm run dev`.
+
+**Full steps:** [docs/GITHUB_PAGES.md](docs/GITHUB_PAGES.md)
+
+Short version:
+
+1. Repo **Settings → Pages → Source: GitHub Actions**.
+2. If the site is `https://user.github.io/RepoName/`, set Actions variable `VITE_BASE` = `/RepoName/`.
+3. Push to `DEV` (or run the **Deploy GitHub Pages** workflow).
+4. Open the Pages URL → **Data & backup** → link or export your data file.
 
 ## Features
 

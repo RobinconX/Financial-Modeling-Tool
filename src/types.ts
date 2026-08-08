@@ -89,6 +89,7 @@ export type AppTab =
   | 'overview'
   | 'income-cost'
   | 'savings'
+  | 'settings'
 
 /** Portfolio display currency (storage remains USD-based). */
 export type DisplayCurrency = 'USD' | 'CHF'

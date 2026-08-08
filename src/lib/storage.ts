@@ -106,6 +106,7 @@ export function saveScenarios(scenarios: SavedScenario[]): { ok: true } | { ok: 
   try {
     const payload: StoragePayload = { version: 1, scenarios }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
+    void import('./dataSync').then((m) => m.notifyAppDataChanged())
     return { ok: true }
   } catch (err) {
     const message =
