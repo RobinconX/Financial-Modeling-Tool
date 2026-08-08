@@ -4,11 +4,13 @@ import {
   downloadAppDataExport,
   readSnapshotFromFile,
 } from '../../lib/appDataSnapshot'
+import { remountApp } from '../../lib/appRemount'
 import {
   createDataFile,
   getLinkedFileStatus,
   isFileSystemAccessSupported,
   linkDataFile,
+  requestLinkedFileAccess,
   unlinkDataFile,
   writeLinkedSnapshot,
   type LinkedFileStatus,
@@ -46,10 +48,9 @@ export function DataSettingsPanel({ onClose }: Props) {
     }
     await refreshStatus()
     if (result.action === 'loaded') {
-      setMessage(
-        `Loaded data from ${result.fileName}. Reloading so the app shows the file contents…`,
-      )
-      window.setTimeout(() => window.location.reload(), 400)
+      setMessage(`Loaded data from ${result.fileName}.`)
+      // Soft remount keeps FS permission; full reload would force a second prompt.
+      remountApp()
       return
     }
     setMessage(
@@ -71,6 +72,26 @@ export function DataSettingsPanel({ onClose }: Props) {
     await refreshStatus()
   }
 
+  async function handleAllowAccess() {
+    setBusy(true)
+    setError(null)
+    setMessage(null)
+    const result = await requestLinkedFileAccess({ reloadFromFile: true })
+    setBusy(false)
+    if (!result.ok) {
+      setError(result.error)
+      await refreshStatus()
+      return
+    }
+    await refreshStatus()
+    if (result.reloaded) {
+      setMessage(`Access granted — loaded ${result.fileName}.`)
+      remountApp()
+      return
+    }
+    setMessage(`Access granted for ${result.fileName}.`)
+  }
+
   async function handleUnlink() {
     setBusy(true)
     await unlinkDataFile()
@@ -86,9 +107,11 @@ export function DataSettingsPanel({ onClose }: Props) {
     setBusy(false)
     if (!result.ok) {
       setError(result.error)
+      await refreshStatus()
       return
     }
     setMessage('Saved current data to the linked file.')
+    await refreshStatus()
   }
 
   function handleExport() {
@@ -119,13 +142,14 @@ export function DataSettingsPanel({ onClose }: Props) {
       setError(applied.error)
       return
     }
-    // Also write to linked file if any
     void writeLinkedSnapshot(parsed)
-    setMessage('Import complete. Reloading…')
-    window.setTimeout(() => window.location.reload(), 500)
+    setMessage('Import complete.')
+    remountApp()
   }
 
   const fsa = isFileSystemAccessSupported()
+  const needsAccess =
+    status?.linked === true && status.permission !== 'granted'
 
   return (
     <div className="card max-w-xl space-y-4 p-5">
@@ -167,25 +191,44 @@ export function DataSettingsPanel({ onClose }: Props) {
           <>
             <p className="text-[12px] text-white/50">
               Status:{' '}
-              {status == null
-                ? '…'
-                : status.linked
-                  ? (
-                      <span className="text-emerald-400/90">
-                        Linked — {status.fileName ?? 'financial-model.json'}
-                      </span>
-                    )
-                  : (
-                      <span className="text-white/40">Not linked</span>
-                    )}
+              {status == null ? (
+                '…'
+              ) : status.linked ? (
+                <span className="text-emerald-400/90">
+                  Linked — {status.fileName ?? 'financial-model.json'}
+                  {status.permission === 'granted' ? (
+                    <span className="text-white/40"> · access ok</span>
+                  ) : (
+                    <span className="text-amber-200/90"> · needs access</span>
+                  )}
+                </span>
+              ) : (
+                <span className="text-white/40">Not linked</span>
+              )}
             </p>
-            {status?.lastError && (
+            {needsAccess && (
+              <p className="text-[12px] text-amber-200/80">
+                This browser session must re-allow the file (normal after a refresh). Use the
+                button below — you should not need to pick the file again.
+              </p>
+            )}
+            {status?.lastError && status.permission === 'granted' && (
               <p className="text-[12px] text-amber-200/80">{status.lastError}</p>
             )}
             <div className="flex flex-wrap gap-2">
+              {needsAccess && (
+                <button
+                  type="button"
+                  className="btn-primary !py-1.5 !text-xs"
+                  disabled={busy}
+                  onClick={() => void handleAllowAccess()}
+                >
+                  Allow file access…
+                </button>
+              )}
               <button
                 type="button"
-                className="btn-primary !py-1.5 !text-xs"
+                className={needsAccess ? 'btn-ghost !py-1.5 !text-xs' : 'btn-primary !py-1.5 !text-xs'}
                 disabled={busy}
                 onClick={() => void handleLink()}
               >
@@ -204,7 +247,7 @@ export function DataSettingsPanel({ onClose }: Props) {
                   <button
                     type="button"
                     className="btn-ghost !py-1.5 !text-xs"
-                    disabled={busy}
+                    disabled={busy || status.permission !== 'granted'}
                     onClick={() => void handleSaveNow()}
                   >
                     Save now

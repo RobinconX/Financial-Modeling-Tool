@@ -29,9 +29,18 @@ const IDB_NAME = 'fmt-meta-handles'
 const IDB_STORE = 'handles'
 const IDB_KEY = 'dataFile'
 
+/** Session access to the remembered handle (Chromium resets this each load). */
+export type LinkedFilePermission = 'none' | 'granted' | 'prompt' | 'denied'
+
 export type LinkedFileStatus = {
   supported: boolean
+  /**
+   * True when a file handle is remembered (linked), even if this session
+   * still needs the user to Allow access.
+   */
   linked: boolean
+  /** Whether we can read/write the file in this browser session. */
+  permission: LinkedFilePermission
   fileName: string | null
   lastError: string | null
 }
@@ -104,32 +113,108 @@ async function ensurePermission(
 let cachedHandle: FsFileHandle | null = null
 let lastError: string | null = null
 
+/**
+ * Query-only status. Does not call requestPermission (that needs a user gesture
+ * and was making the UI flash "Not linked" until a full refresh + second grant).
+ */
 export async function getLinkedFileStatus(): Promise<LinkedFileStatus> {
   const supported = isFileSystemAccessSupported()
   if (!supported) {
-    return { supported: false, linked: false, fileName: null, lastError: null }
+    return {
+      supported: false,
+      linked: false,
+      permission: 'none',
+      fileName: null,
+      lastError: null,
+    }
   }
   if (!cachedHandle) {
     cachedHandle = await idbGetHandle()
   }
   if (!cachedHandle) {
-    return { supported: true, linked: false, fileName: null, lastError: lastError }
-  }
-  const ok = await ensurePermission(cachedHandle, 'read')
-  if (!ok) {
     return {
       supported: true,
       linked: false,
-      fileName: cachedHandle.name,
-      lastError: 'Permission needed — click Re-link data file',
+      permission: 'none',
+      fileName: null,
+      lastError: lastError,
     }
   }
+
+  const permission = await queryPermissionState(cachedHandle, 'readwrite')
+  if (permission === 'granted') {
+    return {
+      supported: true,
+      linked: true,
+      permission: 'granted',
+      fileName: cachedHandle.name,
+      lastError: lastError,
+    }
+  }
+
   return {
     supported: true,
     linked: true,
+    permission,
     fileName: cachedHandle.name,
-    lastError: lastError,
+    lastError:
+      lastError ??
+      (permission === 'denied'
+        ? 'File access denied — use Open / link file… to pick it again'
+        : 'Click Allow file access to reconnect this session'),
   }
+}
+
+async function queryPermissionState(
+  handle: FsFileHandle,
+  mode: FsPermissionMode,
+): Promise<LinkedFilePermission> {
+  if (!handle.queryPermission) return 'prompt'
+  try {
+    const state = await handle.queryPermission({ mode })
+    if (state === 'granted') return 'granted'
+    if (state === 'denied') return 'denied'
+    return 'prompt'
+  } catch {
+    return 'prompt'
+  }
+}
+
+/**
+ * Request read+write on the remembered handle. Must run from a click/tap.
+ * Optionally re-loads the file into localStorage when access is granted.
+ */
+export async function requestLinkedFileAccess(options?: {
+  reloadFromFile?: boolean
+}): Promise<
+  | { ok: true; fileName: string; reloaded: boolean }
+  | { ok: false; error: string }
+> {
+  if (!cachedHandle) {
+    cachedHandle = await idbGetHandle()
+  }
+  if (!cachedHandle) {
+    return { ok: false, error: 'No data file linked' }
+  }
+  const granted = await ensurePermission(cachedHandle, 'readwrite')
+  if (!granted) {
+    lastError = 'Permission denied'
+    return { ok: false, error: 'Permission denied — choose the file again with Open / link' }
+  }
+  lastError = null
+
+  let reloaded = false
+  if (options?.reloadFromFile !== false) {
+    const snap = await readLinkedSnapshot()
+    if (snap && !('error' in snap)) {
+      const applied = applyAppDataToLocalStorage(snap)
+      if (applied.ok) reloaded = true
+    } else if (snap && 'error' in snap) {
+      return { ok: false, error: snap.error }
+    }
+  }
+
+  return { ok: true, fileName: cachedHandle.name, reloaded }
 }
 
 /**
@@ -325,7 +410,9 @@ export async function readLinkedSnapshot(): Promise<
   }
   if (!cachedHandle) return null
   try {
-    const canRead = await ensurePermission(cachedHandle, 'read')
+    // Prefer readwrite so one Allow covers later autosave (avoids a second "edit" prompt).
+    let canRead = await ensurePermission(cachedHandle, 'readwrite')
+    if (!canRead) canRead = await ensurePermission(cachedHandle, 'read')
     if (!canRead) {
       return { error: 'Read permission denied — re-link the data file' }
     }

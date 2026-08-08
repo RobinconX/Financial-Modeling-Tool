@@ -14,6 +14,7 @@ import { loadPortfolios, savePortfolios } from './portfolioStorage'
 import { loadIncomeCost, saveIncomeCost } from './incomeCostStorage'
 import { loadSavings, saveSavings } from './savingsStorage'
 import { loadOverview, saveOverview } from './overviewStorage'
+import { withLinkedMirrorSuppressed } from './linkedMirrorGate'
 
 export const APP_DATA_FILE_NAME = 'financial-model.json'
 export const APP_DATA_SNAPSHOT_VERSION = 1 as const
@@ -73,27 +74,30 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
 
 /**
  * Write snapshot into browser localStorage via existing domain savers.
- * Does not reload React state — caller should reload the page after import.
+ * Does not update React state — caller should remountApp() (or reload) after import.
+ * Suppresses linked-file mirror so hydrate/import does not immediately re-prompt for write.
  */
 export function applyAppDataToLocalStorage(
   snapshot: AppDataSnapshot,
 ): { ok: true } | { ok: false; error: string } {
-  const r1 = saveScenarios(snapshot.scenarios)
-  if (!r1.ok) return { ok: false, error: r1.error }
+  return withLinkedMirrorSuppressed(() => {
+    const r1 = saveScenarios(snapshot.scenarios)
+    if (!r1.ok) return { ok: false, error: r1.error }
 
-  const r2 = savePortfolios(snapshot.portfolios)
-  if (!r2.ok) return { ok: false, error: r2.error }
+    const r2 = savePortfolios(snapshot.portfolios)
+    if (!r2.ok) return { ok: false, error: r2.error }
 
-  const r3 = saveIncomeCost(snapshot.incomeCost)
-  if (!r3.ok) return { ok: false, error: r3.error }
+    const r3 = saveIncomeCost(snapshot.incomeCost)
+    if (!r3.ok) return { ok: false, error: r3.error }
 
-  const r4 = saveSavings(snapshot.savings)
-  if (!r4.ok) return { ok: false, error: r4.error }
+    const r4 = saveSavings(snapshot.savings)
+    if (!r4.ok) return { ok: false, error: r4.error }
 
-  const r5 = saveOverview(snapshot.overview)
-  if (!r5.ok) return { ok: false, error: r5.error }
+    const r5 = saveOverview(snapshot.overview)
+    if (!r5.ok) return { ok: false, error: r5.error }
 
-  return { ok: true }
+    return { ok: true }
+  })
 }
 
 export function downloadAppDataExport(snapshot?: AppDataSnapshot): void {
