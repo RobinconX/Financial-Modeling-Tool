@@ -4,7 +4,7 @@ name: Deploy GitHub Pages
 
 on:
   push:
-    branches: [DEV, master, main, DB-cleanup]
+    branches: [v1-prod]
   workflow_dispatch:
 
 permissions:

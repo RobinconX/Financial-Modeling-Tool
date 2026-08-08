@@ -20,7 +20,7 @@ The workflow file is already in the repo:
 
 `.github/workflows/deploy-pages.yml`
 
-It builds on push to `DEV`, `master`/`main`, or `DB-cleanup`, and on manual **Run workflow**.
+It builds on push to **`v1-prod`** only (other branches are for development), and on manual **Run workflow**.
 
 ---
 
@@ -44,8 +44,8 @@ If you use a **custom domain** or a **user/org site** (`https://<username>.githu
 
 ## 3. Deploy
 
-1. Push a commit to a watched branch, **or**
-2. **Actions** → **Deploy GitHub Pages** → **Run workflow**.
+1. Push a commit to **`v1-prod`**, **or**
+2. **Actions** → **Deploy GitHub Pages** → **Run workflow** (any branch, for a one-off deploy).
 
 Wait for the green check. Then open:
 
