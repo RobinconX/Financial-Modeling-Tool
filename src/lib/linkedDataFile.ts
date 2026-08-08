@@ -6,6 +6,7 @@
  */
 import {
   APP_DATA_FILE_NAME,
+  applyAppDataToLocalStorage,
   collectAppData,
   parseAppDataSnapshot,
   type AppDataSnapshot,
@@ -131,9 +132,15 @@ export async function getLinkedFileStatus(): Promise<LinkedFileStatus> {
   }
 }
 
-/** Create or pick a file for ongoing read/write of the app snapshot. */
+/**
+ * Open / re-attach a data file.
+ * - Non-empty valid file → load into localStorage (never overwrite with browser state).
+ * - Empty file → seed with current browser data.
+ * createWritable() truncates immediately, so we must read before any write.
+ */
 export async function linkDataFile(): Promise<
-  { ok: true; fileName: string } | { ok: false; error: string }
+  | { ok: true; fileName: string; action: 'loaded' | 'seeded' }
+  | { ok: false; error: string }
 > {
   if (!isFileSystemAccessSupported()) {
     return {
@@ -142,7 +149,8 @@ export async function linkDataFile(): Promise<
     }
   }
   try {
-    // Prefer open existing so user can re-attach; allow create via save picker
+    cancelPendingLinkedWrite()
+
     let handle: FsFileHandle
     const w = window as FsWindow
     try {
@@ -177,15 +185,51 @@ export async function linkDataFile(): Promise<
       return { ok: false, error: 'Write permission denied' }
     }
 
+    // Read first — never seed-over an existing snapshot
+    const file = await handle.getFile()
+    const text = await file.text()
+
+    if (text.trim()) {
+      let parsed: AppDataSnapshot | { error: string }
+      try {
+        parsed = parseAppDataSnapshot(JSON.parse(text) as unknown)
+      } catch (e) {
+        const msg = e instanceof Error ? e.message : 'File is not valid JSON'
+        lastError = msg
+        return { ok: false, error: msg }
+      }
+      if ('error' in parsed) {
+        lastError = parsed.error
+        return { ok: false, error: parsed.error }
+      }
+
+      cachedHandle = handle
+      await idbSetHandle(handle)
+      lastError = null
+
+      const applied = applyAppDataToLocalStorage(parsed)
+      if (!applied.ok) {
+        cachedHandle = null
+        try {
+          await idbSetHandle(null)
+        } catch {
+          /* ignore */
+        }
+        return { ok: false, error: applied.error }
+      }
+
+      return { ok: true, fileName: handle.name, action: 'loaded' }
+    }
+
+    // Empty file only — write current browser data into it
     cachedHandle = handle
     await idbSetHandle(handle)
     lastError = null
 
-    // Seed file with current localStorage data
     const writeResult = await writeLinkedSnapshot(collectAppData())
     if (!writeResult.ok) return writeResult
 
-    return { ok: true, fileName: handle.name }
+    return { ok: true, fileName: handle.name, action: 'seeded' }
   } catch (e) {
     if (e instanceof DOMException && e.name === 'AbortError') {
       return { ok: false, error: 'Cancelled' }
@@ -236,6 +280,7 @@ export async function createDataFile(): Promise<
 }
 
 export async function unlinkDataFile(): Promise<void> {
+  cancelPendingLinkedWrite()
   cachedHandle = null
   lastError = null
   try {
@@ -301,6 +346,14 @@ export async function readLinkedSnapshot(): Promise<
 let writeTimer: ReturnType<typeof setTimeout> | null = null
 /** True while a debounce window is open (pending → until write finishes). */
 let debounceActive = false
+
+function cancelPendingLinkedWrite(): void {
+  if (writeTimer) {
+    clearTimeout(writeTimer)
+    writeTimer = null
+  }
+  debounceActive = false
+}
 
 export type LinkedFileSaveEvent = {
   status: 'pending' | 'saving' | 'saved' | 'error' | 'idle'

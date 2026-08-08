@@ -44,8 +44,17 @@ export function DataSettingsPanel({ onClose }: Props) {
       if (result.error !== 'Cancelled') setError(result.error)
       return
     }
-    setMessage(`Linked data file: ${result.fileName}. Current browser data was written to it.`)
     await refreshStatus()
+    if (result.action === 'loaded') {
+      setMessage(
+        `Loaded data from ${result.fileName}. Reloading so the app shows the file contents…`,
+      )
+      window.setTimeout(() => window.location.reload(), 400)
+      return
+    }
+    setMessage(
+      `Linked empty file: ${result.fileName}. Current browser data was written to it.`,
+    )
   }
 
   async function handleCreate() {
@@ -212,9 +221,11 @@ export function DataSettingsPanel({ onClose }: Props) {
               )}
             </div>
             <p className="text-[11px] text-white/30">
-              After linking, edits wait ~4 seconds of idle time, then write the full snapshot once
-              (so typing doesn’t spam saves). A small “Data file” toast appears bottom-right.
-              Put the file in OneDrive/Dropbox if you want it on multiple PCs.
+              <strong className="font-medium text-white/45">Open / link</strong> loads an existing
+              file into the app (does not overwrite it with empty browser data).{' '}
+              <strong className="font-medium text-white/45">Create new</strong> writes current
+              browser data to a new path. After linking, edits wait ~4s of idle, then save once.
+              Put the file in OneDrive/Dropbox for multi-PC backup.
             </p>
           </>
         )}
