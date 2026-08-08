@@ -82,24 +82,41 @@ export function ProjectionsView({
     onChange: (v: string) => void
     id: string
   }) {
+    const isDraft = value === DRAFT
     return (
-      <div className="min-w-[14rem] flex-1">
-        <label className="label !mb-1" htmlFor={id}>
-          Projection
-        </label>
-        <select
-          id={id}
-          className="input w-full"
-          value={value}
-          onChange={(e) => onChange(e.target.value)}
-        >
-          <option value={DRAFT}>+ New projection</option>
-          {sorted.map((sc) => (
-            <option key={sc.id} value={sc.id}>
-              {sc.symbol} · {sc.name}
+      <div className="flex min-w-0 flex-1 flex-wrap items-end gap-2">
+        <div className="min-w-[12rem] flex-1">
+          <label className="label !mb-1" htmlFor={id}>
+            Projection
+          </label>
+          <select
+            id={id}
+            className="input w-full"
+            value={isDraft ? '' : value}
+            onChange={(e) => {
+              const v = e.target.value
+              if (v) onChange(v)
+            }}
+          >
+            <option value="" disabled>
+              {isDraft ? 'New draft (unsaved)' : 'Choose saved…'}
             </option>
-          ))}
-        </select>
+            {sorted.map((sc) => (
+              <option key={sc.id} value={sc.id}>
+                {sc.symbol} · {sc.name}
+              </option>
+            ))}
+          </select>
+        </div>
+        <button
+          type="button"
+          className="btn-primary shrink-0 !py-2 !text-sm"
+          disabled={isDraft}
+          onClick={() => onChange(DRAFT)}
+          title={isDraft ? 'Already editing a new projection' : 'Start a new projection'}
+        >
+          New projection
+        </button>
       </div>
     )
   }
