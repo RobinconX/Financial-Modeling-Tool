@@ -380,7 +380,7 @@ export function PortfolioView({
     panel === 'cash' || panel === 'positions' || panel === 'growth' ? panel : null
 
   return (
-    <div className="flex min-h-[calc(100vh-8rem)] flex-col gap-3">
+    <div className="flex h-full min-h-0 flex-col gap-3">
       {/* Top bar — z-index so portfolio/manage menus paint above the workspace panel */}
       <div className="relative z-40 flex flex-wrap items-center gap-3 border-b border-white/5 pb-3">
         <div className="relative z-50 min-w-0 flex-1" ref={pickerRef}>

@@ -373,6 +373,7 @@ export async function unlinkDataFile(): Promise<void> {
   } catch {
     /* ignore */
   }
+  emitSaveEvent({ status: 'idle', message: 'No linked file', fileName: null })
 }
 
 export async function writeLinkedSnapshot(
@@ -394,10 +395,20 @@ export async function writeLinkedSnapshot(
     await writable.write(JSON.stringify(data, null, 2))
     await writable.close()
     lastError = null
+    emitSaveEvent({
+      status: 'saved',
+      message: 'Saved',
+      fileName: cachedHandle.name,
+    })
     return { ok: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to write data file'
     lastError = msg
+    emitSaveEvent({
+      status: 'error',
+      message: msg,
+      fileName: cachedHandle?.name,
+    })
     return { ok: false, error: msg }
   }
 }
@@ -444,13 +455,21 @@ function cancelPendingLinkedWrite(): void {
 
 export type LinkedFileSaveEvent = {
   status: 'pending' | 'saving' | 'saved' | 'error' | 'idle'
-  /** Short label for UI toast */
+  /** Short label for UI status */
   message: string
   fileName?: string | null
 }
 
 type SaveListener = (event: LinkedFileSaveEvent) => void
 const saveListeners = new Set<SaveListener>()
+let lastSaveEvent: LinkedFileSaveEvent = {
+  status: 'idle',
+  message: 'No linked file',
+}
+
+export function getLastLinkedFileSaveEvent(): LinkedFileSaveEvent {
+  return lastSaveEvent
+}
 
 export function subscribeLinkedFileSave(listener: SaveListener): () => void {
   saveListeners.add(listener)
@@ -460,6 +479,7 @@ export function subscribeLinkedFileSave(listener: SaveListener): () => void {
 }
 
 function emitSaveEvent(event: LinkedFileSaveEvent): void {
+  lastSaveEvent = event
   for (const fn of saveListeners) {
     try {
       fn(event)
@@ -488,7 +508,7 @@ export function scheduleLinkedFileWrite(
       }
       emitSaveEvent({
         status: 'pending',
-        message: 'Will save after you pause editing…',
+        message: 'Unsaved changes',
         fileName: cachedHandle.name,
       })
     })()
@@ -503,7 +523,7 @@ export function scheduleLinkedFileWrite(
       }
       emitSaveEvent({
         status: 'saving',
-        message: 'Saving to data file…',
+        message: 'Saving…',
         fileName: cachedHandle.name,
       })
       const result = await writeLinkedSnapshot()
@@ -511,7 +531,7 @@ export function scheduleLinkedFileWrite(
       if (result.ok) {
         emitSaveEvent({
           status: 'saved',
-          message: `Saved · ${cachedHandle.name}`,
+          message: 'Saved',
           fileName: cachedHandle.name,
         })
       } else {

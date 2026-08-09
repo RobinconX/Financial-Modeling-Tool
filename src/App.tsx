@@ -240,12 +240,11 @@ export default function App() {
   const meta = TAB_META[tab]
 
   return (
-    <div className="flex min-h-screen">
-      <LinkedFileSaveHint />
+    <div className="flex h-screen overflow-hidden">
       <QuoteLoadingHint loading={quotesLoading} count={quoteCount} />
       {/* App sidebar */}
       <aside
-        className={`relative flex shrink-0 flex-col border-r border-white/10 bg-black/40 py-5 transition-[width] duration-200 ${
+        className={`relative flex h-full min-h-0 shrink-0 flex-col border-r border-white/10 bg-black/40 py-5 transition-[width] duration-200 ${
           navCollapsed ? 'w-[52px] px-1.5' : 'w-[220px] px-3'
         }`}
       >
@@ -296,13 +295,18 @@ export default function App() {
         </button>
       </aside>
 
-      <div className="flex min-w-0 flex-1 flex-col">
-        <header className="border-b border-white/5 px-6 py-4">
-          <h2 className="text-xl font-semibold tracking-tight text-white">{meta.title}</h2>
-          <p className="mt-0.5 text-sm text-white/45">{meta.subtitle}</p>
+      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+        <header className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-4 border-b border-white/5 bg-[#0b0f14]/90 px-6 py-4 backdrop-blur-sm">
+          <div className="min-w-0">
+            <h2 className="text-xl font-semibold tracking-tight text-white">{meta.title}</h2>
+            <p className="mt-0.5 text-sm text-white/45">{meta.subtitle}</p>
+          </div>
+          <div className="shrink-0 pt-1">
+            <LinkedFileSaveHint />
+          </div>
         </header>
 
-        <main className="flex-1 overflow-auto px-6 py-6">
+        <main className="min-h-0 flex-1 overflow-auto px-6 py-6">
           {tab === 'projections' && (
             <ProjectionsView
               scenarios={scenarios}

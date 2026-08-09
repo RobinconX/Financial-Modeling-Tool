@@ -1,62 +1,118 @@
 import { useEffect, useState } from 'react'
 import {
+  getLastLinkedFileSaveEvent,
+  getLinkedFileStatus,
   subscribeLinkedFileSave,
   type LinkedFileSaveEvent,
 } from '../../lib/linkedDataFile'
 
 /**
- * Fixed toast when the linked data file is written (auto-save after edits).
+ * Permanent, subtle save status (Excel Online–style) for the linked data file.
+ * Always visible in the app chrome — not a transient toast.
  */
 export function LinkedFileSaveHint() {
-  const [event, setEvent] = useState<LinkedFileSaveEvent | null>(null)
-  const [visible, setVisible] = useState(false)
+  const [event, setEvent] = useState<LinkedFileSaveEvent>(() =>
+    getLastLinkedFileSaveEvent(),
+  )
 
   useEffect(() => {
-    let hideTimer: ReturnType<typeof setTimeout> | null = null
-    const unsub = subscribeLinkedFileSave((e) => {
-      setEvent(e)
-      setVisible(true)
-      if (hideTimer) clearTimeout(hideTimer)
-      // Pending stays until save/error; hide success/error after a short beat
-      if (e.status === 'saved') {
-        hideTimer = setTimeout(() => setVisible(false), 2500)
-      } else if (e.status === 'error') {
-        hideTimer = setTimeout(() => setVisible(false), 5000)
+    const unsub = subscribeLinkedFileSave(setEvent)
+    void (async () => {
+      // Hydrate initial state: linked + idle → Saved; else no file
+      const s = await getLinkedFileStatus()
+      if (s.linked) {
+        setEvent((prev) => {
+          // Don't clobber an in-flight pending/saving from a concurrent edit
+          if (prev.status === 'pending' || prev.status === 'saving' || prev.status === 'error') {
+            return prev
+          }
+          return {
+            status: 'saved',
+            message: 'Saved',
+            fileName: s.fileName,
+          }
+        })
+      } else {
+        setEvent((prev) => {
+          if (prev.status === 'pending' || prev.status === 'saving') return prev
+          return {
+            status: 'idle',
+            message: 'No linked file',
+            fileName: null,
+          }
+        })
       }
-    })
-    return () => {
-      unsub()
-      if (hideTimer) clearTimeout(hideTimer)
-    }
+    })()
+    return unsub
   }, [])
 
-  if (!visible || !event) return null
+  const fileHint = event.fileName ? ` · ${event.fileName}` : ''
 
-  const tone =
-    event.status === 'error'
-      ? 'border-red-500/40 bg-red-500/15 text-red-100'
-      : event.status === 'saved'
-        ? 'border-emerald-500/35 bg-emerald-500/15 text-emerald-100'
-        : 'border-white/15 bg-[#121820]/95 text-white/75'
+  let label: string
+  let detail: string | null = null
+  let tone = 'text-white/40'
+  let showSpinner = false
+
+  switch (event.status) {
+    case 'pending':
+      label = 'Unsaved changes'
+      detail = event.fileName ?? null
+      tone = 'text-amber-200/70'
+      break
+    case 'saving':
+      label = 'Saving…'
+      detail = event.fileName ?? null
+      tone = 'text-white/55'
+      showSpinner = true
+      break
+    case 'saved':
+      label = 'Saved'
+      detail = event.fileName ?? null
+      tone = 'text-white/40'
+      break
+    case 'error':
+      label = 'Couldn’t save'
+      detail = event.message
+      tone = 'text-red-300/90'
+      break
+    default:
+      label = 'No linked file'
+      detail = null
+      tone = 'text-white/30'
+  }
 
   return (
     <div
-      className="pointer-events-none fixed bottom-4 right-4 z-[100] max-w-xs"
+      className={`flex max-w-[min(100%,16rem)] items-center justify-end gap-1.5 text-right text-[11px] leading-snug ${tone}`}
       role="status"
       aria-live="polite"
+      title={
+        event.status === 'error'
+          ? event.message
+          : event.fileName
+            ? `${label}${fileHint}`
+            : label
+      }
     >
-      <div
-        className={`rounded-lg border px-3 py-2 text-xs shadow-lg backdrop-blur-sm transition ${tone}`}
-      >
-        <div className="font-medium">
-          {event.status === 'pending' || event.status === 'saving'
-            ? 'Data file'
-            : event.status === 'saved'
-              ? 'Data file'
-              : 'Data file error'}
-        </div>
-        <div className="mt-0.5 text-[11px] opacity-90">{event.message}</div>
-      </div>
+      {showSpinner ? (
+        <span
+          className="inline-block h-2.5 w-2.5 shrink-0 animate-spin rounded-full border border-white/25 border-t-white/70"
+          aria-hidden
+        />
+      ) : event.status === 'saved' ? (
+        <span className="text-[10px] text-emerald-400/50" aria-hidden>
+          ✓
+        </span>
+      ) : null}
+      <span className="min-w-0 truncate">
+        <span className="font-medium">{label}</span>
+        {detail && event.status !== 'error' ? (
+          <span className="text-white/25"> · {detail}</span>
+        ) : null}
+        {event.status === 'error' && detail ? (
+          <span className="block truncate text-[10px] opacity-90">{detail}</span>
+        ) : null}
+      </span>
     </div>
   )
 }
