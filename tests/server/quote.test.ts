@@ -205,4 +205,41 @@ describe('fetchQuotes', () => {
     const quotes = await fetchQuotes(['!!!', ''])
     expect(quotes).toEqual([])
   })
+
+  it('pricesOnly skips Nasdaq and only uses spark', async () => {
+    const fetchMock = vi.fn(async (url: string) => {
+      const u = String(url)
+      if (u.includes('/v7/finance/spark')) {
+        return jsonResponse({
+          spark: {
+            result: [
+              {
+                symbol: 'AAPL',
+                response: [
+                  {
+                    meta: {
+                      symbol: 'AAPL',
+                      regularMarketPrice: 200,
+                      longName: 'Apple Inc.',
+                      currency: 'USD',
+                    },
+                  },
+                ],
+              },
+            ],
+          },
+        })
+      }
+      return jsonResponse({}, false)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    const quotes = await fetchQuotes(['AAPL'], { pricesOnly: true })
+    expect(quotes).toHaveLength(1)
+    expect(quotes[0]!.price).toBe(200)
+    expect(quotes[0]!.marketCap).toBeNull()
+    expect(fetchMock.mock.calls.every((c) => !String(c[0]).includes('nasdaq.com'))).toBe(
+      true,
+    )
+  })
 })

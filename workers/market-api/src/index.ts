@@ -72,7 +72,10 @@ export default {
             .split(',')
             .map((s) => s.trim())
             .filter(Boolean)
-          const quotes = await fetchQuotes(list)
+          const pricesOnly =
+            url.searchParams.get('pricesOnly') === '1' ||
+            url.searchParams.get('pricesOnly') === 'true'
+          const quotes = await fetchQuotes(list, { pricesOnly })
           return json({ quotes }, 200, { 'Cache-Control': 'no-store' })
         }
         if (!symbol) {

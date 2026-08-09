@@ -73,7 +73,47 @@ const YAHOO_HEADERS = {
 /** Symbols per spark request (URL length + practical limit). */
 const YAHOO_BATCH_SIZE = 40
 
+/** Upstream timeouts — Nasdaq is often the slow leg of multi-ticker batch. */
+const SPARK_TIMEOUT_MS = 5000
+const NASDAQ_TIMEOUT_MS = 1800
+const CHART_TIMEOUT_MS = 4000
+
 const SYMBOL_RE = /^[A-Z0-9.^=_-]{1,15}$/
+
+export type FetchQuotesOptions = {
+  /**
+   * Spark prices only — skip Nasdaq mcap enrichment and slow per-symbol fallback.
+   * Use for background refresh when the client already has mcap/shares.
+   */
+  pricesOnly?: boolean
+}
+
+function fetchTimeoutSignal(ms: number): AbortSignal | undefined {
+  try {
+    if (typeof AbortSignal !== 'undefined' && 'timeout' in AbortSignal) {
+      return AbortSignal.timeout(ms)
+    }
+  } catch {
+    /* ignore */
+  }
+  return undefined
+}
+
+async function fetchJson(
+  url: string,
+  timeoutMs: number,
+): Promise<{ ok: boolean; json: () => Promise<unknown> } | null> {
+  try {
+    const signal = fetchTimeoutSignal(timeoutMs)
+    const res = await fetch(url, {
+      headers: YAHOO_HEADERS,
+      ...(signal ? { signal } : {}),
+    })
+    return res
+  } catch {
+    return null
+  }
+}
 
 function parseNasdaqMoney(value: string | undefined): number | null {
   if (!value || value === 'N/A') return null
@@ -132,8 +172,8 @@ async function fetchYahooChart(symbol: string): Promise<{
   currency: string
 } | null> {
   const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`
-  const chartRes = await fetch(chartUrl, { headers: YAHOO_HEADERS })
-  if (!chartRes.ok) return null
+  const chartRes = await fetchJson(chartUrl, CHART_TIMEOUT_MS)
+  if (!chartRes?.ok) return null
 
   const chartJson = (await chartRes.json()) as YahooChartResponse
   const meta = chartJson.chart?.result?.[0]?.meta
@@ -159,13 +199,13 @@ async function fetchNasdaqMarketCap(symbol: string): Promise<{
   for (const assetClass of assetClasses) {
     try {
       const [summaryRes, infoRes] = await Promise.all([
-        fetch(
+        fetchJson(
           `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/summary?assetclass=${assetClass}`,
-          { headers: YAHOO_HEADERS },
+          NASDAQ_TIMEOUT_MS,
         ),
-        fetch(
+        fetchJson(
           `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/info?assetclass=${assetClass}`,
-          { headers: YAHOO_HEADERS },
+          NASDAQ_TIMEOUT_MS,
         ),
       ])
 
@@ -173,11 +213,11 @@ async function fetchNasdaqMarketCap(symbol: string): Promise<{
       let name: string | null = null
       let price: number | null = null
 
-      if (summaryRes.ok) {
+      if (summaryRes?.ok) {
         const summaryJson = (await summaryRes.json()) as NasdaqSummaryResponse
         marketCap = parseNasdaqMoney(summaryJson.data?.summaryData?.MarketCap?.value)
       }
-      if (infoRes.ok) {
+      if (infoRes?.ok) {
         const infoJson = (await infoRes.json()) as NasdaqInfoResponse
         name = infoJson.data?.companyName ?? null
         price = parseNasdaqPrice(infoJson.data?.primaryData?.lastSalePrice)
@@ -204,8 +244,8 @@ async function fetchYahooSparkBatch(symbols: string[]): Promise<Map<string, Quot
   const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbols
     .map((s) => encodeURIComponent(s))
     .join(',')}&range=1d&interval=1d`
-  const res = await fetch(url, { headers: YAHOO_HEADERS })
-  if (!res.ok) return out
+  const res = await fetchJson(url, SPARK_TIMEOUT_MS)
+  if (!res?.ok) return out
 
   const json = (await res.json()) as YahooSparkResponse
   for (const row of json.spark?.result ?? []) {
@@ -235,11 +275,11 @@ async function fetchNasdaqMarketCapOnly(symbol: string): Promise<number | null> 
   const assetClasses = ['stocks', 'etf'] as const
   for (const assetClass of assetClasses) {
     try {
-      const res = await fetch(
+      const res = await fetchJson(
         `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/summary?assetclass=${assetClass}`,
-        { headers: YAHOO_HEADERS },
+        NASDAQ_TIMEOUT_MS,
       )
-      if (!res.ok) continue
+      if (!res?.ok) continue
       const json = (await res.json()) as NasdaqSummaryResponse
       const mcap = parseNasdaqMoney(json.data?.summaryData?.MarketCap?.value)
       if (mcap != null) return mcap
@@ -306,10 +346,14 @@ async function fetchQuoteFallback(symbol: string): Promise<Quote | null> {
 /**
  * Fetch quotes for many tickers efficiently:
  * 1. Yahoo spark batch (1 request per ~40 symbols) for price/name
- * 2. Parallel Nasdaq summary for market cap / shares on those hits
- * 3. Full per-symbol fallback only for misses
+ * 2. Parallel Nasdaq summary for market cap / shares (unless pricesOnly)
+ * 3. Full per-symbol fallback only for misses (unless pricesOnly)
  */
-export async function fetchQuotes(rawSymbols: string[]): Promise<Quote[]> {
+export async function fetchQuotes(
+  rawSymbols: string[],
+  options?: FetchQuotesOptions,
+): Promise<Quote[]> {
+  const pricesOnly = options?.pricesOnly === true
   const unique: string[] = []
   const seen = new Set<string>()
   for (const raw of rawSymbols) {
@@ -326,26 +370,30 @@ export async function fetchQuotes(rawSymbols: string[]): Promise<Quote[]> {
     const chunk = unique.slice(i, i + YAHOO_BATCH_SIZE)
     try {
       const batch = await fetchYahooSparkBatch(chunk)
-      await enrichQuotesWithMarketCap(batch)
+      if (!pricesOnly) {
+        await enrichQuotesWithMarketCap(batch)
+      }
       for (const [sym, q] of batch) bySymbol.set(sym, q)
     } catch {
       // fall through to per-symbol
     }
   }
 
-  const missing = unique.filter((s) => !bySymbol.has(s))
-  if (missing.length > 0) {
-    const settled = await Promise.all(
-      missing.map(async (symbol) => {
-        try {
-          return await fetchQuoteFallback(symbol)
-        } catch {
-          return null
-        }
-      }),
-    )
-    for (const q of settled) {
-      if (q) bySymbol.set(q.symbol, q)
+  if (!pricesOnly) {
+    const missing = unique.filter((s) => !bySymbol.has(s))
+    if (missing.length > 0) {
+      const settled = await Promise.all(
+        missing.map(async (symbol) => {
+          try {
+            return await fetchQuoteFallback(symbol)
+          } catch {
+            return null
+          }
+        }),
+      )
+      for (const q of settled) {
+        if (q) bySymbol.set(q.symbol, q)
+      }
     }
   }
 

@@ -10,6 +10,7 @@ import { SavingsView } from './components/savings/SavingsView'
 import { OverviewView } from './components/overview/OverviewView'
 import { useSavings } from './hooks/useSavings'
 import { DataSettingsPanel } from './components/settings/DataSettingsPanel'
+import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
 import type { AppTab } from './types'
 
@@ -135,7 +136,11 @@ export default function App() {
   } = useSavedPortfolios()
 
   // Live quotes for all known tickers — on load + every 5 minutes
-  useAutoQuoteRefresh(scenarios, portfolios, updateScenario)
+  const { quotesLoading, quoteCount } = useAutoQuoteRefresh(
+    scenarios,
+    portfolios,
+    updateScenario,
+  )
 
   const {
     scenarios: incomeCostScenarios,
@@ -237,6 +242,7 @@ export default function App() {
   return (
     <div className="flex min-h-screen">
       <LinkedFileSaveHint />
+      <QuoteLoadingHint loading={quotesLoading} count={quoteCount} />
       {/* App sidebar */}
       <aside
         className={`relative flex shrink-0 flex-col border-r border-white/10 bg-black/40 py-5 transition-[width] duration-200 ${

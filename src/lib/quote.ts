@@ -1,6 +1,14 @@
 import type { Quote } from '../types'
 import { apiUrl, hasExternalApiBase } from './apiBase'
 
+export type FetchQuotesClientOptions = {
+  /**
+   * Request prices only from the API (skip Nasdaq mcap enrichment on the server).
+   * Prefer for background multi-ticker refresh when existing mcap can be kept.
+   */
+  pricesOnly?: boolean
+}
+
 async function requestQuoteApi(path: string, label: string): Promise<Response> {
   try {
     return await fetch(apiUrl(path))
@@ -50,7 +58,10 @@ async function fetchQuotesIndividually(symbols: string[]): Promise<Quote[]> {
  * One round-trip for many tickers (`/api/quote?symbols=AAPL,MSFT`).
  * Falls back to parallel singles if the batch route is missing (HTTP 400) or fails.
  */
-export async function fetchQuotesClient(symbols: string[]): Promise<Quote[]> {
+export async function fetchQuotesClient(
+  symbols: string[],
+  options?: FetchQuotesClientOptions,
+): Promise<Quote[]> {
   const cleaned = [
     ...new Set(
       symbols
@@ -59,12 +70,12 @@ export async function fetchQuotesClient(symbols: string[]): Promise<Quote[]> {
     ),
   ]
   if (cleaned.length === 0) return []
-  if (cleaned.length === 1) {
+  if (cleaned.length === 1 && !options?.pricesOnly) {
     return fetchQuotesIndividually(cleaned)
   }
 
-  // Prefer URLSearchParams so commas are encoded correctly for proxies.
   const qs = new URLSearchParams({ symbols: cleaned.join(',') })
+  if (options?.pricesOnly) qs.set('pricesOnly', '1')
   const path = `/api/quote?${qs.toString()}`
 
   try {
@@ -78,5 +89,6 @@ export async function fetchQuotesClient(symbols: string[]): Promise<Quote[]> {
     /* fall through to singles */
   }
 
+  // Individual path always full quotes; acceptable fallback, slower
   return fetchQuotesIndividually(cleaned)
 }
