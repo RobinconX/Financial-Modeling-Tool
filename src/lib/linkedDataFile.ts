@@ -117,6 +117,22 @@ let lastError: string | null = null
  * Query-only status. Does not call requestPermission (that needs a user gesture
  * and was making the UI flash "Not linked" until a full refresh + second grant).
  */
+/** Last-modified of the linked file on disk (ms), if readable this session. */
+export async function getLinkedFileLastModified(): Promise<number | null> {
+  if (!cachedHandle) {
+    cachedHandle = await idbGetHandle()
+  }
+  if (!cachedHandle) return null
+  try {
+    const ok = await ensurePermission(cachedHandle, 'read')
+    if (!ok) return null
+    const file = await cachedHandle.getFile()
+    return Number.isFinite(file.lastModified) ? file.lastModified : null
+  } catch {
+    return null
+  }
+}
+
 export async function getLinkedFileStatus(): Promise<LinkedFileStatus> {
   const supported = isFileSystemAccessSupported()
   if (!supported) {
@@ -373,7 +389,13 @@ export async function unlinkDataFile(): Promise<void> {
   } catch {
     /* ignore */
   }
-  emitSaveEvent({ status: 'idle', message: 'No linked file', fileName: null })
+  lastSuccessfulSaveAt = null
+  emitSaveEvent({
+    status: 'idle',
+    message: 'No linked file',
+    fileName: null,
+    savedAt: null,
+  })
 }
 
 export async function writeLinkedSnapshot(
@@ -395,10 +417,12 @@ export async function writeLinkedSnapshot(
     await writable.write(JSON.stringify(data, null, 2))
     await writable.close()
     lastError = null
+    const savedAt = Date.now()
     emitSaveEvent({
       status: 'saved',
       message: 'Saved',
       fileName: cachedHandle.name,
+      savedAt,
     })
     return { ok: true }
   } catch (e) {
@@ -408,6 +432,7 @@ export async function writeLinkedSnapshot(
       status: 'error',
       message: msg,
       fileName: cachedHandle?.name,
+      savedAt: lastSuccessfulSaveAt,
     })
     return { ok: false, error: msg }
   }
@@ -458,17 +483,26 @@ export type LinkedFileSaveEvent = {
   /** Short label for UI status */
   message: string
   fileName?: string | null
+  /** Epoch ms of last successful write to the linked file (carried across pending/saving). */
+  savedAt?: number | null
 }
 
 type SaveListener = (event: LinkedFileSaveEvent) => void
 const saveListeners = new Set<SaveListener>()
+/** Last successful linked-file write time (ms). Survives pending/saving/error status. */
+let lastSuccessfulSaveAt: number | null = null
 let lastSaveEvent: LinkedFileSaveEvent = {
   status: 'idle',
   message: 'No linked file',
+  savedAt: null,
 }
 
 export function getLastLinkedFileSaveEvent(): LinkedFileSaveEvent {
   return lastSaveEvent
+}
+
+export function getLastSuccessfulLinkedSaveAt(): number | null {
+  return lastSuccessfulSaveAt
 }
 
 export function subscribeLinkedFileSave(listener: SaveListener): () => void {
@@ -479,10 +513,19 @@ export function subscribeLinkedFileSave(listener: SaveListener): () => void {
 }
 
 function emitSaveEvent(event: LinkedFileSaveEvent): void {
-  lastSaveEvent = event
+  if (event.status === 'saved') {
+    lastSuccessfulSaveAt = event.savedAt ?? Date.now()
+  }
+  lastSaveEvent = {
+    ...event,
+    savedAt:
+      event.savedAt !== undefined
+        ? event.savedAt
+        : lastSuccessfulSaveAt,
+  }
   for (const fn of saveListeners) {
     try {
-      fn(event)
+      fn(lastSaveEvent)
     } catch {
       /* ignore listener errors */
     }
@@ -510,6 +553,7 @@ export function scheduleLinkedFileWrite(
         status: 'pending',
         message: 'Unsaved changes',
         fileName: cachedHandle.name,
+        savedAt: lastSuccessfulSaveAt,
       })
     })()
   }
@@ -525,21 +569,14 @@ export function scheduleLinkedFileWrite(
         status: 'saving',
         message: 'Saving…',
         fileName: cachedHandle.name,
+        savedAt: lastSuccessfulSaveAt,
       })
       const result = await writeLinkedSnapshot()
       debounceActive = false
-      if (result.ok) {
-        emitSaveEvent({
-          status: 'saved',
-          message: 'Saved',
-          fileName: cachedHandle.name,
-        })
-      } else {
-        emitSaveEvent({
-          status: 'error',
-          message: result.error,
-          fileName: cachedHandle?.name,
-        })
+      // writeLinkedSnapshot already emits saved/error with timestamp
+      if (!result.ok) {
+        // ensure listeners still get error if write path failed before emit
+        /* writeLinkedSnapshot emits error */
       }
     })()
   }, delayMs)
