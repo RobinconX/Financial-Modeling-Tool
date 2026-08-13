@@ -12,10 +12,12 @@ import {
   assignOverviewSeriesColors,
   getYearBindings,
   isPermanentLeftover,
+  isPermanentSavingsSeries,
   normalizeHexColor,
   shadesForType,
   sourceLabel,
 } from '../../lib/overview'
+import { isPermanentCashAccount } from '../../lib/savings'
 import { InfoTip } from '../common/InfoTip'
 import { NumberInput } from '../common/MoneyInput'
 
@@ -47,12 +49,17 @@ function buildDisplayGroups(series: OverviewSeries[]): DisplayGroup[] {
   const others = series.filter((s) => s.type !== 'savings')
   type Row = { order: number; group: DisplayGroup }
   const rows: Row[] = []
-  if (savings.length > 0) {
-    rows.push({
-      order: Math.min(...savings.map((s) => s.sortOrder)),
-      group: { key: 'savings', kind: 'savings', series: savings },
-    })
-  }
+  // Always show Savings group so accounts are visible even before first sync paints
+  const savingsOrder =
+    savings.length > 0
+      ? Math.min(...savings.map((s) => s.sortOrder))
+      : others
+          .filter((s) => s.type !== 'incomeLeftover')
+          .reduce((m, s) => Math.max(m, s.sortOrder), -1) + 0.5
+  rows.push({
+    order: savingsOrder,
+    group: { key: 'savings', kind: 'savings', series: savings },
+  })
   for (const s of others) {
     rows.push({
       order: s.sortOrder,
@@ -211,7 +218,7 @@ export function OverviewSeriesEditor({
   savingsAccounts,
   incomeCostScenarios = [],
   onAdd,
-  onAddSavings,
+  onAddSavings: _onAddSavings,
   onUpdate,
   onToggle,
   onRemove,
@@ -223,13 +230,6 @@ export function OverviewSeriesEditor({
     (s) => s.enabled && s.type === 'portfolio' && s.portfolioId,
   )
   const displayGroups = useMemo(() => buildDisplayGroups(series), [series])
-  const usedSavingsIds = new Set(
-    series
-      .filter((s) => s.type === 'savings')
-      .map((s) => s.savingsAccountId)
-      .filter(Boolean) as string[],
-  )
-  const availableSavings = savingsAccounts.filter((a) => !usedSavingsIds.has(a.id))
 
   const [dragGroupKey, setDragGroupKey] = useState<string | null>(null)
   const [dragOverGroupKey, setDragOverGroupKey] = useState<string | null>(null)
@@ -362,7 +362,9 @@ export function OverviewSeriesEditor({
             </span>
             <span className="truncate text-[11px] text-white/45">
               {savingsSeries.length === 0
-                ? 'No accounts mapped'
+                ? open
+                  ? 'No accounts'
+                  : ''
                 : open
                   ? `${savingsSeries.filter((s) => s.enabled).length}/${savingsSeries.length} included`
                   : names.length > 0
@@ -370,45 +372,18 @@ export function OverviewSeriesEditor({
                     : 'None included'}
             </span>
           </div>
-          {open && availableSavings.length > 0 ? (
-            <select
-              className="input !w-auto !min-w-[10rem] !py-1 !text-xs"
-              defaultValue=""
-              onChange={(e) => {
-                const id = e.target.value
-                if (!id) return
-                onAddSavings(id)
-                e.target.value = ''
-              }}
-              onMouseDown={(e) => e.stopPropagation()}
-              aria-label="Add savings account"
-            >
-              <option value="">+ Add account…</option>
-              {availableSavings.map((a) => (
-                <option key={a.id} value={a.id}>
-                  {a.name.trim() || 'Untitled'}
-                </option>
-              ))}
-            </select>
-          ) : open ? (
-            <span className="text-[11px] text-white/30">
-              {savingsAccounts.length === 0 ? 'No savings accounts yet' : 'All accounts mapped'}
-            </span>
-          ) : null}
         </div>
         {open && (
           <div className="mt-2">
-            {savingsSeries.length === 0 ? (
-              <p className="text-[11px] text-white/40">
-                Add savings accounts from the menu. Name and deselect each without leaving this row.
-              </p>
-            ) : (
+            {savingsSeries.length === 0 ? null : (
               <div className="space-y-1.5">
                 {savingsSeries.map((s) => {
                   const missing =
                     !!s.savingsAccountId &&
                     !savingsAccounts.some((a) => a.id === s.savingsAccountId)
                   const acct = savingsAccounts.find((a) => a.id === s.savingsAccountId)
+                  const permanent = isPermanentSavingsSeries(s, savingsAccounts)
+                  const cashLocked = !!(acct && isPermanentCashAccount(acct))
                   const over = dragOverSavingsId === s.id && dragSavingsId !== s.id
                   return (
                     <div
@@ -453,11 +428,18 @@ export function OverviewSeriesEditor({
                       </span>
                       <input
                         type="checkbox"
-                        className="h-4 w-4 shrink-0 accent-emerald-500"
+                        className="h-4 w-4 shrink-0 accent-emerald-500 disabled:opacity-60"
                         checked={s.enabled}
+                        disabled={cashLocked}
                         onChange={() => onToggle(s.id)}
                         onMouseDown={(e) => e.stopPropagation()}
-                        title={s.enabled ? 'Included in chart' : 'Excluded from chart'}
+                        title={
+                          cashLocked
+                            ? 'Cash is always included'
+                            : s.enabled
+                              ? 'Included in chart'
+                              : 'Excluded from chart'
+                        }
                         aria-label={`Include ${s.name || acct?.name || 'savings'}`}
                       />
                       <input
@@ -467,30 +449,12 @@ export function OverviewSeriesEditor({
                         onChange={(e) => onUpdate(s.id, { name: e.target.value })}
                         onMouseDown={(e) => e.stopPropagation()}
                       />
-                      <select
-                        className="input !w-[9.5rem] !py-1 !text-xs"
-                        value={s.savingsAccountId ?? ''}
-                        onChange={(e) => {
-                          const id = e.target.value || null
-                          const a = savingsAccounts.find((x) => x.id === id)
-                          onUpdate(s.id, {
-                            savingsAccountId: id,
-                            name: s.name.trim() ? s.name : a?.name?.trim() || '',
-                          })
-                        }}
-                        onMouseDown={(e) => e.stopPropagation()}
-                      >
-                        <option value="">Account…</option>
-                        {savingsAccounts.map((a) => (
-                          <option
-                            key={a.id}
-                            value={a.id}
-                            disabled={a.id !== s.savingsAccountId && usedSavingsIds.has(a.id)}
-                          >
-                            {a.name.trim() || 'Untitled'}
-                          </option>
-                        ))}
-                      </select>
+                      <span className="max-w-[9.5rem] truncate text-[11px] text-white/45">
+                        {acct?.name?.trim() || (missing ? 'Missing account' : 'Account')}
+                        {cashLocked ? (
+                          <span className="ml-1 text-[10px] text-sky-300/70">permanent</span>
+                        ) : null}
+                      </span>
                       <input
                         type="color"
                         className="h-7 w-8 shrink-0 cursor-pointer rounded border border-white/10 bg-transparent p-0.5"
@@ -501,15 +465,17 @@ export function OverviewSeriesEditor({
                         onMouseDown={(e) => e.stopPropagation()}
                         title="Stack color"
                       />
-                      <button
-                        type="button"
-                        className="btn-ghost !py-0.5 !text-[11px] text-red-300/80"
-                        onClick={() => onRemove(s.id)}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        title="Remove from overview"
-                      >
-                        ×
-                      </button>
+                      {!permanent ? (
+                        <button
+                          type="button"
+                          className="btn-ghost !py-0.5 !text-[11px] text-red-300/80"
+                          onClick={() => onRemove(s.id)}
+                          onMouseDown={(e) => e.stopPropagation()}
+                          title="Remove orphan series"
+                        >
+                          ×
+                        </button>
+                      ) : null}
                       {missing ? (
                         <span className="w-full text-[10px] text-amber-300/90">
                           Linked account missing — re-select or remove.

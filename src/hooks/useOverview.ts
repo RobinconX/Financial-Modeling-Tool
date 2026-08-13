@@ -1,14 +1,17 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { OverviewScenario, OverviewSeries, OverviewState } from '../types'
+import type { OverviewScenario, OverviewSeries, OverviewState, SavingsAccount } from '../types'
 import {
   clampOverviewRange,
   cloneSeriesList,
   ensurePermanentLeftover,
+  ensurePermanentSavings,
   isPermanentLeftover,
+  isPermanentSavingsSeries,
   newOverviewScenario,
   newOverviewSeries,
   sortedOverviewScenarios,
 } from '../lib/overview'
+import { isPermanentCashAccount } from '../lib/savings'
 import { loadOverview, saveOverview, OVERVIEW_STORAGE_KEY } from '../lib/overviewStorage'
 
 export function useOverview() {
@@ -86,7 +89,7 @@ export function useOverview() {
   )
 
   const addScenario = useCallback(
-    (name?: string) => {
+    (name?: string, savingsAccounts: SavingsAccount[] = []) => {
       let created: OverviewScenario | null = null
       persistUpdate((prev) => {
         const maxOrder = prev.scenarios.reduce((m, s) => Math.max(m, s.sortOrder), -1)
@@ -94,6 +97,7 @@ export function useOverview() {
           name ?? `Scenario ${prev.scenarios.length + 1}`,
           maxOrder + 1,
         )
+        sc.series = ensurePermanentSavings(sc.series, savingsAccounts)
         created = sc
         return {
           ...prev,
@@ -107,7 +111,7 @@ export function useOverview() {
   )
 
   const saveAsScenario = useCallback(
-    (name: string) => {
+    (name: string, savingsAccounts: SavingsAccount[] = []) => {
       let created: OverviewScenario | null = null
       persistUpdate((prev) => {
         const sel =
@@ -118,7 +122,7 @@ export function useOverview() {
         sc.startYear = sel.startYear
         sc.endYear = sel.endYear
         sc.description = sel.description ?? ''
-        sc.series = cloneSeriesList(sel.series)
+        sc.series = ensurePermanentSavings(cloneSeriesList(sel.series), savingsAccounts)
         created = sc
         return {
           ...prev,
@@ -209,7 +213,7 @@ export function useOverview() {
   )
 
   const removeSeries = useCallback(
-    (id: string) => {
+    (id: string, savingsAccounts: SavingsAccount[] = []) => {
       return persistUpdate((prev) => {
         const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
         if (!sid) return prev
@@ -218,9 +222,16 @@ export function useOverview() {
           const target = sc.series.find((s) => s.id === id)
           // Leftover cash is permanent
           if (target && isPermanentLeftover(target)) return sc
+          // Savings mapped to an existing account are permanent (sync removes orphans)
+          if (target && isPermanentSavingsSeries(target, savingsAccounts)) return sc
           return {
             ...sc,
-            series: ensurePermanentLeftover(sc.series.filter((s) => s.id !== id)),
+            series: ensurePermanentLeftover(
+              ensurePermanentSavings(
+                sc.series.filter((s) => s.id !== id),
+                savingsAccounts,
+              ),
+            ),
           }
         })
         return { ...prev, scenarios }
@@ -230,7 +241,7 @@ export function useOverview() {
   )
 
   const toggleSeries = useCallback(
-    (id: string) => {
+    (id: string, savingsAccounts: SavingsAccount[] = []) => {
       return persistUpdate((prev) => {
         const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
         if (!sid) return prev
@@ -242,11 +253,48 @@ export function useOverview() {
               if (s.id !== id) return s
               // Leftover always stays enabled
               if (isPermanentLeftover(s)) return { ...s, enabled: true }
+              // Permanent Cash savings always stays enabled
+              if (s.type === 'savings' && s.savingsAccountId) {
+                const acc = savingsAccounts.find((a) => a.id === s.savingsAccountId)
+                if (acc && isPermanentCashAccount(acc)) {
+                  return { ...s, enabled: true }
+                }
+              }
               return { ...s, enabled: !s.enabled }
             }),
           }
         })
         return { ...prev, scenarios }
+      })
+    },
+    [persistUpdate],
+  )
+
+  /** Sync all savings accounts onto every overview scenario (adds Cash etc.). */
+  const syncSavingsToScenarios = useCallback(
+    (accounts: SavingsAccount[]) => {
+      return persistUpdate((prev) => {
+        let changed = false
+        const scenarios = prev.scenarios.map((sc) => {
+          const nextSeries = ensurePermanentSavings(sc.series, accounts)
+          const same =
+            nextSeries.length === sc.series.length &&
+            nextSeries.every((s, i) => {
+              const o = sc.series[i]
+              return (
+                o &&
+                s.id === o.id &&
+                s.type === o.type &&
+                s.savingsAccountId === o.savingsAccountId &&
+                s.enabled === o.enabled &&
+                s.name === o.name
+              )
+            })
+          if (same) return sc
+          changed = true
+          return { ...sc, series: nextSeries }
+        })
+        return changed ? { ...prev, scenarios } : prev
       })
     },
     [persistUpdate],
@@ -358,6 +406,7 @@ export function useOverview() {
     updateSeries,
     removeSeries,
     toggleSeries,
+    syncSavingsToScenarios,
     reorderSeriesGroups,
     reorderSavingsSeries,
   }

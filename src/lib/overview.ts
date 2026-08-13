@@ -13,6 +13,7 @@ import { toDisplay } from './fx'
 import { scenarioTotals } from './incomeCost'
 import {
   balanceNow,
+  isPermanentCashAccount,
   latestActual,
   makePeriodKey,
   monthsBetween,
@@ -111,6 +112,97 @@ export function getYearBindings(series: OverviewSeries): OverviewYearBinding[] {
 /** Permanent leftover series present on every Overview scenario. */
 export function isPermanentLeftover(s: OverviewSeries): boolean {
   return s.type === 'incomeLeftover'
+}
+
+/**
+ * Savings series that map to an existing savings account are permanent on the
+ * Overview scenario (always listed; Cash cannot be disabled). Orphans (deleted
+ * accounts) can still be removed.
+ */
+export function isPermanentSavingsSeries(
+  s: OverviewSeries,
+  accounts: SavingsAccount[],
+): boolean {
+  if (s.type !== 'savings' || !s.savingsAccountId) return false
+  return accounts.some((a) => a.id === s.savingsAccountId)
+}
+
+/**
+ * Ensure every savings account has a series on this Overview scenario.
+ * Drops savings series whose account no longer exists. Cash is always enabled.
+ */
+export function ensurePermanentSavings(
+  series: OverviewSeries[],
+  accounts: SavingsAccount[],
+): OverviewSeries[] {
+  const nonSavings = series.filter((s) => s.type !== 'savings')
+  const existingByAccount = new Map<string, OverviewSeries>()
+  for (const s of series) {
+    if (s.type === 'savings' && s.savingsAccountId) {
+      existingByAccount.set(s.savingsAccountId, s)
+    }
+  }
+
+  // Preserve savings block position in the stack when possible
+  const priorSavings = series.filter((s) => s.type === 'savings')
+  let nextOrder =
+    priorSavings.length > 0
+      ? Math.min(...priorSavings.map((s) => s.sortOrder))
+      : nonSavings
+          .filter((s) => s.type !== 'incomeLeftover')
+          .reduce((m, s) => Math.max(m, s.sortOrder), -1) + 1
+
+  const savingsOut: OverviewSeries[] = []
+  for (const acc of accounts) {
+    const prev = existingByAccount.get(acc.id)
+    const cash = isPermanentCashAccount(acc)
+    if (prev) {
+      savingsOut.push({
+        ...prev,
+        sortOrder: nextOrder++,
+        enabled: cash ? true : prev.enabled,
+        name: prev.name.trim() || acc.name.trim() || (cash ? 'Cash' : 'Savings'),
+        savingsAccountId: acc.id,
+      })
+    } else {
+      savingsOut.push(
+        newOverviewSeries(
+          {
+            type: 'savings',
+            name: acc.name.trim() || (cash ? 'Cash' : 'Savings'),
+            savingsAccountId: acc.id,
+            enabled: true,
+          },
+          nextOrder++,
+        ),
+      )
+    }
+  }
+
+  // Keep non-savings series; renumber savings into their block without
+  // reordering other groups relative to each other more than necessary.
+  return ensurePermanentLeftover([...nonSavings, ...savingsOut])
+}
+
+/** True when savings series list already matches accounts 1:1 (ids + cash forced on). */
+export function savingsSeriesInSync(
+  series: OverviewSeries[],
+  accounts: SavingsAccount[],
+): boolean {
+  const mapped = series
+    .filter((s) => s.type === 'savings')
+    .map((s) => s.savingsAccountId)
+    .filter(Boolean) as string[]
+  if (mapped.length !== accounts.length) return false
+  const set = new Set(mapped)
+  for (const a of accounts) {
+    if (!set.has(a.id)) return false
+    if (isPermanentCashAccount(a)) {
+      const s = series.find((x) => x.type === 'savings' && x.savingsAccountId === a.id)
+      if (!s?.enabled) return false
+    }
+  }
+  return true
 }
 
 export function newPermanentLeftoverSeries(

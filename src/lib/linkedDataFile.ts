@@ -56,6 +56,47 @@ export function isFileSystemAccessSupported(): boolean {
   return typeof w.showSaveFilePicker === 'function' && typeof w.showOpenFilePicker === 'function'
 }
 
+/**
+ * Continuous “link a file on disk” needs Chromium’s File System Access pickers.
+ * iOS/iPadOS (including Chrome/Firefox there) use WebKit and do not support this —
+ * only Origin Private File System, not user Documents/Files.
+ */
+export function getFileLinkingSupport(): {
+  linkedFiles: boolean
+  isAppleMobile: boolean
+  /** Short explanation when linkedFiles is false */
+  unsupportedReason: string | null
+} {
+  const linkedFiles = isFileSystemAccessSupported()
+  if (linkedFiles) {
+    return { linkedFiles: true, isAppleMobile: false, unsupportedReason: null }
+  }
+
+  const ua = typeof navigator !== 'undefined' ? navigator.userAgent : ''
+  // iPhone/iPad/iPod, or iPadOS desktop UA (“Macintosh” + touch)
+  const isAppleMobile =
+    /iPhone|iPad|iPod/i.test(ua) ||
+    (typeof navigator !== 'undefined' &&
+      /Macintosh/i.test(ua) &&
+      navigator.maxTouchPoints > 1)
+
+  if (isAppleMobile) {
+    return {
+      linkedFiles: false,
+      isAppleMobile: true,
+      unsupportedReason:
+        'iPhone and iPad browsers cannot keep a continuous link to a file in Files/iCloud (Apple does not expose that API to the web). Use Export / Import below — that works on mobile. Continuous linking works on desktop Chrome or Edge.',
+    }
+  }
+
+  return {
+    linkedFiles: false,
+    isAppleMobile: false,
+    unsupportedReason:
+      'This browser cannot link a file for continuous save. Use desktop Chrome or Edge for linking, or Export / Import below (works everywhere).',
+  }
+}
+
 function openMetaDb(): Promise<IDBDatabase> {
   return new Promise((resolve, reject) => {
     const req = indexedDB.open(IDB_NAME, 1)

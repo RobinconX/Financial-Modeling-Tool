@@ -102,15 +102,70 @@ export function applyAppDataToLocalStorage(
 
 export function downloadAppDataExport(snapshot?: AppDataSnapshot): void {
   const data = snapshot ?? collectAppData()
+  const name = `financial-model-export-${data.exportedAt.slice(0, 10)}.json`
   const blob = new Blob([JSON.stringify(data, null, 2)], {
     type: 'application/json',
   })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
   a.href = url
-  a.download = `financial-model-export-${data.exportedAt.slice(0, 10)}.json`
+  a.download = name
+  a.rel = 'noopener'
+  // iOS Safari often needs the node in the DOM and a user gesture (caller provides gesture)
+  document.body.appendChild(a)
   a.click()
-  URL.revokeObjectURL(url)
+  a.remove()
+  // Delay revoke so iOS can start the download/share pipeline
+  window.setTimeout(() => URL.revokeObjectURL(url), 2_000)
+}
+
+/**
+ * Prefer the system Share sheet on mobile (Save to Files / AirDrop).
+ * Falls back to a normal download when Share is unavailable.
+ */
+export async function exportAppData(snapshot?: AppDataSnapshot): Promise<
+  { ok: true; method: 'share' | 'download' } | { ok: false; error: string }
+> {
+  try {
+    const data = snapshot ?? collectAppData()
+    const name = `financial-model-export-${data.exportedAt.slice(0, 10)}.json`
+    const blob = new Blob([JSON.stringify(data, null, 2)], {
+      type: 'application/json',
+    })
+    const file = new File([blob], name, { type: 'application/json' })
+
+    const nav = navigator as Navigator & {
+      canShare?: (data: { files?: File[] }) => boolean
+      share?: (data: { files?: File[]; title?: string; text?: string }) => Promise<void>
+    }
+
+    if (typeof nav.share === 'function' && typeof nav.canShare === 'function') {
+      try {
+        if (nav.canShare({ files: [file] })) {
+          await nav.share({
+            files: [file],
+            title: 'Financial model backup',
+            text: name,
+          })
+          return { ok: true, method: 'share' }
+        }
+      } catch (e) {
+        // User cancelled share — not an error for the app
+        if (e instanceof DOMException && e.name === 'AbortError') {
+          return { ok: true, method: 'share' }
+        }
+        // Fall through to download
+      }
+    }
+
+    downloadAppDataExport(data)
+    return { ok: true, method: 'download' }
+  } catch (e) {
+    return {
+      ok: false,
+      error: e instanceof Error ? e.message : 'Export failed',
+    }
+  }
 }
 
 export async function readSnapshotFromFile(

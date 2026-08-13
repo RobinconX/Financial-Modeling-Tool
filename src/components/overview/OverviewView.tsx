@@ -52,9 +52,15 @@ export function OverviewView({
     updateSeries,
     removeSeries,
     toggleSeries,
+    syncSavingsToScenarios,
     reorderSeriesGroups,
     reorderSavingsSeries,
   } = useOverview()
+
+  // Every overview scenario always includes all savings accounts (at least Cash).
+  useEffect(() => {
+    syncSavingsToScenarios(savingsAccounts)
+  }, [savingsAccounts, syncSavingsToScenarios])
 
   const [usdToChf, setUsdToChf] = useState<number | null>(null)
   const [fxLoading, setFxLoading] = useState(false)
@@ -177,7 +183,7 @@ export function OverviewView({
 
   function handleSaveAs() {
     const name = saveAsName.trim() || `Copy of ${selectedScenario?.name ?? 'scenario'}`
-    const sc = saveAsScenario(name)
+    const sc = saveAsScenario(name, savingsAccounts)
     if (sc) {
       setSaveAsName('')
       setShowSaveAs(false)
@@ -209,7 +215,11 @@ export function OverviewView({
             </InfoTip>
           </div>
           <div className="flex flex-wrap items-center gap-1.5">
-            <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => addScenario()}>
+            <button
+              type="button"
+              className="btn-ghost !py-1 !text-xs"
+              onClick={() => addScenario(undefined, savingsAccounts)}
+            >
               + New
             </button>
             <button
@@ -515,8 +525,8 @@ export function OverviewView({
             })
           }}
           onUpdate={updateSeries}
-          onToggle={toggleSeries}
-          onRemove={removeSeries}
+          onToggle={(id) => toggleSeries(id, savingsAccounts)}
+          onRemove={(id) => removeSeries(id, savingsAccounts)}
           onReorderGroups={reorderSeriesGroups}
           onReorderSavings={reorderSavingsSeries}
         />

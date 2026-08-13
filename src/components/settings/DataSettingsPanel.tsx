@@ -1,12 +1,13 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   applyAppDataToLocalStorage,
-  downloadAppDataExport,
+  exportAppData,
   readSnapshotFromFile,
 } from '../../lib/appDataSnapshot'
 import { remountApp } from '../../lib/appRemount'
 import {
   createDataFile,
+  getFileLinkingSupport,
   getLinkedFileStatus,
   isFileSystemAccessSupported,
   linkDataFile,
@@ -114,10 +115,21 @@ export function DataSettingsPanel({ onClose }: Props) {
     await refreshStatus()
   }
 
-  function handleExport() {
-    downloadAppDataExport()
-    setMessage('Download started — keep that JSON file as a backup.')
+  async function handleExport() {
+    setBusy(true)
     setError(null)
+    setMessage(null)
+    const result = await exportAppData()
+    setBusy(false)
+    if (!result.ok) {
+      setError(result.error)
+      return
+    }
+    setMessage(
+      result.method === 'share'
+        ? 'Share sheet opened — choose Save to Files, AirDrop, or another app to keep the backup.'
+        : 'Download started — keep that JSON file as a backup.',
+    )
   }
 
   async function handleImportFile(file: File) {
@@ -148,8 +160,11 @@ export function DataSettingsPanel({ onClose }: Props) {
   }
 
   const fsa = isFileSystemAccessSupported()
+  const linking = getFileLinkingSupport()
   const needsAccess =
     status?.linked === true && status.permission !== 'granted'
+  // On mobile without continuous link, Export/Import is the primary backup path
+  const exportPrimary = !fsa
 
   return (
     <div className="max-w-xl space-y-5">
@@ -157,8 +172,9 @@ export function DataSettingsPanel({ onClose }: Props) {
         <div className="flex items-center gap-1.5">
           <h2 className="text-lg font-semibold text-white">Data &amp; backup</h2>
           <InfoTip label="About data storage">
-            Your data stays on this device. Link a JSON file you control (Documents, OneDrive, etc.)
-            or use Export / Import. No multi-user cloud database.
+            Your data stays on this device. On desktop Chrome/Edge you can link a JSON file for
+            continuous save. On iPhone/iPad use Export / Import (Share → Save to Files). No
+            multi-user cloud database.
           </InfoTip>
         </div>
         {onClose && (
@@ -185,16 +201,21 @@ export function DataSettingsPanel({ onClose }: Props) {
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-emerald-300/90">Linked data file</h3>
           <InfoTip label="About linked file">
-            Open / link loads an existing file into the app. Create new writes current browser data
-            to a new path. After linking, edits wait ~4s of idle, then save once. Put the file in
-            OneDrive/Dropbox for multi-PC backup.
+            Continuous link needs the File System Access API (desktop Chrome or Edge). After
+            linking, edits wait ~4s of idle, then save once. Put the file in OneDrive/Dropbox for
+            multi-PC backup. iPhone/iPad cannot do continuous linking — use Export / Import.
           </InfoTip>
         </div>
         {!fsa ? (
-          <p className="text-sm text-amber-200/80">
-            This browser does not support linking a file for continuous save (use Chrome or Edge).
-            Export / Import still works here.
-          </p>
+          <div className="space-y-2 text-sm text-amber-200/85">
+            <p>{linking.unsupportedReason}</p>
+            {linking.isAppleMobile ? (
+              <p className="text-white/50">
+                Tip: Export opens the Share sheet — choose <strong className="text-white/70">Save to
+                Files</strong> (or iCloud Drive). Import picks a JSON from Files to restore.
+              </p>
+            ) : null}
+          </div>
         ) : (
           <>
             <p className="text-sm text-white/60">
@@ -281,15 +302,24 @@ export function DataSettingsPanel({ onClose }: Props) {
         <div className="flex items-center gap-1.5">
           <h3 className="section-title">Export / Import</h3>
           <InfoTip label="About export and import">
-            Works in every browser. Use for backup or to move data into another browser profile.
+            Works on every browser, including iPhone and iPad. Export can open the Share sheet
+            (Save to Files). Import replaces this browser’s data with the file you pick.
           </InfoTip>
         </div>
+        {exportPrimary ? (
+          <p className="text-sm text-white/50">
+            Primary backup on this device: export a JSON, store it in Files, import when you need
+            it back.
+          </p>
+        ) : null}
         <div className="flex flex-wrap gap-2">
           <button
             type="button"
-            className="btn-primary !py-1.5 !text-xs"
+            className={
+              exportPrimary ? 'btn-primary !py-1.5 !text-xs' : 'btn-primary !py-1.5 !text-xs'
+            }
             disabled={busy}
-            onClick={handleExport}
+            onClick={() => void handleExport()}
           >
             Export JSON…
           </button>
@@ -304,7 +334,7 @@ export function DataSettingsPanel({ onClose }: Props) {
           <input
             ref={fileInputRef}
             type="file"
-            accept="application/json,.json"
+            accept="application/json,.json,text/json"
             className="hidden"
             onChange={(e) => {
               const f = e.target.files?.[0]
