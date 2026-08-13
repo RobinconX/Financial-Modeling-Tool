@@ -1,14 +1,18 @@
 import { useEffect, useMemo, useState } from 'react'
-import type { SavedPortfolio, SavedScenario } from '../../types'
+import type { SavedComparable, SavedPortfolio, SavedScenario } from '../../types'
 import {
   deleteScenarioConfirmMessage,
   portfoliosUsingScenario,
 } from '../../lib/scenarioUsage'
 import { ProjectionPanel } from './ProjectionPanel'
+import { ComparablesView } from './ComparablesView'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
 const DRAFT = '__draft__'
+const MODE_KEY = 'grok-lab-projections-mode'
+
+type PageMode = 'analyze' | 'comps'
 
 type Props = {
   scenarios: SavedScenario[]
@@ -19,6 +23,21 @@ type Props = {
   ) => { scenario: SavedScenario; overwritten: boolean } | { error: string }
   updateScenario: (id: string, patch: Partial<SavedScenario>) => boolean
   deleteScenario: (id: string) => boolean
+  comparables: SavedComparable[]
+  comparablesError: string | null
+  createComparable: (name?: string) => SavedComparable | null
+  updateComparable: (id: string, patch: Partial<SavedComparable>) => boolean
+  deleteComparable: (id: string) => boolean
+}
+
+function readMode(): PageMode {
+  try {
+    const v = localStorage.getItem(MODE_KEY)
+    if (v === 'comps' || v === 'analyze') return v
+  } catch {
+    /* ignore */
+  }
+  return 'analyze'
 }
 
 function sortScenariosByTicker(list: SavedScenario[]): SavedScenario[] {
@@ -37,8 +56,22 @@ export function ProjectionsView({
   upsertScenario,
   updateScenario,
   deleteScenario,
+  comparables,
+  comparablesError,
+  createComparable,
+  updateComparable,
+  deleteComparable,
 }: Props) {
   const sorted = useMemo(() => sortScenariosByTicker(scenarios), [scenarios])
+
+  const [mode, setMode] = useState<PageMode>(readMode)
+  useEffect(() => {
+    try {
+      localStorage.setItem(MODE_KEY, mode)
+    } catch {
+      /* ignore */
+    }
+  }, [mode])
 
   const [compare, setCompare] = useState(false)
   /** Selection: DRAFT or scenario id */
@@ -123,6 +156,50 @@ export function ProjectionsView({
 
   return (
     <div className="space-y-5">
+      <div
+        className="inline-flex gap-1 border-b border-white/10"
+        role="tablist"
+        aria-label="Projections"
+      >
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'analyze'}
+          onClick={() => setMode('analyze')}
+          className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
+            mode === 'analyze'
+              ? 'border-emerald-400 text-white'
+              : 'border-transparent text-white/50 hover:text-white/80'
+          }`}
+        >
+          Analyze
+        </button>
+        <button
+          type="button"
+          role="tab"
+          aria-selected={mode === 'comps'}
+          onClick={() => setMode('comps')}
+          className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
+            mode === 'comps'
+              ? 'border-emerald-400 text-white'
+              : 'border-transparent text-white/50 hover:text-white/80'
+          }`}
+        >
+          Comparables
+        </button>
+      </div>
+
+      {mode === 'comps' ? (
+        <ComparablesView
+          scenarios={scenarios}
+          comparables={comparables}
+          storageError={comparablesError}
+          createComparable={createComparable}
+          updateComparable={updateComparable}
+          deleteComparable={deleteComparable}
+        />
+      ) : (
+        <>
       <div className="section-header border-b border-white/5 pb-4">
         <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
           <Selector value={selA} onChange={setSelA} id="proj-select-a" />
@@ -186,6 +263,8 @@ export function ProjectionsView({
           />
         )}
       </div>
+        </>
+      )}
     </div>
   )
 }

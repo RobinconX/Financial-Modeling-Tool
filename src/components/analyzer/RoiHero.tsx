@@ -63,7 +63,7 @@ export function RoiHero({
 
       <div className="text-xs font-semibold uppercase tracking-[0.2em] text-emerald-300/80">
         ROI p.a. · {BASIS_LABEL[selectedBasis]}
-        {hero ? ` · ${hero.year}` : ''}
+        {hero ? ` · to EOY ${hero.year}` : ''}
       </div>
 
       <div
@@ -81,7 +81,7 @@ export function RoiHero({
         />
         <Stat
           label="Horizon"
-          value={hero ? `${hero.years} yr${hero.years === 1 ? '' : 's'}` : '—'}
+          value={hero ? formatHorizon(hero.years) : '—'}
         />
         <Stat
           label="Implied mcap"
@@ -134,6 +134,12 @@ export function RoiHero({
       )}
     </div>
   )
+}
+
+function formatHorizon(years: number): string {
+  if (!Number.isFinite(years) || years < 0) return '—'
+  const rounded = Math.round(years * 10) / 10
+  return `${rounded} yr${rounded === 1 ? '' : 's'}`
 }
 
 function Stat({ label, value }: { label: string; value: string }) {

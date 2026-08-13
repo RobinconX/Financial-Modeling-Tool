@@ -5,6 +5,7 @@
 import type {
   IncomeCostState,
   OverviewState,
+  SavedComparable,
   SavedPortfolio,
   SavedScenario,
   SavingsState,
@@ -14,6 +15,7 @@ import { loadPortfolios, savePortfolios } from './portfolioStorage'
 import { loadIncomeCost, saveIncomeCost } from './incomeCostStorage'
 import { loadSavings, saveSavings } from './savingsStorage'
 import { loadOverview, saveOverview } from './overviewStorage'
+import { loadComparables, saveComparables } from './comparablesStorage'
 import { withLinkedMirrorSuppressed } from './linkedMirrorGate'
 
 export const APP_DATA_FILE_NAME = 'financial-model.json'
@@ -27,6 +29,7 @@ export type AppDataSnapshot = {
   incomeCost: IncomeCostState
   savings: SavingsState
   overview: OverviewState
+  comparables: SavedComparable[]
 }
 
 export function collectAppData(): AppDataSnapshot {
@@ -38,6 +41,7 @@ export function collectAppData(): AppDataSnapshot {
     incomeCost: loadIncomeCost(),
     savings: loadSavings(),
     overview: loadOverview(),
+    comparables: loadComparables(),
   }
 }
 
@@ -69,6 +73,9 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
     incomeCost: raw.incomeCost as IncomeCostState,
     savings: raw.savings as SavingsState,
     overview: raw.overview as OverviewState,
+    comparables: Array.isArray(raw.comparables)
+      ? (raw.comparables as SavedComparable[])
+      : [],
   }
 }
 
@@ -95,6 +102,9 @@ export function applyAppDataToLocalStorage(
 
     const r5 = saveOverview(snapshot.overview)
     if (!r5.ok) return { ok: false, error: r5.error }
+
+    const r6 = saveComparables(snapshot.comparables ?? [])
+    if (!r6.ok) return { ok: false, error: r6.error }
 
     return { ok: true }
   })

@@ -3,11 +3,13 @@ import { ProjectionsView } from './components/projections/ProjectionsView'
 import { PortfolioView } from './components/portfolio/PortfolioView'
 import { useSavedScenarios } from './hooks/useSavedScenarios'
 import { useSavedPortfolios } from './hooks/useSavedPortfolios'
+import { useComparables } from './hooks/useComparables'
 import { useAutoQuoteRefresh } from './hooks/useAutoQuoteRefresh'
 import { useIncomeCost } from './hooks/useIncomeCost'
 import { IncomeCostView } from './components/income-cost/IncomeCostView'
 import { SavingsView } from './components/savings/SavingsView'
 import { OverviewView } from './components/overview/OverviewView'
+import { HistoryView } from './components/history/HistoryView'
 import { useSavings } from './hooks/useSavings'
 import { DataSettingsPanel } from './components/settings/DataSettingsPanel'
 import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
@@ -21,6 +23,7 @@ const ALL_TABS: AppTab[] = [
   'projections',
   'portfolio',
   'overview',
+  'history',
   'income-cost',
   'savings',
   'settings',
@@ -51,6 +54,7 @@ const NAV_MARKS: Record<AppTab, string> = {
   projections: 'P',
   portfolio: 'F',
   overview: 'O',
+  history: 'H',
   'income-cost': 'I',
   savings: 'V',
   settings: '⚙',
@@ -73,7 +77,7 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
   projections: {
     title: 'Projections',
     subtitle:
-      'Fetch a ticker or open a saved scenario — Easy + Advanced assumptions, charts, and ROI.',
+      'Analyze a ticker or rank saved projections — Easy + Advanced assumptions, ROI, and comparables.',
   },
   portfolio: {
     title: 'Portfolio',
@@ -82,6 +86,10 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
   overview: {
     title: 'Overview',
     subtitle: 'Stacked net worth by year (CHF) from portfolios, savings, and manual assets.',
+  },
+  history: {
+    title: 'History',
+    subtitle: 'Recorded actuals over time — portfolios and savings, monthly or year-end.',
   },
   'income-cost': {
     title: 'Income / Cost',
@@ -164,6 +172,14 @@ export default function App() {
   const { accounts: savingsAccounts } = useSavings()
   // savingsAccounts always includes permanent Cash (ensured on load)
 
+  const {
+    comparables,
+    error: comparablesError,
+    createComparable,
+    updateComparable,
+    deleteComparable,
+  } = useComparables()
+
   const sections: NavSection[] = [
     {
       id: 'other',
@@ -172,6 +188,7 @@ export default function App() {
         { id: 'overview', label: 'Overview' },
         { id: 'income-cost', label: 'Income / Cost' },
         { id: 'savings', label: 'Savings' },
+        { id: 'history', label: 'History' },
       ],
     },
     {
@@ -315,6 +332,11 @@ export default function App() {
               upsertScenario={upsertScenario}
               updateScenario={updateScenario}
               deleteScenario={deleteScenario}
+              comparables={comparables}
+              comparablesError={comparablesError}
+              createComparable={createComparable}
+              updateComparable={updateComparable}
+              deleteComparable={deleteComparable}
             />
           )}
 
@@ -341,6 +363,10 @@ export default function App() {
               incomeCostLines={incomeCostLines}
               incomeCostScenarios={incomeCostScenarios}
             />
+          )}
+
+          {tab === 'history' && (
+            <HistoryView portfolios={portfolios} savingsAccounts={savingsAccounts} />
           )}
 
           {tab === 'income-cost' && (

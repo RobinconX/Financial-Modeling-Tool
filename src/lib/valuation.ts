@@ -10,6 +10,24 @@ export function yearsUntil(targetYear: number, fromYear = new Date().getFullYear
   return targetYear - fromYear
 }
 
+const MS_PER_YEAR = 365.25 * 24 * 60 * 60 * 1000
+
+/**
+ * Years from `asOf` (today) to 31 Dec of `targetYear`.
+ * Stated projection years are year-end figures.
+ */
+export function yearsUntilProjectionEnd(targetYear: number, asOf: Date = new Date()): number {
+  const start = new Date(asOf.getFullYear(), asOf.getMonth(), asOf.getDate()).getTime()
+  const end = new Date(targetYear, 11, 31).getTime()
+  return (end - start) / MS_PER_YEAR
+}
+
+function resolveAsOf(asOf?: Date | number): Date {
+  if (asOf instanceof Date) return asOf
+  if (typeof asOf === 'number' && Number.isFinite(asOf)) return new Date(asOf, 0, 1)
+  return new Date()
+}
+
 /** CAGR: (future / present) ^ (1/years) - 1 */
 export function cagr(present: number, future: number, years: number): number {
   if (present <= 0 || future <= 0 || years <= 0) return NaN
@@ -128,15 +146,16 @@ function impliedForBasis(row: YearProjection, basis: ValuationBasis): number | n
 export function buildEasyProjections(
   currentMarketCap: number,
   easyRows: EasyProjection[],
-  currentYear = new Date().getFullYear(),
+  asOf: Date | number = new Date(),
 ): ProjectionRow[] {
   if (currentMarketCap <= 0) return []
+  const asOfDate = resolveAsOf(asOf)
   const results: ProjectionRow[] = []
 
   for (const easy of easyRows) {
     if (easy.projectedMarketCap == null || easy.projectedMarketCap <= 0) continue
-    const years = yearsUntil(easy.year, currentYear)
-    // Include current year (year-end projection); skip past years only
+    const years = yearsUntilProjectionEnd(easy.year, asOfDate)
+    // Year-end figures: skip only when that 31 Dec is already past
     if (years < 0) continue
     results.push({
       year: easy.year,
@@ -156,15 +175,15 @@ export function buildEasyProjections(
 export function buildAdvancedProjections(
   currentMarketCap: number,
   rows: YearProjection[],
-  currentYear = new Date().getFullYear(),
+  asOf: Date | number = new Date(),
 ): ProjectionRow[] {
   if (currentMarketCap <= 0) return []
+  const asOfDate = resolveAsOf(asOf)
   const results: ProjectionRow[] = []
   const bases: ValuationBasis[] = ['ps', 'pfcf', 'pe']
 
   for (const row of rows) {
-    const years = yearsUntil(row.year, currentYear)
-    // Include current year (year-end projection); skip past years only
+    const years = yearsUntilProjectionEnd(row.year, asOfDate)
     if (years < 0) continue
     const dilution = normalizeDilution(row.dilutionFactor)
     for (const basis of bases) {

@@ -73,8 +73,8 @@ export function SavingsView() {
               <h3 className="section-title text-sky-300/90">Accounts & compounding</h3>
               <InfoTip label="About savings inputs">
                 Current end-of-month balances, contribution cadence, and annual rate (CHF).
-                Compounding is always yearly (December → January). Year-end history is on Actuals;
-                forward path on Projection.
+                Compounding is always yearly (December → January). Year-end and optional monthly
+                history are on Actuals; Projection stays year-end + forward path.
               </InfoTip>
             </div>
           </div>
@@ -105,10 +105,9 @@ export function SavingsView() {
             <div className="flex items-center gap-1.5">
               <h3 className="section-title">Balance progression</h3>
               <InfoTip label="About balance progression">
-                Past columns are year-end (December). Now is the current month; later columns are
-                projected. Prefer Actuals for bulk year-end entry. Compounding applies only
-                December → January; contributions land when paid (yearly contribs in January after
-                interest).
+                Past columns are year-end (December) only — monthly detail stays on Actuals and
+                History. Now is the current month; later columns are projected. Compounding
+                applies only December → January.
               </InfoTip>
             </div>
             <SavingsProjectionTable

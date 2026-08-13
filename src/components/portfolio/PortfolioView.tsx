@@ -380,9 +380,36 @@ export function PortfolioView({
     panel === 'cash' || panel === 'positions' || panel === 'growth' ? panel : null
 
   return (
-    <div className="flex h-full min-h-0 flex-col gap-3">
+    <div className="space-y-5">
+      <div className="relative z-40 space-y-3">
+        <nav
+          className="flex gap-1 overflow-x-auto border-b border-white/10"
+          aria-label="Portfolio sections"
+          role="tablist"
+        >
+          {TABS.map((t) => {
+            const active = panel === t.id
+            return (
+              <button
+                key={t.id}
+                type="button"
+                role="tab"
+                aria-selected={active}
+                onClick={() => setPanel(t.id)}
+                className={`-mb-px shrink-0 border-b-2 px-3 py-1.5 text-sm font-medium transition ${
+                  active
+                    ? 'border-emerald-400 text-white'
+                    : 'border-transparent text-white/50 hover:text-white/80'
+                }`}
+              >
+                {t.label}
+              </button>
+            )
+          })}
+        </nav>
+
       {/* Top bar — z-index so portfolio/manage menus paint above the workspace panel */}
-      <div className="relative z-40 flex flex-wrap items-center gap-3 border-b border-white/5 pb-3">
+      <div className="relative z-40 flex flex-wrap items-center gap-3 pb-3">
         <div className="relative z-50 min-w-0 flex-1" ref={pickerRef}>
           <label className="sr-only" htmlFor="portfolio-picker">
             Portfolio
@@ -620,6 +647,7 @@ export function PortfolioView({
           </div>
         </div>
       </div>
+      </div>
 
       {displayCurrency === 'CHF' && usdToChf == null && !fxLoading && (
         <p className="text-[11px] text-amber-300/90">
@@ -628,40 +656,11 @@ export function PortfolioView({
       )}
 
       {!selected ? (
-        <div className="flex flex-1 items-center justify-center p-8 text-sm text-white/40">
+        <div className="flex items-center justify-center p-8 text-sm text-white/40">
           Create or select a portfolio to get started.
         </div>
       ) : (
-        <div className="relative z-0 flex min-h-0 flex-1 flex-col gap-3 md:flex-row">
-          {/* Side / top tabs */}
-          <nav
-            className="flex shrink-0 gap-1 overflow-x-auto border-b border-white/10 md:w-28 md:flex-col md:overflow-visible md:border-b-0 md:border-r md:border-white/10 md:pr-2"
-            aria-label="Portfolio sections"
-          >
-            {TABS.map((t) => {
-              const active = panel === t.id
-              return (
-                <button
-                  key={t.id}
-                  type="button"
-                  role="tab"
-                  aria-selected={active}
-                  onClick={() => setPanel(t.id)}
-                  className={`-mb-px border-b-2 px-3 py-2 text-left text-sm font-medium transition md:mb-0 md:border-b-0 md:border-l-2 md:pl-3 ${
-                    active
-                      ? 'border-emerald-400 text-white md:border-emerald-400'
-                      : 'border-transparent text-white/50 hover:text-white/80'
-                  }`}
-                >
-                  <span className="md:hidden">{t.short}</span>
-                  <span className="hidden md:inline">{t.label}</span>
-                </button>
-              )
-            })}
-          </nav>
-
-          {/* Active panel */}
-          <div className="panel min-h-0 min-w-0 flex-1 overflow-y-auto">
+        <div className="panel min-h-0 min-w-0">
             {panel === 'chart' && grid && (
               <div className="space-y-5">
                 <div className="flex flex-wrap items-end justify-between gap-3">
@@ -807,7 +806,6 @@ export function PortfolioView({
                 onUpdateOtherPortfolio={updatePortfolio}
               />
             )}
-          </div>
         </div>
       )}
     </div>

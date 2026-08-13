@@ -83,10 +83,41 @@ export type StoragePayload = {
   scenarios: SavedScenario[]
 }
 
+/** Valuation basis used for one comparable row. */
+export type ComparableBasis = ValuationBasis | 'easy'
+
+export type ComparableEntry = {
+  scenarioId: string
+  basis: ComparableBasis
+}
+
+/** Named set of stock scenarios for side-by-side price / ROI comparison. */
+export type SavedComparable = {
+  id: string
+  name: string
+  entries: ComparableEntry[]
+  /** Year whose ROI column is the sort key. Null = ticker order. */
+  sortYear: number | null
+  sortDir: 'desc' | 'asc'
+  /**
+   * Years to show in the table. Null / empty = none (user adds years).
+   * Period or sparse set — same list.
+   */
+  filterYears: number[] | null
+  createdAt: string
+  updatedAt: string
+}
+
+export type ComparablesState = {
+  version: 1
+  comparables: SavedComparable[]
+}
+
 export type AppTab =
   | 'projections'
   | 'portfolio'
   | 'overview'
+  | 'history'
   | 'income-cost'
   | 'savings'
   | 'settings'

@@ -9,6 +9,7 @@ import {
 } from '../../lib/portfolio'
 import { amountToDisplay } from '../../lib/fx'
 import { formatMoney, parseMoney } from '../../lib/format'
+import { handleSheetNavKey, parseClipboardGrid } from '../../lib/sheetGrid'
 import { InfoTip } from '../common/InfoTip'
 
 const MONTHS = [
@@ -78,18 +79,37 @@ export function PortfolioActualsEditor({
     })
   }
 
-  function setMonthValue(month: number, raw: string) {
+  function writeMonth(next: Record<string, number>, month: number, raw: string) {
+    if (year > currentYear || (year === currentYear && month > currentMonth)) return
     const key = makeActualKey(year, month)
-    const next = { ...actuals }
     const trimmed = raw.trim()
     if (!trimmed) {
       delete next[key]
-    } else {
-      const parsed = parseMoney(trimmed)
-      if (parsed == null || parsed < 0) return
-      next[key] = parsed
+      return
+    }
+    const parsed = parseMoney(trimmed)
+    if (parsed == null || parsed < 0) return
+    next[key] = parsed
+  }
+
+  function setMonthValue(month: number, raw: string) {
+    const next = { ...actuals }
+    writeMonth(next, month, raw)
+    commitActuals(next)
+  }
+
+  function pasteMonths(startRow: number, text: string): boolean {
+    const grid = parseClipboardGrid(text)
+    if (grid.length === 0) return false
+    if (grid.length === 1 && (grid[0]?.length ?? 0) <= 1) return false
+    const next = { ...actuals }
+    for (let i = 0; i < grid.length; i++) {
+      const month = startRow + i + 1
+      if (month < 1 || month > 12) break
+      writeMonth(next, month, grid[i]?.[0] ?? '')
     }
     commitActuals(next)
+    return true
   }
 
   function addYear() {
@@ -151,8 +171,9 @@ export function PortfolioActualsEditor({
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-emerald-300/90">Monthly actuals</h3>
           <InfoTip label="About portfolio actuals">
-            Enter end-of-month portfolio totals (once per month). Stored in {entryCurrency}. Chart
-            uses the last actual of each year for past years in portfolio value mode.
+            Enter end-of-month portfolio totals (once per month). Stored in {entryCurrency}. Arrow
+            keys move · Enter down · paste a column from Excel. Chart uses the last actual of each
+            year for past bars.
           </InfoTip>
         </div>
         {otherPortfolios.length > 0 && onUpdateOtherPortfolio && (
@@ -334,6 +355,9 @@ export function PortfolioActualsEditor({
                       inputMode="decimal"
                       placeholder={isFuture ? 'Future' : 'e.g. 250K'}
                       disabled={isFuture}
+                      data-sheet="pf-act"
+                      data-sheet-row={i}
+                      data-sheet-col={0}
                       defaultValue={
                         stored != null && Number.isFinite(stored)
                           ? String(roundInput(stored))
@@ -342,7 +366,11 @@ export function PortfolioActualsEditor({
                       key={`${key}-${stored ?? 'x'}-${entryCurrency}`}
                       onBlur={(e) => setMonthValue(month, e.target.value)}
                       onKeyDown={(e) => {
-                        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                        handleSheetNavKey(e, 'pf-act', i, 0, (raw) => setMonthValue(month, raw))
+                      }}
+                      onPaste={(e) => {
+                        const text = e.clipboardData.getData('text/plain')
+                        if (pasteMonths(i, text)) e.preventDefault()
                       }}
                     />
                   </td>

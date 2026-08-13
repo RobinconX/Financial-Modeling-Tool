@@ -235,13 +235,13 @@ export function ProjectionPanel({
 
   const easyProjections = useMemo(() => {
     if (currentMarketCap == null || currentMarketCap <= 0) return []
-    return buildEasyProjections(currentMarketCap, easyRows, currentYear)
-  }, [currentMarketCap, easyRows, currentYear])
+    return buildEasyProjections(currentMarketCap, easyRows)
+  }, [currentMarketCap, easyRows])
 
   const advancedProjections = useMemo(() => {
     if (currentMarketCap == null || currentMarketCap <= 0) return []
-    return buildAdvancedProjections(currentMarketCap, advancedRows, currentYear)
-  }, [currentMarketCap, advancedRows, currentYear])
+    return buildAdvancedProjections(currentMarketCap, advancedRows)
+  }, [currentMarketCap, advancedRows])
 
   const allProjections = useMemo(
     () => [...easyProjections, ...advancedProjections],

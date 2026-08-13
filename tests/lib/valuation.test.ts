@@ -18,12 +18,20 @@ import {
   pickHeroRow,
   totalReturn,
   yearsUntil,
+  yearsUntilProjectionEnd,
 } from '../../src/lib/valuation'
 import type { EasyProjection, YearProjection } from '../../src/types'
 
 describe('yearsUntil / cagr / totalReturn', () => {
   it('computes year delta', () => {
     expect(yearsUntil(2030, 2026)).toBe(4)
+  })
+
+  it('measures projection horizon from as-of date to year-end', () => {
+    expect(yearsUntilProjectionEnd(2028, new Date(2026, 11, 31))).toBeCloseTo(2, 2)
+    const fromAug = yearsUntilProjectionEnd(2028, new Date(2026, 7, 13))
+    expect(fromAug).toBeGreaterThan(2)
+    expect(fromAug).toBeLessThan(3)
   })
 
   it('computes CAGR for doubling in 4 years', () => {
@@ -110,7 +118,8 @@ describe('buildEasyProjections', () => {
     expect(out).toHaveLength(1)
     expect(out[0].year).toBe(year + 4)
     expect(out[0].basis).toBe('easy')
-    expect(out[0].cagr).toBeCloseTo(cagr(100, 200, 4))
+    const span = yearsUntilProjectionEnd(year + 4, new Date(year, 0, 1))
+    expect(out[0].cagr).toBeCloseTo(cagr(100, 200, span))
     expect(out[0].totalReturn).toBeCloseTo(1)
   })
 

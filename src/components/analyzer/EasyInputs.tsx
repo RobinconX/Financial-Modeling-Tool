@@ -6,7 +6,7 @@ import {
   newEasyProjection,
   sortEasyProjections,
   totalReturn,
-  yearsUntil,
+  yearsUntilProjectionEnd,
 } from '../../lib/valuation'
 import {
   impliedSharePrice,
@@ -90,7 +90,7 @@ export function EasyInputs({
           row.projectedMarketCap > 0 &&
           currentMarketCap != null &&
           currentMarketCap > 0
-            ? yearsUntil(row.year, currentYear)
+            ? yearsUntilProjectionEnd(row.year)
             : null
         const rowCagr =
           horizon != null && horizon > 0
