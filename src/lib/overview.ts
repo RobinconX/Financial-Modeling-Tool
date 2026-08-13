@@ -129,7 +129,8 @@ export function isPermanentSavingsSeries(
 
 /**
  * Ensure every savings account has a series on this Overview scenario.
- * Drops savings series whose account no longer exists. Cash is always enabled.
+ * Drops savings series whose account no longer exists.
+ * Accounts stay listed (cannot remove); enabled is user-controlled for chart display.
  */
 export function ensurePermanentSavings(
   series: OverviewSeries[],
@@ -160,7 +161,7 @@ export function ensurePermanentSavings(
       savingsOut.push({
         ...prev,
         sortOrder: nextOrder++,
-        enabled: cash ? true : prev.enabled,
+        enabled: prev.enabled,
         name: prev.name.trim() || acc.name.trim() || (cash ? 'Cash' : 'Savings'),
         savingsAccountId: acc.id,
       })
@@ -184,7 +185,7 @@ export function ensurePermanentSavings(
   return ensurePermanentLeftover([...nonSavings, ...savingsOut])
 }
 
-/** True when savings series list already matches accounts 1:1 (ids + cash forced on). */
+/** True when every account has a mapped savings series (enabled flags are free). */
 export function savingsSeriesInSync(
   series: OverviewSeries[],
   accounts: SavingsAccount[],
@@ -197,10 +198,6 @@ export function savingsSeriesInSync(
   const set = new Set(mapped)
   for (const a of accounts) {
     if (!set.has(a.id)) return false
-    if (isPermanentCashAccount(a)) {
-      const s = series.find((x) => x.type === 'savings' && x.savingsAccountId === a.id)
-      if (!s?.enabled) return false
-    }
   }
   return true
 }

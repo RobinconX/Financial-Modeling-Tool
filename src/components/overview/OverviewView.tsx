@@ -52,6 +52,7 @@ export function OverviewView({
     updateSeries,
     removeSeries,
     toggleSeries,
+    setSavingsGroupEnabled,
     syncSavingsToScenarios,
     reorderSeriesGroups,
     reorderSavingsSeries,
@@ -526,6 +527,7 @@ export function OverviewView({
           }}
           onUpdate={updateSeries}
           onToggle={(id) => toggleSeries(id, savingsAccounts)}
+          onSetSavingsEnabled={setSavingsGroupEnabled}
           onRemove={(id) => removeSeries(id, savingsAccounts)}
           onReorderGroups={reorderSeriesGroups}
           onReorderSavings={reorderSavingsSeries}

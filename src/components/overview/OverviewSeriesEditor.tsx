@@ -17,7 +17,6 @@ import {
   shadesForType,
   sourceLabel,
 } from '../../lib/overview'
-import { isPermanentCashAccount } from '../../lib/savings'
 import { InfoTip } from '../common/InfoTip'
 import { NumberInput } from '../common/MoneyInput'
 
@@ -31,6 +30,8 @@ type Props = {
   onAddSavings: (accountId: string) => void
   onUpdate: (id: string, patch: Partial<OverviewSeries>) => void
   onToggle: (id: string) => void
+  /** Include/exclude the whole savings block in the chart */
+  onSetSavingsEnabled: (enabled: boolean) => void
   onRemove: (id: string) => void
   /** Reorder groups: "savings" or series id — matches bar chart stack order */
   onReorderGroups: (groupKeys: string[]) => void
@@ -221,6 +222,7 @@ export function OverviewSeriesEditor({
   onAddSavings: _onAddSavings,
   onUpdate,
   onToggle,
+  onSetSavingsEnabled,
   onRemove,
   onReorderGroups,
   onReorderSavings,
@@ -300,11 +302,14 @@ export function OverviewSeriesEditor({
   function renderSavingsGroup(savingsSeries: OverviewSeries[], groupKey: string) {
     const isDragOver = dragOverGroupKey === groupKey && dragGroupKey !== groupKey
     const open = isGroupOpen(groupKey)
+    const enabledCount = savingsSeries.filter((s) => s.enabled).length
+    const allOn = savingsSeries.length > 0 && enabledCount === savingsSeries.length
+    const someOn = enabledCount > 0
     const names = savingsSeries
       .filter((s) => s.enabled)
       .map((s) => s.name.trim() || 'Untitled')
       .slice(0, 3)
-    const extra = Math.max(0, savingsSeries.filter((s) => s.enabled).length - names.length)
+    const extra = Math.max(0, enabledCount - names.length)
     return (
       <div
         key={groupKey}
@@ -330,10 +335,12 @@ export function OverviewSeriesEditor({
           e.preventDefault()
           dropGroupOn(groupKey)
         }}
-        className={`rounded-xl border bg-black/20 px-3 py-2.5 transition ${
+        className={`rounded-xl border px-3 py-2.5 transition ${
           isDragOver
             ? 'border-sky-500/50 bg-sky-500/10'
-            : 'border-white/10'
+            : someOn
+              ? 'border-white/10 bg-black/20'
+              : 'border-white/5 bg-black/10 opacity-60'
         } ${dragGroupKey === groupKey ? 'opacity-50' : ''}`}
       >
         <div className="flex flex-wrap items-center justify-between gap-2">
@@ -357,6 +364,25 @@ export function OverviewSeriesEditor({
                 ▸
               </span>
             </button>
+            <input
+              type="checkbox"
+              className="h-4 w-4 shrink-0 accent-emerald-500"
+              checked={allOn}
+              ref={(el) => {
+                if (el) el.indeterminate = someOn && !allOn
+              }}
+              disabled={savingsSeries.length === 0}
+              onChange={() => onSetSavingsEnabled(!allOn)}
+              onMouseDown={(e) => e.stopPropagation()}
+              title={
+                allOn
+                  ? 'Exclude all savings from chart'
+                  : someOn
+                    ? 'Include all savings in chart'
+                    : 'Include savings in chart'
+              }
+              aria-label="Include savings in chart"
+            />
             <span className="rounded-md bg-sky-500/15 px-1.5 py-0.5 text-[10px] font-medium uppercase tracking-wide text-sky-300/90">
               Savings
             </span>
@@ -366,7 +392,7 @@ export function OverviewSeriesEditor({
                   ? 'No accounts'
                   : ''
                 : open
-                  ? `${savingsSeries.filter((s) => s.enabled).length}/${savingsSeries.length} included`
+                  ? `${enabledCount}/${savingsSeries.length} included`
                   : names.length > 0
                     ? `${names.join(', ')}${extra > 0 ? ` +${extra}` : ''}`
                     : 'None included'}
@@ -383,7 +409,6 @@ export function OverviewSeriesEditor({
                     !savingsAccounts.some((a) => a.id === s.savingsAccountId)
                   const acct = savingsAccounts.find((a) => a.id === s.savingsAccountId)
                   const permanent = isPermanentSavingsSeries(s, savingsAccounts)
-                  const cashLocked = !!(acct && isPermanentCashAccount(acct))
                   const over = dragOverSavingsId === s.id && dragSavingsId !== s.id
                   return (
                     <div
@@ -428,18 +453,11 @@ export function OverviewSeriesEditor({
                       </span>
                       <input
                         type="checkbox"
-                        className="h-4 w-4 shrink-0 accent-emerald-500 disabled:opacity-60"
+                        className="h-4 w-4 shrink-0 accent-emerald-500"
                         checked={s.enabled}
-                        disabled={cashLocked}
                         onChange={() => onToggle(s.id)}
                         onMouseDown={(e) => e.stopPropagation()}
-                        title={
-                          cashLocked
-                            ? 'Cash is always included'
-                            : s.enabled
-                              ? 'Included in chart'
-                              : 'Excluded from chart'
-                        }
+                        title={s.enabled ? 'Included in chart' : 'Excluded from chart'}
                         aria-label={`Include ${s.name || acct?.name || 'savings'}`}
                       />
                       <input
@@ -451,9 +469,6 @@ export function OverviewSeriesEditor({
                       />
                       <span className="max-w-[9.5rem] truncate text-[11px] text-white/45">
                         {acct?.name?.trim() || (missing ? 'Missing account' : 'Account')}
-                        {cashLocked ? (
-                          <span className="ml-1 text-[10px] text-sky-300/70">permanent</span>
-                        ) : null}
                       </span>
                       <input
                         type="color"
@@ -498,8 +513,9 @@ export function OverviewSeriesEditor({
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-violet-300/90">Asset series</h3>
           <InfoTip label="About asset series">
-            Drag groups (⋮⋮) to set stack order; expand (▸) to edit. Leftover is permanent; manuals
-            take year → IC → %; remainder goes to leftover.
+            Drag groups (⋮⋮) to set stack order; expand (▸) to edit. Checkboxes include series in
+            the chart (Savings group and each account). Leftover is always on; manuals take year →
+            IC → %; remainder goes to leftover.
           </InfoTip>
         </div>
         <div className="flex flex-wrap gap-1.5">

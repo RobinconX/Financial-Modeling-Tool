@@ -11,7 +11,6 @@ import {
   newOverviewSeries,
   sortedOverviewScenarios,
 } from '../lib/overview'
-import { isPermanentCashAccount } from '../lib/savings'
 import { loadOverview, saveOverview, OVERVIEW_STORAGE_KEY } from '../lib/overviewStorage'
 
 export function useOverview() {
@@ -241,7 +240,7 @@ export function useOverview() {
   )
 
   const toggleSeries = useCallback(
-    (id: string, savingsAccounts: SavingsAccount[] = []) => {
+    (id: string, _savingsAccounts: SavingsAccount[] = []) => {
       return persistUpdate((prev) => {
         const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
         if (!sid) return prev
@@ -253,18 +252,34 @@ export function useOverview() {
               if (s.id !== id) return s
               // Leftover always stays enabled
               if (isPermanentLeftover(s)) return { ...s, enabled: true }
-              // Permanent Cash savings always stays enabled
-              if (s.type === 'savings' && s.savingsAccountId) {
-                const acc = savingsAccounts.find((a) => a.id === s.savingsAccountId)
-                if (acc && isPermanentCashAccount(acc)) {
-                  return { ...s, enabled: true }
-                }
-              }
+              // Savings accounts stay listed permanently; enabled is display-only
               return { ...s, enabled: !s.enabled }
             }),
           }
         })
         return { ...prev, scenarios }
+      })
+    },
+    [persistUpdate],
+  )
+
+  /** Include or exclude the whole savings block on the selected scenario (display only). */
+  const setSavingsGroupEnabled = useCallback(
+    (enabled: boolean) => {
+      return persistUpdate((prev) => {
+        const sid = prev.selectedScenarioId ?? prev.scenarios[0]?.id
+        if (!sid) return prev
+        let changed = false
+        const scenarios = prev.scenarios.map((sc) => {
+          if (sc.id !== sid) return sc
+          const series = sc.series.map((s) => {
+            if (s.type !== 'savings' || s.enabled === enabled) return s
+            changed = true
+            return { ...s, enabled }
+          })
+          return changed ? { ...sc, series } : sc
+        })
+        return changed ? { ...prev, scenarios } : prev
       })
     },
     [persistUpdate],
@@ -406,6 +421,7 @@ export function useOverview() {
     updateSeries,
     removeSeries,
     toggleSeries,
+    setSavingsGroupEnabled,
     syncSavingsToScenarios,
     reorderSeriesGroups,
     reorderSavingsSeries,
