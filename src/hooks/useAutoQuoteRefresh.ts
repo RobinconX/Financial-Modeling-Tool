@@ -66,47 +66,45 @@ export function useAutoQuoteRefresh(
         return
       }
 
-      for (const q of quotes) {
-        const matches = scenariosRef.current.filter(
-          (s) => s.symbol.toUpperCase() === q.symbol.toUpperCase(),
-        )
-        for (const s of matches) {
-          // Prefer API shares; else keep prior shares; else infer once from prior mcap÷price.
-          // Do not recompute shares as oldMcap / *new* price (would distort share count).
-          let shares: number | null =
-            q.sharesOutstanding != null &&
-            Number.isFinite(q.sharesOutstanding) &&
-            q.sharesOutstanding > 0
-              ? q.sharesOutstanding
-              : s.sharesOutstanding != null &&
-                  Number.isFinite(s.sharesOutstanding) &&
-                  s.sharesOutstanding > 0
-                ? s.sharesOutstanding
-                : null
-          if (
-            shares == null &&
-            s.currentMarketCap != null &&
-            s.currentMarketCap > 0 &&
-            s.currentPrice != null &&
-            s.currentPrice > 0
-          ) {
-            shares = s.currentMarketCap / s.currentPrice
-          }
-
-          // Live mcap from API when present; else price × shares so today tracks the new price.
-          const mcap =
-            q.marketCap ??
-            marketCapFromSharePrice(q.price, shares) ??
-            s.currentMarketCap
-
-          updateRef.current(s.id, {
-            companyName: q.name,
-            currency: q.currency,
-            currentPrice: q.price,
-            currentMarketCap: mcap,
-            sharesOutstanding: shares,
-          })
+      const quoteBySym = new Map(quotes.map((q) => [q.symbol.toUpperCase(), q]))
+      for (const s of scenariosRef.current) {
+        const q = quoteBySym.get(s.symbol.toUpperCase())
+        if (!q) continue
+        // Prefer API shares; else keep prior shares; else infer once from prior mcap÷price.
+        // Do not recompute shares as oldMcap / *new* price (would distort share count).
+        let shares: number | null =
+          q.sharesOutstanding != null &&
+          Number.isFinite(q.sharesOutstanding) &&
+          q.sharesOutstanding > 0
+            ? q.sharesOutstanding
+            : s.sharesOutstanding != null &&
+                Number.isFinite(s.sharesOutstanding) &&
+                s.sharesOutstanding > 0
+              ? s.sharesOutstanding
+              : null
+        if (
+          shares == null &&
+          s.currentMarketCap != null &&
+          s.currentMarketCap > 0 &&
+          s.currentPrice != null &&
+          s.currentPrice > 0
+        ) {
+          shares = s.currentMarketCap / s.currentPrice
         }
+
+        // Live mcap from API when present; else price × shares so today tracks the new price.
+        const mcap =
+          q.marketCap ??
+          marketCapFromSharePrice(q.price, shares) ??
+          s.currentMarketCap
+
+        updateRef.current(s.id, {
+          companyName: q.name,
+          currency: q.currency,
+          currentPrice: q.price,
+          currentMarketCap: mcap,
+          sharesOutstanding: shares,
+        })
       }
     } finally {
       refreshingRef.current = false

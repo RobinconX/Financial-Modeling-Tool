@@ -3,6 +3,7 @@ import {
   buildComparableTable,
   defaultBasisForScenario,
   normalizeFilterYears,
+  priceNowForScenario,
   pruneComparableEntries,
   sortComparableRows,
   visibleComparableYears,
@@ -115,6 +116,20 @@ describe('sortComparableRows', () => {
   it('reverses on asc', () => {
     const sorted = sortComparableRows(table.rows, 2028, 'asc')
     expect(sorted.map((r) => r.symbol)).toEqual(['LOW', 'HI'])
+  })
+})
+
+describe('priceNowForScenario', () => {
+  it('prefers live currentPrice over implied from a stale mcap', () => {
+    const s = sc({
+      id: 'p',
+      symbol: 'X',
+      name: 'Base',
+      currentPrice: 12,
+      currentMarketCap: 1000,
+      sharesOutstanding: 100,
+    })
+    expect(priceNowForScenario(s)).toBe(12)
   })
 })
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SavedScenario } from '../types'
 import {
   findBySymbolAndName,
@@ -11,6 +11,8 @@ import { sortEasyProjections, sortYearProjections } from '../lib/valuation'
 export function useSavedScenarios() {
   const [scenarios, setScenarios] = useState<SavedScenario[]>(() => loadScenarios())
   const [error, setError] = useState<string | null>(null)
+  const scenariosRef = useRef(scenarios)
+  scenariosRef.current = scenarios
 
   const persist = useCallback(
     (next: SavedScenario[]): { ok: true } | { ok: false; error: string } => {
@@ -20,6 +22,7 @@ export function useSavedScenarios() {
         return result
       }
       setError(null)
+      scenariosRef.current = next
       setScenarios(next)
       return { ok: true }
     },
@@ -48,11 +51,12 @@ export function useSavedScenarios() {
       const symbol = input.symbol.toUpperCase()
       const name = input.name.trim() || 'Base'
 
+      const current = scenariosRef.current
       let existing: SavedScenario | undefined
       if (input.id) {
-        existing = scenarios.find((s) => s.id === input.id)
+        existing = current.find((s) => s.id === input.id)
       } else if (opts?.overwriteByName !== false) {
-        existing = findBySymbolAndName(scenarios, symbol, name)
+        existing = findBySymbolAndName(current, symbol, name)
       }
 
       if (existing) {
@@ -67,7 +71,7 @@ export function useSavedScenarios() {
           createdAt: existing.createdAt,
           updatedAt: now,
         }
-        const next = scenarios.map((s) => (s.id === existing!.id ? updated : s))
+        const next = current.map((s) => (s.id === existing!.id ? updated : s))
         const result = persist(next)
         if (!result.ok) return { error: result.error }
         return { scenario: updated, overwritten: true }
@@ -88,17 +92,17 @@ export function useSavedScenarios() {
         createdAt: now,
         updatedAt: now,
       }
-      const result = persist([...scenarios, created])
+      const result = persist([...current, created])
       if (!result.ok) return { error: result.error }
       return { scenario: created, overwritten: false }
     },
-    [scenarios, persist],
+    [persist],
   )
 
   const updateScenario = useCallback(
     (id: string, patch: Partial<SavedScenario>) => {
       const now = new Date().toISOString()
-      const next = scenarios.map((s) => {
+      const next = scenariosRef.current.map((s) => {
         if (s.id !== id) return s
         const merged: SavedScenario = {
           ...s,
@@ -116,14 +120,12 @@ export function useSavedScenarios() {
       })
       return persist(next).ok
     },
-    [scenarios, persist],
+    [persist],
   )
 
   const deleteScenario = useCallback(
-    (id: string) => {
-      return persist(scenarios.filter((s) => s.id !== id)).ok
-    },
-    [scenarios, persist],
+    (id: string) => persist(scenariosRef.current.filter((s) => s.id !== id)).ok,
+    [persist],
   )
 
   const renameScenario = useCallback(

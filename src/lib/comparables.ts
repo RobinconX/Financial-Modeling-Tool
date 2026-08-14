@@ -111,12 +111,12 @@ export function sharesForScenario(sc: SavedScenario): number | null {
 }
 
 export function priceNowForScenario(sc: SavedScenario): number | null {
-  const mcap = currentMcapForScenario(sc)
-  const shares = sharesForScenario(sc)
-  return (
-    impliedSharePrice(mcap, shares) ??
-    (sc.currentPrice != null && sc.currentPrice > 0 ? sc.currentPrice : null)
-  )
+  // Live quote wins unless the user overrode mcap (implied from override).
+  if (sc.mcapOverride != null && sc.mcapOverride > 0) {
+    return impliedSharePrice(sc.mcapOverride, sharesForScenario(sc))
+  }
+  if (sc.currentPrice != null && sc.currentPrice > 0) return sc.currentPrice
+  return impliedSharePrice(currentMcapForScenario(sc), sharesForScenario(sc))
 }
 
 export function availableBases(
