@@ -8,14 +8,16 @@ import {
 } from 'react'
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
+import { RECORDED_ACTUAL_KEY } from '../../lib/history'
 import { formatMoney } from '../../lib/format'
 import {
   assignOverviewSeriesColors,
@@ -40,6 +42,9 @@ type Props = {
   series: OverviewSeries[]
   deps: OverviewBuildDeps
   fillContainer?: boolean
+  /** Year-end recorded actuals (History) to overlay. */
+  recordedByYear?: Map<number, number>
+  showRecorded?: boolean
 }
 
 type HoverState = {
@@ -50,6 +55,7 @@ type HoverState = {
   barX: number
   stacks: { id: string; name: string; type: OverviewSeries['type']; value: number }[]
   total: number
+  recorded: number | null
   portfolios: {
     seriesId: string
     name: string
@@ -98,6 +104,8 @@ export function OverviewChart({
   series,
   deps,
   fillContainer = false,
+  recordedByYear,
+  showRecorded = false,
 }: Props) {
   const [hover, setHover] = useState<HoverState | null>(null)
   const chartAreaRef = useRef<HTMLDivElement>(null)
@@ -122,10 +130,15 @@ export function OverviewChart({
   // Paint order: last in list (high sortOrder) first → bottom of stack
   const stackOrder = useMemo(() => [...sorted].reverse(), [sorted])
 
-  const rows = useMemo(
-    () => buildOverviewChartRows({ startYear, endYear, series }, deps),
-    [startYear, endYear, series, deps],
-  )
+  const rows = useMemo(() => {
+    const built = buildOverviewChartRows({ startYear, endYear, series }, deps)
+    if (!showRecorded || !recordedByYear) return built
+    return built.map((r) => ({
+      ...r,
+      [RECORDED_ACTUAL_KEY]:
+        r.isNow || r.kind !== 'actual' ? null : (recordedByYear.get(r.year) ?? null),
+    }))
+  }, [startYear, endYear, series, deps, recordedByYear, showRecorded])
 
   const colorById = useMemo(() => assignOverviewSeriesColors(series), [series])
 
@@ -203,6 +216,10 @@ export function OverviewChart({
       barX,
       stacks,
       total,
+      recorded:
+        row.isNow || row.kind !== 'actual'
+          ? null
+          : recordedByYear?.get(row.year) ?? null,
       portfolios,
     }
   }
@@ -295,7 +312,7 @@ export function OverviewChart({
         }}
       >
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-          <BarChart
+          <ComposedChart
             data={rows}
             margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
             onMouseMove={(state) => {
@@ -363,7 +380,19 @@ export function OverviewChart({
                   : null}
               </Bar>
             ))}
-          </BarChart>
+            {showRecorded ? (
+              <Line
+                type="monotone"
+                dataKey={RECORDED_ACTUAL_KEY}
+                name="Recorded"
+                stroke="#fbbf24"
+                strokeWidth={2}
+                dot={{ r: 3, fill: '#fbbf24' }}
+                connectNulls={false}
+                isAnimationActive={false}
+              />
+            ) : null}
+          </ComposedChart>
         </ResponsiveContainer>
 
         {hover && panelStyle ? (
@@ -423,11 +452,19 @@ export function OverviewChart({
             )}
 
             <div className="mt-1.5 flex justify-between border-t border-white/10 pt-1.5 font-medium">
-              <span className="text-white/50">Total</span>
+              <span className="text-white/50">Modeled</span>
               <span className="tabular-nums text-emerald-400/90">
                 {formatMoney(hover.total, OVERVIEW_CURRENCY)}
               </span>
             </div>
+            {hover.recorded != null ? (
+              <div className="mt-1 flex justify-between font-medium">
+                <span className="text-amber-300/80">Recorded</span>
+                <span className="tabular-nums text-amber-300/90">
+                  {formatMoney(hover.recorded, OVERVIEW_CURRENCY)}
+                </span>
+              </div>
+            ) : null}
 
             {/* Portfolio breakdown in the same floating panel, scrollable */}
             {hover.portfolios.map((p) => (

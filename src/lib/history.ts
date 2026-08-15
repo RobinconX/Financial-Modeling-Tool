@@ -4,7 +4,7 @@ import {
   getActualsMap,
   parseActualKey,
 } from './portfolio'
-import { parsePeriodKey } from './savings'
+import { addMonthsToKey, currentPeriodKey, parsePeriodKey } from './savings'
 
 export type HistoryKind = 'portfolio' | 'savings'
 export type HistoryResolution = 'monthly' | 'yearly'
@@ -50,6 +50,9 @@ const SAVINGS_SHADES = [
   '#bae6fd',
   '#0369a1',
 ]
+
+/** Data key for recorded-actual overlay on Overview charts. */
+export const RECORDED_ACTUAL_KEY = '__recorded'
 
 export function historySeriesId(kind: HistoryKind, sourceId: string): string {
   return `${kind}:${sourceId}`
@@ -259,4 +262,85 @@ export function historySnapshot(
     asOfLabel: last?.label ?? null,
     prevYear,
   }
+}
+
+export type HistoryCompleteness = {
+  lastKey: string | null
+  monthsBehind: number
+  stale: boolean
+  gapCount: number
+  yearlyOnly: boolean
+}
+
+function monthsBetweenKeys(from: string, to: string): number {
+  const a = parsePeriodKey(from)
+  const b = parsePeriodKey(to)
+  if (!a || !b) return 0
+  return (b.year - a.year) * 12 + (b.month - a.month)
+}
+
+/** True when the series is basically year-ends (Dec) plus maybe a current month. */
+export function seriesLooksYearly(points: HistorySeriesPoint[]): boolean {
+  if (points.length <= 1) return true
+  const nonDec = points.filter((p) => p.month !== 12)
+  return nonDec.length <= 1
+}
+
+export function seriesCompleteness(
+  series: HistorySeries,
+  asOf: Date = new Date(),
+  fromYear?: number,
+  toYear?: number,
+): HistoryCompleteness {
+  const nowKey = currentPeriodKey(asOf)
+  const now = parsePeriodKey(nowKey) ?? { year: asOf.getFullYear(), month: asOf.getMonth() + 1 }
+  const y0 = fromYear ?? 1
+  const y1 = toYear ?? 9999
+  const windowStart = `${y0}-01`
+  const windowEnd = [ `${y1}-12`, nowKey ].sort()[0]!
+
+  const pts = [...series.points]
+    .filter((p) => p.key >= windowStart && p.key <= windowEnd)
+    .sort((a, b) => a.key.localeCompare(b.key))
+
+  const allPts = [...series.points].sort((a, b) => a.key.localeCompare(b.key))
+  const yearlyOnly = seriesLooksYearly(allPts)
+
+  if (pts.length === 0) {
+    return { lastKey: null, monthsBehind: 0, stale: false, gapCount: 0, yearlyOnly }
+  }
+
+  const last = pts[pts.length - 1]!
+  const monthsBehind = Math.max(0, monthsBetweenKeys(last.key, windowEnd))
+
+  let stale = false
+  if (yearlyOnly) {
+    const lastCompletedYear = now.month === 12 ? now.year : now.year - 1
+    const needYear = Math.min(y1, lastCompletedYear)
+    if (needYear >= y0) {
+      const haveYear = pts.some((p) => p.year === needYear)
+      stale = !haveYear
+    }
+  } else if (windowEnd === nowKey) {
+    stale = monthsBehind >= 2
+  }
+
+  let gapCount = 0
+  if (yearlyOnly) {
+    const lastExpectedYear = now.month === 12 ? Math.min(y1, now.year) : Math.min(y1, now.year - 1)
+    const have = new Set(pts.map((p) => p.year))
+    for (let y = y0; y <= lastExpectedYear; y++) {
+      if (!have.has(y)) gapCount += 1
+    }
+  } else {
+    const have = new Set(pts.map((p) => p.key))
+    let k = windowStart
+    while (k < windowEnd) {
+      if (!have.has(k)) gapCount += 1
+      k = addMonthsToKey(k, 1)
+    }
+    if (!have.has(windowEnd)) gapCount += 1
+  }
+
+  return { lastKey: last.key, monthsBehind, stale, gapCount, yearlyOnly }
 }

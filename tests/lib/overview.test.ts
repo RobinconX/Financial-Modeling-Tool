@@ -5,6 +5,7 @@ import {
   buildOverviewCompareRows,
   clampOverviewRange,
   manualValueAtYear,
+  recordedOverviewByYear,
   residualCashValueAtYear,
   savingsValueAtYear,
   seriesValueChf,
@@ -614,5 +615,108 @@ describe('savingsValueAtYear', () => {
       },
     )
     expect(v).toBe(1000)
+  })
+})
+
+describe('recordedOverviewByYear', () => {
+  const portfolio: SavedPortfolio = {
+    id: 'port-1',
+    name: 'Main',
+    currentCash: 0,
+    deposits: [],
+    holdings: [],
+    actions: [],
+    actuals: {
+      [makeActualKey(2024, 12)]: 100_000,
+      [makeActualKey(2025, 6)]: 120_000,
+    },
+    actualsCurrency: 'USD',
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+  const extra: SavedPortfolio = {
+    ...portfolio,
+    id: 'port-extra',
+    name: 'Other',
+    actuals: { [makeActualKey(2024, 12)]: 50_000 },
+  }
+  const cash: SavingsAccount = {
+    id: 'cash',
+    name: 'Cash',
+    actuals: { '2024-12': 10_000 },
+    contribution: 0,
+    cadence: 'monthly',
+    annualRatePercent: 0,
+    sortOrder: 0,
+  }
+  const deps = {
+    portfolios: [portfolio, extra],
+    stockScenarios: [],
+    savingsAccounts: [cash],
+    incomeCostLines: [],
+    usdToChf: 0.9,
+    asOf,
+  }
+
+  it('sums enabled portfolio + savings actuals the same way past bars do', () => {
+    const map = recordedOverviewByYear(
+      [
+        {
+          id: 'p',
+          name: 'Port',
+          enabled: true,
+          sortOrder: 0,
+          type: 'portfolio',
+          portfolioId: 'port-1',
+        },
+        {
+          id: 's',
+          name: 'Cash',
+          enabled: true,
+          sortOrder: 1,
+          type: 'savings',
+          savingsAccountId: 'cash',
+        },
+        manualSeries({
+          id: 'm',
+          baseChf: 10_000,
+          annualRatePercent: 0,
+          enabled: true,
+          baseYear: 2024,
+        }),
+      ],
+      deps,
+    )
+    // 100k USD × 0.9 + 10k cash — not the extra portfolio, not manual
+    expect(map.get(2024)).toBeCloseTo(100_000)
+    // last 2025 month 120k USD × 0.9 + cash carried forward
+    expect(map.get(2025)).toBeCloseTo(118_000)
+    expect(map.has(2026)).toBe(false)
+  })
+
+  it('ignores disabled series and unlinked portfolios', () => {
+    const map = recordedOverviewByYear(
+      [
+        {
+          id: 'p',
+          name: 'Port',
+          enabled: false,
+          sortOrder: 0,
+          type: 'portfolio',
+          portfolioId: 'port-1',
+        },
+        {
+          id: 's',
+          name: 'Cash',
+          enabled: true,
+          sortOrder: 1,
+          type: 'savings',
+          savingsAccountId: 'cash',
+        },
+      ],
+      deps,
+    )
+    expect(map.get(2024)).toBe(10_000)
+    expect(map.get(2025)).toBe(10_000)
   })
 })

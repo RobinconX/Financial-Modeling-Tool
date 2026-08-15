@@ -9,9 +9,14 @@ import type {
 } from '../../types'
 import { useOverview } from '../../hooks/useOverview'
 import { fetchFxRateClient } from '../../lib/fx'
-import { OVERVIEW_CURRENCY, type OverviewBuildDeps } from '../../lib/overview'
+import {
+  OVERVIEW_CURRENCY,
+  recordedOverviewByYear,
+  type OverviewBuildDeps,
+} from '../../lib/overview'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { InfoTip } from '../common/InfoTip'
+import { OverviewAreaChart } from './OverviewAreaChart'
 import { OverviewChart } from './OverviewChart'
 import { OverviewCompareChart } from './OverviewCompareChart'
 import { OverviewSeriesEditor } from './OverviewSeriesEditor'
@@ -24,7 +29,22 @@ type Props = {
   incomeCostScenarios?: CashflowScenario[]
 }
 
-type ChartMode = 'stack' | 'compare'
+type ChartMode = 'bars' | 'area' | 'compare'
+
+const COMPARE_IDS_KEY = 'grok-lab-overview-compare-ids'
+const RECORDED_KEY = 'grok-lab-overview-show-recorded'
+
+function readCompareIds(): string[] | null {
+  try {
+    const raw = localStorage.getItem(COMPARE_IDS_KEY)
+    if (!raw) return null
+    const parsed: unknown = JSON.parse(raw)
+    if (!Array.isArray(parsed)) return null
+    return parsed.filter((x): x is string => typeof x === 'string')
+  } catch {
+    return null
+  }
+}
 
 export function OverviewView({
   portfolios,
@@ -68,9 +88,19 @@ export function OverviewView({
   const [fxError, setFxError] = useState<string | null>(null)
   const [saveAsName, setSaveAsName] = useState('')
   const [showSaveAs, setShowSaveAs] = useState(false)
-  const [chartMode, setChartMode] = useState<ChartMode>('stack')
-  /** Scenario ids included in compare line chart (defaults to all). */
-  const [compareIds, setCompareIds] = useState<string[]>([])
+  const [chartMode, setChartMode] = useState<ChartMode>('bars')
+  /** null = all scenarios (default). Explicit list is the user's compare set. */
+  const [compareIds, setCompareIds] = useState<string[] | null>(() => readCompareIds())
+  const [showRecorded, setShowRecorded] = useState(() => {
+    try {
+      const v = localStorage.getItem(RECORDED_KEY)
+      if (v === '0') return false
+      if (v === '1') return true
+    } catch {
+      /* ignore */
+    }
+    return true
+  })
   // Draft year inputs so typing multi-digit years doesn't clamp mid-edit
   const [fromDraft, setFromDraft] = useState(String(startYear))
   const [toDraft, setToDraft] = useState(String(endYear))
@@ -97,17 +127,22 @@ export function OverviewView({
     void loadFx()
   }, [loadFx])
 
-  // Keep compare selection in sync when scenarios are added/removed
   useEffect(() => {
-    const ids = scenarios.map((s) => s.id)
-    setCompareIds((prev) => {
-      if (prev.length === 0) return ids
-      const kept = prev.filter((id) => ids.includes(id))
-      const added = ids.filter((id) => !prev.includes(id))
-      // Drop deleted; auto-include newly created scenarios
-      return [...kept, ...added]
-    })
-  }, [scenarios])
+    if (compareIds == null) return
+    try {
+      localStorage.setItem(COMPARE_IDS_KEY, JSON.stringify(compareIds))
+    } catch {
+      /* ignore */
+    }
+  }, [compareIds])
+
+  useEffect(() => {
+    try {
+      localStorage.setItem(RECORDED_KEY, showRecorded ? '1' : '0')
+    } catch {
+      /* ignore */
+    }
+  }, [showRecorded])
 
   const asOf = useMemo(() => new Date(), [])
 
@@ -123,10 +158,25 @@ export function OverviewView({
     [portfolios, stockScenarios, savingsAccounts, incomeCostLines, usdToChf, asOf],
   )
 
+  const shownCompareIds = useMemo(() => {
+    const all = scenarios.map((s) => s.id)
+    if (compareIds == null) return all
+    return compareIds.filter((id) => all.includes(id))
+  }, [scenarios, compareIds])
+
   const compareScenarios = useMemo(
-    () => scenarios.filter((s) => compareIds.includes(s.id)),
-    [scenarios, compareIds],
+    () => scenarios.filter((s) => shownCompareIds.includes(s.id)),
+    [scenarios, shownCompareIds],
   )
+
+  const recordedByYear = useMemo(() => {
+    const src =
+      chartMode === 'compare'
+        ? compareScenarios.flatMap((s) => s.series)
+        : series
+    return recordedOverviewByYear(src, deps)
+  }, [chartMode, compareScenarios, series, deps])
+  const hasRecorded = recordedByYear.size > 0
 
   /** Apply year range immediately when both values look like calendar years (spinner or finished typing). */
   function applyRangeDraft(fromStr: string, toStr: string) {
@@ -140,11 +190,11 @@ export function OverviewView({
   }
 
   const needsFx =
-    chartMode === 'stack'
-      ? series.some((s) => s.enabled && s.type === 'portfolio')
-      : compareScenarios.some((sc) =>
+    chartMode === 'compare'
+      ? compareScenarios.some((sc) =>
           sc.series.some((s) => s.enabled && s.type === 'portfolio'),
         )
+      : series.some((s) => s.enabled && s.type === 'portfolio')
 
   function handleAdd(type: OverviewSeriesType) {
     if (type === 'portfolio') {
@@ -186,15 +236,17 @@ export function OverviewView({
     const name = saveAsName.trim() || `Copy of ${selectedScenario?.name ?? 'scenario'}`
     const sc = saveAsScenario(name, savingsAccounts)
     if (sc) {
+      setCompareIds((prev) => (prev == null ? null : [...prev, sc.id]))
       setSaveAsName('')
       setShowSaveAs(false)
     }
   }
 
   function toggleCompareId(id: string) {
-    setCompareIds((prev) =>
-      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
-    )
+    setCompareIds((prev) => {
+      const base = prev ?? scenarios.map((s) => s.id)
+      return base.includes(id) ? base.filter((x) => x !== id) : [...base, id]
+    })
   }
 
   return (
@@ -211,7 +263,7 @@ export function OverviewView({
           <div className="flex items-center gap-1.5">
             <span className="section-title">Scenarios</span>
             <InfoTip label="About overview scenarios">
-              Each scenario is a net-worth stack (portfolios, savings, manuals). Stacked mode shows
+              Each scenario is a net-worth stack (portfolios, savings, manuals). Bars or area show
               one scenario; Compare plots totals as lines. Optional notes store assumptions only.
             </InfoTip>
           </div>
@@ -219,7 +271,10 @@ export function OverviewView({
             <button
               type="button"
               className="btn-ghost !py-1 !text-xs"
-              onClick={() => addScenario(undefined, savingsAccounts)}
+              onClick={() => {
+                const sc = addScenario(undefined, savingsAccounts)
+                if (sc) setCompareIds((prev) => (prev == null ? null : [...prev, sc.id]))
+              }}
             >
               + New
             </button>
@@ -312,7 +367,12 @@ export function OverviewView({
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-center gap-1.5">
             <h3 className="section-title">
-              {chartMode === 'stack' ? (
+              {chartMode === 'compare' ? (
+                <>
+                  Compare
+                  <span className="ml-2 font-normal text-white/40">· scenarios</span>
+                </>
+              ) : (
                 <>
                   Net worth
                   {selectedScenario ? (
@@ -321,17 +381,12 @@ export function OverviewView({
                     </span>
                   ) : null}
                 </>
-              ) : (
-                <>
-                  Compare
-                  <span className="ml-2 font-normal text-white/40">· scenarios</span>
-                </>
               )}
             </h3>
             <InfoTip label="About overview chart">
-              {chartMode === 'stack'
-                ? 'Past years → Now (live) → future. CHF. Portfolio greens, savings blues, manual amber/violet.'
-                : 'Past years → Now (live) → future. Each line is total net worth for a scenario (enabled series only).'}
+              {chartMode === 'compare'
+                ? 'Past years → Now (live) → future. Each line is total net worth for a scenario (enabled series only).'
+                : 'Past years → Now (live) → future. CHF. Bars or stacked area. Portfolio greens, savings blues, manual amber/violet.'}
             </InfoTip>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -342,7 +397,8 @@ export function OverviewView({
             >
               {(
                 [
-                  { id: 'stack' as const, label: 'Stacked' },
+                  { id: 'bars' as const, label: 'Bars' },
+                  { id: 'area' as const, label: 'Area' },
                   { id: 'compare' as const, label: 'Compare' },
                 ] as const
               ).map((opt) => (
@@ -420,7 +476,7 @@ export function OverviewView({
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-medium text-white/45">Show</span>
             {scenarios.map((s) => {
-              const on = compareIds.includes(s.id)
+              const on = shownCompareIds.includes(s.id)
               return (
                 <label
                   key={s.id}
@@ -467,37 +523,65 @@ export function OverviewView({
 
         <FullscreenChart
           title={
-            chartMode === 'stack'
-              ? `Overview · ${selectedScenario?.name ?? 'net worth'}`
-              : 'Overview · compare scenarios'
+            chartMode === 'compare'
+              ? 'Overview · compare scenarios'
+              : `Overview · ${selectedScenario?.name ?? 'net worth'}`
           }
         >
-          {chartMode === 'stack' ? (
+          {chartMode === 'bars' ? (
             <OverviewChart
-              key={`stack-${selectedScenarioId}-${startYear}-${endYear}`}
+              key={`bars-${selectedScenarioId}-${startYear}-${endYear}`}
               startYear={startYear}
               endYear={endYear}
               series={series}
               deps={deps}
+              recordedByYear={recordedByYear}
+              showRecorded={hasRecorded && showRecorded}
+            />
+          ) : chartMode === 'area' ? (
+            <OverviewAreaChart
+              key={`area-${selectedScenarioId}-${startYear}-${endYear}`}
+              startYear={startYear}
+              endYear={endYear}
+              series={series}
+              deps={deps}
+              recordedByYear={recordedByYear}
+              showRecorded={hasRecorded && showRecorded}
             />
           ) : (
             <OverviewCompareChart
-              key={`compare-${startYear}-${endYear}-${compareIds.join(',')}`}
+              key={`compare-${startYear}-${endYear}-${shownCompareIds.join(',')}`}
               scenarios={compareScenarios}
               startYear={startYear}
               endYear={endYear}
               deps={deps}
+              recordedByYear={recordedByYear}
+              showRecorded={hasRecorded && showRecorded}
             />
           )}
         </FullscreenChart>
 
-        <div className="flex flex-wrap gap-3 text-[11px] text-white/40">
+        <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/40">
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-sm bg-emerald-400/80" /> Actual (≤ this year)
           </span>
           <span className="inline-flex items-center gap-1.5">
             <span className="h-2 w-2 rounded-sm bg-white/25" /> Projected (future years)
           </span>
+          {hasRecorded ? (
+            <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-white/55 hover:text-white/80">
+              <input
+                type="checkbox"
+                className="h-3.5 w-3.5 accent-amber-400"
+                checked={showRecorded}
+                onChange={() => setShowRecorded((v) => !v)}
+              />
+              <span className="inline-flex items-center gap-1.5">
+                <span className="h-2 w-2 rounded-full bg-amber-300" />
+                Recorded actuals
+              </span>
+            </label>
+          ) : null}
         </div>
       </div>
 

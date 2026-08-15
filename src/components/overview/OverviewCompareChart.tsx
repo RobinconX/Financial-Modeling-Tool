@@ -17,6 +17,7 @@ import {
   type OverviewBuildDeps,
 } from '../../lib/overview'
 import type { OverviewScenario } from '../../types'
+import { RECORDED_ACTUAL_KEY } from '../../lib/history'
 
 type Props = {
   scenarios: OverviewScenario[]
@@ -25,6 +26,8 @@ type Props = {
   endYear: number
   deps: OverviewBuildDeps
   fillContainer?: boolean
+  recordedByYear?: Map<number, number>
+  showRecorded?: boolean
 }
 
 export function OverviewCompareChart({
@@ -33,11 +36,18 @@ export function OverviewCompareChart({
   endYear,
   deps,
   fillContainer = false,
+  recordedByYear,
+  showRecorded = false,
 }: Props) {
-  const rows = useMemo(
-    () => buildOverviewCompareRows(scenarios, deps, { startYear, endYear }),
-    [scenarios, deps, startYear, endYear],
-  )
+  const rows = useMemo(() => {
+    const built = buildOverviewCompareRows(scenarios, deps, { startYear, endYear })
+    if (!showRecorded || !recordedByYear) return built
+    return built.map((r) => ({
+      ...r,
+      [RECORDED_ACTUAL_KEY]:
+        r.isNow || r.kind !== 'actual' ? null : (recordedByYear.get(r.year) ?? null),
+    }))
+  }, [scenarios, deps, startYear, endYear, recordedByYear, showRecorded])
 
   const colorById = useMemo(() => assignScenarioCompareColors(scenarios), [scenarios])
 
@@ -128,6 +138,19 @@ export function OverviewCompareChart({
                     <div className="mt-1.5 space-y-0.5">
                       {payload.map((p) => {
                         const id = String(p.dataKey ?? '')
+                        if (id === RECORDED_ACTUAL_KEY) {
+                          return (
+                            <div key={id} className="flex justify-between gap-4">
+                              <span className="inline-flex items-center gap-1.5 text-amber-300/80">
+                                <span className="h-2 w-2 rounded-full bg-amber-300" />
+                                Recorded
+                              </span>
+                              <span className="tabular-nums text-amber-300/90">
+                                {formatMoney(Number(p.value) || 0, OVERVIEW_CURRENCY)}
+                              </span>
+                            </div>
+                          )
+                        }
                         const sc = scenarios.find((s) => s.id === id)
                         return (
                           <div key={id} className="flex justify-between gap-4">
@@ -191,6 +214,19 @@ export function OverviewCompareChart({
                 connectNulls
               />
             ))}
+            {showRecorded ? (
+              <Line
+                type="monotone"
+                dataKey={RECORDED_ACTUAL_KEY}
+                name="Recorded"
+                stroke="#fbbf24"
+                strokeWidth={2}
+                strokeDasharray="4 3"
+                dot={{ r: 3, fill: '#fbbf24' }}
+                isAnimationActive={false}
+                connectNulls={false}
+              />
+            ) : null}
           </LineChart>
         </ResponsiveContainer>
       </div>

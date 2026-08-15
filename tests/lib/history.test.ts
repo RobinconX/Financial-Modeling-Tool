@@ -6,6 +6,7 @@ import {
   historySnapshot,
   historySeriesId,
   rollupYearly,
+  seriesCompleteness,
 } from '../../src/lib/history'
 import { newPortfolio } from '../../src/lib/portfolio'
 import type { SavingsAccount } from '../../src/types'
@@ -105,5 +106,80 @@ describe('buildHistoryChart / table / snapshot', () => {
     expect(snap.prevYearEnd).toBe(100_000)
     expect(snap.yoy).toBeCloseTo(0.25)
     expect(snap.prevYear).toBe(2024)
+  })
+})
+
+describe('seriesCompleteness', () => {
+  const asOf = new Date(2026, 7, 13) // Aug 2026
+
+  it('marks monthly series stale when last actual in the window is two+ months old', () => {
+    const s = collectHistorySeries(
+      [],
+      [
+        savings({
+          id: 'c',
+          name: 'Cash',
+          actuals: { '2026-03': 1, '2026-04': 2, '2026-05': 10_000 },
+        }),
+      ],
+      null,
+    )[0]!
+    const c = seriesCompleteness(s, asOf, 2026, 2026)
+    expect(c.stale).toBe(true)
+    expect(c.lastKey).toBe('2026-05')
+    expect(c.monthsBehind).toBe(3)
+  })
+
+  it('does not warn when the selected period is fully filled', () => {
+    const s = collectHistorySeries(
+      [],
+      [
+        savings({
+          id: 'c',
+          name: 'Cash',
+          actuals: { '2024-12': 8_000, '2025-12': 9_000 },
+        }),
+      ],
+      null,
+    )[0]!
+    const c = seriesCompleteness(s, asOf, 2024, 2025)
+    expect(c.yearlyOnly).toBe(true)
+    expect(c.gapCount).toBe(0)
+    expect(c.stale).toBe(false)
+  })
+
+  it('does not nag Jan–Nov on year-end-only series in an open current year', () => {
+    const s = collectHistorySeries(
+      [],
+      [
+        savings({
+          id: 'c',
+          name: 'Cash',
+          actuals: { '2024-12': 8_000, '2025-12': 9_000 },
+        }),
+      ],
+      null,
+    )[0]!
+    const c = seriesCompleteness(s, asOf, 2024, 2026)
+    expect(c.yearlyOnly).toBe(true)
+    expect(c.gapCount).toBe(0)
+    expect(c.stale).toBe(false)
+  })
+
+  it('counts holes between monthly points inside the window', () => {
+    const s = collectHistorySeries(
+      [],
+      [
+        savings({
+          id: 'c',
+          name: 'Cash',
+          actuals: { '2026-01': 1, '2026-02': 2, '2026-04': 4, '2026-05': 5 },
+        }),
+      ],
+      null,
+    )[0]!
+    const c = seriesCompleteness(s, asOf, 2026, 2026)
+    expect(c.yearlyOnly).toBe(false)
+    expect(c.gapCount).toBe(4) // Mar + Jun–Aug through current period
   })
 })

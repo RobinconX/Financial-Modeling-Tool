@@ -7,6 +7,8 @@ import {
   buildHistoryTable,
   collectHistorySeries,
   historySnapshot,
+  seriesCompleteness,
+  type HistoryCompleteness,
   type HistoryResolution,
 } from '../../lib/history'
 import { FullscreenChart } from '../common/FullscreenChart'
@@ -174,10 +176,12 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
     const a = Number(fromRaw)
     const b = Number(toRaw)
     if (!Number.isFinite(a) || !Number.isFinite(b)) return
-    setFromYear(Math.min(a, b))
-    setToYear(Math.max(a, b))
-    setFromDraft(String(Math.min(a, b)))
-    setToDraft(String(Math.max(a, b)))
+    if (a < 1000 || a > 9999 || b < 1000 || b > 9999) return
+    const lo = Math.min(a, b)
+    const hi = Math.max(a, b)
+    if (lo === rangeFrom && hi === rangeTo) return
+    setFromYear(lo)
+    setToYear(hi)
   }
 
   function toggleSeries(id: string) {
@@ -186,6 +190,20 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
     else next.add(id)
     setIncludedOverride([...next])
   }
+
+  const completeness = useMemo(() => {
+    const asOf = new Date()
+    const map = new Map<string, HistoryCompleteness>()
+    for (const s of allSeries) {
+      map.set(s.id, seriesCompleteness(s, asOf, rangeFrom, rangeTo))
+    }
+    return map
+  }, [allSeries, rangeFrom, rangeTo])
+
+  const attentionCount = included.filter((s) => {
+    const c = completeness.get(s.id)
+    return c && (c.stale || c.gapCount > 0)
+  }).length
 
   const portfoliosGroup = allSeries.filter((s) => s.kind === 'portfolio')
   const savingsGroup = allSeries.filter((s) => s.kind === 'savings')
@@ -243,7 +261,11 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
               className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
               type="number"
               value={fromDraft}
-              onChange={(e) => setFromDraft(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value
+                setFromDraft(v)
+                applyPeriod(v, toDraft)
+              }}
               onBlur={() => applyPeriod(fromDraft, toDraft)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') applyPeriod(fromDraft, toDraft)
@@ -256,7 +278,11 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
               className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
               type="number"
               value={toDraft}
-              onChange={(e) => setToDraft(e.target.value)}
+              onChange={(e) => {
+                const v = e.target.value
+                setToDraft(v)
+                applyPeriod(fromDraft, toDraft)
+              }}
               onBlur={() => applyPeriod(fromDraft, toDraft)}
               onKeyDown={(e) => {
                 if (e.key === 'Enter') applyPeriod(fromDraft, toDraft)
@@ -307,6 +333,7 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
             label="Portfolios"
             series={portfoliosGroup}
             included={includedIds}
+            completeness={completeness}
             onToggle={toggleSeries}
           />
         ) : null}
@@ -315,8 +342,15 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
             label="Savings"
             series={savingsGroup}
             included={includedIds}
+            completeness={completeness}
             onToggle={toggleSeries}
           />
+        ) : null}
+        {attentionCount > 0 ? (
+          <p className="mt-1.5 text-[11px] text-amber-300/80">
+            {attentionCount} included series{' '}
+            {attentionCount === 1 ? 'needs' : 'need'} attention (stale or gaps).
+          </p>
         ) : null}
       </div>
 
@@ -433,15 +467,25 @@ function Seg<T extends string>({
   )
 }
 
+function completenessHint(c: HistoryCompleteness | undefined): string | null {
+  if (!c) return null
+  const bits: string[] = []
+  if (c.stale && c.lastKey) bits.push(`stale · ${c.lastKey}`)
+  if (c.gapCount > 0) bits.push(`${c.gapCount} gap${c.gapCount === 1 ? '' : 's'}`)
+  return bits.length ? bits.join(' · ') : null
+}
+
 function Group({
   label,
   series,
   included,
+  completeness,
   onToggle,
 }: {
   label: string
   series: { id: string; name: string; color: string; inChf: boolean }[]
   included: Set<string>
+  completeness: Map<string, HistoryCompleteness>
   onToggle: (id: string) => void
 }) {
   return (
@@ -450,10 +494,13 @@ function Group({
         {label}
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1">
-        {series.map((s) => (
+        {series.map((s) => {
+          const hint = completenessHint(completeness.get(s.id))
+          return (
           <label
             key={s.id}
             className="flex cursor-pointer items-center gap-1.5 text-xs text-white/80"
+            title={hint ?? undefined}
           >
             <input
               type="checkbox"
@@ -464,8 +511,10 @@ function Group({
             <span className="h-2 w-2 rounded-sm" style={{ background: s.color }} />
             {s.name}
             {!s.inChf ? <span className="text-[10px] text-amber-300/80">USD</span> : null}
+            {hint ? <span className="text-[10px] text-amber-300/75">{hint}</span> : null}
           </label>
-        ))}
+          )
+        })}
       </div>
     </div>
   )

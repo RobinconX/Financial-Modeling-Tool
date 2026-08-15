@@ -104,7 +104,7 @@ export function useOverview() {
           selectedScenarioId: sc.id,
         }
       })
-      return created
+      return created as OverviewScenario | null
     },
     [persistUpdate],
   )
@@ -129,7 +129,7 @@ export function useOverview() {
           selectedScenarioId: sc.id,
         }
       })
-      return created
+      return created as OverviewScenario | null
     },
     [persistUpdate],
   )

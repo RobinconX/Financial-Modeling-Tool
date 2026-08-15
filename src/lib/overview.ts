@@ -13,16 +13,19 @@ import { toDisplay } from './fx'
 import { scenarioTotals } from './incomeCost'
 import {
   balanceNow,
+  comparePeriodKeys,
   isPermanentCashAccount,
   latestActual,
   makePeriodKey,
   monthsBetween,
   currentPeriodKey,
+  parsePeriodKey,
   simulateMonths,
 } from './savings'
 import {
   cashAtYear,
   getActions,
+  getActualsCurrency,
   getDeposits,
   getOpeningCash,
   getPerpetualGrowthRate,
@@ -31,6 +34,7 @@ import {
   holdingValueAtYear,
   lastExplicitDepositYear,
   lastStatedProjectionYear,
+  listActualYears,
   portfolioTotalUsdAtYear as portfolioBookTotalUsdAtYear,
   withResolvedDepositAmounts,
   yearEndActualUsd,
@@ -55,7 +59,7 @@ export type OverviewChartRow = {
   kind: OverviewYearKind
   isNow: boolean
   total: number
-  [seriesId: string]: number | string | boolean
+  [seriesId: string]: number | string | boolean | null
 }
 
 export type OverviewBuildDeps = {
@@ -921,6 +925,89 @@ export function portfolioLiveTotalChf(
   return toDisplay(usd, 'CHF', deps.usdToChf)
 }
 
+function savingsHasActualOnOrBefore(account: SavingsAccount, asOfKey: string): boolean {
+  for (const [k, v] of Object.entries(account.actuals ?? {})) {
+    if (!Number.isFinite(v)) continue
+    if (comparePeriodKeys(k, asOfKey) <= 0) return true
+  }
+  return false
+}
+
+/**
+ * Year-end recorded CHF for enabled portfolio + savings series only.
+ * Same actuals Overview uses on past bars: last month in the year for
+ * portfolios (via yearEndActualUsd → CHF), latest actual ≤ Dec Y for savings
+ * (carry-forward). Manual / leftover are modeled, not recorded.
+ * Past calendar years only — current year is a projection on this chart.
+ */
+export function recordedOverviewByYear(
+  series: OverviewSeries[],
+  deps: OverviewBuildDeps,
+): Map<number, number> {
+  const asOf = deps.asOf ?? new Date()
+  const currentYear = asOf.getFullYear()
+
+  const portfolios: SavedPortfolio[] = []
+  const seenP = new Set<string>()
+  const accounts: SavingsAccount[] = []
+  const seenA = new Set<string>()
+
+  for (const s of series) {
+    if (!s.enabled) continue
+    if (s.type === 'portfolio' && s.portfolioId && !seenP.has(s.portfolioId)) {
+      const p = deps.portfolios.find((x) => x.id === s.portfolioId)
+      if (p) {
+        seenP.add(p.id)
+        portfolios.push(p)
+      }
+    } else if (s.type === 'savings' && s.savingsAccountId && !seenA.has(s.savingsAccountId)) {
+      const a = deps.savingsAccounts.find((x) => x.id === s.savingsAccountId)
+      if (a) {
+        seenA.add(a.id)
+        accounts.push(a)
+      }
+    }
+  }
+
+  let minY = currentYear
+  for (const p of portfolios) {
+    for (const y of listActualYears(p)) {
+      if (y < minY) minY = y
+    }
+  }
+  for (const a of accounts) {
+    for (const key of Object.keys(a.actuals ?? {})) {
+      const parsed = parsePeriodKey(key)
+      if (parsed && parsed.year < minY) minY = parsed.year
+    }
+  }
+
+  const out = new Map<number, number>()
+  if (minY >= currentYear) return out
+
+  for (let year = minY; year < currentYear; year++) {
+    let sum = 0
+    let any = false
+    for (const p of portfolios) {
+      const usd = yearEndActualUsd(p, year, deps.usdToChf)
+      if (usd == null) continue
+      if (getActualsCurrency(p) === 'USD' && (deps.usdToChf == null || deps.usdToChf <= 0)) {
+        continue
+      }
+      sum += toDisplay(usd, 'CHF', deps.usdToChf)
+      any = true
+    }
+    const decKey = makePeriodKey(year, 12)
+    for (const a of accounts) {
+      if (!savingsHasActualOnOrBefore(a, decKey)) continue
+      sum += latestActual(a, decKey)
+      any = true
+    }
+    if (any) out.set(year, sum)
+  }
+  return out
+}
+
 export function seriesValueChf(
   series: OverviewSeries,
   year: number,
@@ -1146,7 +1233,7 @@ export type OverviewCompareRow = {
   kind: OverviewYearKind
   isNow: boolean
   /** Per-scenario totals keyed by scenario id */
-  [scenarioId: string]: number | string | boolean
+  [scenarioId: string]: number | string | boolean | null
 }
 
 /**
