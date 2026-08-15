@@ -16,7 +16,9 @@ import {
   OVERVIEW_CURRENCY,
   type OverviewBuildDeps,
 } from '../../lib/overview'
-import type { OverviewScenario } from '../../types'
+import type { ChartAnnotation, OverviewScenario } from '../../types'
+import { chartYearTick } from '../common/ChartNotes'
+import { annotationsForXKey } from '../../lib/annotations'
 import { RECORDED_ACTUAL_KEY } from '../../lib/history'
 
 type Props = {
@@ -28,6 +30,7 @@ type Props = {
   fillContainer?: boolean
   recordedByYear?: Map<number, number>
   showRecorded?: boolean
+  annotations?: ChartAnnotation[]
 }
 
 export function OverviewCompareChart({
@@ -38,6 +41,7 @@ export function OverviewCompareChart({
   fillContainer = false,
   recordedByYear,
   showRecorded = false,
+  annotations = [],
 }: Props) {
   const rows = useMemo(() => {
     const built = buildOverviewCompareRows(scenarios, deps, { startYear, endYear })
@@ -85,18 +89,15 @@ export function OverviewCompareChart({
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
               dataKey="xKey"
-              tick={{ fill: 'rgba(232,238,245,0.45)', fontSize: 11 }}
+              tick={chartYearTick(annotations, rows.map((r) => r.xKey), (key) => {
+                if (rows.length <= 18) return false
+                const n = Number(key)
+                return Number.isFinite(n) && n % 2 !== 0
+              })}
               tickLine={false}
               axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
               interval={0}
-              tickFormatter={(key: string) => {
-                if (key === 'now') return 'Now'
-                if (rows.length > 18) {
-                  const n = Number(key)
-                  if (Number.isFinite(n) && n % 2 !== 0) return ''
-                }
-                return key
-              }}
+              height={28}
             />
             <YAxis
               tick={{ fill: 'rgba(232,238,245,0.4)', fontSize: 10 }}
@@ -113,10 +114,13 @@ export function OverviewCompareChart({
               content={({ active, payload, label }) => {
                 if (!active || !payload?.length) return null
                 const row = payload[0]?.payload as
-                  | { kind?: string; isNow?: boolean; label?: string }
+                  | { kind?: string; isNow?: boolean; label?: string; xKey?: string }
                   | undefined
                 const isNow = row?.isNow === true
                 const kind = row?.kind
+                const notesHere = isNow
+                  ? []
+                  : annotationsForXKey(annotations, String(row?.xKey ?? label ?? ''))
                 return (
                   <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
                     <div className="flex items-center gap-2 font-semibold text-white">
@@ -168,6 +172,13 @@ export function OverviewCompareChart({
                         )
                       })}
                     </div>
+                    {notesHere.length > 0 ? (
+                      <div className="mt-1.5 space-y-0.5 border-t border-white/10 pt-1.5 text-amber-200/75">
+                        {notesHere.map((n) => (
+                          <div key={n.id}>{n.label}</div>
+                        ))}
+                      </div>
+                    ) : null}
                   </div>
                 )
               }}

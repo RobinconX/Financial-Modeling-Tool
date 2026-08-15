@@ -11,7 +11,9 @@ import {
   type HistoryCompleteness,
   type HistoryResolution,
 } from '../../lib/history'
+import { useChartAnnotations } from '../../hooks/useChartAnnotations'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { ChartNotes } from '../common/ChartNotes'
 import { InfoTip } from '../common/InfoTip'
 import { HistoryChart, type HistoryChartKind, type HistoryChartSplit } from './HistoryChart'
 
@@ -77,6 +79,13 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
   const [fromYear, setFromYear] = useState<number | null>(null)
   const [toYear, setToYear] = useState<number | null>(null)
   const [sort, setSort] = useState<'latest' | 'yoy'>('latest')
+  const {
+    annotations,
+    error: notesError,
+    addAnnotation,
+    updateAnnotation,
+    removeAnnotation,
+  } = useChartAnnotations()
 
   const loadFx = useCallback(async () => {
     setFxError(null)
@@ -304,8 +313,22 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
 
       <div className="panel space-y-3">
         <FullscreenChart title="Recorded actuals">
-          <HistoryChart rows={chart.rows} series={included} kind={kind} split={split} />
+          <HistoryChart
+            rows={chart.rows}
+            series={included}
+            kind={kind}
+            split={split}
+            annotations={annotations}
+          />
         </FullscreenChart>
+        <ChartNotes
+          annotations={annotations}
+          error={notesError}
+          defaultYear={rangeTo}
+          onAdd={addAnnotation}
+          onUpdate={updateAnnotation}
+          onRemove={removeAnnotation}
+        />
         <p className="text-sm text-white/70">
           Latest{' '}
           <span className="tabular-nums text-white">

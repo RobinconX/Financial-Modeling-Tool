@@ -7,6 +7,7 @@ import type {
   SavedScenario,
   SavingsAccount,
 } from '../../types'
+import { useChartAnnotations } from '../../hooks/useChartAnnotations'
 import { useOverview } from '../../hooks/useOverview'
 import { fetchFxRateClient } from '../../lib/fx'
 import {
@@ -14,6 +15,7 @@ import {
   recordedOverviewByYear,
   type OverviewBuildDeps,
 } from '../../lib/overview'
+import { ChartNotes } from '../common/ChartNotes'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { InfoTip } from '../common/InfoTip'
 import { OverviewAreaChart } from './OverviewAreaChart'
@@ -77,6 +79,13 @@ export function OverviewView({
     reorderSeriesGroups,
     reorderSavingsSeries,
   } = useOverview()
+  const {
+    annotations,
+    error: notesError,
+    addAnnotation,
+    updateAnnotation,
+    removeAnnotation,
+  } = useChartAnnotations()
 
   // Every overview scenario always includes all savings accounts (at least Cash).
   useEffect(() => {
@@ -537,6 +546,7 @@ export function OverviewView({
               deps={deps}
               recordedByYear={recordedByYear}
               showRecorded={hasRecorded && showRecorded}
+              annotations={annotations}
             />
           ) : chartMode === 'area' ? (
             <OverviewAreaChart
@@ -547,6 +557,7 @@ export function OverviewView({
               deps={deps}
               recordedByYear={recordedByYear}
               showRecorded={hasRecorded && showRecorded}
+              annotations={annotations}
             />
           ) : (
             <OverviewCompareChart
@@ -557,19 +568,22 @@ export function OverviewView({
               deps={deps}
               recordedByYear={recordedByYear}
               showRecorded={hasRecorded && showRecorded}
+              annotations={annotations}
             />
           )}
         </FullscreenChart>
 
-        <div className="flex flex-wrap items-center gap-3 text-[11px] text-white/40">
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-sm bg-emerald-400/80" /> Actual (≤ this year)
-          </span>
-          <span className="inline-flex items-center gap-1.5">
-            <span className="h-2 w-2 rounded-sm bg-white/25" /> Projected (future years)
-          </span>
+        <div className="flex items-start justify-between gap-3">
+          <ChartNotes
+            annotations={annotations}
+            error={notesError}
+            defaultYear={asOf.getFullYear()}
+            onAdd={addAnnotation}
+            onUpdate={updateAnnotation}
+            onRemove={removeAnnotation}
+          />
           {hasRecorded ? (
-            <label className="ml-auto inline-flex cursor-pointer items-center gap-1.5 text-white/55 hover:text-white/80">
+            <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-white/55 hover:text-white/80">
               <input
                 type="checkbox"
                 className="h-3.5 w-3.5 accent-amber-400"

@@ -17,6 +17,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { annotationsForXKey } from '../../lib/annotations'
 import { RECORDED_ACTUAL_KEY } from '../../lib/history'
 import { formatMoney } from '../../lib/format'
 import {
@@ -29,7 +30,8 @@ import {
   type OverviewChartRow,
   type PortfolioBreakdownLine,
 } from '../../lib/overview'
-import type { OverviewSeries } from '../../types'
+import type { ChartAnnotation, OverviewSeries } from '../../types'
+import { chartYearTick } from '../common/ChartNotes'
 
 const PANEL_WIDTH = 260
 const PANEL_GAP = 12
@@ -45,6 +47,7 @@ type Props = {
   /** Year-end recorded actuals (History) to overlay. */
   recordedByYear?: Map<number, number>
   showRecorded?: boolean
+  annotations?: ChartAnnotation[]
 }
 
 type HoverState = {
@@ -56,6 +59,7 @@ type HoverState = {
   stacks: { id: string; name: string; type: OverviewSeries['type']; value: number }[]
   total: number
   recorded: number | null
+  notes: { id: string; label: string }[]
   portfolios: {
     seriesId: string
     name: string
@@ -106,6 +110,7 @@ export function OverviewChart({
   fillContainer = false,
   recordedByYear,
   showRecorded = false,
+  annotations = [],
 }: Props) {
   const [hover, setHover] = useState<HoverState | null>(null)
   const chartAreaRef = useRef<HTMLDivElement>(null)
@@ -220,6 +225,7 @@ export function OverviewChart({
         row.isNow || row.kind !== 'actual'
           ? null
           : recordedByYear?.get(row.year) ?? null,
+      notes: row.isNow ? [] : annotationsForXKey(annotations, row.xKey),
       portfolios,
     }
   }
@@ -325,19 +331,15 @@ export function OverviewChart({
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
               dataKey="xKey"
-              tick={{ fill: 'rgba(232,238,245,0.45)', fontSize: 11 }}
+              tick={chartYearTick(annotations, rows.map((r) => r.xKey), (key) => {
+                if (rows.length <= 18) return false
+                const n = Number(key)
+                return Number.isFinite(n) && n % 2 !== 0
+              })}
               tickLine={false}
               axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
               interval={0}
-              tickFormatter={(key: string) => {
-                if (key === 'now') return 'Now'
-                // Thin dense year labels
-                if (rows.length > 18) {
-                  const n = Number(key)
-                  if (Number.isFinite(n) && n % 2 !== 0) return ''
-                }
-                return key
-              }}
+              height={28}
             />
             <YAxis
               tick={{ fill: 'rgba(232,238,245,0.4)', fontSize: 10 }}
@@ -463,6 +465,13 @@ export function OverviewChart({
                 <span className="tabular-nums text-amber-300/90">
                   {formatMoney(hover.recorded, OVERVIEW_CURRENCY)}
                 </span>
+              </div>
+            ) : null}
+            {hover.notes.length > 0 ? (
+              <div className="mt-1.5 space-y-0.5 border-t border-white/10 pt-1.5 text-amber-200/75">
+                {hover.notes.map((n) => (
+                  <div key={n.id}>{n.label}</div>
+                ))}
               </div>
             ) : null}
 

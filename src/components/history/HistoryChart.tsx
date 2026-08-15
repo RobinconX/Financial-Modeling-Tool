@@ -11,7 +11,10 @@ import {
   YAxis,
 } from 'recharts'
 import { formatMoney } from '../../lib/format'
+import { annotationsForXKey } from '../../lib/annotations'
 import type { HistoryChartRow, HistorySeries } from '../../lib/history'
+import type { ChartAnnotation } from '../../types'
+import { chartYearTick } from '../common/ChartNotes'
 
 export type HistoryChartKind = 'line' | 'stacked'
 export type HistoryChartSplit = 'total' | 'assets'
@@ -21,6 +24,7 @@ type Props = {
   series: HistorySeries[]
   kind: HistoryChartKind
   split: HistoryChartSplit
+  annotations?: ChartAnnotation[]
 }
 
 const TOTAL_COLOR = '#a78bfa'
@@ -29,7 +33,7 @@ function tickMoney(v: number): string {
   return formatMoney(v, 'CHF')
 }
 
-export function HistoryChart({ rows, series, kind, split }: Props) {
+export function HistoryChart({ rows, series, kind, split, annotations = [] }: Props) {
   if (rows.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-white/40">
@@ -40,6 +44,9 @@ export function HistoryChart({ rows, series, kind, split }: Props) {
 
   const showAssets = split === 'assets'
   const plotSeries = showAssets ? series : []
+  const xKeys = rows.map((r) => r.xKey)
+  const yearTick = chartYearTick(annotations, xKeys)
+  const tickInterval = xKeys.every((k) => /^\d{4}$/.test(k)) ? 0 : 'preserveStartEnd'
 
   const tooltip = (
     <Tooltip
@@ -54,6 +61,7 @@ export function HistoryChart({ rows, series, kind, split }: Props) {
         const row = payload[0]?.payload as HistoryChartRow | undefined
         const total = row?.total
         const showTotalRow = showAssets && total != null
+        const notesHere = annotationsForXKey(annotations, String(row?.xKey ?? label ?? ''))
         return (
           <div className="rounded-lg border border-white/15 bg-[#121820] px-2.5 py-2 text-xs">
             <div className="mb-1.5 font-medium text-white/80">{String(label ?? '')}</div>
@@ -77,6 +85,13 @@ export function HistoryChart({ rows, series, kind, split }: Props) {
                 <span className="tabular-nums text-white">{formatMoney(total, 'CHF')}</span>
               </div>
             ) : null}
+            {notesHere.length > 0 ? (
+              <div className="mt-1.5 space-y-0.5 border-t border-white/10 pt-1.5 text-amber-200/75">
+                {notesHere.map((n) => (
+                  <div key={n.id}>{n.label}</div>
+                ))}
+              </div>
+            ) : null}
           </div>
         )
       }}
@@ -89,7 +104,7 @@ export function HistoryChart({ rows, series, kind, split }: Props) {
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={rows} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }} />
+            <XAxis dataKey="label" tick={yearTick} tickLine={false} height={28} interval={tickInterval} />
             <YAxis
               tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }}
               tickFormatter={tickMoney}
@@ -122,7 +137,7 @@ export function HistoryChart({ rows, series, kind, split }: Props) {
         <ResponsiveContainer width="100%" height="100%">
           <AreaChart data={rows} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }} />
+            <XAxis dataKey="label" tick={yearTick} tickLine={false} height={28} interval={tickInterval} />
             <YAxis
               tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }}
               tickFormatter={tickMoney}
@@ -149,7 +164,7 @@ export function HistoryChart({ rows, series, kind, split }: Props) {
       <ResponsiveContainer width="100%" height="100%">
         <LineChart data={rows} margin={{ top: 8, right: 8, left: 4, bottom: 0 }}>
           <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-          <XAxis dataKey="label" tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }} />
+          <XAxis dataKey="label" tick={yearTick} tickLine={false} height={28} interval={tickInterval} />
           <YAxis
             tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }}
             tickFormatter={tickMoney}

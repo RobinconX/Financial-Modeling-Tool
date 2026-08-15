@@ -5,6 +5,7 @@
 import type {
   IncomeCostState,
   OverviewState,
+  ChartAnnotation,
   SavedComparable,
   SavedPortfolio,
   SavedScenario,
@@ -16,6 +17,8 @@ import { loadIncomeCost, saveIncomeCost } from './incomeCostStorage'
 import { loadSavings, saveSavings } from './savingsStorage'
 import { loadOverview, saveOverview } from './overviewStorage'
 import { loadComparables, saveComparables } from './comparablesStorage'
+import { loadAnnotations, saveAnnotations } from './annotationsStorage'
+import { normalizeChartAnnotation } from './annotations'
 import { withLinkedMirrorSuppressed } from './linkedMirrorGate'
 
 export const APP_DATA_FILE_NAME = 'financial-model.json'
@@ -30,6 +33,7 @@ export type AppDataSnapshot = {
   savings: SavingsState
   overview: OverviewState
   comparables: SavedComparable[]
+  annotations: ChartAnnotation[]
 }
 
 export function collectAppData(): AppDataSnapshot {
@@ -42,6 +46,7 @@ export function collectAppData(): AppDataSnapshot {
     savings: loadSavings(),
     overview: loadOverview(),
     comparables: loadComparables(),
+    annotations: loadAnnotations(),
   }
 }
 
@@ -76,6 +81,11 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
     comparables: Array.isArray(raw.comparables)
       ? (raw.comparables as SavedComparable[])
       : [],
+    annotations: Array.isArray(raw.annotations)
+      ? raw.annotations
+          .map(normalizeChartAnnotation)
+          .filter((a): a is ChartAnnotation => a != null)
+      : [],
   }
 }
 
@@ -105,6 +115,9 @@ export function applyAppDataToLocalStorage(
 
     const r6 = saveComparables(snapshot.comparables ?? [])
     if (!r6.ok) return { ok: false, error: r6.error }
+
+    const r7 = saveAnnotations(snapshot.annotations ?? [])
+    if (!r7.ok) return { ok: false, error: r7.error }
 
     return { ok: true }
   })

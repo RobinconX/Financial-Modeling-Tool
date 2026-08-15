@@ -113,6 +113,15 @@ export type ComparablesState = {
   comparables: SavedComparable[]
 }
 
+/** Year mark on History / Overview charts (life event, not modeled). */
+export type ChartAnnotation = {
+  id: string
+  year: number
+  /** Optional month 1–12; omit for a year-end mark. */
+  month?: number | null
+  label: string
+}
+
 export type AppTab =
   | 'projections'
   | 'portfolio'

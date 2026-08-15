@@ -10,6 +10,7 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import { annotationsForXKey } from '../../lib/annotations'
 import { RECORDED_ACTUAL_KEY } from '../../lib/history'
 import { formatMoney } from '../../lib/format'
 import {
@@ -18,7 +19,8 @@ import {
   OVERVIEW_CURRENCY,
   type OverviewBuildDeps,
 } from '../../lib/overview'
-import type { OverviewSeries } from '../../types'
+import type { ChartAnnotation, OverviewSeries } from '../../types'
+import { chartYearTick } from '../common/ChartNotes'
 
 type Props = {
   startYear: number
@@ -28,6 +30,7 @@ type Props = {
   fillContainer?: boolean
   recordedByYear?: Map<number, number>
   showRecorded?: boolean
+  annotations?: ChartAnnotation[]
 }
 
 export function OverviewAreaChart({
@@ -38,6 +41,7 @@ export function OverviewAreaChart({
   fillContainer = false,
   recordedByYear,
   showRecorded = false,
+  annotations = [],
 }: Props) {
   const sorted = useMemo(
     () =>
@@ -92,18 +96,15 @@ export function OverviewAreaChart({
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
               dataKey="xKey"
-              tick={{ fill: 'rgba(232,238,245,0.45)', fontSize: 11 }}
+              tick={chartYearTick(annotations, rows.map((r) => r.xKey), (key) => {
+                if (rows.length <= 18) return false
+                const n = Number(key)
+                return Number.isFinite(n) && n % 2 !== 0
+              })}
               tickLine={false}
               axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
               interval={0}
-              tickFormatter={(key: string) => {
-                if (key === 'now') return 'Now'
-                if (rows.length > 18) {
-                  const n = Number(key)
-                  if (Number.isFinite(n) && n % 2 !== 0) return ''
-                }
-                return key
-              }}
+              height={28}
             />
             <YAxis
               tick={{ fill: 'rgba(232,238,245,0.4)', fontSize: 10 }}
@@ -164,6 +165,19 @@ export function OverviewAreaChart({
                         </span>
                       </div>
                     ) : null}
+                    {(() => {
+                      const xKey =
+                        (row as { xKey?: string } | undefined)?.xKey ?? String(label ?? '')
+                      const notesHere = annotationsForXKey(annotations, xKey)
+                      if (notesHere.length === 0) return null
+                      return (
+                        <div className="mt-1.5 space-y-0.5 border-t border-white/10 pt-1.5 text-amber-200/75">
+                          {notesHere.map((n) => (
+                            <div key={n.id}>{n.label}</div>
+                          ))}
+                        </div>
+                      )
+                    })()}
                   </div>
                 )
               }}
