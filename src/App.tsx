@@ -101,7 +101,7 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
   },
   settings: {
     title: 'Data & backup',
-    subtitle: 'Link a data file, export/import JSON — your data stays on this device.',
+    subtitle: 'Link a data file, export JSON or tables — your data stays on this device.',
   },
 }
 

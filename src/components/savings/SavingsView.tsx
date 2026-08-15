@@ -26,6 +26,8 @@ export function SavingsView() {
     setContribution,
     setCadence,
     setRate,
+    setCompoundUntilYear,
+    setContributeUntilYear,
     setName,
     addPastPeriodKey,
     removePastPeriod,
@@ -86,6 +88,8 @@ export function SavingsView() {
             onContribution={setContribution}
             onCadence={setCadence}
             onRate={setRate}
+            onCompoundUntil={setCompoundUntilYear}
+            onContributeUntil={setContributeUntilYear}
             onActual={setActual}
             onAdd={addAccount}
             onRemove={removeAccount}

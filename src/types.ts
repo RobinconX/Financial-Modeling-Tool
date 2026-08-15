@@ -225,6 +225,16 @@ export type SavingsAccount = {
   cadence: SavingsCadence
   /** Annual compounding rate in percent (applied Dec→Jan only), e.g. 3.5 */
   annualRatePercent: number
+  /**
+   * Last calendar year that still gets the Jan compound (Dec→Jan into this year).
+   * Null/omit = compound for the whole horizon.
+   */
+  compoundUntilYear?: number | null
+  /**
+   * Last calendar year that still receives contributions.
+   * Null/omit = contribute for the whole horizon.
+   */
+  contributeUntilYear?: number | null
   /** Lower = earlier in the table */
   sortOrder: number
   /**
@@ -298,6 +308,16 @@ export type OverviewSeries = {
   /** Year when baseChf applies (defaults to year of creation) */
   baseYear?: number
   /**
+   * Last calendar year this series still grows. After that: no compound /
+   * perpetual growth (additions can still land). Empty = always.
+   */
+  compoundUntilYear?: number | null
+  /**
+   * Last calendar year this series still receives contributions / yearly
+   * additions. Empty = always.
+   */
+  contributeUntilYear?: number | null
+  /**
    * @deprecated Manual funding is yearBindings + percent.
    */
   manualYearlyChf?: number
@@ -305,6 +325,25 @@ export type OverviewSeries = {
    * @deprecated Manual funding is yearBindings + percent.
    */
   manualYearlySource?: 'leftover' | 'fixed'
+}
+
+export type RunwayDrawMode = 'percent' | 'fixed'
+/** manual = typed income; ic-income = I/C income + own draw; ic-keep = I/C income + I/C costs. */
+export type RunwayPeriodMode = 'manual' | 'ic-income' | 'ic-keep'
+
+export type OverviewRunwayPeriod = {
+  startYear: number
+  mode: RunwayPeriodMode
+  incomeCostScenarioId: string | null
+  manualIncomeChf: number
+  drawMode: RunwayDrawMode
+  drawPercent: number
+  drawFixedChf: number
+}
+
+/** Per-overview-scenario runway: ordered periods (each applies until the next). */
+export type OverviewRunwayConfig = {
+  periods: OverviewRunwayPeriod[]
 }
 
 /** Named combination of asset series (+ year range) for the Overview chart. */
@@ -319,6 +358,7 @@ export type OverviewScenario = {
   startYear: number
   endYear: number
   series: OverviewSeries[]
+  runway?: OverviewRunwayConfig
 }
 
 export type OverviewState = {

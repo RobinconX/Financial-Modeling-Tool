@@ -121,6 +121,9 @@ export function useOverview() {
         sc.startYear = sel.startYear
         sc.endYear = sel.endYear
         sc.description = sel.description ?? ''
+        sc.runway = sel.runway
+          ? { periods: (sel.runway.periods ?? []).map((p) => ({ ...p })) }
+          : sc.runway
         sc.series = ensurePermanentSavings(cloneSeriesList(sel.series), savingsAccounts)
         created = sc
         return {

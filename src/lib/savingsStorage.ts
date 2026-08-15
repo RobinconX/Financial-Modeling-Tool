@@ -16,6 +16,13 @@ function asNumber(v: unknown, fallback = 0): number {
   return Number.isFinite(n) ? n : fallback
 }
 
+function parseOptionalYear(v: unknown): number | null {
+  if (v == null || v === '') return null
+  const y = Math.floor(Number(v))
+  if (!Number.isFinite(y) || y < 1900 || y > 2200) return null
+  return y
+}
+
 function normalizeCadence(v: unknown): SavingsCadence {
   return v === 'yearly' ? 'yearly' : 'monthly'
 }
@@ -48,24 +55,30 @@ function normalizeAccount(raw: unknown, index: number): SavingsAccount | null {
     contribution: Math.max(0, asNumber(raw.contribution, 0)),
     cadence: normalizeCadence(raw.cadence),
     annualRatePercent: asNumber(raw.annualRatePercent, 0),
+    compoundUntilYear: parseOptionalYear(raw.compoundUntilYear),
+    contributeUntilYear: parseOptionalYear(raw.contributeUntilYear),
     sortOrder: Math.floor(asNumber(raw.sortOrder, index)),
     role,
   }
+}
+
+/** Normalize a saved `{ version, accounts }` payload (old files have no compoundUntilYear). */
+export function accountsFromSavingsPayload(raw: unknown): SavingsAccount[] {
+  if (!isRecord(raw) || !Array.isArray(raw.accounts)) {
+    return ensurePermanentCashAccount([])
+  }
+  return ensurePermanentCashAccount(
+    raw.accounts
+      .map((a, i) => normalizeAccount(a, i))
+      .filter((a): a is SavingsAccount => a != null),
+  )
 }
 
 export function loadSavings(): SavingsState {
   try {
     const raw = localStorage.getItem(SAVINGS_STORAGE_KEY)
     if (!raw) return emptySavingsState()
-    const parsed: unknown = JSON.parse(raw)
-    if (!isRecord(parsed)) return emptySavingsState()
-    const list = Array.isArray(parsed.accounts) ? parsed.accounts : []
-    const accounts = ensurePermanentCashAccount(
-      list
-        .map((a, i) => normalizeAccount(a, i))
-        .filter((a): a is SavingsAccount => a != null),
-    )
-    return { version: 1, accounts }
+    return { version: 1, accounts: accountsFromSavingsPayload(JSON.parse(raw)) }
   } catch {
     return emptySavingsState()
   }
@@ -83,6 +96,8 @@ export function saveSavings(state: SavingsState): { ok: true } | { ok: false; er
         contribution: a.contribution,
         cadence: a.cadence,
         annualRatePercent: a.annualRatePercent,
+        compoundUntilYear: a.compoundUntilYear ?? null,
+        contributeUntilYear: a.contributeUntilYear ?? null,
         sortOrder: a.sortOrder ?? i,
         role: a.role === 'cash' ? 'cash' : null,
       })),

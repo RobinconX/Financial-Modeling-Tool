@@ -18,6 +18,7 @@ import {
   buildOverviewChartRows,
   OVERVIEW_CURRENCY,
   type OverviewBuildDeps,
+  type OverviewChartRow,
 } from '../../lib/overview'
 import type { ChartAnnotation, NetWorthGoal, OverviewSeries } from '../../types'
 import { ChartGoalLines } from '../common/ChartGoals'
@@ -34,6 +35,7 @@ type Props = {
   showRecorded?: boolean
   annotations?: ChartAnnotation[]
   goals?: NetWorthGoal[]
+  prebuiltRows?: OverviewChartRow[]
 }
 
 export function OverviewAreaChart({
@@ -46,6 +48,7 @@ export function OverviewAreaChart({
   showRecorded = false,
   annotations = [],
   goals = [],
+  prebuiltRows,
 }: Props) {
   const sorted = useMemo(
     () =>
@@ -56,14 +59,15 @@ export function OverviewAreaChart({
   )
   const stackOrder = useMemo(() => [...sorted].reverse(), [sorted])
   const rows = useMemo(() => {
-    const built = buildOverviewChartRows({ startYear, endYear, series }, deps)
+    const built =
+      prebuiltRows ?? buildOverviewChartRows({ startYear, endYear, series }, deps)
     if (!showRecorded || !recordedByYear) return built
     return built.map((r) => ({
       ...r,
       [RECORDED_ACTUAL_KEY]:
         r.isNow || r.kind !== 'actual' ? null : (recordedByYear.get(r.year) ?? null),
     }))
-  }, [startYear, endYear, series, deps, recordedByYear, showRecorded])
+  }, [startYear, endYear, series, deps, recordedByYear, showRecorded, prebuiltRows])
   const colorById = useMemo(() => assignOverviewSeriesColors(series), [series])
 
   if (sorted.length === 0) {

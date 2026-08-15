@@ -132,6 +132,8 @@ export function newPermanentCashAccount(asOf: Date = new Date()): SavingsAccount
     contribution: 0,
     cadence: 'monthly',
     annualRatePercent: 0,
+    compoundUntilYear: null,
+    contributeUntilYear: null,
     sortOrder: -1,
   }
 }
@@ -190,6 +192,8 @@ export function newSavingsAccount(sortOrder: number, asOf: Date = new Date()): S
     contribution: 0,
     cadence: 'monthly',
     annualRatePercent: 0,
+    compoundUntilYear: null,
+    contributeUntilYear: null,
     sortOrder,
   }
 }
@@ -294,13 +298,18 @@ export function simulateMonths(
 
   for (let i = 1; i <= months; i++) {
     const key = addMonthsToKey(nowKey, i)
-    bal = stepToEndOfMonth(
-      bal,
-      key,
-      account.contribution,
-      account.annualRatePercent,
-      account.cadence,
-    )
+    const p = parsePeriodKey(key)
+    const until = account.compoundUntilYear
+    const rate =
+      until != null && Number.isFinite(until) && p != null && p.month === 1 && p.year > until
+        ? 0
+        : account.annualRatePercent
+    const contribUntil = account.contributeUntilYear
+    const contrib =
+      contribUntil != null && Number.isFinite(contribUntil) && p != null && p.year > contribUntil
+        ? 0
+        : account.contribution
+    bal = stepToEndOfMonth(bal, key, contrib, rate, account.cadence)
     out.set(key, bal)
   }
   return out

@@ -13,6 +13,7 @@ import {
   periodKeyFromDate,
   projectAccount,
   seriesForAccount,
+  simulateMonths,
   stepToEndOfMonth,
   totalNow,
 } from '../../src/lib/savings'
@@ -26,6 +27,8 @@ function acc(partial: Partial<SavingsAccount> & Pick<SavingsAccount, 'actuals'>)
     contribution: partial.contribution ?? 0,
     cadence: partial.cadence ?? 'monthly',
     annualRatePercent: partial.annualRatePercent ?? 0,
+    compoundUntilYear: partial.compoundUntilYear ?? null,
+    contributeUntilYear: partial.contributeUntilYear ?? null,
     sortOrder: partial.sortOrder ?? 0,
   }
 }
@@ -90,6 +93,33 @@ describe('stepToEndOfMonth / compounding', () => {
   it('January applies compound then monthly contribution', () => {
     // 1000 * 1.10 + 50
     expect(stepToEndOfMonth(1000, '2027-01', 50, 10, 'monthly')).toBe(1150)
+  })
+
+  it('stops compounding after compoundUntilYear', () => {
+    const decAsOf = new Date(2026, 11, 15)
+    const a = acc({
+      actuals: { '2026-12': 10_000 },
+      contribution: 0,
+      annualRatePercent: 10,
+      compoundUntilYear: 2027,
+    })
+    const sim = simulateMonths(a, decAsOf, 24)
+    expect(sim.get('2027-01')).toBeCloseTo(11_000)
+    expect(sim.get('2028-01')).toBeCloseTo(11_000)
+  })
+
+  it('stops contributions after contributeUntilYear', () => {
+    const decAsOf = new Date(2026, 11, 15)
+    const a = acc({
+      actuals: { '2026-12': 10_000 },
+      contribution: 100,
+      cadence: 'monthly',
+      annualRatePercent: 0,
+      contributeUntilYear: 2027,
+    })
+    const sim = simulateMonths(a, decAsOf, 24)
+    expect(sim.get('2027-12')).toBeCloseTo(10_000 + 100 * 12)
+    expect(sim.get('2028-12')).toBeCloseTo(10_000 + 100 * 12)
   })
 
   it('yearly contribution only in January (after compound)', () => {
@@ -252,5 +282,40 @@ describe('chart + table + past period', () => {
 describe('currentPeriodKey', () => {
   it('matches asOf', () => {
     expect(currentPeriodKey(asOf)).toBe('2026-07')
+  })
+})
+
+describe('savings payload migrate', () => {
+  it('keeps every account and actuals when compoundUntilYear is missing', async () => {
+    const { accountsFromSavingsPayload } = await import('../../src/lib/savingsStorage')
+    const loaded = accountsFromSavingsPayload({
+      version: 1,
+      accounts: [
+        {
+          id: 'savings-cash',
+          name: 'Cash',
+          role: 'cash',
+          actuals: { '2025-12': 1000 },
+          contribution: 0,
+          cadence: 'monthly',
+          annualRatePercent: 0,
+          sortOrder: -1,
+        },
+        {
+          id: 'acc-2',
+          name: 'Pension',
+          role: null,
+          actuals: { '2025-12': 50_000, '2026-07': 52_000 },
+          contribution: 700,
+          cadence: 'monthly',
+          annualRatePercent: 4,
+          sortOrder: 2,
+        },
+      ],
+    })
+    expect(loaded.map((a) => a.id)).toEqual(['savings-cash', 'acc-2'])
+    expect(loaded[1]!.name).toBe('Pension')
+    expect(loaded[1]!.actuals['2026-07']).toBe(52_000)
+    expect(loaded[1]!.compoundUntilYear).toBeNull()
   })
 })

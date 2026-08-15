@@ -43,7 +43,7 @@ import {
 
 export const OVERVIEW_CURRENCY = 'CHF' as const
 export const OVERVIEW_DEFAULT_HORIZON_YEARS = 10
-export const OVERVIEW_MAX_HORIZON_YEARS = 40
+export const OVERVIEW_MAX_HORIZON_YEARS = 80
 
 export type OverviewYearKind = 'actual' | 'projected' | 'now'
 
@@ -268,6 +268,19 @@ export function newOverviewScenario(
     startYear: range.startYear,
     endYear: range.endYear,
     series: ensurePermanentLeftover(series, asOf),
+    runway: {
+      periods: [
+        {
+          startYear: asOf.getFullYear(),
+          mode: 'manual',
+          incomeCostScenarioId: null,
+          manualIncomeChf: 0,
+          drawMode: 'percent',
+          drawPercent: 100,
+          drawFixedChf: 0,
+        },
+      ],
+    },
   }
 }
 
@@ -297,6 +310,8 @@ export function newOverviewSeries(
     savingsAccountId: partial.savingsAccountId ?? null,
     baseChf: partial.baseChf ?? 0,
     annualRatePercent: partial.annualRatePercent ?? 0,
+    compoundUntilYear: partial.compoundUntilYear ?? null,
+    contributeUntilYear: partial.contributeUntilYear ?? null,
     baseYear: partial.baseYear ?? new Date().getFullYear(),
     yearBindings: partial.yearBindings ?? [],
     perpetualYearlyChf: partial.perpetualYearlyChf ?? 0,
@@ -644,10 +659,12 @@ export function residualCashValueAtYear(
   const rate = Number.isFinite(series.annualRatePercent) ? series.annualRatePercent! : 0
   if (year < baseYear) return 0
 
+  const until = series.compoundUntilYear
+  const contribUntil = series.contributeUntilYear
   let bal = base
   for (let y = baseYear; y <= year; y++) {
-    if (y > baseYear) bal = bal * (1 + rate / 100)
-    bal += leftoverNetYearlyAddition(series, y, deps)
+    if (y > baseYear && (until == null || y <= until)) bal = bal * (1 + rate / 100)
+    if (contribUntil == null || y <= contribUntil) bal += leftoverNetYearlyAddition(series, y, deps)
   }
   return bal
 }
@@ -669,10 +686,12 @@ export function manualAccumulatedValueAtYear(
   const rate = Number.isFinite(series.annualRatePercent) ? series.annualRatePercent! : 0
   if (year < baseYear) return 0
 
+  const until = series.compoundUntilYear
+  const contribUntil = series.contributeUntilYear
   let bal = base
   for (let y = baseYear; y <= year; y++) {
-    if (y > baseYear) bal = bal * (1 + rate / 100)
-    bal += manualYearlyAddition(series, y, deps)
+    if (y > baseYear && (until == null || y <= until)) bal = bal * (1 + rate / 100)
+    if (contribUntil == null || y <= contribUntil) bal += manualYearlyAddition(series, y, deps)
   }
   return bal
 }
@@ -1023,13 +1042,24 @@ export function seriesValueChf(
   if (series.type === 'savings') {
     const acc = deps.savingsAccounts.find((a) => a.id === series.savingsAccountId)
     if (!acc) return 0
-    return savingsValueAtYear(acc, year, asOf)
+    const until = series.compoundUntilYear ?? acc.compoundUntilYear ?? null
+    const contribUntil = series.contributeUntilYear ?? acc.contributeUntilYear ?? null
+    return savingsValueAtYear(
+      { ...acc, compoundUntilYear: until, contributeUntilYear: contribUntil },
+      year,
+      asOf,
+    )
   }
 
   if (series.type === 'portfolio') {
     const p = deps.portfolios.find((x) => x.id === series.portfolioId)
     if (!p) return 0
     if (deps.usdToChf == null || deps.usdToChf <= 0) return 0
+
+    const until = series.compoundUntilYear
+    if (until != null && year > until) {
+      return seriesValueChf({ ...series, compoundUntilYear: null }, until, deps)
+    }
 
     // Past years: stack year-end actual when present (matches Portfolio chart)
     if (year < currentYear) {
@@ -1111,7 +1141,7 @@ function overviewPortfolioIdsFromSeries(series: OverviewSeries[]): string[] {
   return ids
 }
 
-function withOverviewContext(
+export function withOverviewContext(
   deps: OverviewBuildDeps,
   series: OverviewSeries[],
 ): OverviewBuildDeps {

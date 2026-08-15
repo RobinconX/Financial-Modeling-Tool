@@ -66,6 +66,32 @@ describe('manual series', () => {
     expect(manualValueAtYear(10_000, 10, 2026, 2028)).toBeCloseTo(12_100, 6)
   })
 
+  it('stops compounding after series compoundUntilYear', () => {
+    const leftover: OverviewSeries = {
+      id: 'left',
+      name: 'Leftover cash',
+      enabled: true,
+      sortOrder: 0,
+      type: 'incomeLeftover',
+      yearBindings: [],
+      baseChf: 10_000,
+      baseYear: 2026,
+      annualRatePercent: 10,
+      perpetualYearlyChf: 0,
+      compoundUntilYear: 2027,
+    }
+    const deps = {
+      portfolios: [],
+      stockScenarios: [],
+      savingsAccounts: [],
+      incomeCostLines: [],
+      usdToChf: 0.9,
+      asOf,
+    }
+    expect(residualCashValueAtYear(leftover, 2027, deps)).toBeCloseTo(11_000)
+    expect(residualCashValueAtYear(leftover, 2028, deps)).toBeCloseTo(11_000)
+  })
+
   it('manual % of IC year leaves remainder on permanent leftover', () => {
     const leftover: OverviewSeries = {
       id: 'left',

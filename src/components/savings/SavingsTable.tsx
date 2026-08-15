@@ -16,6 +16,8 @@ type Props = {
   onContribution: (id: string, value: number) => void
   onCadence: (id: string, cadence: SavingsCadence) => void
   onRate: (id: string, rate: number) => void
+  onCompoundUntil: (id: string, year: number | null) => void
+  onContributeUntil: (id: string, year: number | null) => void
   onActual: (id: string, periodKey: string, amount: number | null) => void
   onAdd: () => void
   onRemove: (id: string) => void
@@ -36,6 +38,8 @@ export function SavingsTable({
   onContribution,
   onCadence,
   onRate,
+  onCompoundUntil,
+  onContributeUntil,
   onActual,
   onAdd,
   onRemove,
@@ -69,13 +73,15 @@ export function SavingsTable({
               <th className="px-2 py-2 font-medium">Contribution</th>
               <th className="px-2 py-2 font-medium">Contrib. cadence</th>
               <th className="px-2 py-2 font-medium">Rate % / yr</th>
+              <th className="px-2 py-2 font-medium">Contribute until</th>
+              <th className="px-2 py-2 font-medium">Compound until</th>
               <th className="px-2 py-2 font-medium" />
             </tr>
           </thead>
           <tbody>
             {accounts.length === 0 ? (
               <tr>
-                <td colSpan={6} className="px-3 py-8 text-center text-white/40">
+                <td colSpan={8} className="px-3 py-8 text-center text-white/40">
                   No savings accounts yet. Add Pension fund, Emergency fund, or any account.
                 </td>
               </tr>
@@ -187,6 +193,76 @@ export function SavingsTable({
                       />
                     </td>
                     <td className="px-2 py-1.5">
+                      <input
+                        className="input !w-[4.5rem] !py-1 !text-xs tabular-nums"
+                        type="number"
+                        value={
+                          drafts[draftKey(a.id, 'contribUntil')] ??
+                          (a.contributeUntilYear != null ? String(a.contributeUntilYear) : '')
+                        }
+                        placeholder="—"
+                        title="Last year that still gets contributions (empty = always)"
+                        onChange={(e) =>
+                          setDrafts((d) => ({
+                            ...d,
+                            [draftKey(a.id, 'contribUntil')]: e.target.value,
+                          }))
+                        }
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim()
+                          if (!raw) {
+                            onContributeUntil(a.id, null)
+                          } else {
+                            const y = Math.floor(Number(raw))
+                            onContributeUntil(
+                              a.id,
+                              Number.isFinite(y) && y >= 1900 && y <= 2200 ? y : null,
+                            )
+                          }
+                          setDrafts((d) => {
+                            const next = { ...d }
+                            delete next[draftKey(a.id, 'contribUntil')]
+                            return next
+                          })
+                        }}
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
+                      <input
+                        className="input !w-[4.5rem] !py-1 !text-xs tabular-nums"
+                        type="number"
+                        value={
+                          drafts[draftKey(a.id, 'until')] ??
+                          (a.compoundUntilYear != null ? String(a.compoundUntilYear) : '')
+                        }
+                        placeholder="—"
+                        title="Last year that still compounds (empty = always)"
+                        onChange={(e) =>
+                          setDrafts((d) => ({
+                            ...d,
+                            [draftKey(a.id, 'until')]: e.target.value,
+                          }))
+                        }
+                        onBlur={(e) => {
+                          const raw = e.target.value.trim()
+                          if (!raw) {
+                            onCompoundUntil(a.id, null)
+                          } else {
+                            const y = Math.floor(Number(raw))
+                            onCompoundUntil(
+                              a.id,
+                              Number.isFinite(y) && y >= 1900 && y <= 2200 ? y : null,
+                            )
+                          }
+                          setDrafts((d) => {
+                            const next = { ...d }
+                            delete next[draftKey(a.id, 'until')]
+                            return next
+                          })
+                        }}
+                      />
+                    </td>
+                    <td className="px-2 py-1.5">
                       {isCash ? (
                         <span
                           className="text-[10px] text-white/25"
@@ -217,7 +293,7 @@ export function SavingsTable({
                 <td className="px-2 py-2 tabular-nums text-emerald-400/90">
                   {formatMoney(total, SAVINGS_CURRENCY)}
                 </td>
-                <td colSpan={4} />
+                <td colSpan={6} />
               </tr>
             </tfoot>
           ) : null}

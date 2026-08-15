@@ -51,6 +51,7 @@ type Props = {
   showRecorded?: boolean
   annotations?: ChartAnnotation[]
   goals?: NetWorthGoal[]
+  prebuiltRows?: OverviewChartRow[]
 }
 
 type HoverState = {
@@ -62,6 +63,10 @@ type HoverState = {
   stacks: { id: string; name: string; type: OverviewSeries['type']; value: number }[]
   total: number
   recorded: number | null
+  income: number | null
+  draw: number | null
+  fromAssets: number | null
+  surplus: number | null
   notes: { id: string; label: string }[]
   portfolios: {
     seriesId: string
@@ -115,6 +120,7 @@ export function OverviewChart({
   showRecorded = false,
   annotations = [],
   goals = [],
+  prebuiltRows,
 }: Props) {
   const [hover, setHover] = useState<HoverState | null>(null)
   const chartAreaRef = useRef<HTMLDivElement>(null)
@@ -140,14 +146,15 @@ export function OverviewChart({
   const stackOrder = useMemo(() => [...sorted].reverse(), [sorted])
 
   const rows = useMemo(() => {
-    const built = buildOverviewChartRows({ startYear, endYear, series }, deps)
+    const built =
+      prebuiltRows ?? buildOverviewChartRows({ startYear, endYear, series }, deps)
     if (!showRecorded || !recordedByYear) return built
     return built.map((r) => ({
       ...r,
       [RECORDED_ACTUAL_KEY]:
         r.isNow || r.kind !== 'actual' ? null : (recordedByYear.get(r.year) ?? null),
     }))
-  }, [startYear, endYear, series, deps, recordedByYear, showRecorded])
+  }, [startYear, endYear, series, deps, recordedByYear, showRecorded, prebuiltRows])
 
   const colorById = useMemo(() => assignOverviewSeriesColors(series), [series])
 
@@ -230,6 +237,10 @@ export function OverviewChart({
           ? null
           : recordedByYear?.get(row.year) ?? null,
       notes: row.isNow ? [] : annotationsForXKey(annotations, row.xKey),
+      income: typeof row.__income === 'number' ? row.__income : null,
+      draw: typeof row.__draw === 'number' ? row.__draw : null,
+      fromAssets: typeof row.__fromAssets === 'number' ? row.__fromAssets : null,
+      surplus: typeof row.__surplus === 'number' ? row.__surplus : null,
       portfolios,
     }
   }
@@ -473,6 +484,36 @@ export function OverviewChart({
                 <span className="tabular-nums text-amber-300/90">
                   {formatMoney(hover.recorded, OVERVIEW_CURRENCY)}
                 </span>
+              </div>
+            ) : null}
+            {hover.draw != null ? (
+              <div className="mt-1.5 space-y-0.5 border-t border-white/10 pt-1.5 text-[11px]">
+                {hover.income != null ? (
+                  <div className="flex justify-between gap-3 text-white/55">
+                    <span>Income</span>
+                    <span className="tabular-nums">{formatMoney(hover.income, OVERVIEW_CURRENCY)}</span>
+                  </div>
+                ) : null}
+                <div className="flex justify-between gap-3 text-white/55">
+                  <span>Draw</span>
+                  <span className="tabular-nums">{formatMoney(hover.draw, OVERVIEW_CURRENCY)}</span>
+                </div>
+                {hover.fromAssets != null && hover.fromAssets > 0 ? (
+                  <div className="flex justify-between gap-3 text-white/55">
+                    <span>From assets</span>
+                    <span className="tabular-nums">
+                      {formatMoney(hover.fromAssets, OVERVIEW_CURRENCY)}
+                    </span>
+                  </div>
+                ) : null}
+                {hover.surplus != null && hover.surplus > 0 ? (
+                  <div className="flex justify-between gap-3 text-white/55">
+                    <span>To leftover</span>
+                    <span className="tabular-nums">
+                      {formatMoney(hover.surplus, OVERVIEW_CURRENCY)}
+                    </span>
+                  </div>
+                ) : null}
               </div>
             ) : null}
             {hover.notes.length > 0 ? (

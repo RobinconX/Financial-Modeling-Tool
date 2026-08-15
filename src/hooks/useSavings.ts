@@ -141,6 +141,26 @@ export function useSavings() {
     [persist],
   )
 
+  const setCompoundUntilYear = useCallback(
+    (accountId: string, year: number | null) => {
+      const next = accountsRef.current.map((a) =>
+        a.id === accountId ? { ...a, compoundUntilYear: year } : a,
+      )
+      return persist(next)
+    },
+    [persist],
+  )
+
+  const setContributeUntilYear = useCallback(
+    (accountId: string, year: number | null) => {
+      const next = accountsRef.current.map((a) =>
+        a.id === accountId ? { ...a, contributeUntilYear: year } : a,
+      )
+      return persist(next)
+    },
+    [persist],
+  )
+
   const setName = useCallback(
     (accountId: string, name: string) => {
       const next = accountsRef.current.map((a) =>
@@ -187,6 +207,8 @@ export function useSavings() {
     setContribution,
     setCadence,
     setRate,
+    setCompoundUntilYear,
+    setContributeUntilYear,
     setName,
     addPastPeriodKey,
     removePastPeriod,

@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type {
   CashflowScenario,
   OverviewSeries,
@@ -68,6 +68,58 @@ function buildDisplayGroups(series: OverviewSeries[]): DisplayGroup[] {
     })
   }
   return rows.sort((a, b) => a.order - b.order).map((r) => r.group)
+}
+
+function YearUntilInput({
+  label,
+  title,
+  value,
+  onCommit,
+}: {
+  label: string
+  title: string
+  value: number | null | undefined
+  onCommit: (year: number | null) => void
+}) {
+  const [draft, setDraft] = useState(value != null ? String(value) : '')
+  useEffect(() => {
+    setDraft(value != null ? String(value) : '')
+  }, [value])
+
+  function commit() {
+    const raw = draft.trim()
+    if (!raw) {
+      onCommit(null)
+      setDraft('')
+      return
+    }
+    const y = Math.floor(Number(raw))
+    if (!Number.isFinite(y) || y < 1900 || y > 2200) {
+      setDraft(value != null ? String(value) : '')
+      return
+    }
+    onCommit(y)
+    setDraft(String(y))
+  }
+
+  return (
+    <div>
+      <label className="label !mb-0.5 !text-[10px]">{label}</label>
+      <input
+        className="input !py-1.5 !text-xs tabular-nums"
+        type="number"
+        value={draft}
+        placeholder="—"
+        title={title}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      />
+    </div>
+  )
 }
 
 function YearBindingsEditor({
@@ -712,6 +764,19 @@ export function OverviewSeriesEditor({
                         )}
                       </div>
                     </div>
+
+                    <YearUntilInput
+                      label="Contribute until"
+                      title="Last year this series still gets contributions (empty = always)"
+                      value={s.contributeUntilYear}
+                      onCommit={(y) => onUpdate(s.id, { contributeUntilYear: y })}
+                    />
+                    <YearUntilInput
+                      label="Compound until"
+                      title="Last year this series still grows (empty = always)"
+                      value={s.compoundUntilYear}
+                      onCommit={(y) => onUpdate(s.id, { compoundUntilYear: y })}
+                    />
 
                     {s.type === 'portfolio' && (
                       <div className="sm:col-span-1 lg:col-span-2">

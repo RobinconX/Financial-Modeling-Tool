@@ -16,6 +16,11 @@ import {
   recordedOverviewByYear,
   type OverviewBuildDeps,
 } from '../../lib/overview'
+import {
+  buildRunwayChartRows,
+  defaultRunwayConfig,
+  runwayAssetSeries,
+} from '../../lib/runway'
 import { readShowGoals, writeShowGoals } from '../../lib/goals'
 import { ChartGoals } from '../common/ChartGoals'
 import { ChartNotes } from '../common/ChartNotes'
@@ -25,6 +30,7 @@ import { OverviewAreaChart } from './OverviewAreaChart'
 import { OverviewChart } from './OverviewChart'
 import { OverviewCompareChart } from './OverviewCompareChart'
 import { OverviewSeriesEditor } from './OverviewSeriesEditor'
+import { RunwayConfig } from './RunwayConfig'
 
 type Props = {
   portfolios: SavedPortfolio[]
@@ -35,6 +41,9 @@ type Props = {
 }
 
 type ChartMode = 'bars' | 'area' | 'compare'
+type PageTab = 'networth' | 'runway'
+
+const PAGE_TAB_KEY = 'grok-lab-overview-page-tab'
 
 const COMPARE_IDS_KEY = 'grok-lab-overview-compare-ids'
 const RECORDED_KEY = 'grok-lab-overview-show-recorded'
@@ -103,6 +112,13 @@ export function OverviewView({
   const [saveAsName, setSaveAsName] = useState('')
   const [showSaveAs, setShowSaveAs] = useState(false)
   const [chartMode, setChartMode] = useState<ChartMode>('bars')
+  const [pageTab, setPageTab] = useState<PageTab>(() => {
+    try {
+      return localStorage.getItem(PAGE_TAB_KEY) === 'runway' ? 'runway' : 'networth'
+    } catch {
+      return 'networth'
+    }
+  })
   /** null = all scenarios (default). Explicit list is the user's compare set. */
   const [compareIds, setCompareIds] = useState<string[] | null>(() => readCompareIds())
   const [showRecorded, setShowRecorded] = useState(() => {
@@ -162,6 +178,14 @@ export function OverviewView({
     writeShowGoals(showGoals)
   }, [showGoals])
 
+  useEffect(() => {
+    try {
+      localStorage.setItem(PAGE_TAB_KEY, pageTab)
+    } catch {
+      /* ignore */
+    }
+  }, [pageTab])
+
   const asOf = useMemo(() => new Date(), [])
 
   const deps: OverviewBuildDeps = useMemo(
@@ -196,6 +220,20 @@ export function OverviewView({
   }, [chartMode, compareScenarios, series, deps])
   const hasRecorded = recordedByYear.size > 0
   const overlayGoals = showGoals ? goals : []
+  const runwayConfig = selectedScenario?.runway ?? defaultRunwayConfig()
+  const runwaySeries = useMemo(() => runwayAssetSeries(series), [series])
+  const runwayRows = useMemo(
+    () =>
+      buildRunwayChartRows(
+        { startYear, endYear, series },
+        deps,
+        runwayConfig,
+      ),
+    [startYear, endYear, series, deps, runwayConfig],
+  )
+  const chartSeries = pageTab === 'runway' ? runwaySeries : series
+  const effectiveChartMode: ChartMode =
+    pageTab === 'runway' && chartMode === 'compare' ? 'bars' : chartMode
 
   /** Apply year range immediately when both values look like calendar years (spinner or finished typing). */
   function applyRangeDraft(fromStr: string, toStr: string) {
@@ -381,12 +419,47 @@ export function OverviewView({
         ) : null}
       </div>
 
+      <div
+        className="inline-flex gap-1 border-b border-white/10"
+        role="group"
+        aria-label="Overview page"
+      >
+        {(
+          [
+            { id: 'networth' as const, label: 'Net worth' },
+            { id: 'runway' as const, label: 'Runway' },
+          ] as const
+        ).map((t) => (
+          <button
+            key={t.id}
+            type="button"
+            onClick={() => setPageTab(t.id)}
+            className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
+              pageTab === t.id
+                ? 'border-emerald-400 text-white'
+                : 'border-transparent text-white/50 hover:text-white/80'
+            }`}
+          >
+            {t.label}
+          </button>
+        ))}
+      </div>
+
       {/* Chart */}
       <div className="panel relative z-10 space-y-3 overflow-visible">
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-center gap-1.5">
             <h3 className="section-title">
-              {chartMode === 'compare' ? (
+              {pageTab === 'runway' ? (
+                <>
+                  Runway
+                  {selectedScenario ? (
+                    <span className="ml-2 font-normal text-white/40">
+                      · {selectedScenario.name}
+                    </span>
+                  ) : null}
+                </>
+              ) : chartMode === 'compare' ? (
                 <>
                   Compare
                   <span className="ml-2 font-normal text-white/40">· scenarios</span>
@@ -415,11 +488,16 @@ export function OverviewView({
               aria-label="Chart mode"
             >
               {(
-                [
-                  { id: 'bars' as const, label: 'Bars' },
-                  { id: 'area' as const, label: 'Area' },
-                  { id: 'compare' as const, label: 'Compare' },
-                ] as const
+                pageTab === 'runway'
+                  ? [
+                      { id: 'bars' as const, label: 'Bars' },
+                      { id: 'area' as const, label: 'Area' },
+                    ]
+                  : [
+                      { id: 'bars' as const, label: 'Bars' },
+                      { id: 'area' as const, label: 'Area' },
+                      { id: 'compare' as const, label: 'Compare' },
+                    ]
               ).map((opt) => (
                 <button
                   key={opt.id}
@@ -547,29 +625,31 @@ export function OverviewView({
               : `Overview · ${selectedScenario?.name ?? 'net worth'}`
           }
         >
-          {chartMode === 'bars' ? (
+          {effectiveChartMode === 'bars' ? (
             <OverviewChart
-              key={`bars-${selectedScenarioId}-${startYear}-${endYear}`}
+              key={`bars-${pageTab}-${selectedScenarioId}-${startYear}-${endYear}`}
               startYear={startYear}
               endYear={endYear}
-              series={series}
+              series={chartSeries}
               deps={deps}
               recordedByYear={recordedByYear}
-              showRecorded={hasRecorded && showRecorded}
-              annotations={annotations}
-              goals={overlayGoals}
+              showRecorded={pageTab === 'networth' && hasRecorded && showRecorded}
+              annotations={pageTab === 'networth' ? annotations : []}
+              goals={pageTab === 'networth' ? overlayGoals : []}
+              prebuiltRows={pageTab === 'runway' ? runwayRows : undefined}
             />
-          ) : chartMode === 'area' ? (
+          ) : effectiveChartMode === 'area' ? (
             <OverviewAreaChart
-              key={`area-${selectedScenarioId}-${startYear}-${endYear}`}
+              key={`area-${pageTab}-${selectedScenarioId}-${startYear}-${endYear}`}
               startYear={startYear}
               endYear={endYear}
-              series={series}
+              series={chartSeries}
               deps={deps}
               recordedByYear={recordedByYear}
-              showRecorded={hasRecorded && showRecorded}
-              annotations={annotations}
-              goals={overlayGoals}
+              showRecorded={pageTab === 'networth' && hasRecorded && showRecorded}
+              annotations={pageTab === 'networth' ? annotations : []}
+              goals={pageTab === 'networth' ? overlayGoals : []}
+              prebuiltRows={pageTab === 'runway' ? runwayRows : undefined}
             />
           ) : (
             <OverviewCompareChart
@@ -586,6 +666,19 @@ export function OverviewView({
           )}
         </FullscreenChart>
 
+        {pageTab === 'runway' && selectedScenario ? (
+          <RunwayConfig
+            config={runwayConfig}
+            incomeCostScenarios={incomeCostScenarios}
+            incomeCostLines={incomeCostLines}
+            onChange={(patch) =>
+              updateScenario(selectedScenario.id, {
+                runway: { ...runwayConfig, ...patch },
+              })
+            }
+          />
+        ) : null}
+        {pageTab === 'networth' ? (
         <div className="flex items-start justify-between gap-3">
           <div className="min-w-0 flex-1 space-y-1.5">
             <ChartNotes
@@ -633,10 +726,12 @@ export function OverviewView({
             ) : null}
           </div>
         </div>
+        ) : null}
       </div>
 
+      {pageTab === 'networth' ? (
       <div className="panel space-y-3">
-        {chartMode === 'compare' && selectedScenario ? (
+        {effectiveChartMode === 'compare' && selectedScenario ? (
           <p className="text-xs text-white/45">
             Editing series for <span className="text-white/75">{selectedScenario.name}</span>
           </p>
@@ -667,6 +762,7 @@ export function OverviewView({
           onReorderSavings={reorderSavingsSeries}
         />
       </div>
+      ) : null}
     </div>
   )
 }

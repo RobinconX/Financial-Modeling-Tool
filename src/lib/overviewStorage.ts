@@ -10,6 +10,7 @@ import {
   ensurePermanentLeftover,
   newOverviewScenario,
 } from './overview'
+import { normalizeRunwayConfig } from './runway'
 
 export const OVERVIEW_STORAGE_KEY = 'grok-lab.overview.v1'
 
@@ -109,6 +110,14 @@ function normalizeSeries(raw: unknown, index: number): OverviewSeries | null {
     series.yearBindings = bindings
     series.incomeCostScenarioId = null
   }
+  if (raw.compoundUntilYear != null) {
+    const y = Math.floor(asNumber(raw.compoundUntilYear, NaN))
+    if (Number.isFinite(y) && y >= 1900 && y <= 2200) series.compoundUntilYear = y
+  }
+  if (raw.contributeUntilYear != null) {
+    const y = Math.floor(asNumber(raw.contributeUntilYear, NaN))
+    if (Number.isFinite(y) && y >= 1900 && y <= 2200) series.contributeUntilYear = y
+  }
   return series
 }
 
@@ -138,6 +147,7 @@ function normalizeScenario(raw: unknown, index: number, asOf = new Date()): Over
     startYear: range.startYear,
     endYear: range.endYear,
     series,
+    runway: normalizeRunwayConfig(raw.runway),
   }
 }
 

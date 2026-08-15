@@ -1,9 +1,10 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   applyAppDataToLocalStorage,
-  exportAppData,
+  downloadAppDataExport,
   readSnapshotFromFile,
 } from '../../lib/appDataSnapshot'
+import { downloadTableExport } from '../../lib/tableExport'
 import { remountApp } from '../../lib/appRemount'
 import {
   createDataFile,
@@ -115,21 +116,16 @@ export function DataSettingsPanel({ onClose }: Props) {
     await refreshStatus()
   }
 
-  async function handleExport() {
-    setBusy(true)
+  function handleExport() {
     setError(null)
-    setMessage(null)
-    const result = await exportAppData()
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error)
-      return
-    }
-    setMessage(
-      result.method === 'share'
-        ? 'Share sheet opened — choose Save to Files, AirDrop, or another app to keep the backup.'
-        : 'Download started — keep that JSON file as a backup.',
-    )
+    downloadAppDataExport()
+    setMessage('Download started — keep that JSON file as a backup.')
+  }
+
+  function handleExportTables() {
+    setError(null)
+    downloadTableExport()
+    setMessage('Download started — open the Excel file.')
   }
 
   async function handleImportFile(file: File) {
@@ -173,8 +169,7 @@ export function DataSettingsPanel({ onClose }: Props) {
           <h2 className="text-lg font-semibold text-white">Data &amp; backup</h2>
           <InfoTip label="About data storage">
             Your data stays on this device. On desktop Chrome/Edge you can link a JSON file for
-            continuous save. On iPhone/iPad use Export / Import (Share → Save to Files). No
-            multi-user cloud database.
+            continuous save. On iPhone/iPad use Export / Import. No multi-user cloud database.
           </InfoTip>
         </div>
         {onClose && (
@@ -211,8 +206,7 @@ export function DataSettingsPanel({ onClose }: Props) {
             <p>{linking.unsupportedReason}</p>
             {linking.isAppleMobile ? (
               <p className="text-white/50">
-                Tip: Export opens the Share sheet — choose <strong className="text-white/70">Save to
-                Files</strong> (or iCloud Drive). Import picks a JSON from Files to restore.
+                Tip: Export downloads a file. Import picks a JSON from Files to restore.
               </p>
             ) : null}
           </div>
@@ -302,8 +296,8 @@ export function DataSettingsPanel({ onClose }: Props) {
         <div className="flex items-center gap-1.5">
           <h3 className="section-title">Export / Import</h3>
           <InfoTip label="About export and import">
-            Works on every browser, including iPhone and iPad. Export can open the Share sheet
-            (Save to Files). Import replaces this browser’s data with the file you pick.
+            JSON is a full restore backup. Tables (.xlsx) is a readable copy of the same model for
+            Excel — not for import. Import JSON replaces this browser’s data with the file you pick.
           </InfoTip>
         </div>
         {exportPrimary ? (
@@ -319,9 +313,9 @@ export function DataSettingsPanel({ onClose }: Props) {
               exportPrimary ? 'btn-primary !py-1.5 !text-xs' : 'btn-primary !py-1.5 !text-xs'
             }
             disabled={busy}
-            onClick={() => void handleExport()}
+            onClick={handleExport}
           >
-            Export JSON…
+            Export JSON
           </button>
           <button
             type="button"
@@ -342,6 +336,14 @@ export function DataSettingsPanel({ onClose }: Props) {
               if (f) void handleImportFile(f)
             }}
           />
+          <button
+            type="button"
+            className="btn-ghost !py-1.5 !text-xs"
+            disabled={busy}
+            onClick={handleExportTables}
+          >
+            Export tables
+          </button>
         </div>
       </section>
 
