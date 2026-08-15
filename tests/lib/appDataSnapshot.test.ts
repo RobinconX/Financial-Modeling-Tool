@@ -22,6 +22,7 @@ describe('appDataSnapshot', () => {
     expect(parsed.scenarios).toEqual([])
     expect(parsed.comparables).toEqual([])
     expect(parsed.annotations).toEqual([])
+    expect(parsed.goals).toEqual([])
   })
 
   it('rejects invalid payloads', () => {

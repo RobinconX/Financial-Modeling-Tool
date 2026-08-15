@@ -13,8 +13,10 @@ import {
 import { formatMoney } from '../../lib/format'
 import { annotationsForXKey } from '../../lib/annotations'
 import type { HistoryChartRow, HistorySeries } from '../../lib/history'
-import type { ChartAnnotation } from '../../types'
+import type { ChartAnnotation, NetWorthGoal } from '../../types'
+import { ChartGoalLines } from '../common/ChartGoals'
 import { chartYearTick } from '../common/ChartNotes'
+import { goalYMax } from '../../lib/goals'
 
 export type HistoryChartKind = 'line' | 'stacked'
 export type HistoryChartSplit = 'total' | 'assets'
@@ -25,6 +27,7 @@ type Props = {
   kind: HistoryChartKind
   split: HistoryChartSplit
   annotations?: ChartAnnotation[]
+  goals?: NetWorthGoal[]
 }
 
 const TOTAL_COLOR = '#a78bfa'
@@ -33,7 +36,7 @@ function tickMoney(v: number): string {
   return formatMoney(v, 'CHF')
 }
 
-export function HistoryChart({ rows, series, kind, split, annotations = [] }: Props) {
+export function HistoryChart({ rows, series, kind, split, annotations = [], goals = [] }: Props) {
   if (rows.length === 0) {
     return (
       <p className="py-10 text-center text-sm text-white/40">
@@ -109,8 +112,10 @@ export function HistoryChart({ rows, series, kind, split, annotations = [] }: Pr
               tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }}
               tickFormatter={tickMoney}
               width={72}
+              domain={goals.length > 0 ? [0, goalYMax(goals)] : undefined}
             />
             {tooltip}
+            {goals.length > 0 ? <ChartGoalLines goals={goals} xKeys={xKeys} /> : null}
             <Legend wrapperStyle={{ fontSize: 11 }} />
             {plotSeries.map((s) => (
               <Area
@@ -142,8 +147,10 @@ export function HistoryChart({ rows, series, kind, split, annotations = [] }: Pr
               tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }}
               tickFormatter={tickMoney}
               width={72}
+              domain={goals.length > 0 ? [0, goalYMax(goals)] : undefined}
             />
             {tooltip}
+            {goals.length > 0 ? <ChartGoalLines goals={goals} xKeys={xKeys} /> : null}
             <Area
               type="monotone"
               dataKey="total"
@@ -169,8 +176,10 @@ export function HistoryChart({ rows, series, kind, split, annotations = [] }: Pr
             tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }}
             tickFormatter={tickMoney}
             width={72}
+            domain={goals.length > 0 ? [0, goalYMax(goals)] : undefined}
           />
           {tooltip}
+          {goals.length > 0 ? <ChartGoalLines goals={goals} xKeys={xKeys} /> : null}
           <Legend wrapperStyle={{ fontSize: 11 }} />
           {showAssets ? (
             plotSeries.map((s) => (

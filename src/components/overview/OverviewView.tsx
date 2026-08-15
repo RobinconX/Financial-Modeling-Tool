@@ -8,6 +8,7 @@ import type {
   SavingsAccount,
 } from '../../types'
 import { useChartAnnotations } from '../../hooks/useChartAnnotations'
+import { useGoals } from '../../hooks/useGoals'
 import { useOverview } from '../../hooks/useOverview'
 import { fetchFxRateClient } from '../../lib/fx'
 import {
@@ -15,6 +16,8 @@ import {
   recordedOverviewByYear,
   type OverviewBuildDeps,
 } from '../../lib/overview'
+import { readShowGoals, writeShowGoals } from '../../lib/goals'
+import { ChartGoals } from '../common/ChartGoals'
 import { ChartNotes } from '../common/ChartNotes'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { InfoTip } from '../common/InfoTip'
@@ -86,6 +89,8 @@ export function OverviewView({
     updateAnnotation,
     removeAnnotation,
   } = useChartAnnotations()
+  const { goals, error: goalsError, addGoal, updateGoal, removeGoal } = useGoals()
+  const [showGoals, setShowGoals] = useState(() => readShowGoals())
 
   // Every overview scenario always includes all savings accounts (at least Cash).
   useEffect(() => {
@@ -153,6 +158,10 @@ export function OverviewView({
     }
   }, [showRecorded])
 
+  useEffect(() => {
+    writeShowGoals(showGoals)
+  }, [showGoals])
+
   const asOf = useMemo(() => new Date(), [])
 
   const deps: OverviewBuildDeps = useMemo(
@@ -186,6 +195,7 @@ export function OverviewView({
     return recordedOverviewByYear(src, deps)
   }, [chartMode, compareScenarios, series, deps])
   const hasRecorded = recordedByYear.size > 0
+  const overlayGoals = showGoals ? goals : []
 
   /** Apply year range immediately when both values look like calendar years (spinner or finished typing). */
   function applyRangeDraft(fromStr: string, toStr: string) {
@@ -547,6 +557,7 @@ export function OverviewView({
               recordedByYear={recordedByYear}
               showRecorded={hasRecorded && showRecorded}
               annotations={annotations}
+              goals={overlayGoals}
             />
           ) : chartMode === 'area' ? (
             <OverviewAreaChart
@@ -558,6 +569,7 @@ export function OverviewView({
               recordedByYear={recordedByYear}
               showRecorded={hasRecorded && showRecorded}
               annotations={annotations}
+              goals={overlayGoals}
             />
           ) : (
             <OverviewCompareChart
@@ -569,33 +581,57 @@ export function OverviewView({
               recordedByYear={recordedByYear}
               showRecorded={hasRecorded && showRecorded}
               annotations={annotations}
+              goals={overlayGoals}
             />
           )}
         </FullscreenChart>
 
         <div className="flex items-start justify-between gap-3">
-          <ChartNotes
-            annotations={annotations}
-            error={notesError}
-            defaultYear={asOf.getFullYear()}
-            onAdd={addAnnotation}
-            onUpdate={updateAnnotation}
-            onRemove={removeAnnotation}
-          />
-          {hasRecorded ? (
-            <label className="inline-flex shrink-0 cursor-pointer items-center gap-1.5 text-[11px] text-white/55 hover:text-white/80">
-              <input
-                type="checkbox"
-                className="h-3.5 w-3.5 accent-amber-400"
-                checked={showRecorded}
-                onChange={() => setShowRecorded((v) => !v)}
-              />
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-full bg-amber-300" />
-                Recorded actuals
-              </span>
-            </label>
-          ) : null}
+          <div className="min-w-0 flex-1 space-y-1.5">
+            <ChartNotes
+              annotations={annotations}
+              error={notesError}
+              defaultYear={asOf.getFullYear()}
+              onAdd={addAnnotation}
+              onUpdate={updateAnnotation}
+              onRemove={removeAnnotation}
+            />
+            <ChartGoals
+              goals={goals}
+              error={goalsError}
+              defaultYear={endYear}
+              show={showGoals}
+              onShowChange={setShowGoals}
+              onAdd={addGoal}
+              onUpdate={updateGoal}
+              onRemove={removeGoal}
+              showToggle={false}
+            />
+          </div>
+          <div className="flex shrink-0 flex-col gap-1.5 text-[11px]">
+            {hasRecorded ? (
+              <label className="grid cursor-pointer grid-cols-[1rem_auto] items-center gap-1.5 text-white/55 hover:text-white/80">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 justify-self-center accent-amber-400"
+                  checked={showRecorded}
+                  onChange={() => setShowRecorded((v) => !v)}
+                />
+                <span>Show recorded actuals</span>
+              </label>
+            ) : null}
+            {goals.length > 0 ? (
+              <label className="grid cursor-pointer grid-cols-[1rem_auto] items-center gap-1.5 text-white/55 hover:text-white/80">
+                <input
+                  type="checkbox"
+                  className="h-3.5 w-3.5 justify-self-center accent-violet-400"
+                  checked={showGoals}
+                  onChange={() => setShowGoals(!showGoals)}
+                />
+                <span>Show Goals</span>
+              </label>
+            ) : null}
+          </div>
         </div>
       </div>
 

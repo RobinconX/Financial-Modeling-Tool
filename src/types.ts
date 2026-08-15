@@ -113,6 +113,14 @@ export type ComparablesState = {
   comparables: SavedComparable[]
 }
 
+/** Optional net-worth target (CHF + year) for Overview / History overlay. */
+export type NetWorthGoal = {
+  id: string
+  name: string
+  amountChf: number
+  year: number
+}
+
 /** Year mark on History / Overview charts (life event, not modeled). */
 export type ChartAnnotation = {
   id: string

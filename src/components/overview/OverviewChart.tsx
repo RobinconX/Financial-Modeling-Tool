@@ -30,8 +30,10 @@ import {
   type OverviewChartRow,
   type PortfolioBreakdownLine,
 } from '../../lib/overview'
-import type { ChartAnnotation, OverviewSeries } from '../../types'
+import type { ChartAnnotation, NetWorthGoal, OverviewSeries } from '../../types'
+import { ChartGoalLines } from '../common/ChartGoals'
 import { chartYearTick } from '../common/ChartNotes'
+import { goalYMax } from '../../lib/goals'
 
 const PANEL_WIDTH = 260
 const PANEL_GAP = 12
@@ -48,6 +50,7 @@ type Props = {
   recordedByYear?: Map<number, number>
   showRecorded?: boolean
   annotations?: ChartAnnotation[]
+  goals?: NetWorthGoal[]
 }
 
 type HoverState = {
@@ -111,6 +114,7 @@ export function OverviewChart({
   recordedByYear,
   showRecorded = false,
   annotations = [],
+  goals = [],
 }: Props) {
   const [hover, setHover] = useState<HoverState | null>(null)
   const chartAreaRef = useRef<HTMLDivElement>(null)
@@ -346,6 +350,7 @@ export function OverviewChart({
               tickLine={false}
               axisLine={false}
               width={56}
+              domain={goals.length > 0 ? [0, goalYMax(goals)] : undefined}
               tickFormatter={(v: number) => {
                 if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
                 if (v >= 1e3) return `${(v / 1e3).toFixed(0)}k`
@@ -393,6 +398,9 @@ export function OverviewChart({
                 connectNulls={false}
                 isAnimationActive={false}
               />
+            ) : null}
+            {goals.length > 0 ? (
+              <ChartGoalLines goals={goals} xKeys={rows.map((r) => r.xKey)} />
             ) : null}
           </ComposedChart>
         </ResponsiveContainer>

@@ -19,8 +19,10 @@ import {
   OVERVIEW_CURRENCY,
   type OverviewBuildDeps,
 } from '../../lib/overview'
-import type { ChartAnnotation, OverviewSeries } from '../../types'
+import type { ChartAnnotation, NetWorthGoal, OverviewSeries } from '../../types'
+import { ChartGoalLines } from '../common/ChartGoals'
 import { chartYearTick } from '../common/ChartNotes'
+import { goalYMax } from '../../lib/goals'
 
 type Props = {
   startYear: number
@@ -31,6 +33,7 @@ type Props = {
   recordedByYear?: Map<number, number>
   showRecorded?: boolean
   annotations?: ChartAnnotation[]
+  goals?: NetWorthGoal[]
 }
 
 export function OverviewAreaChart({
@@ -42,6 +45,7 @@ export function OverviewAreaChart({
   recordedByYear,
   showRecorded = false,
   annotations = [],
+  goals = [],
 }: Props) {
   const sorted = useMemo(
     () =>
@@ -111,6 +115,7 @@ export function OverviewAreaChart({
               tickLine={false}
               axisLine={false}
               width={56}
+              domain={goals.length > 0 ? [0, goalYMax(goals)] : undefined}
               tickFormatter={(v: number) => formatMoney(v, OVERVIEW_CURRENCY)}
             />
             <Tooltip
@@ -206,6 +211,9 @@ export function OverviewAreaChart({
                 dot={{ r: 3, fill: '#fbbf24' }}
                 connectNulls={false}
               />
+            ) : null}
+            {goals.length > 0 ? (
+              <ChartGoalLines goals={goals} xKeys={rows.map((r) => r.xKey)} />
             ) : null}
           </ComposedChart>
         </ResponsiveContainer>

@@ -12,7 +12,10 @@ import {
   type HistoryResolution,
 } from '../../lib/history'
 import { useChartAnnotations } from '../../hooks/useChartAnnotations'
+import { useGoals } from '../../hooks/useGoals'
+import { readShowGoals, writeShowGoals } from '../../lib/goals'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { ChartGoals } from '../common/ChartGoals'
 import { ChartNotes } from '../common/ChartNotes'
 import { InfoTip } from '../common/InfoTip'
 import { HistoryChart, type HistoryChartKind, type HistoryChartSplit } from './HistoryChart'
@@ -86,6 +89,8 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
     updateAnnotation,
     removeAnnotation,
   } = useChartAnnotations()
+  const { goals, error: goalsError, addGoal, updateGoal, removeGoal } = useGoals()
+  const [showGoals, setShowGoals] = useState(() => readShowGoals())
 
   const loadFx = useCallback(async () => {
     setFxError(null)
@@ -134,6 +139,10 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
     setFromDraft(String(dataYears[0]))
     setToDraft(String(dataYears[dataYears.length - 1]))
   }, [dataYears, fromDraft, toDraft])
+
+  useEffect(() => {
+    writeShowGoals(showGoals)
+  }, [showGoals])
 
   useEffect(() => {
     try {
@@ -319,6 +328,7 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
             kind={kind}
             split={split}
             annotations={annotations}
+            goals={showGoals ? goals : []}
           />
         </FullscreenChart>
         <ChartNotes
@@ -328,6 +338,16 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
           onAdd={addAnnotation}
           onUpdate={updateAnnotation}
           onRemove={removeAnnotation}
+        />
+        <ChartGoals
+          goals={goals}
+          error={goalsError}
+          defaultYear={rangeTo}
+          show={showGoals}
+          onShowChange={setShowGoals}
+          onAdd={addGoal}
+          onUpdate={updateGoal}
+          onRemove={removeGoal}
         />
         <p className="text-sm text-white/70">
           Latest{' '}

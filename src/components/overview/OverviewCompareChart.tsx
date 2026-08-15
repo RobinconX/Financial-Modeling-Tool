@@ -16,8 +16,10 @@ import {
   OVERVIEW_CURRENCY,
   type OverviewBuildDeps,
 } from '../../lib/overview'
-import type { ChartAnnotation, OverviewScenario } from '../../types'
+import type { ChartAnnotation, NetWorthGoal, OverviewScenario } from '../../types'
+import { ChartGoalLines } from '../common/ChartGoals'
 import { chartYearTick } from '../common/ChartNotes'
+import { goalYMax } from '../../lib/goals'
 import { annotationsForXKey } from '../../lib/annotations'
 import { RECORDED_ACTUAL_KEY } from '../../lib/history'
 
@@ -31,6 +33,7 @@ type Props = {
   recordedByYear?: Map<number, number>
   showRecorded?: boolean
   annotations?: ChartAnnotation[]
+  goals?: NetWorthGoal[]
 }
 
 export function OverviewCompareChart({
@@ -42,6 +45,7 @@ export function OverviewCompareChart({
   recordedByYear,
   showRecorded = false,
   annotations = [],
+  goals = [],
 }: Props) {
   const rows = useMemo(() => {
     const built = buildOverviewCompareRows(scenarios, deps, { startYear, endYear })
@@ -104,6 +108,7 @@ export function OverviewCompareChart({
               tickLine={false}
               axisLine={false}
               width={56}
+              domain={goals.length > 0 ? [0, goalYMax(goals)] : undefined}
               tickFormatter={(v: number) => {
                 if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
                 if (v >= 1e3) return `${(v / 1e3).toFixed(0)}k`
@@ -237,6 +242,9 @@ export function OverviewCompareChart({
                 isAnimationActive={false}
                 connectNulls={false}
               />
+            ) : null}
+            {goals.length > 0 ? (
+              <ChartGoalLines goals={goals} xKeys={rows.map((r) => r.xKey)} />
             ) : null}
           </LineChart>
         </ResponsiveContainer>
