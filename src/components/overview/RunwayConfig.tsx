@@ -1,8 +1,17 @@
-import type { CashflowLine, CashflowScenario, OverviewRunwayConfig, OverviewRunwayPeriod } from '../../types'
+import { useState } from 'react'
+import type {
+  CashflowLine,
+  CashflowScenario,
+  OverviewRunwayConfig,
+  OverviewRunwayPeriod,
+  OverviewSeries,
+  SavingsAccount,
+} from '../../types'
 import { parseMoney, formatMoney } from '../../lib/format'
 import {
   defaultRunwayPeriod,
   periodForYear,
+  resolveRunwayDrawOrder,
   runwayIncomeDrawForYear,
 } from '../../lib/runway'
 import { InfoTip } from '../common/InfoTip'
@@ -12,14 +21,20 @@ type Props = {
   config: OverviewRunwayConfig
   incomeCostScenarios: CashflowScenario[]
   incomeCostLines: CashflowLine[]
+  series: OverviewSeries[]
+  savingsAccounts: SavingsAccount[]
   onChange: (patch: Partial<OverviewRunwayConfig>) => void
+  onUpdateSeries: (id: string, patch: Partial<OverviewSeries>) => void
 }
 
 export function RunwayConfig({
   config,
   incomeCostScenarios,
   incomeCostLines,
+  series,
+  savingsAccounts,
   onChange,
+  onUpdateSeries,
 }: Props) {
   const periods = [...(config.periods ?? [])].sort((a, b) => a.startYear - b.startYear)
   const sortedIc = [...incomeCostScenarios].sort(
@@ -27,6 +42,31 @@ export function RunwayConfig({
   )
   const previewYear = periods[0]?.startYear ?? new Date().getFullYear()
   const preview = runwayIncomeDrawForYear(config, previewYear, incomeCostLines)
+  const drawList = resolveRunwayDrawOrder(series, config, savingsAccounts)
+  const [dragId, setDragId] = useState<string | null>(null)
+  const [dragOverId, setDragOverId] = useState<string | null>(null)
+
+  function dropOn(targetId: string) {
+    if (!dragId || dragId === targetId) {
+      setDragId(null)
+      setDragOverId(null)
+      return
+    }
+    const ids = drawList.map((s) => s.id)
+    const from = ids.indexOf(dragId)
+    const to = ids.indexOf(targetId)
+    if (from < 0 || to < 0) {
+      setDragId(null)
+      setDragOverId(null)
+      return
+    }
+    const next = [...ids]
+    next.splice(from, 1)
+    next.splice(to, 0, dragId)
+    onChange({ drawOrder: next })
+    setDragId(null)
+    setDragOverId(null)
+  }
 
   function setPeriods(next: OverviewRunwayPeriod[]) {
     onChange({
@@ -45,8 +85,8 @@ export function RunwayConfig({
         <InfoTip label="About runway periods">
           Each row starts in that year and lasts until the next row. Runway leftover is a separate
           pile: a copy of Overview leftover, then adjusted by this config (I/C surplus added, draws
-          taken from leftover first). Surplus is not a leftover contribution. “Keep I/C” uses that
-          scenario’s income as in and its costs as the draw.
+          taken from leftover first). Set draw order below. Surplus is not a leftover contribution.
+          “Keep I/C” uses that scenario’s income as in and its costs as the draw.
         </InfoTip>
       </div>
 
@@ -196,6 +236,85 @@ export function RunwayConfig({
           {formatMoney(preview.income, OVERVIEW_CURRENCY)} in →{' '}
           {formatMoney(preview.draw, OVERVIEW_CURRENCY)} out
         </span>
+      </div>
+
+      <div className="space-y-2 pt-1">
+        <div className="flex items-center gap-1.5">
+          <span className="section-title">Draw order</span>
+          <InfoTip label="About draw order">
+            Deficit years spend from the top series first. Drag rows to reorder. Locked until:
+            that series is skipped before the stated year. Surplus on leftover is not drawn.
+          </InfoTip>
+        </div>
+        {drawList.map((s, i) => {
+          const over = dragOverId === s.id && dragId !== s.id
+          return (
+            <div
+              key={s.id}
+              draggable
+              onDragStart={(e) => {
+                setDragId(s.id)
+                e.dataTransfer.effectAllowed = 'move'
+                e.dataTransfer.setData('text/plain', s.id)
+              }}
+              onDragEnd={() => {
+                setDragId(null)
+                setDragOverId(null)
+              }}
+              onDragOver={(e) => {
+                e.preventDefault()
+                e.dataTransfer.dropEffect = 'move'
+                if (dragOverId !== s.id) setDragOverId(s.id)
+              }}
+              onDragLeave={() => {
+                if (dragOverId === s.id) setDragOverId(null)
+              }}
+              onDrop={(e) => {
+                e.preventDefault()
+                dropOn(s.id)
+              }}
+              className={`flex flex-wrap items-center gap-2 rounded-md border px-2 py-1.5 ${
+                over ? 'border-sky-400/50 bg-sky-500/10' : 'border-white/10'
+              } ${dragId === s.id ? 'opacity-50' : ''}`}
+            >
+              <span
+                className="cursor-grab select-none text-white/30"
+                title="Drag to reorder"
+                aria-hidden
+              >
+                ⋮⋮
+              </span>
+              <span className="w-4 tabular-nums text-[10px] text-white/35">{i + 1}</span>
+              <span className="min-w-[8rem] flex-1 truncate text-white/80">
+                {s.name.trim() || 'Series'}
+              </span>
+              <label className="flex items-center gap-1 text-[10px] text-white/45">
+                Locked until
+                <input
+                  className="input !w-[4.5rem] !py-0.5 !text-xs tabular-nums"
+                  type="number"
+                  defaultValue={s.drawLockedUntilYear ?? ''}
+                  placeholder="—"
+                  onMouseDown={(e) => e.stopPropagation()}
+                  onBlur={(e) => {
+                    const raw = e.target.value.trim()
+                    if (!raw) {
+                      onUpdateSeries(s.id, { drawLockedUntilYear: null })
+                      return
+                    }
+                    const y = Math.floor(Number(raw))
+                    onUpdateSeries(s.id, {
+                      drawLockedUntilYear:
+                        Number.isFinite(y) && y >= 1900 && y <= 2200
+                          ? y
+                          : s.drawLockedUntilYear ?? null,
+                    })
+                  }}
+                />
+              </label>
+            </div>
+          )
+        })}
       </div>
     </div>
   )

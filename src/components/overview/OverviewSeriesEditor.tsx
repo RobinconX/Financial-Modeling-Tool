@@ -777,6 +777,12 @@ export function OverviewSeriesEditor({
                       value={s.compoundUntilYear}
                       onCommit={(y) => onUpdate(s.id, { compoundUntilYear: y })}
                     />
+                    <YearUntilInput
+                      label="Draw locked until"
+                      title="Runway cannot draw from this series before this year (empty = always drawable)"
+                      value={s.drawLockedUntilYear}
+                      onCommit={(y) => onUpdate(s.id, { drawLockedUntilYear: y })}
+                    />
 
                     {s.type === 'portfolio' && (
                       <div className="sm:col-span-1 lg:col-span-2">

@@ -118,6 +118,10 @@ function normalizeSeries(raw: unknown, index: number): OverviewSeries | null {
     const y = Math.floor(asNumber(raw.contributeUntilYear, NaN))
     if (Number.isFinite(y) && y >= 1900 && y <= 2200) series.contributeUntilYear = y
   }
+  if (raw.drawLockedUntilYear != null) {
+    const y = Math.floor(asNumber(raw.drawLockedUntilYear, NaN))
+    if (Number.isFinite(y) && y >= 1900 && y <= 2200) series.drawLockedUntilYear = y
+  }
   return series
 }
 

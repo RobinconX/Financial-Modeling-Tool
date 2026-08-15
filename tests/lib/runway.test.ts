@@ -9,6 +9,8 @@ import {
   buildRunwayChartRows,
   growLeftoverByRate,
   periodAddsICsurplus,
+  resolveRunwayDrawOrder,
+  seriesDrawLocked,
   stepRunwayLeftoverPile,
   takeFromAssets,
 } from '../../src/lib/runway'
@@ -260,6 +262,87 @@ describe('leftover surplus timing', () => {
     expect(byYear.get(2030)?.l).toBe(95_000)
     expect(byYear.get(2031)?.__surplus).toBe(70_000)
     expect(byYear.get(2031)?.l).toBe(165_000)
+  })
+})
+
+describe('runway draw order and lock', () => {
+  it('uses configured draw order then default leftover-first remainder', () => {
+    const leftover = series({ id: 'l', type: 'incomeLeftover' })
+    const port = series({ id: 'p', type: 'portfolio' })
+    const cash: SavingsAccount = {
+      id: 'cash',
+      name: 'Cash',
+      role: 'cash',
+      actuals: {},
+      contribution: 0,
+      cadence: 'monthly',
+      annualRatePercent: 0,
+      sortOrder: 0,
+    }
+    const sav = series({ id: 'c', type: 'savings', savingsAccountId: 'cash' })
+    const order = resolveRunwayDrawOrder(
+      [leftover, port, sav],
+      { periods: [], drawOrder: ['p', 'l'] },
+      [cash],
+    )
+    expect(order.map((s) => s.id)).toEqual(['p', 'l', 'c'])
+  })
+
+  it('locks a series before the stated year', () => {
+    const port = series({ id: 'p', type: 'portfolio', drawLockedUntilYear: 2030 })
+    expect(seriesDrawLocked(port, 2029)).toBe(true)
+    expect(seriesDrawLocked(port, 2030)).toBe(false)
+  })
+
+  it('does not draw leftover before drawLockedUntilYear', () => {
+    const leftover = series({
+      id: 'l',
+      type: 'incomeLeftover',
+      baseChf: 10_000,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      perpetualYearlyChf: 0,
+      yearBindings: [],
+      drawLockedUntilYear: 2028,
+    })
+    const cashAcc: SavingsAccount = {
+      id: 'cash',
+      name: 'Cash',
+      role: 'cash',
+      actuals: { '2026-07': 20_000 },
+      contribution: 0,
+      cadence: 'monthly',
+      annualRatePercent: 0,
+      sortOrder: 0,
+    }
+    const cash = series({ id: 'c', type: 'savings', savingsAccountId: 'cash' })
+    const asOf = new Date(2026, 6, 15)
+    const rows = buildRunwayChartRows(
+      { startYear: 2026, endYear: 2028, series: [leftover, cash] },
+      {
+        portfolios: [],
+        stockScenarios: [],
+        savingsAccounts: [cashAcc],
+        incomeCostLines: [],
+        usdToChf: 0.9,
+        asOf,
+      },
+      {
+        periods: [
+          {
+            ...defaultRunwayPeriod(2026),
+            manualIncomeChf: 0,
+            drawMode: 'fixed',
+            drawFixedChf: 8_000,
+          },
+        ],
+        drawOrder: ['l', 'c'],
+      },
+    )
+    const byYear = new Map(rows.filter((r) => !r.isNow).map((r) => [r.year, r]))
+    expect(byYear.get(2026)?.l).toBe(10_000)
+    expect(byYear.get(2027)?.l).toBe(10_000)
+    expect(byYear.get(2028)?.l).toBe(2_000)
   })
 })
 

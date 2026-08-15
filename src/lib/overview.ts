@@ -312,6 +312,7 @@ export function newOverviewSeries(
     annualRatePercent: partial.annualRatePercent ?? 0,
     compoundUntilYear: partial.compoundUntilYear ?? null,
     contributeUntilYear: partial.contributeUntilYear ?? null,
+    drawLockedUntilYear: partial.drawLockedUntilYear ?? null,
     baseYear: partial.baseYear ?? new Date().getFullYear(),
     yearBindings: partial.yearBindings ?? [],
     perpetualYearlyChf: partial.perpetualYearlyChf ?? 0,

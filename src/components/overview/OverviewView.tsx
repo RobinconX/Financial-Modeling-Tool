@@ -671,11 +671,14 @@ export function OverviewView({
             config={runwayConfig}
             incomeCostScenarios={incomeCostScenarios}
             incomeCostLines={incomeCostLines}
+            series={runwaySeries}
+            savingsAccounts={savingsAccounts}
             onChange={(patch) =>
               updateScenario(selectedScenario.id, {
                 runway: { ...runwayConfig, ...patch },
               })
             }
+            onUpdateSeries={updateSeries}
           />
         ) : null}
         {pageTab === 'networth' ? (

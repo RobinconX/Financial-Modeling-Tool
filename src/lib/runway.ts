@@ -32,7 +32,7 @@ export function defaultRunwayPeriod(startYear: number): OverviewRunwayPeriod {
 }
 
 export function defaultRunwayConfig(asOf: Date = new Date()): OverviewRunwayConfig {
-  return { periods: [defaultRunwayPeriod(asOf.getFullYear())] }
+  return { periods: [defaultRunwayPeriod(asOf.getFullYear())], drawOrder: [] }
 }
 
 function isRecord(v: unknown): v is Record<string, unknown> {
@@ -67,19 +67,35 @@ function normalizePeriod(raw: unknown, fallbackYear: number): OverviewRunwayPeri
   }
 }
 
+function parseDrawOrder(raw: unknown): string[] {
+  if (!Array.isArray(raw)) return []
+  const out: string[] = []
+  const seen = new Set<string>()
+  for (const id of raw) {
+    if (typeof id !== 'string' || !id || seen.has(id)) continue
+    seen.add(id)
+    out.push(id)
+  }
+  return out
+}
+
 export function normalizeRunwayConfig(raw: unknown): OverviewRunwayConfig {
   const cy = new Date().getFullYear()
+  const drawOrder = isRecord(raw) ? parseDrawOrder(raw.drawOrder) : []
   if (isRecord(raw) && Array.isArray(raw.periods)) {
     const periods = raw.periods
       .map((p) => normalizePeriod(p, cy))
       .filter((p): p is OverviewRunwayPeriod => p != null)
       .sort((a, b) => a.startYear - b.startYear)
-    return { periods: periods.length > 0 ? periods : defaultRunwayConfig().periods }
+    return {
+      periods: periods.length > 0 ? periods : defaultRunwayConfig().periods,
+      drawOrder,
+    }
   }
   // Legacy single-block config
   if (isRecord(raw) && (raw.incomeSource != null || raw.drawMode != null || raw.manualIncomeChf != null)) {
     const p = normalizePeriod({ ...raw, startYear: cy, mode: raw.incomeSource }, cy)
-    return { periods: p ? [p] : defaultRunwayConfig().periods }
+    return { periods: p ? [p] : defaultRunwayConfig().periods, drawOrder }
   }
   return defaultRunwayConfig()
 }
@@ -146,7 +162,7 @@ export function runwayDrawChf(
   return income * 1
 }
 
-function drawRank(s: OverviewSeries, accounts: SavingsAccount[]): number {
+export function defaultDrawRank(s: OverviewSeries, accounts: SavingsAccount[]): number {
   if (s.type === 'incomeLeftover') return 0
   if (s.type === 'savings') {
     const acc = accounts.find((a) => a.id === s.savingsAccountId)
@@ -158,6 +174,38 @@ function drawRank(s: OverviewSeries, accounts: SavingsAccount[]): number {
   return 9
 }
 
+/** Locked in years before `drawLockedUntilYear`. That year and after are drawable. */
+export function seriesDrawLocked(s: OverviewSeries, year: number): boolean {
+  const lock = s.drawLockedUntilYear
+  return lock != null && Number.isFinite(lock) && year < lock
+}
+
+/** Draw order: configured ids first, then remaining by leftover → cash → savings → portfolios → manuals. */
+export function resolveRunwayDrawOrder(
+  series: OverviewSeries[],
+  config: OverviewRunwayConfig,
+  accounts: SavingsAccount[],
+): OverviewSeries[] {
+  const byId = new Map(series.map((s) => [s.id, s]))
+  const out: OverviewSeries[] = []
+  const seen = new Set<string>()
+  for (const id of config.drawOrder ?? []) {
+    const s = byId.get(id)
+    if (!s || seen.has(s.id)) continue
+    out.push(s)
+    seen.add(s.id)
+  }
+  const rest = series
+    .filter((s) => !seen.has(s.id))
+    .sort(
+      (a, b) =>
+        defaultDrawRank(a, accounts) - defaultDrawRank(b, accounts) ||
+        a.sortOrder - b.sortOrder ||
+        a.id.localeCompare(b.id),
+    )
+  return [...out, ...rest]
+}
+
 /** Take `gap` from balances: leftover, cash, other savings, portfolios, manuals. */
 export function takeFromAssets(
   balances: Map<string, number>,
@@ -166,12 +214,7 @@ export function takeFromAssets(
   gap: number,
 ): number {
   if (!(gap > 0)) return 0
-  const order = [...series].sort(
-    (a, b) =>
-      drawRank(a, accounts) - drawRank(b, accounts) ||
-      a.sortOrder - b.sortOrder ||
-      a.id.localeCompare(b.id),
-  )
+  const order = resolveRunwayDrawOrder(series, { periods: [], drawOrder: [] }, accounts)
   let left = gap
   for (const s of order) {
     if (!(left > 0)) break
@@ -361,19 +404,30 @@ export function buildRunwayChartRows(
     const { income, draw } = runwayIncomeDrawForYear(config, year, scoped.incomeCostLines)
     const gap = Math.max(0, draw - income)
     const yearSurplus = Math.max(0, income - draw)
-
-    let leftoverTake = 0
+    leftoverSurplus += yearSurplus
     if (leftoverSeries) {
       leftoverCopy = stepRunwayLeftoverPile(leftoverCopy, leftoverSeries, prevGrow, year, scoped)
-      leftoverTake = Math.min(leftoverCopy, gap)
-      leftoverCopy = Math.max(0, leftoverCopy - leftoverTake)
-      leftoverSurplus += yearSurplus
-      balances.set(leftoverSeries.id, leftoverCopy + leftoverSurplus)
     }
 
-    const rest = active.filter((s) => s.type !== 'incomeLeftover')
-    const fromAssets =
-      leftoverTake + takeFromAssets(balances, rest, deps.savingsAccounts, gap - leftoverTake)
+    let left = gap
+    for (const s of resolveRunwayDrawOrder(active, config, deps.savingsAccounts)) {
+      if (!(left > 0)) break
+      if (seriesDrawLocked(s, year)) continue
+      if (s.type === 'incomeLeftover') {
+        const take = Math.min(leftoverCopy, left)
+        leftoverCopy -= take
+        left -= take
+        continue
+      }
+      const have = balances.get(s.id) ?? 0
+      const take = Math.min(have, left)
+      balances.set(s.id, have - take)
+      left -= take
+    }
+    if (leftoverSeries) {
+      balances.set(leftoverSeries.id, leftoverCopy + leftoverSurplus)
+    }
+    const fromAssets = gap - left
     rows.push(
       rowFromBalances(year, String(year), String(year), yearKind(year, asOf), false, active, balances, {
         income,

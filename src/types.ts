@@ -318,6 +318,11 @@ export type OverviewSeries = {
    */
   contributeUntilYear?: number | null
   /**
+   * First calendar year this series may be drawn from on Runway.
+   * Years before this are locked. Empty = always drawable.
+   */
+  drawLockedUntilYear?: number | null
+  /**
    * @deprecated Manual funding is yearBindings + percent.
    */
   manualYearlyChf?: number
@@ -344,6 +349,8 @@ export type OverviewRunwayPeriod = {
 /** Per-overview-scenario runway: ordered periods (each applies until the next). */
 export type OverviewRunwayConfig = {
   periods: OverviewRunwayPeriod[]
+  /** Series ids, first = drawn first on a deficit year. Empty = leftover, cash, savings, portfolios, manuals. */
+  drawOrder?: string[]
 }
 
 /** Named combination of asset series (+ year range) for the Overview chart. */

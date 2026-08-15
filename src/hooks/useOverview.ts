@@ -121,10 +121,17 @@ export function useOverview() {
         sc.startYear = sel.startYear
         sc.endYear = sel.endYear
         sc.description = sel.description ?? ''
+        const cloned = cloneSeriesList(sel.series)
+        const idMap = new Map(sel.series.map((s, i) => [s.id, cloned[i]!.id]))
         sc.runway = sel.runway
-          ? { periods: (sel.runway.periods ?? []).map((p) => ({ ...p })) }
+          ? {
+              periods: (sel.runway.periods ?? []).map((p) => ({ ...p })),
+              drawOrder: (sel.runway.drawOrder ?? [])
+                .map((id) => idMap.get(id))
+                .filter((id): id is string => Boolean(id)),
+            }
           : sc.runway
-        sc.series = ensurePermanentSavings(cloneSeriesList(sel.series), savingsAccounts)
+        sc.series = ensurePermanentSavings(cloned, savingsAccounts)
         created = sc
         return {
           ...prev,
