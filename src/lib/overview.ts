@@ -24,6 +24,7 @@ import {
 } from './savings'
 import {
   cashAtYear,
+  cashFromDeposits,
   getActions,
   getActualsCurrency,
   getDeposits,
@@ -134,59 +135,59 @@ export function isPermanentSavingsSeries(
 /**
  * Ensure every savings account has a series on this Overview scenario.
  * Drops savings series whose account no longer exists.
- * Accounts stay listed (cannot remove); enabled is user-controlled for chart display.
+ * Keeps existing savings sortOrder (Overview stack order). New accounts
+ * append after the last existing savings sortOrder.
  */
 export function ensurePermanentSavings(
   series: OverviewSeries[],
   accounts: SavingsAccount[],
 ): OverviewSeries[] {
-  const nonSavings = series.filter((s) => s.type !== 'savings')
-  const existingByAccount = new Map<string, OverviewSeries>()
-  for (const s of series) {
-    if (s.type === 'savings' && s.savingsAccountId) {
-      existingByAccount.set(s.savingsAccountId, s)
-    }
-  }
+  const accountIds = new Set(accounts.map((a) => a.id))
+  const kept = series.filter(
+    (s) => s.type !== 'savings' || (s.savingsAccountId != null && accountIds.has(s.savingsAccountId)),
+  )
+  const haveAccount = new Set(
+    kept
+      .filter((s) => s.type === 'savings' && s.savingsAccountId)
+      .map((s) => s.savingsAccountId as string),
+  )
 
-  // Preserve savings block position in the stack when possible
-  const priorSavings = series.filter((s) => s.type === 'savings')
+  const existingSavings = kept.filter((s) => s.type === 'savings')
   let nextOrder =
-    priorSavings.length > 0
-      ? Math.min(...priorSavings.map((s) => s.sortOrder))
-      : nonSavings
+    existingSavings.length > 0
+      ? Math.max(...existingSavings.map((s) => s.sortOrder)) + 1
+      : kept
           .filter((s) => s.type !== 'incomeLeftover')
           .reduce((m, s) => Math.max(m, s.sortOrder), -1) + 1
 
-  const savingsOut: OverviewSeries[] = []
+  const added: OverviewSeries[] = []
   for (const acc of accounts) {
-    const prev = existingByAccount.get(acc.id)
+    if (haveAccount.has(acc.id)) continue
     const cash = isPermanentCashAccount(acc)
-    if (prev) {
-      savingsOut.push({
-        ...prev,
-        sortOrder: nextOrder++,
-        enabled: prev.enabled,
-        name: prev.name.trim() || acc.name.trim() || (cash ? 'Cash' : 'Savings'),
-        savingsAccountId: acc.id,
-      })
-    } else {
-      savingsOut.push(
-        newOverviewSeries(
-          {
-            type: 'savings',
-            name: acc.name.trim() || (cash ? 'Cash' : 'Savings'),
-            savingsAccountId: acc.id,
-            enabled: true,
-          },
-          nextOrder++,
-        ),
-      )
-    }
+    added.push(
+      newOverviewSeries(
+        {
+          type: 'savings',
+          name: acc.name.trim() || (cash ? 'Cash' : 'Savings'),
+          savingsAccountId: acc.id,
+          enabled: true,
+        },
+        nextOrder++,
+      ),
+    )
   }
 
-  // Keep non-savings series; renumber savings into their block without
-  // reordering other groups relative to each other more than necessary.
-  return ensurePermanentLeftover([...nonSavings, ...savingsOut])
+  const refreshed = kept.map((s) => {
+    if (s.type !== 'savings' || !s.savingsAccountId) return s
+    const acc = accounts.find((a) => a.id === s.savingsAccountId)
+    if (!acc) return s
+    const cash = isPermanentCashAccount(acc)
+    const name = s.name.trim() || acc.name.trim() || (cash ? 'Cash' : 'Savings')
+    if (name === s.name) return s
+    return { ...s, name }
+  })
+
+  return ensurePermanentLeftover([...refreshed, ...added])
 }
 
 /** True when every account has a mapped savings series (enabled flags are free). */
@@ -313,6 +314,7 @@ export function newOverviewSeries(
     compoundUntilYear: partial.compoundUntilYear ?? null,
     contributeUntilYear: partial.contributeUntilYear ?? null,
     drawLockedUntilYear: partial.drawLockedUntilYear ?? null,
+    drawTiming: partial.drawTiming ?? null,
     baseYear: partial.baseYear ?? new Date().getFullYear(),
     yearBindings: partial.yearBindings ?? [],
     perpetualYearlyChf: partial.perpetualYearlyChf ?? 0,
@@ -727,6 +729,8 @@ export function portfolioBreakdownChfAtYear(
   const resolved = withResolvedDepositAmounts(p, depositCtx)
   const actions = getActions(resolved)
   const last = lastStatedProjectionYear(resolved, deps.stockScenarios, currentYear)
+  const until = series.compoundUntilYear
+  const contribUntil = series.contributeUntilYear
 
   if (options?.live) {
     // Now bar: positions as held (ignore planned buy/sell actions)
@@ -769,14 +773,36 @@ export function portfolioBreakdownChfAtYear(
     }
   }
 
+  if (until != null && Number.isFinite(until) && year > until) {
+    const lines = portfolioBreakdownChfAtYear(
+      { ...series, compoundUntilYear: null },
+      until,
+      deps,
+      options,
+    )
+    const addThrough =
+      contribUntil != null && Number.isFinite(contribUntil) ? Math.min(year, contribUntil) : year
+    const addUsd = extraCashFromDepositsAfter(resolved, until, addThrough, currentYear)
+    if (addUsd > 0) {
+      lines.push({
+        label: `Deposits after ${until}`,
+        kind: 'cash',
+        valueChf: toDisplay(addUsd, 'CHF', deps.usdToChf),
+      })
+    }
+    return lines
+  }
+
   const rate = getPerpetualGrowthRate(resolved)
 
-  // After last stated year with growth: single compounded total (matches portfolio grid)
+  // After last stated year with growth: single compounded total (matches series bar)
   if (year > last && rate !== 0) {
-    const grown = portfolioBookTotalUsdAtYear(
+    const grown = overviewPortfolioSeriesUsd(
       resolved,
-      deps.stockScenarios,
       year,
+      until,
+      contribUntil,
+      deps.stockScenarios,
       currentYear,
     )
     return [
@@ -808,7 +834,10 @@ export function portfolioBreakdownChfAtYear(
 
   // After last stated without growth: cash only (same as portfolio grid)
   if (year <= last || rate === 0) {
-    const cashUsd = cashAtYear(resolved, year, deps.stockScenarios, currentYear)
+    let cashUsd = cashAtYear(resolved, year, deps.stockScenarios, currentYear)
+    if (contribUntil != null && Number.isFinite(contribUntil) && year > contribUntil) {
+      cashUsd -= extraCashFromDepositsAfter(resolved, contribUntil, year, currentYear)
+    }
     if (Number.isFinite(cashUsd) && cashUsd !== 0) {
       lines.push({
         label: 'Cash',
@@ -918,6 +947,82 @@ export function portfolioTotalUsdAtYear(
 ): number {
   const resolved = withResolvedDepositAmounts(portfolio, depositCtx)
   return portfolioBookTotalUsdAtYear(resolved, stockScenarios, year, currentYear)
+}
+
+/** Deposits scheduled after `afterYear` through `asOfYear` (USD book). */
+function extraCashFromDepositsAfter(
+  portfolio: SavedPortfolio,
+  afterYear: number,
+  asOfYear: number,
+  currentYear: number,
+): number {
+  if (asOfYear <= afterYear) return 0
+  return (
+    cashFromDeposits(portfolio, asOfYear, currentYear) -
+    cashFromDeposits(portfolio, afterYear, currentYear)
+  )
+}
+
+/**
+ * Overview portfolio book USD: compound-until freezes growth (later deposits
+ * still land); contribute-until stops those additions. Does not change the
+ * Portfolio tab — only this series’ Overview / Runway value.
+ */
+function overviewPortfolioSeriesUsd(
+  portfolio: SavedPortfolio,
+  year: number,
+  compoundUntil: number | null | undefined,
+  contributeUntil: number | null | undefined,
+  scenarios: SavedScenario[],
+  currentYear: number,
+): number {
+  const until = compoundUntil != null && Number.isFinite(compoundUntil) ? compoundUntil : null
+  const contribUntil =
+    contributeUntil != null && Number.isFinite(contributeUntil) ? contributeUntil : null
+
+  if (until != null && year > until) {
+    const frozen = overviewPortfolioSeriesUsd(
+      portfolio,
+      until,
+      null,
+      contribUntil,
+      scenarios,
+      currentYear,
+    )
+    const addThrough = contribUntil == null ? year : Math.min(year, contribUntil)
+    return (
+      frozen +
+      Math.max(0, extraCashFromDepositsAfter(portfolio, until, addThrough, currentYear))
+    )
+  }
+
+  if (contribUntil == null || year <= contribUntil) {
+    return portfolioBookTotalUsdAtYear(portfolio, scenarios, year, currentYear)
+  }
+
+  const last = lastStatedProjectionYear(portfolio, scenarios, currentYear)
+  const rate = getPerpetualGrowthRate(portfolio)
+  const extraThrough = (y: number) =>
+    extraCashFromDepositsAfter(portfolio, contribUntil, y, currentYear)
+
+  if (year <= last || rate === 0) {
+    return portfolioBookTotalUsdAtYear(portfolio, scenarios, year, currentYear) - extraThrough(year)
+  }
+
+  // After last stated: keep growth, drop deposits after contribute-until
+  // (cannot subtract nominal later deposits — they would have been compounded).
+  if (contribUntil >= last) {
+    let v = portfolioBookTotalUsdAtYear(portfolio, scenarios, contribUntil, currentYear)
+    const r = 1 + rate / 100
+    for (let y = contribUntil + 1; y <= year; y++) v *= r
+    return v
+  }
+
+  let v =
+    portfolioBookTotalUsdAtYear(portfolio, scenarios, last, currentYear) - extraThrough(last)
+  const r = 1 + rate / 100
+  for (let y = last + 1; y <= year; y++) v *= r
+  return v
 }
 
 /** Live portfolio total in CHF (opening cash + live holdings), matching Portfolio Now. */
@@ -1057,11 +1162,6 @@ export function seriesValueChf(
     if (!p) return 0
     if (deps.usdToChf == null || deps.usdToChf <= 0) return 0
 
-    const until = series.compoundUntilYear
-    if (until != null && year > until) {
-      return seriesValueChf({ ...series, compoundUntilYear: null }, until, deps)
-    }
-
     // Past years: stack year-end actual when present (matches Portfolio chart)
     if (year < currentYear) {
       const actualUsd = yearEndActualUsd(p, year, deps.usdToChf)
@@ -1074,11 +1174,13 @@ export function seriesValueChf(
       incomeCostLines: deps.incomeCostLines,
       usdToChf: deps.usdToChf,
     }
-    const usd = portfolioTotalUsdAtYear(
-      p,
-      deps.stockScenarios,
+    const resolved = withResolvedDepositAmounts(p, depositCtx)
+    const usd = overviewPortfolioSeriesUsd(
+      resolved,
       year,
-      depositCtx,
+      series.compoundUntilYear,
+      series.contributeUntilYear,
+      deps.stockScenarios,
       currentYear,
     )
     return toDisplay(usd, 'CHF', deps.usdToChf)

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react'
-import { useSavings } from '../../hooks/useSavings'
+import type { SavingsApi } from '../../hooks/useSavings'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { InfoTip } from '../common/InfoTip'
 import { SavingsActualsEditor } from './SavingsActualsEditor'
@@ -15,23 +15,22 @@ const SUB_TABS: { id: SubTab; label: string }[] = [
   { id: 'projection', label: 'Projection' },
 ]
 
-export function SavingsView() {
-  const {
-    accounts,
-    total,
-    error,
-    addAccount,
-    removeAccount,
-    setActual,
-    setContribution,
-    setCadence,
-    setRate,
-    setCompoundUntilYear,
-    setContributeUntilYear,
-    setName,
-    addPastPeriodKey,
-    removePastPeriod,
-  } = useSavings()
+export function SavingsView({
+  accounts,
+  total,
+  error,
+  addAccount,
+  removeAccount,
+  setActual,
+  setContribution,
+  setCadence,
+  setRate,
+  setCompoundUntilYear,
+  setContributeUntilYear,
+  setName,
+  addPastPeriodKey,
+  removePastPeriod,
+}: SavingsApi) {
 
   const [subTab, setSubTab] = useState<SubTab>('inputs')
   const asOf = useMemo(() => new Date(), [])
@@ -131,18 +130,6 @@ export function SavingsView() {
             <FullscreenChart title="Savings · all accounts">
               <SavingsChart accounts={accounts} asOf={asOf} />
             </FullscreenChart>
-            <div className="flex flex-wrap gap-3 text-[11px] text-white/40">
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-sm bg-emerald-400/80" /> Year-end actual
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-sm bg-sky-400/80 ring-1 ring-white/50" /> Now
-                (live)
-              </span>
-              <span className="inline-flex items-center gap-1.5">
-                <span className="h-2 w-2 rounded-sm bg-white/25" /> Projected
-              </span>
-            </div>
           </div>
         </div>
       )}

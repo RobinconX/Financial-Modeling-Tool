@@ -1,4 +1,6 @@
 import {
+  memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -117,6 +119,7 @@ export function PortfolioChart({
   const chartAreaRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [areaSize, setAreaSize] = useState({ w: 0, h: 0 })
+  const hoverKeyRef = useRef<string | null>(null)
 
   const equityRows = useMemo(
     () => grid.rows.filter((r) => r.kind === 'equity'),
@@ -221,16 +224,17 @@ export function PortfolioChart({
   const barCategoryGap = data.length > 14 ? '12%' : data.length > 8 ? '18%' : '28%'
   const maxBarSize = data.length > 14 ? 28 : data.length > 8 ? 40 : 52
 
-  const tickKeys = new Set<string>(['now'])
-  const yearPoints = data.filter((d) => !d.isNow)
-  const tickStep = yearPoints.length <= 12 ? 1 : yearPoints.length <= 24 ? 2 : 5
-  yearPoints.forEach((d, i) => {
-    if (i % tickStep === 0 || i === yearPoints.length - 1 || d.isCurrentYear || d.isActual) {
-      tickKeys.add(String(d.xKey))
-    }
-  })
-  // Always label Now (sits between past and current year)
-  tickKeys.add('now')
+  const tickKeys = useMemo(() => {
+    const keys = new Set<string>(['now'])
+    const yearPoints = data.filter((d) => !d.isNow)
+    const tickStep = yearPoints.length <= 12 ? 1 : yearPoints.length <= 24 ? 2 : 5
+    yearPoints.forEach((d, i) => {
+      if (i % tickStep === 0 || i === yearPoints.length - 1 || d.isCurrentYear || d.isActual) {
+        keys.add(String(d.xKey))
+      }
+    })
+    return keys
+  }, [data])
 
   function resolvePoint(state: {
     isTooltipActive: boolean
@@ -262,6 +266,24 @@ export function PortfolioChart({
 
   const panelStyle = hover ? computePanelStyle(hover.barX, areaSize.w, areaSize.h) : null
 
+  const handleChartHover = useCallback(
+    (state: Parameters<typeof resolvePoint>[0]) => {
+      const next = resolvePoint(state)
+      const key = next?.point.xKey ?? null
+      if (key === hoverKeyRef.current) return
+      hoverKeyRef.current = key
+      setHover(next)
+    },
+    // resolvePoint closes over latest `data`; skip setState when the year is unchanged.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [data],
+  )
+
+  function clearHover() {
+    hoverKeyRef.current = null
+    setHover(null)
+  }
+
   return (
     <div
       className={
@@ -273,189 +295,21 @@ export function PortfolioChart({
       <div
         ref={chartAreaRef}
         className="relative min-h-0 w-full flex-1 overflow-hidden"
-        onMouseLeave={() => setHover(null)}
+        onMouseLeave={clearHover}
       >
-        <ResponsiveContainer width="100%" height="100%">
-          <BarChart
-            data={data}
-            margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
-            barCategoryGap={barCategoryGap}
-            onMouseMove={(state) => {
-              const next = resolvePoint(state)
-              setHover(next)
-            }}
-          >
-            <CartesianGrid
-              stroke="rgba(255,255,255,0.06)"
-              strokeDasharray="3 3"
-              vertical={false}
-            />
-            <XAxis
-              dataKey="xKey"
-              stroke="rgba(255,255,255,0.35)"
-              tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 11 }}
-              tickLine={false}
-              axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
-              interval={0}
-              tickFormatter={(key: string) => {
-                if (!tickKeys.has(key)) return ''
-                if (key === 'now') return 'Now'
-                return key
-              }}
-            />
-            <YAxis
-              stroke="rgba(255,255,255,0.35)"
-              tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 11 }}
-              tickLine={false}
-              tickFormatter={(v: number) => formatMoney(v, activeCurrency)}
-              width={72}
-              axisLine={false}
-            />
-            <Tooltip
-              cursor={{ fill: 'rgba(255,255,255,0.06)' }}
-              content={() => null}
-              isAnimationActive={false}
-            />
-
-            {chartMode === 'total' ? (
-              <Bar
-                dataKey={PORTFOLIO_TOTAL_CHART_KEY}
-                name="Portfolio"
-                stackId="portfolio"
-                fill={PORTFOLIO_TOTAL_COLOR}
-                isAnimationActive={false}
-                maxBarSize={maxBarSize}
-                radius={[3, 3, 0, 0]}
-              >
-                {data.map((entry) => (
-                  <Cell
-                    key={`total-${entry.xKey}`}
-                    fill={
-                      entry.isNow
-                        ? '#94a3b8'
-                        : entry.isActual
-                          ? PORTFOLIO_ACTUAL_COLOR
-                          : entry.isPerpetualGrowth
-                            ? PERPETUAL_GROWTH_COLOR
-                            : PORTFOLIO_TOTAL_COLOR
-                    }
-                    fillOpacity={entry.isEmpty ? 0 : entry.isActual ? 0.95 : 0.9}
-                    stroke={
-                      entry.isNow || entry.isActual
-                        ? 'rgba(255,255,255,0.4)'
-                        : undefined
-                    }
-                    strokeWidth={entry.isNow || entry.isActual ? 1.5 : 0}
-                  />
-                ))}
-              </Bar>
-            ) : (
-              <>
-                {equityRows.map((row, i) => (
-                  <Bar
-                    key={row.key}
-                    dataKey={row.key}
-                    name={row.label}
-                    stackId="portfolio"
-                    fill={HOLDING_COLORS[i % HOLDING_COLORS.length]}
-                    isAnimationActive={false}
-                    maxBarSize={maxBarSize}
-                  >
-                    {data.map((entry) => (
-                      <Cell
-                        key={`${row.key}-${entry.xKey}`}
-                        fill={
-                          entry.isActual
-                            ? PORTFOLIO_ACTUAL_COLOR
-                            : HOLDING_COLORS[i % HOLDING_COLORS.length]
-                        }
-                        fillOpacity={
-                          entry.isEmpty || entry.isPerpetualGrowth
-                            ? 0
-                            : entry.isActual
-                              ? 0
-                              : entry.isNow
-                                ? 1
-                                : entry.isCurrentYear
-                                  ? 0.95
-                                  : 0.88
-                        }
-                        stroke={entry.isNow ? 'rgba(255,255,255,0.35)' : undefined}
-                        strokeWidth={entry.isNow ? 1 : 0}
-                      />
-                    ))}
-                  </Bar>
-                ))}
-                {/* Past-year actuals in stacked mode use total key */}
-                {hasActuals && (
-                  <Bar
-                    dataKey={PORTFOLIO_TOTAL_CHART_KEY}
-                    name="Actual"
-                    stackId="portfolio"
-                    fill={PORTFOLIO_ACTUAL_COLOR}
-                    isAnimationActive={false}
-                    maxBarSize={maxBarSize}
-                    radius={[3, 3, 0, 0]}
-                  >
-                    {data.map((entry) => (
-                      <Cell
-                        key={`act-${entry.xKey}`}
-                        fill={PORTFOLIO_ACTUAL_COLOR}
-                        fillOpacity={entry.isActual ? 0.95 : 0}
-                        stroke={entry.isActual ? 'rgba(255,255,255,0.4)' : undefined}
-                        strokeWidth={entry.isActual ? 1.5 : 0}
-                      />
-                    ))}
-                  </Bar>
-                )}
-                {hasCash && (
-                  <Bar
-                    dataKey="cash"
-                    name="Cash"
-                    stackId="portfolio"
-                    fill={CASH_COLOR}
-                    isAnimationActive={false}
-                    maxBarSize={maxBarSize}
-                    radius={hasPerpetualGrowth ? [0, 0, 0, 0] : [3, 3, 0, 0]}
-                  >
-                    {data.map((entry) => (
-                      <Cell
-                        key={`cash-${entry.xKey}`}
-                        fill={entry.isNow ? NOW_CASH_COLOR : CASH_COLOR}
-                        fillOpacity={
-                          entry.isEmpty || entry.isPerpetualGrowth || entry.isActual
-                            ? 0
-                            : 1
-                        }
-                        stroke={entry.isNow ? 'rgba(255,255,255,0.35)' : undefined}
-                        strokeWidth={entry.isNow ? 1 : 0}
-                      />
-                    ))}
-                  </Bar>
-                )}
-                {hasPerpetualGrowth && (
-                  <Bar
-                    dataKey={PERPETUAL_GROWTH_CHART_KEY}
-                    name="Growth"
-                    stackId="portfolio"
-                    fill={PERPETUAL_GROWTH_COLOR}
-                    isAnimationActive={false}
-                    maxBarSize={maxBarSize}
-                    radius={[3, 3, 0, 0]}
-                  >
-                    {data.map((entry) => (
-                      <Cell
-                        key={`growth-${entry.xKey}`}
-                        fill={PERPETUAL_GROWTH_COLOR}
-                        fillOpacity={entry.isPerpetualGrowth ? 0.92 : 0}
-                      />
-                    ))}
-                  </Bar>
-                )}
-              </>
-            )}
-          </BarChart>
-        </ResponsiveContainer>
+        <PortfolioBarsPlot
+          data={data}
+          equityRows={equityRows}
+          chartMode={chartMode}
+          activeCurrency={activeCurrency}
+          barCategoryGap={barCategoryGap}
+          maxBarSize={maxBarSize}
+          tickKeys={tickKeys}
+          hasActuals={hasActuals}
+          hasCash={hasCash}
+          hasPerpetualGrowth={hasPerpetualGrowth}
+          onHover={handleChartHover}
+        />
 
         {hover && panelStyle && (
           <div
@@ -465,7 +319,7 @@ export function PortfolioChart({
             aria-label={`Breakdown for ${hover.point.yearLabel}`}
             className="absolute z-30 overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-[#121820]/97 shadow-2xl outline-none backdrop-blur-sm focus:ring-1 focus:ring-emerald-500/40"
             style={panelStyle}
-            onMouseLeave={() => setHover(null)}
+            onMouseLeave={clearHover}
           >
             <HoverPanel
               point={hover.point}
@@ -540,6 +394,216 @@ function HoverPanel({
     </div>
   )
 }
+
+type BarsPlotProps = {
+  data: PortfolioChartPoint[]
+  equityRows: PortfolioGrid['rows']
+  chartMode: PortfolioChartMode
+  activeCurrency: DisplayCurrency
+  barCategoryGap: string
+  maxBarSize: number
+  tickKeys: Set<string>
+  hasActuals: boolean
+  hasCash: boolean
+  hasPerpetualGrowth: boolean
+  onHover: (state: {
+    isTooltipActive: boolean
+    activeLabel?: string | number
+    activeTooltipIndex?: number | string | unknown
+    activeIndex?: number | string | unknown
+    activeCoordinate?: { x?: number; y?: number }
+  }) => void
+}
+
+const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
+  data,
+  equityRows,
+  chartMode,
+  activeCurrency,
+  barCategoryGap,
+  maxBarSize,
+  tickKeys,
+  hasActuals,
+  hasCash,
+  hasPerpetualGrowth,
+  onHover,
+}: BarsPlotProps) {
+  return (
+    <ResponsiveContainer width="100%" height="100%">
+      <BarChart
+        data={data}
+        margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+        barCategoryGap={barCategoryGap}
+        onMouseMove={onHover}
+      >
+        <CartesianGrid
+          stroke="rgba(255,255,255,0.06)"
+          strokeDasharray="3 3"
+          vertical={false}
+        />
+        <XAxis
+          dataKey="xKey"
+          stroke="rgba(255,255,255,0.35)"
+          tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 11 }}
+          tickLine={false}
+          axisLine={{ stroke: 'rgba(255,255,255,0.1)' }}
+          interval={0}
+          tickFormatter={(key: string) => {
+            if (!tickKeys.has(key)) return ''
+            if (key === 'now') return 'Now'
+            return key
+          }}
+        />
+        <YAxis
+          stroke="rgba(255,255,255,0.35)"
+          tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 11 }}
+          tickLine={false}
+          tickFormatter={(v: number) => formatMoney(v, activeCurrency)}
+          width={72}
+          axisLine={false}
+        />
+        <Tooltip
+          cursor={{ fill: 'rgba(255,255,255,0.06)' }}
+          content={() => null}
+          isAnimationActive={false}
+        />
+
+        {chartMode === 'total' ? (
+          <Bar
+            dataKey={PORTFOLIO_TOTAL_CHART_KEY}
+            name="Portfolio"
+            stackId="portfolio"
+            fill={PORTFOLIO_TOTAL_COLOR}
+            isAnimationActive={false}
+            maxBarSize={maxBarSize}
+            radius={[3, 3, 0, 0]}
+          >
+            {data.map((entry) => (
+              <Cell
+                key={`total-${entry.xKey}`}
+                fill={
+                  entry.isNow
+                    ? '#94a3b8'
+                    : entry.isActual
+                      ? PORTFOLIO_ACTUAL_COLOR
+                      : entry.isPerpetualGrowth
+                        ? PERPETUAL_GROWTH_COLOR
+                        : PORTFOLIO_TOTAL_COLOR
+                }
+                fillOpacity={entry.isEmpty ? 0 : entry.isActual ? 0.95 : 0.9}
+                stroke={
+                  entry.isNow || entry.isActual ? 'rgba(255,255,255,0.4)' : undefined
+                }
+                strokeWidth={entry.isNow || entry.isActual ? 1.5 : 0}
+              />
+            ))}
+          </Bar>
+        ) : (
+          <>
+            {equityRows.map((row, i) => (
+              <Bar
+                key={row.key}
+                dataKey={row.key}
+                name={row.label}
+                stackId="portfolio"
+                fill={HOLDING_COLORS[i % HOLDING_COLORS.length]}
+                isAnimationActive={false}
+                maxBarSize={maxBarSize}
+              >
+                {data.map((entry) => (
+                  <Cell
+                    key={`${row.key}-${entry.xKey}`}
+                    fill={
+                      entry.isActual
+                        ? PORTFOLIO_ACTUAL_COLOR
+                        : HOLDING_COLORS[i % HOLDING_COLORS.length]
+                    }
+                    fillOpacity={
+                      entry.isEmpty || entry.isPerpetualGrowth
+                        ? 0
+                        : entry.isActual
+                          ? 0
+                          : entry.isNow
+                            ? 1
+                            : entry.isCurrentYear
+                              ? 0.95
+                              : 0.88
+                    }
+                    stroke={entry.isNow ? 'rgba(255,255,255,0.35)' : undefined}
+                    strokeWidth={entry.isNow ? 1 : 0}
+                  />
+                ))}
+              </Bar>
+            ))}
+            {hasActuals && (
+              <Bar
+                dataKey={PORTFOLIO_TOTAL_CHART_KEY}
+                name="Actual"
+                stackId="portfolio"
+                fill={PORTFOLIO_ACTUAL_COLOR}
+                isAnimationActive={false}
+                maxBarSize={maxBarSize}
+                radius={[3, 3, 0, 0]}
+              >
+                {data.map((entry) => (
+                  <Cell
+                    key={`act-${entry.xKey}`}
+                    fill={PORTFOLIO_ACTUAL_COLOR}
+                    fillOpacity={entry.isActual ? 0.95 : 0}
+                    stroke={entry.isActual ? 'rgba(255,255,255,0.4)' : undefined}
+                    strokeWidth={entry.isActual ? 1.5 : 0}
+                  />
+                ))}
+              </Bar>
+            )}
+            {hasCash && (
+              <Bar
+                dataKey="cash"
+                name="Cash"
+                stackId="portfolio"
+                fill={CASH_COLOR}
+                isAnimationActive={false}
+                maxBarSize={maxBarSize}
+                radius={hasPerpetualGrowth ? [0, 0, 0, 0] : [3, 3, 0, 0]}
+              >
+                {data.map((entry) => (
+                  <Cell
+                    key={`cash-${entry.xKey}`}
+                    fill={entry.isNow ? NOW_CASH_COLOR : CASH_COLOR}
+                    fillOpacity={
+                      entry.isEmpty || entry.isPerpetualGrowth || entry.isActual ? 0 : 1
+                    }
+                    stroke={entry.isNow ? 'rgba(255,255,255,0.35)' : undefined}
+                    strokeWidth={entry.isNow ? 1 : 0}
+                  />
+                ))}
+              </Bar>
+            )}
+            {hasPerpetualGrowth && (
+              <Bar
+                dataKey={PERPETUAL_GROWTH_CHART_KEY}
+                name="Growth"
+                stackId="portfolio"
+                fill={PERPETUAL_GROWTH_COLOR}
+                isAnimationActive={false}
+                maxBarSize={maxBarSize}
+                radius={[3, 3, 0, 0]}
+              >
+                {data.map((entry) => (
+                  <Cell
+                    key={`growth-${entry.xKey}`}
+                    fill={PERPETUAL_GROWTH_COLOR}
+                    fillOpacity={entry.isPerpetualGrowth ? 0.92 : 0}
+                  />
+                ))}
+              </Bar>
+            )}
+          </>
+        )}
+      </BarChart>
+    </ResponsiveContainer>
+  )
+})
 
 function computePanelStyle(barX: number, areaW: number, areaH: number): CSSProperties {
   if (areaW <= 0) return { left: PANEL_EDGE, top: PANEL_TOP, width: PANEL_WIDTH, maxHeight: 200 }

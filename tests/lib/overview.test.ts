@@ -4,6 +4,7 @@ import {
   buildOverviewChartRows,
   buildOverviewCompareRows,
   clampOverviewRange,
+  ensurePermanentSavings,
   manualValueAtYear,
   recordedOverviewByYear,
   residualCashValueAtYear,
@@ -641,6 +642,162 @@ describe('savingsValueAtYear', () => {
       },
     )
     expect(v).toBe(1000)
+  })
+})
+
+describe('portfolio series contribute / compound until', () => {
+  const portfolio: SavedPortfolio = {
+    id: 'port-grow',
+    name: 'Grow',
+    currentCash: 0,
+    deposits: [newOpeningDeposit(10_000, 2026)],
+    holdings: [],
+    actions: [],
+    perpetualGrowthPercent: 10,
+    perpetualYearlyDeposit: { amount: 1_000, source: 'fixed' },
+    createdAt: '2026-01-01T00:00:00.000Z',
+    updatedAt: '2026-01-01T00:00:00.000Z',
+  }
+  const deps = {
+    portfolios: [portfolio],
+    stockScenarios: [],
+    savingsAccounts: [],
+    incomeCostLines: [],
+    usdToChf: 0.9,
+    asOf,
+  }
+  const series = (partial: Partial<OverviewSeries> = {}): OverviewSeries => ({
+    id: 'p',
+    name: 'Port',
+    enabled: true,
+    sortOrder: 0,
+    type: 'portfolio',
+    portfolioId: 'port-grow',
+    ...partial,
+  })
+
+  it('until year matches the uncapped total', () => {
+    expect(seriesValueChf(series({ compoundUntilYear: 2027 }), 2027, deps)).toBeCloseTo(
+      seriesValueChf(series(), 2027, deps),
+    )
+  })
+
+  it('compoundUntil freezes growth but later deposits still land', () => {
+    // 2027: 10000 × 1.1 + 1000 = 12000 USD
+    // 2028 uncapped: 12000 × 1.1 + 1000 = 14200 USD
+    // 2028 frozen: 12000 + 1000 = 13000 USD
+    const frozen = series({ compoundUntilYear: 2027 })
+    expect(seriesValueChf(frozen, 2027, deps)).toBeCloseTo(12_000 * 0.9, 4)
+    expect(seriesValueChf(frozen, 2028, deps)).toBeCloseTo(13_000 * 0.9, 4)
+    expect(seriesValueChf(series(), 2028, deps)).toBeCloseTo(14_200 * 0.9, 4)
+  })
+
+  it('contributeUntil stops later deposits while growth continues', () => {
+    // 2028: 12000 × 1.1 + 0 = 13200 USD
+    const s = series({ contributeUntilYear: 2027 })
+    expect(seriesValueChf(s, 2027, deps)).toBeCloseTo(12_000 * 0.9, 4)
+    expect(seriesValueChf(s, 2028, deps)).toBeCloseTo(13_200 * 0.9, 4)
+  })
+
+  it('compound and contribute until both apply', () => {
+    expect(
+      seriesValueChf(
+        series({ compoundUntilYear: 2027, contributeUntilYear: 2027 }),
+        2028,
+        deps,
+      ),
+    ).toBeCloseTo(12_000 * 0.9, 4)
+    expect(
+      seriesValueChf(
+        series({ compoundUntilYear: 2027, contributeUntilYear: 2028 }),
+        2028,
+        deps,
+      ),
+    ).toBeCloseTo(13_000 * 0.9, 4)
+  })
+
+  it('does not double-count deposits already in the freeze-year total', () => {
+    const s = series({ compoundUntilYear: 2027 })
+    const atUntil = seriesValueChf(s, 2027, deps)
+    const next = seriesValueChf(s, 2028, deps)
+    expect(next - atUntil).toBeCloseTo(1_000 * 0.9, 4)
+  })
+})
+
+describe('ensurePermanentSavings', () => {
+  const cashAcc: SavingsAccount = {
+    id: 'cash',
+    name: 'Cash',
+    role: 'cash',
+    actuals: {},
+    contribution: 0,
+    cadence: 'monthly',
+    annualRatePercent: 0,
+    sortOrder: 0,
+  }
+  const penAcc: SavingsAccount = {
+    id: 'pen',
+    name: 'Pension',
+    actuals: {},
+    contribution: 0,
+    cadence: 'yearly',
+    annualRatePercent: 0,
+    sortOrder: 1,
+  }
+
+  function sav(
+    id: string,
+    accountId: string,
+    sortOrder: number,
+    name: string,
+  ): OverviewSeries {
+    return {
+      id,
+      name,
+      enabled: true,
+      sortOrder,
+      type: 'savings',
+      savingsAccountId: accountId,
+    }
+  }
+
+  it('keeps existing savings sortOrder when account list order differs', () => {
+    const port = manualSeries({
+      id: 'p',
+      type: 'portfolio',
+      name: 'Brokerage',
+      sortOrder: 2,
+    })
+    const series = [
+      sav('s-pen', 'pen', 0, 'Pension'),
+      sav('s-cash', 'cash', 1, 'Cash'),
+      port,
+    ]
+    // Accounts listed Cash then Pension (Savings-tab order)
+    const next = ensurePermanentSavings(series, [cashAcc, penAcc])
+    expect(next.find((s) => s.id === 's-pen')?.sortOrder).toBe(0)
+    expect(next.find((s) => s.id === 's-cash')?.sortOrder).toBe(1)
+    expect(next.find((s) => s.id === 'p')?.sortOrder).toBe(2)
+  })
+
+  it('appends a new account after the last existing savings sortOrder', () => {
+    const series = [
+      sav('s-cash', 'cash', 0, 'Cash'),
+      manualSeries({ id: 'p', type: 'portfolio', sortOrder: 3 }),
+    ]
+    const next = ensurePermanentSavings(series, [cashAcc, penAcc])
+    expect(next.find((s) => s.id === 's-cash')?.sortOrder).toBe(0)
+    expect(next.find((s) => s.id === 'p')?.sortOrder).toBe(3)
+    const added = next.find((s) => s.savingsAccountId === 'pen')
+    expect(added?.sortOrder).toBe(1)
+    expect(added?.type).toBe('savings')
+  })
+
+  it('drops savings series whose account is gone', () => {
+    const series = [sav('s-gone', 'gone', 0, 'Old'), sav('s-cash', 'cash', 1, 'Cash')]
+    const next = ensurePermanentSavings(series, [cashAcc])
+    expect(next.some((s) => s.id === 's-gone')).toBe(false)
+    expect(next.find((s) => s.id === 's-cash')?.sortOrder).toBe(1)
   })
 })
 

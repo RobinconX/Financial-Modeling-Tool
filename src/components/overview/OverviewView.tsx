@@ -12,12 +12,13 @@ import { useGoals } from '../../hooks/useGoals'
 import { useOverview } from '../../hooks/useOverview'
 import { fetchFxRateClient } from '../../lib/fx'
 import {
+  assignOverviewSeriesColors,
   OVERVIEW_CURRENCY,
   recordedOverviewByYear,
   type OverviewBuildDeps,
 } from '../../lib/overview'
 import {
-  buildRunwayChartRows,
+  buildRunwayModel,
   defaultRunwayConfig,
   runwayAssetSeries,
 } from '../../lib/runway'
@@ -31,6 +32,7 @@ import { OverviewChart } from './OverviewChart'
 import { OverviewCompareChart } from './OverviewCompareChart'
 import { OverviewSeriesEditor } from './OverviewSeriesEditor'
 import { RunwayConfig } from './RunwayConfig'
+import { RunwayYearFlowPanel } from './RunwayYearFlow'
 
 type Props = {
   portfolios: SavedPortfolio[]
@@ -134,6 +136,7 @@ export function OverviewView({
   // Draft year inputs so typing multi-digit years doesn't clamp mid-edit
   const [fromDraft, setFromDraft] = useState(String(startYear))
   const [toDraft, setToDraft] = useState(String(endYear))
+  const [runwayYearKey, setRunwayYearKey] = useState<string | null>(null)
 
   useEffect(() => {
     setFromDraft(String(startYear))
@@ -186,6 +189,19 @@ export function OverviewView({
     }
   }, [pageTab])
 
+  useEffect(() => {
+    setRunwayYearKey(null)
+  }, [selectedScenarioId, pageTab, startYear, endYear])
+
+  useEffect(() => {
+    if (pageTab !== 'runway' || runwayYearKey == null) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setRunwayYearKey(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [pageTab, runwayYearKey])
+
   const asOf = useMemo(() => new Date(), [])
 
   const deps: OverviewBuildDeps = useMemo(
@@ -222,15 +238,25 @@ export function OverviewView({
   const overlayGoals = showGoals ? goals : []
   const runwayConfig = selectedScenario?.runway ?? defaultRunwayConfig()
   const runwaySeries = useMemo(() => runwayAssetSeries(series), [series])
-  const runwayRows = useMemo(
+  const runwayModel = useMemo(
     () =>
-      buildRunwayChartRows(
+      buildRunwayModel(
         { startYear, endYear, series },
         deps,
         runwayConfig,
       ),
     [startYear, endYear, series, deps, runwayConfig],
   )
+  const runwayRows = runwayModel.rows
+  const runwayColors = useMemo(() => assignOverviewSeriesColors(runwaySeries), [runwaySeries])
+  const selectedRunwayFlow =
+    runwayYearKey != null && runwayYearKey !== 'now'
+      ? (runwayModel.flows.get(Number(runwayYearKey)) ?? null)
+      : null
+
+  const selectRunwayYear = useCallback((xKey: string) => {
+    setRunwayYearKey((cur) => (cur === xKey ? null : xKey))
+  }, [])
   const chartSeries = pageTab === 'runway' ? runwaySeries : series
   const effectiveChartMode: ChartMode =
     pageTab === 'runway' && chartMode === 'compare' ? 'bars' : chartMode
@@ -637,6 +663,8 @@ export function OverviewView({
               annotations={pageTab === 'networth' ? annotations : []}
               goals={pageTab === 'networth' ? overlayGoals : []}
               prebuiltRows={pageTab === 'runway' ? runwayRows : undefined}
+              selectedXKey={pageTab === 'runway' ? runwayYearKey : null}
+              onSelectYear={pageTab === 'runway' ? selectRunwayYear : undefined}
             />
           ) : effectiveChartMode === 'area' ? (
             <OverviewAreaChart
@@ -650,6 +678,7 @@ export function OverviewView({
               annotations={pageTab === 'networth' ? annotations : []}
               goals={pageTab === 'networth' ? overlayGoals : []}
               prebuiltRows={pageTab === 'runway' ? runwayRows : undefined}
+              onSelectYear={pageTab === 'runway' ? selectRunwayYear : undefined}
             />
           ) : (
             <OverviewCompareChart
@@ -665,6 +694,15 @@ export function OverviewView({
             />
           )}
         </FullscreenChart>
+
+        {pageTab === 'runway' ? (
+          <RunwayYearFlowPanel
+            selectedXKey={runwayYearKey}
+            flow={selectedRunwayFlow}
+            colorById={runwayColors}
+            onClear={() => setRunwayYearKey(null)}
+          />
+        ) : null}
 
         {pageTab === 'runway' && selectedScenario ? (
           <RunwayConfig

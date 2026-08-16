@@ -122,6 +122,53 @@ function YearUntilInput({
   )
 }
 
+function DraftTextField({
+  label,
+  value,
+  onCommit,
+  placeholder,
+  className = 'input !py-1.5 !text-xs',
+}: {
+  label?: string
+  value: string
+  onCommit: (next: string) => void
+  placeholder?: string
+  className?: string
+}) {
+  const [draft, setDraft] = useState(value)
+  useEffect(() => {
+    setDraft(value)
+  }, [value])
+
+  function commit() {
+    if (draft !== value) onCommit(draft)
+  }
+
+  return (
+    <div>
+      {label ? <label className="label !mb-0.5 !text-[10px]">{label}</label> : null}
+      <input
+        className={className}
+        value={draft}
+        placeholder={placeholder}
+        onChange={(e) => setDraft(e.target.value)}
+        onBlur={commit}
+        onKeyDown={(e) => {
+          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+        }}
+        onMouseDown={(e) => e.stopPropagation()}
+      />
+    </div>
+  )
+}
+
+function parseDraftNumber(raw: string, fallback: number, min?: number): number {
+  const n = Number(raw.replace(/[,%]/g, '').trim())
+  if (!Number.isFinite(n)) return fallback
+  if (min != null && n < min) return fallback
+  return n
+}
+
 function YearBindingsEditor({
   series,
   incomeCostScenarios,
@@ -225,25 +272,14 @@ function YearBindingsEditor({
               </select>
               {withPercent && (
                 <div className="relative w-16 shrink-0">
-                  <input
+                  <DraftTextField
                     className="input !py-1 !pr-5 !text-xs tabular-nums"
-                    type="text"
-                    inputMode="decimal"
-                    placeholder="%"
                     value={b.percent != null && b.percent !== 0 ? String(b.percent) : ''}
-                    onChange={(e) => {
-                      const n = Number(e.target.value.replace(/%/g, ''))
-                      patchAt(
-                        idx,
-                        {
-                          percent: Number.isFinite(n)
-                            ? Math.max(0, Math.min(100, n))
-                            : 0,
-                        },
-                        false,
-                      )
+                    placeholder="%"
+                    onCommit={(raw) => {
+                      const n = parseDraftNumber(raw, 0, 0)
+                      patchAt(idx, { percent: Math.max(0, Math.min(100, n)) }, true)
                     }}
-                    onBlur={() => setBindings(bindings, true)}
                   />
                   <span className="pointer-events-none absolute right-1.5 top-1/2 -translate-y-1/2 text-[10px] text-white/35">
                     %
@@ -699,24 +735,22 @@ export function OverviewSeriesEditor({
 
                 {open && (
                   <div className="mt-3 grid gap-2 sm:grid-cols-2 lg:grid-cols-3">
-                    <div>
-                      <label className="label !mb-0.5 !text-[10px]">Label</label>
-                      <input
-                        className="input !py-1.5 !text-xs"
-                        value={s.name}
-                        onChange={(e) => onUpdate(s.id, { name: e.target.value })}
-                        onMouseDown={(e) => e.stopPropagation()}
-                        placeholder={
-                          s.type === 'manual'
-                            ? 'Series name'
-                            : s.type === 'portfolio'
-                              ? 'Portfolio name'
-                              : s.type === 'incomeLeftover'
-                                ? 'Leftover cash'
-                                : 'Account name'
-                        }
-                      />
-                    </div>
+                    <DraftTextField
+                      label="Label"
+                      value={s.name}
+                      onCommit={(name) => {
+                        if (name !== s.name) onUpdate(s.id, { name })
+                      }}
+                      placeholder={
+                        s.type === 'manual'
+                          ? 'Series name'
+                          : s.type === 'portfolio'
+                            ? 'Portfolio name'
+                            : s.type === 'incomeLeftover'
+                              ? 'Leftover cash'
+                              : 'Account name'
+                      }
+                    />
 
                     <div>
                       <label className="label !mb-0.5 !text-[10px]">Color</label>
@@ -777,12 +811,6 @@ export function OverviewSeriesEditor({
                       value={s.compoundUntilYear}
                       onCommit={(y) => onUpdate(s.id, { compoundUntilYear: y })}
                     />
-                    <YearUntilInput
-                      label="Draw locked until"
-                      title="Runway cannot draw from this series before this year (empty = always drawable)"
-                      value={s.drawLockedUntilYear}
-                      onCommit={(y) => onUpdate(s.id, { drawLockedUntilYear: y })}
-                    />
 
                     {s.type === 'portfolio' && (
                       <div className="sm:col-span-1 lg:col-span-2">
@@ -821,83 +849,59 @@ export function OverviewSeriesEditor({
                             After the last year binding on this scenario, perpetual CHF/yr applies.
                           </p>
                         </div>
-                        <div>
-                          <label className="label !mb-0.5 !text-[10px]">Now pile (CHF)</label>
-                          <input
-                            className="input !py-1.5 !text-xs tabular-nums"
-                            type="text"
-                            inputMode="decimal"
-                            value={s.baseChf ? String(s.baseChf) : ''}
-                            placeholder="0"
-                            onChange={(e) => {
-                              const n = Number(e.target.value.replace(/,/g, ''))
-                              onUpdate(s.id, {
-                                baseChf: Number.isFinite(n) && n >= 0 ? n : 0,
-                              })
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div>
-                          <label className="label !mb-0.5 !text-[10px]">Rate % / year</label>
-                          <input
-                            className="input !py-1.5 !text-xs tabular-nums"
-                            type="text"
-                            inputMode="decimal"
-                            value={
-                              s.annualRatePercent != null && s.annualRatePercent !== 0
-                                ? String(s.annualRatePercent)
-                                : ''
+                        <DraftTextField
+                          label="Now pile (CHF)"
+                          className="input !py-1.5 !text-xs tabular-nums"
+                          value={s.baseChf ? String(s.baseChf) : ''}
+                          placeholder="0"
+                          onCommit={(raw) => {
+                            const n = parseDraftNumber(raw, 0, 0)
+                            if (n !== (s.baseChf ?? 0)) onUpdate(s.id, { baseChf: n })
+                          }}
+                        />
+                        <DraftTextField
+                          label="Rate % / year"
+                          className="input !py-1.5 !text-xs tabular-nums"
+                          value={
+                            s.annualRatePercent != null && s.annualRatePercent !== 0
+                              ? String(s.annualRatePercent)
+                              : ''
+                          }
+                          placeholder="0"
+                          onCommit={(raw) => {
+                            const n = parseDraftNumber(raw, 0)
+                            if (n !== (s.annualRatePercent ?? 0)) {
+                              onUpdate(s.id, { annualRatePercent: n })
                             }
-                            placeholder="0"
-                            onChange={(e) => {
-                              const n = Number(e.target.value.replace(/%/g, ''))
-                              onUpdate(s.id, {
-                                annualRatePercent: Number.isFinite(n) ? n : 0,
-                              })
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div>
-                          <label className="label !mb-0.5 !text-[10px]">Base year</label>
-                          <input
-                            className="input !py-1.5 !text-xs tabular-nums"
-                            type="number"
-                            value={s.baseYear ?? new Date().getFullYear()}
-                            onChange={(e) =>
-                              onUpdate(s.id, {
-                                baseYear:
-                                  Math.floor(Number(e.target.value)) ||
-                                  new Date().getFullYear(),
-                              })
+                          }}
+                        />
+                        <DraftTextField
+                          label="Base year"
+                          className="input !py-1.5 !text-xs tabular-nums"
+                          value={String(s.baseYear ?? new Date().getFullYear())}
+                          onCommit={(raw) => {
+                            const y = Math.floor(parseDraftNumber(raw, s.baseYear ?? new Date().getFullYear()))
+                            if (y !== (s.baseYear ?? new Date().getFullYear())) {
+                              onUpdate(s.id, { baseYear: y })
                             }
-                            onMouseDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div>
-                          <label className="label !mb-0.5 !text-[10px]">
-                            Perpetual after last year (CHF/yr)
-                          </label>
-                          <input
-                            className="input !py-1.5 !text-xs tabular-nums"
-                            type="text"
-                            inputMode="decimal"
-                            value={
-                              s.perpetualYearlyChf != null && s.perpetualYearlyChf !== 0
-                                ? String(s.perpetualYearlyChf)
-                                : ''
+                          }}
+                        />
+                        <DraftTextField
+                          label="Perpetual after last year (CHF/yr)"
+                          className="input !py-1.5 !text-xs tabular-nums"
+                          value={
+                            s.perpetualYearlyChf != null && s.perpetualYearlyChf !== 0
+                              ? String(s.perpetualYearlyChf)
+                              : ''
+                          }
+                          placeholder="0"
+                          onCommit={(raw) => {
+                            const n = parseDraftNumber(raw, 0, 0)
+                            if (n !== (s.perpetualYearlyChf ?? 0)) {
+                              onUpdate(s.id, { perpetualYearlyChf: n })
                             }
-                            placeholder="0"
-                            onChange={(e) => {
-                              const n = Number(e.target.value.replace(/,/g, ''))
-                              onUpdate(s.id, {
-                                perpetualYearlyChf: Number.isFinite(n) && n >= 0 ? n : 0,
-                              })
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
+                          }}
+                        />
                         <YearBindingsEditor
                           series={s}
                           incomeCostScenarios={incomeCostScenarios}
@@ -909,83 +913,61 @@ export function OverviewSeriesEditor({
 
                     {s.type === 'manual' && (
                       <>
-                        <div>
-                          <label className="label !mb-0.5 !text-[10px]">Base (CHF)</label>
-                          <input
-                            className="input !py-1.5 !text-xs tabular-nums"
-                            type="text"
-                            inputMode="decimal"
-                            value={s.baseChf ? String(s.baseChf) : ''}
-                            placeholder="0"
-                            onChange={(e) => {
-                              const n = Number(e.target.value.replace(/,/g, ''))
-                              onUpdate(s.id, {
-                                baseChf: Number.isFinite(n) && n >= 0 ? n : 0,
-                              })
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div>
-                          <label className="label !mb-0.5 !text-[10px]">Rate % / year</label>
-                          <input
-                            className="input !py-1.5 !text-xs tabular-nums"
-                            type="text"
-                            inputMode="decimal"
-                            value={
-                              s.annualRatePercent != null && s.annualRatePercent !== 0
-                                ? String(s.annualRatePercent)
-                                : ''
+                        <DraftTextField
+                          label="Base (CHF)"
+                          className="input !py-1.5 !text-xs tabular-nums"
+                          value={s.baseChf ? String(s.baseChf) : ''}
+                          placeholder="0"
+                          onCommit={(raw) => {
+                            const n = parseDraftNumber(raw, 0, 0)
+                            if (n !== (s.baseChf ?? 0)) onUpdate(s.id, { baseChf: n })
+                          }}
+                        />
+                        <DraftTextField
+                          label="Rate % / year"
+                          className="input !py-1.5 !text-xs tabular-nums"
+                          value={
+                            s.annualRatePercent != null && s.annualRatePercent !== 0
+                              ? String(s.annualRatePercent)
+                              : ''
+                          }
+                          placeholder="0"
+                          onCommit={(raw) => {
+                            const n = parseDraftNumber(raw, 0)
+                            if (n !== (s.annualRatePercent ?? 0)) {
+                              onUpdate(s.id, { annualRatePercent: n })
                             }
-                            placeholder="0"
-                            onChange={(e) => {
-                              const n = Number(e.target.value.replace(/%/g, ''))
-                              onUpdate(s.id, {
-                                annualRatePercent: Number.isFinite(n) ? n : 0,
-                              })
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div>
-                          <label className="label !mb-0.5 !text-[10px]">Base year</label>
-                          <input
-                            className="input !py-1.5 !text-xs tabular-nums"
-                            type="number"
-                            value={s.baseYear ?? new Date().getFullYear()}
-                            onChange={(e) =>
-                              onUpdate(s.id, {
-                                baseYear:
-                                  Math.floor(Number(e.target.value)) ||
-                                  new Date().getFullYear(),
-                              })
+                          }}
+                        />
+                        <DraftTextField
+                          label="Base year"
+                          className="input !py-1.5 !text-xs tabular-nums"
+                          value={String(s.baseYear ?? new Date().getFullYear())}
+                          onCommit={(raw) => {
+                            const y = Math.floor(
+                              parseDraftNumber(raw, s.baseYear ?? new Date().getFullYear()),
+                            )
+                            if (y !== (s.baseYear ?? new Date().getFullYear())) {
+                              onUpdate(s.id, { baseYear: y })
                             }
-                            onMouseDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
-                        <div>
-                          <label className="label !mb-0.5 !text-[10px]">
-                            Perpetual after last year (CHF/yr)
-                          </label>
-                          <input
-                            className="input !py-1.5 !text-xs tabular-nums"
-                            type="text"
-                            inputMode="decimal"
-                            value={
-                              s.perpetualYearlyChf != null && s.perpetualYearlyChf !== 0
-                                ? String(s.perpetualYearlyChf)
-                                : ''
+                          }}
+                        />
+                        <DraftTextField
+                          label="Perpetual after last year (CHF/yr)"
+                          className="input !py-1.5 !text-xs tabular-nums"
+                          value={
+                            s.perpetualYearlyChf != null && s.perpetualYearlyChf !== 0
+                              ? String(s.perpetualYearlyChf)
+                              : ''
+                          }
+                          placeholder="0"
+                          onCommit={(raw) => {
+                            const n = parseDraftNumber(raw, 0, 0)
+                            if (n !== (s.perpetualYearlyChf ?? 0)) {
+                              onUpdate(s.id, { perpetualYearlyChf: n })
                             }
-                            placeholder="0"
-                            onChange={(e) => {
-                              const n = Number(e.target.value.replace(/,/g, ''))
-                              onUpdate(s.id, {
-                                perpetualYearlyChf: Number.isFinite(n) && n >= 0 ? n : 0,
-                              })
-                            }}
-                            onMouseDown={(e) => e.stopPropagation()}
-                          />
-                        </div>
+                          }}
+                        />
                         <YearBindingsEditor
                           series={s}
                           incomeCostScenarios={incomeCostScenarios}

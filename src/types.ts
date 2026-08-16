@@ -252,6 +252,7 @@ export type SavingsState = {
 // --- Overview (net-worth stack config; display CHF) ---
 
 export type OverviewSeriesType = 'portfolio' | 'savings' | 'manual' | 'incomeLeftover'
+export type RunwayDrawTiming = 'growFirst' | 'drawFirst'
 
 /**
  * Calendar year → Income/Cost scenario binding.
@@ -322,6 +323,12 @@ export type OverviewSeries = {
    * Years before this are locked. Empty = always drawable.
    */
   drawLockedUntilYear?: number | null
+  /**
+   * When this series pays a Runway deficit.
+   * growFirst (default) = compound, then draw.
+   * drawFirst = draw from last year’s leftover, then compound the rest.
+   */
+  drawTiming?: RunwayDrawTiming | null
   /**
    * @deprecated Manual funding is yearBindings + percent.
    */

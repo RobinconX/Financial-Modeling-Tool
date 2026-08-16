@@ -180,6 +180,11 @@ export function seriesDrawLocked(s: OverviewSeries, year: number): boolean {
   return lock != null && Number.isFinite(lock) && year < lock
 }
 
+/** Conservative: pay from last year’s leftover, then compound what remains. */
+export function seriesDrawsBeforeGrowth(s: OverviewSeries): boolean {
+  return s.drawTiming === 'drawFirst'
+}
+
 /** Draw order: configured ids first, then remaining by leftover → cash → savings → portfolios → manuals. */
 export function resolveRunwayDrawOrder(
   series: OverviewSeries[],
@@ -287,24 +292,97 @@ export function stepRunwayLeftoverPile(
   return Math.max(0, pile + (next - prev))
 }
 
-function growBalances(
-  balances: Map<string, number>,
-  series: OverviewSeries[],
+/** Last year that still receives additions on the growth-only path (toYear inflows are separate). */
+function growStopAddsYear(
+  series: OverviewSeries,
+  from: 'now' | number,
+  toYear: number,
+): number {
+  const fromStop = from === 'now' ? toYear - 1 : from
+  const existing = series.contributeUntilYear
+  if (existing != null && Number.isFinite(existing)) return Math.min(existing, fromStop)
+  return fromStop
+}
+
+export type RunwaySeriesFlow = {
+  id: string
+  name: string
+  type: OverviewSeries['type']
+  start: number
+  growth: number
+  inflow: number
+  surplus: number
+  drawn: number
+  end: number
+  /** drawFirst = taken before this year’s growth; growFirst = after. */
+  drawTiming: 'growFirst' | 'drawFirst'
+}
+
+export type RunwayYearFlow = {
+  year: number
+  from: 'now' | number
+  income: number
+  draw: number
+  fromAssets: number
+  surplus: number
+  series: RunwaySeriesFlow[]
+}
+
+function applySeriesGrow(
+  s: OverviewSeries,
+  cur: number,
   from: 'now' | number,
   toYear: number,
   deps: OverviewBuildDeps,
-): void {
-  for (const s of series) {
-    if (s.type === 'incomeLeftover') continue
-    const cur = balances.get(s.id) ?? 0
-    const prev = from === 'now' ? seriesValueChfNow(s, deps) : seriesValueChf(s, from, deps)
-    const next = seriesValueChf(s, toYear, deps)
-    if (prev > 0 && Number.isFinite(next / prev)) {
-      balances.set(s.id, Math.max(0, cur * (next / prev)))
-    } else if (next > 0 && cur === 0) {
-      balances.set(s.id, next)
-    }
+): { next: number; growth: number; inflow: number } {
+  const prev = from === 'now' ? seriesValueChfNow(s, deps) : seriesValueChf(s, from, deps)
+  const nextOv = seriesValueChf(s, toYear, deps)
+  const growthOnly = seriesValueChf(
+    { ...s, contributeUntilYear: growStopAddsYear(s, from, toYear) },
+    toYear,
+    deps,
+  )
+  const inflow = Math.max(0, nextOv - growthOnly)
+  if (prev > 0 && Number.isFinite(growthOnly / prev)) {
+    const next = Math.max(0, cur * (growthOnly / prev) + inflow)
+    return { next, growth: next - cur - inflow, inflow }
   }
+  if (nextOv > 0 && cur === 0) {
+    return { next: nextOv, growth: 0, inflow: nextOv }
+  }
+  return { next: cur, growth: 0, inflow: 0 }
+}
+
+function leftoverStepSplit(
+  leftover: OverviewSeries,
+  pile: number,
+  from: 'now' | number,
+  toYear: number,
+  deps: OverviewBuildDeps,
+): { next: number; growth: number; inflow: number } {
+  const next = stepRunwayLeftoverPile(pile, leftover, from, toYear, deps)
+  const applied = next - pile
+  const nextOv = seriesValueChf(leftover, toYear, deps)
+  const growthOnly = seriesValueChf(
+    { ...leftover, contributeUntilYear: growStopAddsYear(leftover, from, toYear) },
+    toYear,
+    deps,
+  )
+  const inflow = Math.max(0, nextOv - growthOnly)
+  return { next, growth: applied - inflow, inflow }
+}
+
+export const RUNWAY_DRAWN_PREFIX = '__d_'
+
+export function runwayDrawnFromRow(
+  row: OverviewChartRow,
+): { id: string; amount: number }[] {
+  const out: { id: string; amount: number }[] = []
+  for (const [k, v] of Object.entries(row)) {
+    if (!k.startsWith(RUNWAY_DRAWN_PREFIX) || typeof v !== 'number' || !(v > 0)) continue
+    out.push({ id: k.slice(RUNWAY_DRAWN_PREFIX.length), amount: v })
+  }
+  return out
 }
 
 function rowFromBalances(
@@ -315,7 +393,13 @@ function rowFromBalances(
   isNow: boolean,
   series: OverviewSeries[],
   balances: Map<string, number>,
-  extra?: { income?: number; draw?: number; fromAssets?: number; surplus?: number },
+  extra?: {
+    income?: number
+    draw?: number
+    fromAssets?: number
+    surplus?: number
+    drawn?: Record<string, number>
+  },
 ): OverviewChartRow {
   const row: OverviewChartRow = {
     year,
@@ -337,6 +421,11 @@ function rowFromBalances(
   if (extra?.draw != null) row.__draw = extra.draw
   if (extra?.fromAssets != null) row.__fromAssets = extra.fromAssets
   if (extra?.surplus != null) row.__surplus = extra.surplus
+  if (extra?.drawn) {
+    for (const [id, amt] of Object.entries(extra.drawn)) {
+      if (amt > 0) row[`${RUNWAY_DRAWN_PREFIX}${id}`] = amt
+    }
+  }
   return row
 }
 
@@ -350,12 +439,13 @@ export function runwayAssetSeries(series: OverviewSeries[]): OverviewSeries[] {
  * Past years = modeled stack including leftover.
  * Now = live including leftover.
  * Current/future = grow from Now, then spend (income first; gap from assets).
+ * Deficit walks draw order. Before/after growth only changes when that pile is tapped.
  */
-export function buildRunwayChartRows(
+export function buildRunwayModel(
   state: { startYear: number; endYear: number; series: OverviewSeries[] },
   deps: OverviewBuildDeps,
   config: OverviewRunwayConfig,
-): OverviewChartRow[] {
+): { rows: OverviewChartRow[]; flows: Map<number, RunwayYearFlow> } {
   const asOf = deps.asOf ?? new Date()
   const currentYear = asOf.getFullYear()
   const years = yearsInRange(state.startYear, state.endYear, asOf)
@@ -386,6 +476,7 @@ export function buildRunwayChartRows(
   }
 
   const rows: OverviewChartRow[] = []
+  const flows = new Map<number, RunwayYearFlow>()
   let nowInserted = false
   let prevGrow: 'now' | number = 'now'
   let leftoverCopy = leftoverSeries ? (balances.get(leftoverSeries.id) ?? 0) : 0
@@ -400,31 +491,86 @@ export function buildRunwayChartRows(
       rows.push(pastRow(year))
       continue
     }
-    growBalances(balances, active, prevGrow, year, scoped)
+
+    const startById = new Map(balances)
+    const leftoverStartCopy = leftoverCopy
+    const leftoverStartSurplus = leftoverSurplus
     const { income, draw } = runwayIncomeDrawForYear(config, year, scoped.incomeCostLines)
     const gap = Math.max(0, draw - income)
     const yearSurplus = Math.max(0, income - draw)
-    leftoverSurplus += yearSurplus
-    if (leftoverSeries) {
-      leftoverCopy = stepRunwayLeftoverPile(leftoverCopy, leftoverSeries, prevGrow, year, scoped)
+    const order = resolveRunwayDrawOrder(active, config, deps.savingsAccounts)
+    const grownFromStart = new Map<string, { next: number; growth: number; inflow: number }>()
+    for (const s of active) {
+      if (s.type === 'incomeLeftover') continue
+      grownFromStart.set(
+        s.id,
+        applySeriesGrow(s, startById.get(s.id) ?? 0, prevGrow, year, scoped),
+      )
     }
+    let leftoverGrown = leftoverStartCopy
+    let leftoverGrowth = 0
+    let leftoverInflow = 0
+    if (leftoverSeries) {
+      const stepped = leftoverStepSplit(
+        leftoverSeries,
+        leftoverStartCopy,
+        prevGrow,
+        year,
+        scoped,
+      )
+      leftoverGrown = stepped.next
+      leftoverGrowth = stepped.growth
+      leftoverInflow = stepped.inflow
+    }
+    const leftoverDrawFirst = leftoverSeries ? seriesDrawsBeforeGrowth(leftoverSeries) : false
+    let leftoverPile = leftoverDrawFirst ? leftoverStartCopy : leftoverGrown
 
+    const drawn: Record<string, number> = {}
     let left = gap
-    for (const s of resolveRunwayDrawOrder(active, config, deps.savingsAccounts)) {
+    for (const s of order) {
       if (!(left > 0)) break
       if (seriesDrawLocked(s, year)) continue
       if (s.type === 'incomeLeftover') {
-        const take = Math.min(leftoverCopy, left)
-        leftoverCopy -= take
+        const take = Math.min(leftoverPile, left)
+        leftoverPile -= take
         left -= take
+        if (take > 0) drawn[s.id] = take
         continue
       }
-      const have = balances.get(s.id) ?? 0
+      const have = seriesDrawsBeforeGrowth(s)
+        ? (startById.get(s.id) ?? 0)
+        : (grownFromStart.get(s.id)?.next ?? 0)
       const take = Math.min(have, left)
-      balances.set(s.id, have - take)
       left -= take
+      if (take > 0) drawn[s.id] = take
     }
+
+    const deltas = new Map<string, { growth: number; inflow: number }>()
+    for (const s of active) {
+      if (s.type === 'incomeLeftover') continue
+      const take = drawn[s.id] ?? 0
+      if (seriesDrawsBeforeGrowth(s)) {
+        const remaining = Math.max(0, (startById.get(s.id) ?? 0) - take)
+        const g = applySeriesGrow(s, remaining, prevGrow, year, scoped)
+        balances.set(s.id, g.next)
+        deltas.set(s.id, { growth: g.growth, inflow: g.inflow })
+      } else {
+        const g = grownFromStart.get(s.id) ?? { next: 0, growth: 0, inflow: 0 }
+        balances.set(s.id, Math.max(0, g.next - take))
+        deltas.set(s.id, { growth: g.growth, inflow: g.inflow })
+      }
+    }
+
     if (leftoverSeries) {
+      if (leftoverDrawFirst) {
+        const stepped = leftoverStepSplit(leftoverSeries, leftoverPile, prevGrow, year, scoped)
+        leftoverCopy = stepped.next
+        leftoverGrowth = stepped.growth
+        leftoverInflow = stepped.inflow
+      } else {
+        leftoverCopy = leftoverPile
+      }
+      leftoverSurplus += yearSurplus
       balances.set(leftoverSeries.id, leftoverCopy + leftoverSurplus)
     }
     const fromAssets = gap - left
@@ -434,12 +580,72 @@ export function buildRunwayChartRows(
         draw,
         fromAssets,
         surplus: yearSurplus,
+        drawn,
       }),
     )
+
+    const seriesFlows: RunwaySeriesFlow[] = []
+    for (const s of order) {
+      if (s.type === 'incomeLeftover') {
+        const start = leftoverStartCopy + leftoverStartSurplus
+        const end = leftoverCopy + leftoverSurplus
+        const take = drawn[s.id] ?? 0
+        if (start === 0 && leftoverGrowth === 0 && leftoverInflow === 0 && yearSurplus === 0 && take === 0 && end === 0) {
+          continue
+        }
+        seriesFlows.push({
+          id: s.id,
+          name: s.name.trim() || 'Leftover',
+          type: s.type,
+          start,
+          growth: leftoverGrowth,
+          inflow: leftoverInflow,
+          surplus: yearSurplus,
+          drawn: take,
+          end,
+          drawTiming: seriesDrawsBeforeGrowth(s) ? 'drawFirst' : 'growFirst',
+        })
+        continue
+      }
+      const start = startById.get(s.id) ?? 0
+      const d = deltas.get(s.id) ?? { growth: 0, inflow: 0 }
+      const take = drawn[s.id] ?? 0
+      const end = balances.get(s.id) ?? 0
+      if (start === 0 && d.growth === 0 && d.inflow === 0 && take === 0 && end === 0) continue
+      seriesFlows.push({
+        id: s.id,
+        name: s.name.trim() || s.id,
+        type: s.type,
+        start,
+        growth: d.growth,
+        inflow: d.inflow,
+        surplus: 0,
+        drawn: take,
+        end,
+        drawTiming: seriesDrawsBeforeGrowth(s) ? 'drawFirst' : 'growFirst',
+      })
+    }
+    flows.set(year, {
+      year,
+      from: prevGrow,
+      income,
+      draw,
+      fromAssets,
+      surplus: yearSurplus,
+      series: seriesFlows,
+    })
     prevGrow = year
   }
   if (!nowInserted) {
     rows.push(nowRow())
   }
-  return rows
+  return { rows, flows }
+}
+
+export function buildRunwayChartRows(
+  state: { startYear: number; endYear: number; series: OverviewSeries[] },
+  deps: OverviewBuildDeps,
+  config: OverviewRunwayConfig,
+): OverviewChartRow[] {
+  return buildRunwayModel(state, deps, config).rows
 }

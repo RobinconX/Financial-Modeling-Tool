@@ -8,13 +8,15 @@ export const QUOTE_REFRESH_MS = 5 * 60 * 1000
 type UpdateScenario = (id: string, patch: Partial<SavedScenario>) => boolean
 
 /**
- * Refresh live quotes for all scenario (+ portfolio) tickers on mount and every 5 minutes.
- * Uses prices-only batch (fast) and keeps prior mcap/shares when the API omits them.
+ * Refresh live quotes for all scenario (+ portfolio) tickers when enabled,
+ * on enable, and every 5 minutes. Uses prices-only batch (fast) and keeps
+ * prior mcap/shares when the API omits them.
  */
 export function useAutoQuoteRefresh(
   scenarios: SavedScenario[],
   portfolios: SavedPortfolio[],
   updateScenario: UpdateScenario,
+  enabled = true,
 ): { quotesLoading: boolean; quoteCount: number } {
   const scenariosRef = useRef(scenarios)
   const portfoliosRef = useRef(portfolios)
@@ -28,6 +30,7 @@ export function useAutoQuoteRefresh(
   const [quoteCount, setQuoteCount] = useState(0)
 
   const refreshAll = useCallback(async () => {
+    if (!enabled) return
     if (refreshingRef.current) return
     refreshingRef.current = true
 
@@ -110,9 +113,13 @@ export function useAutoQuoteRefresh(
       refreshingRef.current = false
       setQuotesLoading(false)
     }
-  }, [])
+  }, [enabled])
 
   useEffect(() => {
+    if (!enabled) {
+      setQuotesLoading(false)
+      return
+    }
     void refreshAll()
     const id = window.setInterval(() => {
       void refreshAll()
@@ -127,7 +134,7 @@ export function useAutoQuoteRefresh(
       window.clearInterval(id)
       document.removeEventListener('visibilitychange', onVis)
     }
-  }, [refreshAll])
+  }, [enabled, refreshAll])
 
   return { quotesLoading, quoteCount }
 }

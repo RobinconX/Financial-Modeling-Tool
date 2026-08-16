@@ -214,3 +214,5 @@ export function useSavings() {
     removePastPeriod,
   }
 }
+
+export type SavingsApi = ReturnType<typeof useSavings>

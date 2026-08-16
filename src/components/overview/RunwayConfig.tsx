@@ -243,7 +243,10 @@ export function RunwayConfig({
           <span className="section-title">Draw order</span>
           <InfoTip label="About draw order">
             Deficit years spend from the top series first. Drag rows to reorder. Locked until:
-            that series is skipped before the stated year. Surplus on leftover is not drawn.
+            that series is skipped before the stated year. The Before / After slider is when
+            that pile is tapped: after growth (compound first) or before growth (take from last
+            year’s leftover, then compound the rest). This year’s deposits are not used to cover
+            a before-growth draw. Surplus on leftover is not drawn.
           </InfoTip>
         </div>
         {drawList.map((s, i) => {
@@ -288,6 +291,34 @@ export function RunwayConfig({
               <span className="min-w-[8rem] flex-1 truncate text-white/80">
                 {s.name.trim() || 'Series'}
               </span>
+              <button
+                type="button"
+                role="switch"
+                aria-checked={s.drawTiming === 'drawFirst'}
+                aria-label={`${s.name.trim() || 'Series'}: draw before or after growth`}
+                title="When this pile pays: before it grows, or after. Click to switch."
+                className="flex cursor-pointer items-center gap-1.5 rounded-md px-1.5 py-1 text-[10px] text-white/45 hover:bg-white/5"
+                onMouseDown={(e) => e.stopPropagation()}
+                onClick={() =>
+                  onUpdateSeries(s.id, {
+                    drawTiming: s.drawTiming === 'drawFirst' ? 'growFirst' : 'drawFirst',
+                  })
+                }
+              >
+                <span className={s.drawTiming === 'drawFirst' ? 'text-white/80' : 'text-white/30'}>
+                  Before
+                </span>
+                <span className="relative h-4 w-8 shrink-0 rounded-full bg-white/15">
+                  <span
+                    className={`absolute top-0.5 h-3 w-3 rounded-full bg-white transition-[left] ${
+                      s.drawTiming === 'drawFirst' ? 'left-0.5' : 'left-[1.125rem]'
+                    }`}
+                  />
+                </span>
+                <span className={s.drawTiming !== 'drawFirst' ? 'text-white/80' : 'text-white/30'}>
+                  After
+                </span>
+              </button>
               <label className="flex items-center gap-1 text-[10px] text-white/45">
                 Locked until
                 <input

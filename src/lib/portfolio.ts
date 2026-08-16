@@ -1088,7 +1088,11 @@ export function computeHoldingValues(
   for (const year of yearsNeeded) {
     const sh = sharesAtYear(holding, actions, year)
     // Manual: allow negative qty (shorts). Equity: long-only shares.
-    if (isManual ? sh === 0 : sh <= 0) continue
+    // Record 0 so later years do not carry a pre-sell mark after sell-all.
+    if (isManual ? sh === 0 : sh <= 0) {
+      values.set(year, 0)
+      continue
+    }
 
     let px: number | null = null
     if (year < currentYear) {

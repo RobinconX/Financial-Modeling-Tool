@@ -66,14 +66,15 @@ export function amountToDisplay(
   return toDisplay(usd, displayCurrency, usdToChf)
 }
 
-/**
- * Prefer same-origin / external proxy; fall back to Frankfurter in the browser
- * (CORS-friendly) so CHF display still works on static GitHub Pages.
- */
-export async function fetchFxRateClient(
-  from = 'USD',
-  to = 'CHF',
-): Promise<FxQuote> {
+const FX_CACHE_MS = 5 * 60 * 1000
+const fxInflight = new Map<string, Promise<FxQuote>>()
+const fxCache = new Map<string, { quote: FxQuote; at: number }>()
+
+function fxPairKey(from: string, to: string): string {
+  return `${from.trim().toUpperCase()}-${to.trim().toUpperCase()}`
+}
+
+async function requestFxRate(from: string, to: string): Promise<FxQuote> {
   const path = `/api/fx?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
   try {
     const res = await fetch(apiUrl(path))
@@ -85,6 +86,35 @@ export async function fetchFxRateClient(
     /* try direct */
   }
   return fetchFxRateDirect(from, to)
+}
+
+/**
+ * Prefer same-origin / external proxy; fall back to Frankfurter in the browser
+ * (CORS-friendly) so CHF display still works on static GitHub Pages.
+ * Concurrent callers share one in-flight request; a short cache avoids a
+ * second fetch when Overview / History / StrictMode remount.
+ */
+export async function fetchFxRateClient(
+  from = 'USD',
+  to = 'CHF',
+): Promise<FxQuote> {
+  const key = fxPairKey(from, to)
+  const cached = fxCache.get(key)
+  if (cached && Date.now() - cached.at < FX_CACHE_MS) return cached.quote
+
+  const pending = fxInflight.get(key)
+  if (pending) return pending
+
+  const req = requestFxRate(from, to)
+    .then((quote) => {
+      fxCache.set(key, { quote, at: Date.now() })
+      return quote
+    })
+    .finally(() => {
+      fxInflight.delete(key)
+    })
+  fxInflight.set(key, req)
+  return req
 }
 
 async function fetchFxRateDirect(from: string, to: string): Promise<FxQuote> {

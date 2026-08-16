@@ -285,34 +285,96 @@ export function stepToEndOfMonth(
   return bal
 }
 
+/** Long enough for Overview/Runway max horizon so one sim covers every year lookup. */
+const SIM_CACHE_MIN_MONTHS = 80 * 12
+const SIM_CACHE_MAX = 24
+
+type SimCacheEntry = { months: number; map: Map<string, number> }
+const simCache = new Map<string, SimCacheEntry>()
+
+function simCacheKey(account: SavingsAccount, asOf: Date): string {
+  const actuals = account.actuals ?? {}
+  const actualPart = Object.keys(actuals)
+    .sort()
+    .map((k) => `${k}:${actuals[k]}`)
+    .join(',')
+  return [
+    account.id,
+    currentPeriodKey(asOf),
+    account.contribution,
+    account.cadence,
+    account.annualRatePercent,
+    account.compoundUntilYear ?? '',
+    account.contributeUntilYear ?? '',
+    actualPart,
+  ].join('|')
+}
+
+function rateAndContribForKey(
+  account: SavingsAccount,
+  key: string,
+): { rate: number; contrib: number } {
+  const p = parsePeriodKey(key)
+  const until = account.compoundUntilYear
+  const rate =
+    until != null && Number.isFinite(until) && p != null && p.month === 1 && p.year > until
+      ? 0
+      : account.annualRatePercent
+  const contribUntil = account.contributeUntilYear
+  const contrib =
+    contribUntil != null && Number.isFinite(contribUntil) && p != null && p.year > contribUntil
+      ? 0
+      : account.contribution
+  return { rate, contrib }
+}
+
+function runSimulateMonths(
+  account: SavingsAccount,
+  asOf: Date,
+  months: number,
+): Map<string, number> {
+  const nowKey = currentPeriodKey(asOf)
+  const recorded = getActual(account, nowKey)
+  let bal: number
+  if (recorded != null) {
+    bal = recorded
+  } else {
+    const prevKey = addMonthsToKey(nowKey, -1)
+    const prevBal = latestActual(account, prevKey)
+    const { rate, contrib } = rateAndContribForKey(account, nowKey)
+    bal = stepToEndOfMonth(prevBal, nowKey, contrib, rate, account.cadence)
+  }
+  const out = new Map<string, number>()
+  out.set(nowKey, bal)
+
+  for (let i = 1; i <= months; i++) {
+    const key = addMonthsToKey(nowKey, i)
+    const { rate, contrib } = rateAndContribForKey(account, key)
+    bal = stepToEndOfMonth(bal, key, contrib, rate, account.cadence)
+    out.set(key, bal)
+  }
+  return out
+}
+
 /** Simulate monthly from now for `months` steps; returns map of periodKey → balance. */
 export function simulateMonths(
   account: SavingsAccount,
   asOf: Date,
   months: number,
 ): Map<string, number> {
-  const nowKey = currentPeriodKey(asOf)
-  let bal = latestActual(account, nowKey)
-  const out = new Map<string, number>()
-  out.set(nowKey, bal)
+  const n = Math.max(0, Math.floor(months))
+  const key = simCacheKey(account, asOf)
+  const hit = simCache.get(key)
+  if (hit && hit.months >= n) return hit.map
 
-  for (let i = 1; i <= months; i++) {
-    const key = addMonthsToKey(nowKey, i)
-    const p = parsePeriodKey(key)
-    const until = account.compoundUntilYear
-    const rate =
-      until != null && Number.isFinite(until) && p != null && p.month === 1 && p.year > until
-        ? 0
-        : account.annualRatePercent
-    const contribUntil = account.contributeUntilYear
-    const contrib =
-      contribUntil != null && Number.isFinite(contribUntil) && p != null && p.year > contribUntil
-        ? 0
-        : account.contribution
-    bal = stepToEndOfMonth(bal, key, contrib, rate, account.cadence)
-    out.set(key, bal)
+  const runMonths = Math.max(n, SIM_CACHE_MIN_MONTHS)
+  const map = runSimulateMonths(account, asOf, runMonths)
+  if (simCache.size >= SIM_CACHE_MAX) {
+    const first = simCache.keys().next().value
+    if (first != null) simCache.delete(first)
   }
-  return out
+  simCache.set(key, { months: runMonths, map })
+  return map
 }
 
 /**

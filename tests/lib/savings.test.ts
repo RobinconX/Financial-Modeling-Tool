@@ -122,6 +122,64 @@ describe('stepToEndOfMonth / compounding', () => {
     expect(sim.get('2028-12')).toBeCloseTo(10_000 + 100 * 12)
   })
 
+  it('steps the current month when it has no actual (Jan compound)', () => {
+    const janAsOf = new Date(2027, 0, 15)
+    const a = acc({
+      actuals: { '2026-12': 10_000 },
+      contribution: 0,
+      annualRatePercent: 10,
+    })
+    const sim = simulateMonths(a, janAsOf, 1)
+    expect(sim.get('2027-01')).toBeCloseTo(11_000)
+  })
+
+  it('steps the current month contribution when it has no actual', () => {
+    const a = acc({
+      actuals: { '2026-06': 10_000 },
+      contribution: 100,
+      cadence: 'monthly',
+      annualRatePercent: 0,
+    })
+    const sim = simulateMonths(a, asOf, 1)
+    expect(sim.get('2026-07')).toBe(10_100)
+    expect(sim.get('2026-08')).toBe(10_200)
+  })
+
+  it('does not restep the current month when an actual exists', () => {
+    const a = acc({
+      actuals: { '2026-07': 10_000 },
+      contribution: 100,
+      cadence: 'monthly',
+      annualRatePercent: 0,
+    })
+    const sim = simulateMonths(a, asOf, 1)
+    expect(sim.get('2026-07')).toBe(10_000)
+    expect(sim.get('2026-08')).toBe(10_100)
+  })
+
+  it('reuses one simulation for later year lookups without changing values', () => {
+    const a = acc({
+      id: 'cache-a',
+      actuals: { '2026-07': 10_000 },
+      contribution: 100,
+      cadence: 'monthly',
+      annualRatePercent: 0,
+    })
+    const short = simulateMonths(a, asOf, 12)
+    const long = simulateMonths(a, asOf, 36)
+    expect(long.get('2027-07')).toBe(short.get('2027-07'))
+    expect(long.get('2027-07')).toBe(10_000 + 100 * 12)
+
+    const other = acc({
+      id: 'cache-b',
+      actuals: { '2026-07': 1_000 },
+      contribution: 0,
+      cadence: 'monthly',
+      annualRatePercent: 0,
+    })
+    expect(simulateMonths(other, asOf, 12).get('2027-07')).toBe(1_000)
+  })
+
   it('yearly contribution only in January (after compound)', () => {
     expect(stepToEndOfMonth(1000, '2026-08', 500, 0, 'yearly')).toBe(1000)
     expect(stepToEndOfMonth(1000, '2027-01', 500, 10, 'yearly')).toBe(1000 * 1.1 + 500)

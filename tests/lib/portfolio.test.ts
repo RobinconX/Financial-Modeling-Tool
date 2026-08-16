@@ -282,6 +282,44 @@ describe('scenario projection share prices on portfolio', () => {
     expect(eq.values[i2030]).toBeCloseTo(4_000, 6)
   })
 
+  it('stores 0 after a full sell so later years do not reuse the last mark', () => {
+    const sc = scenario()
+    const holding: PortfolioHolding = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 100,
+      scenarioId: sc.id,
+      basis: 'easy',
+      manualCurrentPrice: null,
+    }
+    const actions: PortfolioAction[] = [
+      { id: 's1', type: 'sell', holdingId: 'h1', year: 2028, shares: 100 },
+    ]
+    expect(sharesAtYear(holding, actions, 2027)).toBe(100)
+    expect(sharesAtYear(holding, actions, 2028)).toBe(0)
+    expect(computeHoldingValues(holding, sc, actions, 2026).get(2028)).toBe(0)
+    expect(holdingValueAtYear(holding, sc, actions, 2029, 2026)).toBe(0)
+    expect(holdingValueAtYear(holding, sc, actions, 2030, 2026)).toBe(0)
+  })
+
+  it('shows value again after a later buy', () => {
+    const sc = scenario()
+    const holding: PortfolioHolding = {
+      ...newHolding('AAA'),
+      id: 'h1',
+      sharesHeld: 100,
+      scenarioId: sc.id,
+      basis: 'easy',
+      manualCurrentPrice: null,
+    }
+    const actions: PortfolioAction[] = [
+      { id: 's1', type: 'sell', holdingId: 'h1', year: 2028, shares: 100 },
+      { id: 'b1', type: 'buy', holdingId: 'h1', year: 2030, shares: 50 },
+    ]
+    expect(holdingValueAtYear(holding, sc, actions, 2029, 2026)).toBe(0)
+    expect(holdingValueAtYear(holding, sc, actions, 2030, 2026)).toBeCloseTo(2_000, 6)
+  })
+
   it('uses advanced projections when holding basis is easy but only advanced is filled', () => {
     const sc = scenario({
       easyRows: [{ id: 'e0', year: 2030, projectedMarketCap: null }],

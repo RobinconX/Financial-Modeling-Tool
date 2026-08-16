@@ -439,7 +439,9 @@ export async function unlinkDataFile(): Promise<void> {
   })
 }
 
-export async function writeLinkedSnapshot(
+let writeChain: Promise<unknown> = Promise.resolve()
+
+async function performLinkedWrite(
   snapshot?: AppDataSnapshot,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!cachedHandle) {
@@ -479,6 +481,19 @@ export async function writeLinkedSnapshot(
   }
 }
 
+/** One write at a time so overlapping createWritable() cannot truncate the file. */
+export async function writeLinkedSnapshot(
+  snapshot?: AppDataSnapshot,
+): Promise<{ ok: true } | { ok: false; error: string }> {
+  const run = () => performLinkedWrite(snapshot)
+  const result = writeChain.then(run, run)
+  writeChain = result.then(
+    () => undefined,
+    () => undefined,
+  )
+  return result
+}
+
 export async function readLinkedSnapshot(): Promise<
   AppDataSnapshot | { error: string } | null
 > {
@@ -510,6 +525,9 @@ export async function readLinkedSnapshot(): Promise<
 let writeTimer: ReturnType<typeof setTimeout> | null = null
 /** True while a debounce window is open (pending → until write finishes). */
 let debounceActive = false
+/** Another save requested while a write is in flight. */
+let writeQueued = false
+let writeFlushing = false
 
 function cancelPendingLinkedWrite(): void {
   if (writeTimer) {
@@ -517,6 +535,7 @@ function cancelPendingLinkedWrite(): void {
     writeTimer = null
   }
   debounceActive = false
+  writeQueued = false
 }
 
 export type LinkedFileSaveEvent = {
@@ -576,10 +595,59 @@ function emitSaveEvent(event: LinkedFileSaveEvent): void {
 /** Wait this long after the last edit before writing the linked file. */
 export const LINKED_FILE_SAVE_DEBOUNCE_MS = 4000
 
+async function flushLinkedWrite(): Promise<void> {
+  if (writeFlushing) {
+    writeQueued = true
+    return
+  }
+  writeFlushing = true
+  try {
+    if (!cachedHandle) cachedHandle = await idbGetHandle()
+    if (!cachedHandle) {
+      debounceActive = false
+      writeQueued = false
+      return
+    }
+    emitSaveEvent({
+      status: 'saving',
+      message: 'Saving…',
+      fileName: cachedHandle.name,
+      savedAt: lastSuccessfulSaveAt,
+    })
+    await writeLinkedSnapshot()
+  } finally {
+    writeFlushing = false
+    if (writeQueued) {
+      writeQueued = false
+      await flushLinkedWrite()
+    } else {
+      debounceActive = false
+    }
+  }
+}
+
 /** Debounced write of current localStorage snapshot to the linked file. */
 export function scheduleLinkedFileWrite(
   delayMs = LINKED_FILE_SAVE_DEBOUNCE_MS,
 ): void {
+  if (writeFlushing) {
+    writeQueued = true
+    if (!debounceActive) {
+      debounceActive = true
+      void (async () => {
+        if (!cachedHandle) cachedHandle = await idbGetHandle()
+        if (cachedHandle) {
+          emitSaveEvent({
+            status: 'pending',
+            message: 'Unsaved changes',
+            fileName: cachedHandle.name,
+            savedAt: lastSuccessfulSaveAt,
+          })
+        }
+      })()
+    }
+    return
+  }
   if (writeTimer) clearTimeout(writeTimer)
   // Announce “pending” only once per save cycle (not every keystroke)
   if (!debounceActive) {
@@ -600,26 +668,7 @@ export function scheduleLinkedFileWrite(
   }
   writeTimer = setTimeout(() => {
     writeTimer = null
-    void (async () => {
-      if (!cachedHandle) cachedHandle = await idbGetHandle()
-      if (!cachedHandle) {
-        debounceActive = false
-        return
-      }
-      emitSaveEvent({
-        status: 'saving',
-        message: 'Saving…',
-        fileName: cachedHandle.name,
-        savedAt: lastSuccessfulSaveAt,
-      })
-      const result = await writeLinkedSnapshot()
-      debounceActive = false
-      // writeLinkedSnapshot already emits saved/error with timestamp
-      if (!result.ok) {
-        // ensure listeners still get error if write path failed before emit
-        /* writeLinkedSnapshot emits error */
-      }
-    })()
+    void flushLinkedWrite()
   }, delayMs)
 }
 

@@ -1,4 +1,6 @@
 import {
+  memo,
+  useCallback,
   useEffect,
   useLayoutEffect,
   useMemo,
@@ -30,6 +32,7 @@ import {
   type OverviewChartRow,
   type PortfolioBreakdownLine,
 } from '../../lib/overview'
+import { runwayDrawnFromRow } from '../../lib/runway'
 import type { ChartAnnotation, NetWorthGoal, OverviewSeries } from '../../types'
 import { ChartGoalLines } from '../common/ChartGoals'
 import { chartYearTick } from '../common/ChartNotes'
@@ -52,10 +55,13 @@ type Props = {
   annotations?: ChartAnnotation[]
   goals?: NetWorthGoal[]
   prebuiltRows?: OverviewChartRow[]
+  selectedXKey?: string | null
+  onSelectYear?: (xKey: string) => void
 }
 
 type HoverState = {
   year: number
+  xKey: string
   label: string
   kind: 'actual' | 'projected' | 'now'
   isNow: boolean
@@ -67,6 +73,7 @@ type HoverState = {
   draw: number | null
   fromAssets: number | null
   surplus: number | null
+  drawn: { id: string; name: string; amount: number }[]
   notes: { id: string; label: string }[]
   portfolios: {
     seriesId: string
@@ -121,6 +128,8 @@ export function OverviewChart({
   annotations = [],
   goals = [],
   prebuiltRows,
+  selectedXKey = null,
+  onSelectYear,
 }: Props) {
   const [hover, setHover] = useState<HoverState | null>(null)
   const chartAreaRef = useRef<HTMLDivElement>(null)
@@ -129,6 +138,7 @@ export function OverviewChart({
   const overChartRef = useRef(false)
   const overPanelRef = useRef(false)
   const clearTimerRef = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const hoverKeyRef = useRef<string | null>(null)
 
   // List order (low sortOrder first = top of editor). Recharts paints first Bar at
   // the stack bottom, so reverse when rendering bars so list-top = chart-top.
@@ -181,6 +191,7 @@ export function OverviewChart({
     if (clearTimerRef.current) clearTimeout(clearTimerRef.current)
     clearTimerRef.current = setTimeout(() => {
       if (!overChartRef.current && !overPanelRef.current) {
+        hoverKeyRef.current = null
         setHover(null)
       }
     }, 80)
@@ -197,6 +208,11 @@ export function OverviewChart({
     const stacks: HoverState['stacks'] = []
     const portfolios: HoverState['portfolios'] = []
     let total = 0
+    const nameById = new Map(active.map((s) => [s.id, s.name.trim() || sourceLabel(s.type)]))
+    const drawn = runwayDrawnFromRow(row).map((d) => ({
+      ...d,
+      name: nameById.get(d.id) ?? d.id,
+    }))
 
     // Top of stack first (matches visual top of bar / list top)
     for (const s of active) {
@@ -226,6 +242,7 @@ export function OverviewChart({
 
     return {
       year: row.year,
+      xKey: row.xKey,
       label: row.label,
       kind: row.kind,
       isNow: row.isNow === true,
@@ -241,21 +258,18 @@ export function OverviewChart({
       draw: typeof row.__draw === 'number' ? row.__draw : null,
       fromAssets: typeof row.__fromAssets === 'number' ? row.__fromAssets : null,
       surplus: typeof row.__surplus === 'number' ? row.__surplus : null,
+      drawn,
       portfolios,
     }
   }
 
-  function resolveHover(state: {
-    isTooltipActive?: boolean
+  function rowFromPointerState(state: {
     activeLabel?: string | number
     activeTooltipIndex?: number | string | unknown
     activeIndex?: number | string | unknown
-    activeCoordinate?: { x?: number; y?: number }
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     activePayload?: any[]
-  }): HoverState | null {
-    if (!state?.isTooltipActive) return null
-
+  }): OverviewChartRow | undefined {
     const byLabel =
       state.activeLabel != null
         ? rows.find(
@@ -281,14 +295,67 @@ export function OverviewChart({
       byPayload = p0 as OverviewChartRow
     }
 
-    const row = byLabel ?? byIndex ?? byPayload
-    if (!row) return null
+    return byLabel ?? byIndex ?? byPayload
+  }
 
+  function resolveHover(state: {
+    isTooltipActive?: boolean
+    activeLabel?: string | number
+    activeTooltipIndex?: number | string | unknown
+    activeIndex?: number | string | unknown
+    activeCoordinate?: { x?: number; y?: number }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    activePayload?: any[]
+  }): HoverState | null {
+    if (!state?.isTooltipActive) return null
+    const row = rowFromPointerState(state)
+    if (!row) return null
     const barX =
       typeof state.activeCoordinate?.x === 'number' ? state.activeCoordinate.x : areaSize.w / 2
-
     return hoverFromRow(row, barX)
   }
+
+  const handleChartHover = useCallback(
+    (state: Parameters<typeof resolveHover>[0]) => {
+      overChartRef.current = true
+      cancelClear()
+      const next = resolveHover(state)
+      const key = next?.xKey ?? null
+      if (key === hoverKeyRef.current) return
+      hoverKeyRef.current = key
+      setHover(next)
+    },
+    // resolveHover closes over latest rows/active/deps via render; we only
+    // skip when the year key is unchanged so the chart is not re-rendered.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [rows, active, deps, annotations, recordedByYear, areaSize.w],
+  )
+
+  const handleChartClick = useCallback(
+    (state: Parameters<typeof rowFromPointerState>[0]) => {
+      if (!onSelectYear) return
+      const row = rowFromPointerState(state)
+      if (!row) return
+      onSelectYear(row.xKey)
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [onSelectYear, rows],
+  )
+
+  const yearTick = useMemo(
+    () =>
+      chartYearTick(annotations, rows.map((r) => r.xKey), (key) => {
+        if (key === 'now') return false
+        const n = Number(key)
+        if (!Number.isFinite(n)) return false
+        if (rows.length > 40) return n % 5 !== 0
+        if (rows.length > 18) return n % 2 !== 0
+        return false
+      }),
+    [annotations, rows],
+  )
+
+  const goalXKeys = useMemo(() => rows.map((r) => r.xKey), [rows])
 
   const panelStyle = hover
     ? computePanelStyle(hover.barX, areaSize.w, areaSize.h)
@@ -320,9 +387,18 @@ export function OverviewChart({
         ref={chartAreaRef}
         className={
           fillContainer
-            ? 'relative min-h-0 w-full flex-1 overflow-hidden'
-            : 'relative h-80 w-full min-h-[20rem] overflow-hidden'
+            ? `relative min-h-0 w-full flex-1 overflow-hidden outline-none [&_svg]:outline-none ${
+                onSelectYear ? 'cursor-pointer' : ''
+              }`
+            : `relative h-80 w-full min-h-[20rem] overflow-hidden outline-none [&_svg]:outline-none ${
+                onSelectYear ? 'cursor-pointer' : ''
+              }`
         }
+        onMouseDown={(e) => {
+          if (!onSelectYear) return
+          if (panelRef.current?.contains(e.target as Node)) return
+          e.preventDefault()
+        }}
         onMouseEnter={() => {
           overChartRef.current = true
           cancelClear()
@@ -332,89 +408,18 @@ export function OverviewChart({
           scheduleClear()
         }}
       >
-        <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-          <ComposedChart
-            data={rows}
-            margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
-            onMouseMove={(state) => {
-              overChartRef.current = true
-              cancelClear()
-              const next = resolveHover(state as Parameters<typeof resolveHover>[0])
-              setHover(next)
-            }}
-          >
-            <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <XAxis
-              dataKey="xKey"
-              tick={chartYearTick(annotations, rows.map((r) => r.xKey), (key) => {
-                if (rows.length <= 18) return false
-                const n = Number(key)
-                return Number.isFinite(n) && n % 2 !== 0
-              })}
-              tickLine={false}
-              axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
-              interval={0}
-              height={28}
-            />
-            <YAxis
-              tick={{ fill: 'rgba(232,238,245,0.4)', fontSize: 10 }}
-              tickLine={false}
-              axisLine={false}
-              width={56}
-              domain={goals.length > 0 ? [0, goalYMax(goals)] : undefined}
-              tickFormatter={(v: number) => {
-                if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
-                if (v >= 1e3) return `${(v / 1e3).toFixed(0)}k`
-                return String(v)
-              }}
-            />
-            <Tooltip
-              content={() => null}
-              cursor={{ fill: 'rgba(255,255,255,0.06)' }}
-              isAnimationActive={false}
-            />
-            {stackOrder.map((s) => (
-              <Bar
-                key={s.id}
-                dataKey={s.id}
-                name={s.name}
-                stackId="overview"
-                fill={colorById.get(s.id) ?? '#94a3b8'}
-                isAnimationActive={false}
-                // Disabled series stay mounted (0 height — no values in rows) so stack
-                // order is stable when re-enabled.
-                legendType={s.enabled ? 'rect' : 'none'}
-              >
-                {s.enabled
-                  ? rows.map((r) => (
-                      <Cell
-                        key={`${s.id}-${r.xKey}`}
-                        fill={colorById.get(s.id) ?? '#94a3b8'}
-                        fillOpacity={r.isNow ? 1 : r.kind === 'actual' ? 0.92 : 0.4}
-                        stroke={r.isNow ? 'rgba(255,255,255,0.45)' : undefined}
-                        strokeWidth={r.isNow ? 1.5 : 0}
-                      />
-                    ))
-                  : null}
-              </Bar>
-            ))}
-            {showRecorded ? (
-              <Line
-                type="monotone"
-                dataKey={RECORDED_ACTUAL_KEY}
-                name="Recorded"
-                stroke="#fbbf24"
-                strokeWidth={2}
-                dot={{ r: 3, fill: '#fbbf24' }}
-                connectNulls={false}
-                isAnimationActive={false}
-              />
-            ) : null}
-            {goals.length > 0 ? (
-              <ChartGoalLines goals={goals} xKeys={rows.map((r) => r.xKey)} />
-            ) : null}
-          </ComposedChart>
-        </ResponsiveContainer>
+        <OverviewBarsPlot
+          rows={rows}
+          stackOrder={stackOrder}
+          colorById={colorById}
+          yearTick={yearTick}
+          goalXKeys={goalXKeys}
+          goals={goals}
+          showRecorded={showRecorded}
+          selectedXKey={selectedXKey}
+          onHover={handleChartHover}
+          onClick={onSelectYear ? handleChartClick : undefined}
+        />
 
         {hover && panelStyle ? (
           <div
@@ -506,6 +511,14 @@ export function OverviewChart({
                     </span>
                   </div>
                 ) : null}
+                {hover.drawn.map((d) => (
+                  <div key={d.id} className="flex justify-between gap-3 pl-2 text-rose-300/80">
+                    <span className="truncate">{d.name}</span>
+                    <span className="shrink-0 tabular-nums">
+                      −{formatMoney(d.amount, OVERVIEW_CURRENCY)}
+                    </span>
+                  </div>
+                ))}
                 {hover.surplus != null && hover.surplus > 0 ? (
                   <div className="flex justify-between gap-3 text-white/55">
                     <span>To leftover</span>
@@ -589,3 +602,129 @@ export function OverviewChart({
     </div>
   )
 }
+
+type BarsPlotProps = {
+  rows: OverviewChartRow[]
+  stackOrder: OverviewSeries[]
+  colorById: Map<string, string>
+  yearTick: ReturnType<typeof chartYearTick>
+  goalXKeys: string[]
+  goals: NetWorthGoal[]
+  showRecorded: boolean
+  selectedXKey: string | null
+  onHover: (state: {
+    isTooltipActive?: boolean
+    activeLabel?: string | number
+    activeTooltipIndex?: number | string | unknown
+    activeIndex?: number | string | unknown
+    activeCoordinate?: { x?: number; y?: number }
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    activePayload?: any[]
+  }) => void
+  onClick?: (state: {
+    activeLabel?: string | number
+    activeTooltipIndex?: number | string | unknown
+    activeIndex?: number | string | unknown
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    activePayload?: any[]
+  }) => void
+}
+
+const OverviewBarsPlot = memo(function OverviewBarsPlot({
+  rows,
+  stackOrder,
+  colorById,
+  yearTick,
+  goalXKeys,
+  goals,
+  showRecorded,
+  selectedXKey,
+  onHover,
+  onClick,
+}: BarsPlotProps) {
+  return (
+    <ResponsiveContainer width="100%" height="100%" minWidth={0}>
+      <ComposedChart
+        data={rows}
+        margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+        onMouseMove={onHover}
+        onClick={onClick}
+        style={onClick ? { cursor: 'pointer', outline: 'none' } : { outline: 'none' }}
+      >
+        <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+        <XAxis
+          dataKey="xKey"
+          tick={yearTick}
+          tickLine={false}
+          axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
+          interval={0}
+          height={28}
+        />
+        <YAxis
+          tick={{ fill: 'rgba(232,238,245,0.4)', fontSize: 10 }}
+          tickLine={false}
+          axisLine={false}
+          width={56}
+          domain={goals.length > 0 ? [0, goalYMax(goals)] : undefined}
+          tickFormatter={(v: number) => {
+            if (v >= 1e6) return `${(v / 1e6).toFixed(1)}M`
+            if (v >= 1e3) return `${(v / 1e3).toFixed(0)}k`
+            return String(v)
+          }}
+        />
+        <Tooltip
+          content={() => null}
+          cursor={{ fill: 'rgba(255,255,255,0.06)' }}
+          isAnimationActive={false}
+        />
+        {stackOrder.map((s) => (
+          <Bar
+            key={s.id}
+            dataKey={s.id}
+            name={s.name}
+            stackId="overview"
+            fill={colorById.get(s.id) ?? '#94a3b8'}
+            isAnimationActive={false}
+            legendType={s.enabled ? 'rect' : 'none'}
+          >
+            {s.enabled
+              ? rows.map((r) => {
+                  const selected = selectedXKey != null && r.xKey === selectedXKey
+                  return (
+                    <Cell
+                      key={`${s.id}-${r.xKey}`}
+                      fill={colorById.get(s.id) ?? '#94a3b8'}
+                      fillOpacity={
+                        selected ? 1 : r.isNow ? 1 : r.kind === 'actual' ? 0.92 : 0.4
+                      }
+                      stroke={
+                        selected
+                          ? 'rgba(255,255,255,0.8)'
+                          : r.isNow
+                            ? 'rgba(255,255,255,0.45)'
+                            : undefined
+                      }
+                      strokeWidth={selected ? 2 : r.isNow ? 1.5 : 0}
+                    />
+                  )
+                })
+              : null}
+          </Bar>
+        ))}
+        {showRecorded ? (
+          <Line
+            type="monotone"
+            dataKey={RECORDED_ACTUAL_KEY}
+            name="Recorded"
+            stroke="#fbbf24"
+            strokeWidth={2}
+            dot={{ r: 3, fill: '#fbbf24' }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+        ) : null}
+        {goals.length > 0 ? <ChartGoalLines goals={goals} xKeys={goalXKeys} /> : null}
+      </ComposedChart>
+    </ResponsiveContainer>
+  )
+})

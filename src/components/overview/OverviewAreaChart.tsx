@@ -36,6 +36,7 @@ type Props = {
   annotations?: ChartAnnotation[]
   goals?: NetWorthGoal[]
   prebuiltRows?: OverviewChartRow[]
+  onSelectYear?: (xKey: string) => void
 }
 
 export function OverviewAreaChart({
@@ -49,6 +50,7 @@ export function OverviewAreaChart({
   annotations = [],
   goals = [],
   prebuiltRows,
+  onSelectYear,
 }: Props) {
   const sorted = useMemo(
     () =>
@@ -95,12 +97,44 @@ export function OverviewAreaChart({
       <div
         className={
           fillContainer
-            ? 'relative min-h-0 w-full flex-1'
-            : 'relative h-80 w-full min-h-[20rem]'
+            ? `relative min-h-0 w-full flex-1 outline-none [&_svg]:outline-none ${
+                onSelectYear ? 'cursor-pointer' : ''
+              }`
+            : `relative h-80 w-full min-h-[20rem] outline-none [&_svg]:outline-none ${
+                onSelectYear ? 'cursor-pointer' : ''
+              }`
         }
+        onMouseDown={(e) => {
+          if (!onSelectYear) return
+          e.preventDefault()
+        }}
       >
         <ResponsiveContainer width="100%" height="100%" minWidth={0}>
-          <ComposedChart data={rows} margin={{ top: 8, right: 12, left: 4, bottom: 4 }}>
+          <ComposedChart
+            data={rows}
+            margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+            style={onSelectYear ? { cursor: 'pointer', outline: 'none' } : { outline: 'none' }}
+            onClick={
+              onSelectYear
+                ? (state: {
+                    activeLabel?: string | number
+                    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+                    activePayload?: any[]
+                  }) => {
+                    const p0 = state?.activePayload?.[0]?.payload as
+                      | { xKey?: string }
+                      | undefined
+                    const key =
+                      typeof p0?.xKey === 'string'
+                        ? p0.xKey
+                        : state.activeLabel != null
+                          ? String(state.activeLabel)
+                          : null
+                    if (key) onSelectYear(key)
+                  }
+                : undefined
+            }
+          >
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
               dataKey="xKey"

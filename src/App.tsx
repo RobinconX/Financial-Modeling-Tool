@@ -143,11 +143,12 @@ export default function App() {
     reorderPortfolios,
   } = useSavedPortfolios()
 
-  // Live quotes for all known tickers — on load + every 5 minutes
+  const quotesEnabled = tab === 'projections' || tab === 'portfolio' || tab === 'overview'
   const { quotesLoading, quoteCount } = useAutoQuoteRefresh(
     scenarios,
     portfolios,
     updateScenario,
+    quotesEnabled,
   )
 
   const {
@@ -169,8 +170,8 @@ export default function App() {
     copyScenario,
   } = useIncomeCost()
 
-  const { accounts: savingsAccounts } = useSavings()
-  // savingsAccounts always includes permanent Cash (ensured on load)
+  const savings = useSavings()
+  const savingsAccounts = savings.accounts
 
   const {
     comparables,
@@ -391,7 +392,7 @@ export default function App() {
             />
           )}
 
-          {tab === 'savings' && <SavingsView />}
+          {tab === 'savings' && <SavingsView {...savings} />}
 
           {tab === 'settings' && <DataSettingsPanel />}
         </main>

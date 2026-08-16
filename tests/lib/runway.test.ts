@@ -7,14 +7,16 @@ import {
   runwayIncomeDrawForYear,
   addSurplusToLeftover,
   buildRunwayChartRows,
+  buildRunwayModel,
   growLeftoverByRate,
   periodAddsICsurplus,
   resolveRunwayDrawOrder,
+  runwayDrawnFromRow,
   seriesDrawLocked,
   stepRunwayLeftoverPile,
   takeFromAssets,
 } from '../../src/lib/runway'
-import { residualCashValueAtYear } from '../../src/lib/overview'
+import { residualCashValueAtYear, seriesValueChf } from '../../src/lib/overview'
 import type { CashflowLine, OverviewSeries, SavingsAccount } from '../../src/types'
 
 function series(partial: Partial<OverviewSeries> & Pick<OverviewSeries, 'id' | 'type'>): OverviewSeries {
@@ -343,6 +345,279 @@ describe('runway draw order and lock', () => {
     expect(byYear.get(2026)?.l).toBe(10_000)
     expect(byYear.get(2027)?.l).toBe(10_000)
     expect(byYear.get(2028)?.l).toBe(2_000)
+    expect(runwayDrawnFromRow(byYear.get(2026)!)).toEqual([{ id: 'c', amount: 8_000 }])
+    expect(runwayDrawnFromRow(byYear.get(2027)!)).toEqual([{ id: 'c', amount: 8_000 }])
+    expect(runwayDrawnFromRow(byYear.get(2028)!)).toEqual([{ id: 'l', amount: 8_000 }])
+  })
+
+  it('records how much was taken from each series in draw order', () => {
+    const leftover = series({
+      id: 'l',
+      type: 'incomeLeftover',
+      name: 'Leftover',
+      baseChf: 10_000,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      perpetualYearlyChf: 0,
+      yearBindings: [],
+    })
+    const cash: OverviewSeries = series({
+      id: 'm',
+      type: 'manual',
+      name: 'Cash pile',
+      baseChf: 20_000,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      perpetualYearlyChf: 0,
+      yearBindings: [],
+    })
+    const rows = buildRunwayChartRows(
+      { startYear: 2026, endYear: 2026, series: [leftover, cash] },
+      {
+        portfolios: [],
+        stockScenarios: [],
+        savingsAccounts: [],
+        incomeCostLines: [],
+        usdToChf: 0.9,
+        asOf: new Date(2026, 6, 15),
+      },
+      {
+        periods: [
+          {
+            ...defaultRunwayPeriod(2026),
+            drawMode: 'fixed',
+            drawFixedChf: 15_000,
+          },
+        ],
+        drawOrder: ['l', 'm'],
+      },
+    )
+    const y2026 = rows.find((r) => r.xKey === '2026')!
+    expect(runwayDrawnFromRow(y2026)).toEqual([
+      { id: 'l', amount: 10_000 },
+      { id: 'm', amount: 5_000 },
+    ])
+    expect(y2026.l).toBe(0)
+    expect(y2026.m).toBe(15_000)
+  })
+})
+
+describe('runway grow after draw', () => {
+  const asOf = new Date(2026, 6, 15)
+  const cash: OverviewSeries = series({
+    id: 'm',
+    type: 'manual',
+    baseChf: 100_000,
+    baseYear: 2026,
+    annualRatePercent: 10,
+    perpetualYearlyChf: 10_000,
+    yearBindings: [],
+  })
+  const deps = {
+    portfolios: [],
+    stockScenarios: [],
+    savingsAccounts: [],
+    incomeCostLines: [],
+    usdToChf: 0.9,
+    asOf,
+    overviewSeries: [cash],
+  }
+
+  it('matches net worth when nothing is drawn', () => {
+    const rows = buildRunwayChartRows(
+      { startYear: 2026, endYear: 2027, series: [cash] },
+      deps,
+      { periods: [defaultRunwayPeriod(2026)] },
+    )
+    const byYear = new Map(rows.filter((r) => !r.isNow).map((r) => [r.year, r]))
+    expect(byYear.get(2026)?.m).toBeCloseTo(seriesValueChf(cash, 2026, deps))
+    expect(byYear.get(2027)?.m).toBeCloseTo(seriesValueChf(cash, 2027, deps))
+    expect(byYear.get(2027)?.m).toBeCloseTo(131_000)
+  })
+
+  it('grows what is left and still adds the full next-year deposit', () => {
+    // 2026: 100k + 10k = 110k, then draw 50k → 60k
+    // 2027: 60k × 1.1 + 10k = 76k (not 60k × 131/110)
+    const rows = buildRunwayChartRows(
+      { startYear: 2026, endYear: 2027, series: [cash] },
+      deps,
+      {
+        periods: [
+          {
+            ...defaultRunwayPeriod(2026),
+            drawMode: 'fixed',
+            drawFixedChf: 50_000,
+          },
+          {
+            ...defaultRunwayPeriod(2027),
+            drawMode: 'fixed',
+            drawFixedChf: 0,
+          },
+        ],
+      },
+    )
+    const byYear = new Map(rows.filter((r) => !r.isNow).map((r) => [r.year, r]))
+    expect(byYear.get(2026)?.m).toBeCloseTo(60_000)
+    expect(byYear.get(2027)?.m).toBeCloseTo(76_000)
+  })
+
+  it('year flow start + growth + inflow − drawn = end', () => {
+    const { flows } = buildRunwayModel(
+      { startYear: 2026, endYear: 2027, series: [cash] },
+      deps,
+      {
+        periods: [
+          {
+            ...defaultRunwayPeriod(2026),
+            drawMode: 'fixed',
+            drawFixedChf: 50_000,
+          },
+          {
+            ...defaultRunwayPeriod(2027),
+            drawMode: 'fixed',
+            drawFixedChf: 0,
+          },
+        ],
+      },
+    )
+    const y2026 = flows.get(2026)!
+    const y2027 = flows.get(2027)!
+    const m26 = y2026.series.find((s) => s.id === 'm')!
+    expect(m26.start).toBeCloseTo(100_000)
+    expect(m26.inflow).toBeCloseTo(10_000)
+    expect(m26.drawn).toBeCloseTo(50_000)
+    expect(m26.start + m26.growth + m26.inflow - m26.drawn).toBeCloseTo(m26.end)
+    expect(m26.end).toBeCloseTo(60_000)
+
+    const m27 = y2027.series.find((s) => s.id === 'm')!
+    expect(m27.start).toBeCloseTo(60_000)
+    expect(m27.growth).toBeCloseTo(6_000)
+    expect(m27.inflow).toBeCloseTo(10_000)
+    expect(m27.drawn).toBe(0)
+    expect(m27.start + m27.growth + m27.inflow - m27.drawn).toBeCloseTo(m27.end)
+    expect(m27.end).toBeCloseTo(76_000)
+  })
+})
+
+describe('runway draw before growth', () => {
+  const asOf = new Date(2026, 6, 15)
+  const cash = (timing: 'growFirst' | 'drawFirst' = 'drawFirst'): OverviewSeries =>
+    series({
+      id: 'm',
+      type: 'manual',
+      name: 'Brokerage',
+      baseChf: 100_000,
+      baseYear: 2026,
+      annualRatePercent: 10,
+      perpetualYearlyChf: 10_000,
+      yearBindings: [],
+      drawTiming: timing,
+    })
+  const deps = {
+    portfolios: [],
+    stockScenarios: [],
+    savingsAccounts: [],
+    incomeCostLines: [],
+    usdToChf: 0.9,
+    asOf,
+  }
+
+  it('draws from last year’s leftover then compounds the rest', () => {
+    // 2026: 100k − 50k + 10k = 60k (no compound on base year)
+    // 2027: (60k − 15k) × 1.1 + 10k = 59.5k  (not 60k × 1.1 + 10k − 15k = 61k)
+    const { rows, flows } = buildRunwayModel(
+      { startYear: 2026, endYear: 2027, series: [cash()] },
+      { ...deps, overviewSeries: [cash()] },
+      {
+        periods: [
+          { ...defaultRunwayPeriod(2026), drawMode: 'fixed', drawFixedChf: 50_000 },
+          { ...defaultRunwayPeriod(2027), drawMode: 'fixed', drawFixedChf: 15_000 },
+        ],
+      },
+    )
+    const byYear = new Map(rows.filter((r) => !r.isNow).map((r) => [r.year, r]))
+    expect(byYear.get(2026)?.m).toBeCloseTo(60_000)
+    expect(byYear.get(2027)?.m).toBeCloseTo(59_500)
+
+    const y27 = flows.get(2027)!
+    const m = y27.series.find((s) => s.id === 'm')!
+    expect(m.drawTiming).toBe('drawFirst')
+    expect(m.start).toBeCloseTo(60_000)
+    expect(m.drawn).toBeCloseTo(15_000)
+    expect(m.growth).toBeCloseTo(4_500)
+    expect(m.inflow).toBeCloseTo(10_000)
+    expect(m.start - m.drawn + m.growth + m.inflow).toBeCloseTo(m.end)
+    expect(m.end).toBeCloseTo(59_500)
+  })
+
+  it('does not use this year’s deposit to cover a before-growth draw', () => {
+    const thin = series({
+      id: 'm',
+      type: 'manual',
+      baseChf: 10_000,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      perpetualYearlyChf: 20_000,
+      yearBindings: [],
+      drawTiming: 'drawFirst',
+    })
+    const rows = buildRunwayChartRows(
+      { startYear: 2026, endYear: 2026, series: [thin] },
+      { ...deps, overviewSeries: [thin] },
+      {
+        periods: [{ ...defaultRunwayPeriod(2026), drawMode: 'fixed', drawFixedChf: 25_000 }],
+      },
+    )
+    const y2026 = rows.find((r) => r.xKey === '2026')!
+    // Can only take the 10k start; 20k deposit lands after. 15k of the draw is unmet.
+    expect(runwayDrawnFromRow(y2026)).toEqual([{ id: 'm', amount: 10_000 }])
+    expect(y2026.m).toBeCloseTo(20_000)
+    expect(y2026.__fromAssets).toBe(10_000)
+  })
+
+  it('mixed: draw order still holds; before/after only changes when that pile is tapped', () => {
+    const leftover = series({
+      id: 'l',
+      type: 'incomeLeftover',
+      name: 'Leftover',
+      baseChf: 10_000,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      perpetualYearlyChf: 0,
+      yearBindings: [],
+      drawTiming: 'growFirst',
+    })
+    const port = series({
+      id: 'p',
+      type: 'manual',
+      name: 'Portfolio',
+      baseChf: 20_000,
+      baseYear: 2026,
+      annualRatePercent: 0,
+      perpetualYearlyChf: 0,
+      yearBindings: [],
+      drawTiming: 'drawFirst',
+    })
+    const { rows, flows } = buildRunwayModel(
+      { startYear: 2026, endYear: 2026, series: [leftover, port] },
+      { ...deps, overviewSeries: [leftover, port] },
+      {
+        periods: [{ ...defaultRunwayPeriod(2026), drawMode: 'fixed', drawFixedChf: 15_000 }],
+        drawOrder: ['l', 'p'],
+      },
+    )
+    const y2026 = rows.find((r) => r.xKey === '2026')!
+    // Leftover is first: pays 10k (after its own growth). Portfolio then pays 5k from start.
+    expect(runwayDrawnFromRow(y2026)).toEqual([
+      { id: 'l', amount: 10_000 },
+      { id: 'p', amount: 5_000 },
+    ])
+    expect(y2026.l).toBe(0)
+    expect(y2026.p).toBe(15_000)
+    const flow = flows.get(2026)!
+    expect(flow.series.map((s) => s.id)).toEqual(['l', 'p'])
+    expect(flow.series.find((s) => s.id === 'p')!.drawTiming).toBe('drawFirst')
+    expect(flow.series.find((s) => s.id === 'l')!.drawTiming).toBe('growFirst')
   })
 })
 
