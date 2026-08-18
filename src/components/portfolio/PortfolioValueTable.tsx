@@ -1,9 +1,11 @@
 import { useMemo } from 'react'
-import { formatMoney } from '../../lib/format'
+import { formatMoney, formatPercent } from '../../lib/format'
 import { toDisplay } from '../../lib/fx'
 import { getOpeningCash, holdingLiveValue } from '../../lib/portfolio'
+import { investedForRoiDisplay, simpleRoi } from '../../lib/portfolioContributions'
 import type {
   DisplayCurrency,
+  PortfolioContributionsState,
   PortfolioGrid,
   PortfolioGridRow,
   SavedPortfolio,
@@ -16,6 +18,7 @@ type Props = {
   scenarios?: SavedScenario[]
   displayCurrency?: DisplayCurrency
   usdToChf?: number | null
+  contributions?: PortfolioContributionsState | null
 }
 
 /** Live "Now" values: opening cash + live holding values (matches chart Now bar). */
@@ -62,6 +65,7 @@ export function PortfolioValueTable({
   scenarios = [],
   displayCurrency = 'USD',
   usdToChf = null,
+  contributions = null,
 }: Props) {
   const currentYear = new Date().getFullYear()
   const showNow = portfolio != null
@@ -195,9 +199,68 @@ export function PortfolioValueTable({
                 })}
               </tr>
             ))}
+            {contributions ? (
+              <tr className="border-t border-white/10 bg-white/[0.02]">
+                <td className="sticky left-0 z-10 bg-[#0f141b] px-3 py-2 text-white/70">ROI</td>
+                {pastYears.map(({ y, i }) => {
+                  const total = grid.rows.find((r) => r.kind === 'total')?.values[i] ?? null
+                  return (
+                    <td key={`roi-${y}`} className="px-3 py-2 tabular-nums text-white/70">
+                      {roiCell(total, contributions, y, displayCurrency, usdToChf, portfolio, false)}
+                    </td>
+                  )
+                })}
+                {showNow && nowValues ? (
+                  <td className="bg-white/[0.04] px-3 py-2 tabular-nums text-white/80">
+                    {roiCell(
+                      nowValues[grid.rows.findIndex((r) => r.kind === 'total')] ?? null,
+                      contributions,
+                      currentYear,
+                      displayCurrency,
+                      usdToChf,
+                      portfolio,
+                      true,
+                    )}
+                  </td>
+                ) : null}
+                {futureYears.map(({ y, i }) => {
+                  const total = grid.rows.find((r) => r.kind === 'total')?.values[i] ?? null
+                  return (
+                    <td key={`roi-${y}`} className="px-3 py-2 tabular-nums text-white/70">
+                      {roiCell(total, contributions, y, displayCurrency, usdToChf, portfolio, false)}
+                    </td>
+                  )
+                })}
+              </tr>
+            ) : null}
           </tbody>
         </table>
       </div>
     </div>
   )
+}
+
+function roiCell(
+  valueUsd: number | null,
+  contributions: PortfolioContributionsState,
+  year: number,
+  displayCurrency: DisplayCurrency,
+  usdToChf: number | null,
+  portfolio: SavedPortfolio | null,
+  asOfNow: boolean,
+): string {
+  if (valueUsd == null || !Number.isFinite(valueUsd)) return '—'
+  const invested = investedForRoiDisplay(
+    contributions,
+    year,
+    displayCurrency,
+    usdToChf,
+    portfolio,
+    new Date().getFullYear(),
+    asOfNow,
+  )
+  if (invested == null || !(invested > 0)) return '—'
+  const value = toDisplay(valueUsd, displayCurrency, usdToChf)
+  const r = simpleRoi(value, invested)
+  return r ? formatPercent(r.roi) : '—'
 }

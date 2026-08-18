@@ -3,6 +3,7 @@ import type {
   CashflowLine,
   CashflowScenario,
   DisplayCurrency,
+  PortfolioContributionsState,
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
@@ -20,6 +21,7 @@ import {
 import { PortfolioValueTable } from './PortfolioValueTable'
 import { PortfolioChart } from './PortfolioChart'
 import { PortfolioActualsEditor } from './PortfolioActualsEditor'
+import { PortfolioMoneyIn } from './PortfolioMoneyIn'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { InfoTip } from '../common/InfoTip'
 
@@ -27,6 +29,7 @@ const CURRENCY_KEY = 'grok-lab-portfolio-currency'
 const SELECTED_PORTFOLIO_KEY = 'grok-lab-selected-portfolio'
 const PANEL_KEY = 'grok-lab-portfolio-panel'
 const CHART_MODE_KEY = 'grok-lab-portfolio-chart-mode'
+const CASH_INVESTED_KEY = 'grok-lab-portfolio-cash-invested'
 
 type WorkspaceTab = 'chart' | 'actuals' | PortfolioEditorPanel
 
@@ -84,6 +87,14 @@ function readChartMode(): PortfolioChartMode {
   return 'stacked'
 }
 
+function readCashInvested(): boolean {
+  try {
+    return localStorage.getItem(CASH_INVESTED_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 type Props = {
   scenarios: SavedScenario[]
   portfolios: SavedPortfolio[]
@@ -95,6 +106,10 @@ type Props = {
   reorderPortfolios: (orderedIds: string[]) => boolean
   incomeCostScenarios?: CashflowScenario[]
   incomeCostLines?: CashflowLine[]
+  contributions: PortfolioContributionsState
+  contributionsError: string | null
+  setContributionYear: (year: number, amount: number | null) => void
+  setContributionsCurrency: (currency: DisplayCurrency) => void
 }
 
 export function PortfolioView({
@@ -108,12 +123,18 @@ export function PortfolioView({
   reorderPortfolios,
   incomeCostScenarios = [],
   incomeCostLines = [],
+  contributions,
+  contributionsError,
+  setContributionYear,
+  setContributionsCurrency,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     readSelectedPortfolioId(portfolios),
   )
   const [panel, setPanel] = useState<WorkspaceTab>(readPanel)
+  const [actualsKind, setActualsKind] = useState<'value' | 'moneyin'>('value')
   const [chartMode, setChartMode] = useState<PortfolioChartMode>(readChartMode)
+  const [showCashInvested, setShowCashInvested] = useState(readCashInvested)
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(readCurrency)
   const [usdToChf, setUsdToChf] = useState<number | null>(null)
   const [fxAsOf, setFxAsOf] = useState<string | null>(null)
@@ -660,7 +681,7 @@ export function PortfolioView({
           Create or select a portfolio to get started.
         </div>
       ) : (
-        <div className="panel min-h-0 min-w-0">
+        <div className="panel min-h-0 min-w-0 space-y-5">
             {panel === 'chart' && grid && (
               <div className="space-y-5">
                 <div className="flex flex-wrap items-end justify-between gap-3">
@@ -700,6 +721,28 @@ export function PortfolioView({
                         Portfolio value
                       </button>
                     </div>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={showCashInvested}
+                      title="Overlay invested vs cash % on the bars (right axis)"
+                      className={`rounded-md px-2 py-1 text-[11px] transition ${
+                        showCashInvested
+                          ? 'bg-sky-500/20 text-sky-200'
+                          : 'text-white/45 hover:bg-white/5 hover:text-white/70'
+                      }`}
+                      onClick={() => {
+                        const next = !showCashInvested
+                        setShowCashInvested(next)
+                        try {
+                          localStorage.setItem(CASH_INVESTED_KEY, next ? '1' : '0')
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                    >
+                      Cash / invested
+                    </button>
                     <label className="flex items-center gap-1.5 text-xs text-white/50">
                       From
                       <input
@@ -762,6 +805,8 @@ export function PortfolioView({
                     chartMode={chartMode}
                     fromYear={periodFrom}
                     toYear={periodTo}
+                    contributions={contributions}
+                    showCashInvested={showCashInvested}
                   />
                 </FullscreenChart>
                 <div className="border-t border-white/[0.06] pt-4">
@@ -772,6 +817,7 @@ export function PortfolioView({
                     scenarios={scenarios}
                     displayCurrency={activeCurrency}
                     usdToChf={usdToChf}
+                    contributions={contributions}
                   />
                 </div>
               </div>
@@ -782,14 +828,53 @@ export function PortfolioView({
             )}
 
             {panel === 'actuals' && (
-              <PortfolioActualsEditor
-                portfolio={selected}
-                onChange={(patch) => updatePortfolio(selected.id, patch)}
-                displayCurrency={activeCurrency}
-                usdToChf={usdToChf}
-                otherPortfolios={portfolios.filter((p) => p.id !== selected.id)}
-                onUpdateOtherPortfolio={updatePortfolio}
-              />
+              <div className="space-y-4">
+                <div
+                  className="inline-flex gap-1 border-b border-white/10"
+                  role="group"
+                  aria-label="Actuals kind"
+                >
+                  {(
+                    [
+                      { id: 'value' as const, label: 'Portfolio value' },
+                      { id: 'moneyin' as const, label: 'Money in' },
+                    ]
+                  ).map((t) => (
+                    <button
+                      key={t.id}
+                      type="button"
+                      onClick={() => setActualsKind(t.id)}
+                      className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
+                        actualsKind === t.id
+                          ? 'border-emerald-400 text-white'
+                          : 'border-transparent text-white/50 hover:text-white/80'
+                      }`}
+                    >
+                      {t.label}
+                    </button>
+                  ))}
+                </div>
+                {actualsKind === 'value' ? (
+                  <PortfolioActualsEditor
+                    portfolio={selected}
+                    onChange={(patch) => updatePortfolio(selected.id, patch)}
+                    displayCurrency={activeCurrency}
+                    usdToChf={usdToChf}
+                    otherPortfolios={portfolios.filter((p) => p.id !== selected.id)}
+                    onUpdateOtherPortfolio={updatePortfolio}
+                  />
+                ) : (
+                  <PortfolioMoneyIn
+                    contributions={contributions}
+                    error={contributionsError}
+                    displayCurrency={activeCurrency}
+                    usdToChf={usdToChf}
+                    currentYear={currentYear}
+                    onSetYear={setContributionYear}
+                    onSetCurrency={setContributionsCurrency}
+                  />
+                )}
+              </div>
             )}
 
             {editorPanel && (

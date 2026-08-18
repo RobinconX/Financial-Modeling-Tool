@@ -23,6 +23,7 @@ describe('appDataSnapshot', () => {
     expect(parsed.comparables).toEqual([])
     expect(parsed.annotations).toEqual([])
     expect(parsed.goals).toEqual([])
+    expect(parsed.portfolioContributions).toEqual({ version: 1, currency: 'USD', byYear: {} })
   })
 
   it('rejects invalid payloads', () => {

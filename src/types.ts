@@ -249,6 +249,14 @@ export type SavingsState = {
   accounts: SavingsAccount[]
 }
 
+/** Shared actual contributions into investing (all portfolio scenarios). ROI only. */
+export type PortfolioContributionsState = {
+  version: 1
+  currency: DisplayCurrency
+  /** Calendar year → amount in `currency`. */
+  byYear: Record<string, number>
+}
+
 // --- Overview (net-worth stack config; display CHF) ---
 
 export type OverviewSeriesType = 'portfolio' | 'savings' | 'manual' | 'incomeLeftover'

@@ -10,19 +10,28 @@ import {
 } from 'react'
 import {
   Bar,
-  BarChart,
   CartesianGrid,
   Cell,
+  ComposedChart,
+  Line,
   ResponsiveContainer,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatMoney } from '../../lib/format'
+import { formatMoney, formatPercent } from '../../lib/format'
 import { toDisplay } from '../../lib/fx'
-import type { DisplayCurrency, PortfolioGrid, SavedPortfolio } from '../../types'
+import { investedForRoiDisplay, simpleRoi } from '../../lib/portfolioContributions'
+import type {
+  DisplayCurrency,
+  PortfolioContributionsState,
+  PortfolioGrid,
+  SavedPortfolio,
+} from '../../types'
 import {
   buildPortfolioChartData,
+  cashAtYear,
+  getOpeningCash,
   PERPETUAL_GROWTH_CHART_KEY,
   PERPETUAL_GROWTH_COLOR,
   PORTFOLIO_ACTUAL_COLOR,
@@ -32,6 +41,7 @@ import {
   type PortfolioChartMode,
   type PortfolioChartPoint,
 } from '../../lib/portfolio'
+import { PortfolioYearDetail, pointTitle, sliceColor } from './PortfolioYearDetail'
 
 const HOLDING_COLORS = [
   '#38bdf8',
@@ -62,6 +72,9 @@ type Props = {
   chartMode?: PortfolioChartMode
   fromYear?: number
   toYear?: number
+  contributions?: PortfolioContributionsState | null
+  /** Show cash / invested on hover and a % line chart */
+  showCashInvested?: boolean
   /** Grow to parent height (fullscreen overlay) */
   fillContainer?: boolean
 }
@@ -110,12 +123,15 @@ export function PortfolioChart({
   chartMode = 'stacked',
   fromYear,
   toYear,
+  contributions = null,
+  showCashInvested = false,
   fillContainer = false,
 }: Props) {
   const activeCurrency: DisplayCurrency =
     displayCurrency ?? (currency === 'CHF' ? 'CHF' : 'USD')
 
   const [hover, setHover] = useState<HoverState | null>(null)
+  const [selectedXKey, setSelectedXKey] = useState<string | null>(null)
   const chartAreaRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [areaSize, setAreaSize] = useState({ w: 0, h: 0 })
@@ -150,7 +166,34 @@ export function PortfolioChart({
         PERPETUAL_GROWTH_CHART_KEY,
         PORTFOLIO_TOTAL_CHART_KEY,
       ]
-      return raw.map((p) => convertPoint(p, activeCurrency, usdToChf, keys))
+      const currentYear = new Date().getFullYear()
+      const cashRow = grid.rows.find((r) => r.kind === 'cash')
+      return raw.map((p) => {
+        const next = convertPoint(p, activeCurrency, usdToChf, keys)
+        let cashUsd: number | null = null
+        if (p.isNow) {
+          cashUsd = getOpeningCash(portfolio)
+        } else if (!p.isActual && !p.isEmpty && p.year != null) {
+          const i = grid.years.indexOf(p.year)
+          const fromGrid = i >= 0 ? cashRow?.values[i] : null
+          if (fromGrid != null && Number.isFinite(fromGrid)) {
+            cashUsd = fromGrid
+          } else if (p.year >= currentYear) {
+            cashUsd = cashAtYear(portfolio, p.year, scenarios, currentYear)
+          }
+        }
+        const total = typeof next.total === 'number' ? next.total : 0
+        if (cashUsd == null || !(total > 0)) {
+          next.cashSharePct = null
+          next.investedSharePct = null
+        } else {
+          const cashDisp = toDisplay(cashUsd, activeCurrency, usdToChf)
+          next.cashSharePct = (cashDisp / total) * 100
+          next.investedSharePct = ((total - cashDisp) / total) * 100
+          next.cashDisp = cashDisp
+        }
+        return next
+      })
     } catch (err) {
       console.error('[PortfolioChart] failed to build chart data', err)
       return []
@@ -236,14 +279,17 @@ export function PortfolioChart({
     return keys
   }, [data])
 
-  function resolvePoint(state: {
-    isTooltipActive: boolean
-    activeLabel?: string | number
-    activeTooltipIndex?: number | string | unknown
-    activeIndex?: number | string | unknown
-    activeCoordinate?: { x?: number; y?: number }
-  }): HoverState | null {
-    if (!state?.isTooltipActive) return null
+  function resolvePoint(
+    state: {
+      isTooltipActive?: boolean
+      activeLabel?: string | number
+      activeTooltipIndex?: number | string | unknown
+      activeIndex?: number | string | unknown
+      activeCoordinate?: { x?: number; y?: number }
+    },
+    requireTooltip = true,
+  ): HoverState | null {
+    if (requireTooltip && !state?.isTooltipActive) return null
 
     const byLabel =
       state.activeLabel != null
@@ -279,6 +325,32 @@ export function PortfolioChart({
     [data],
   )
 
+  const handleChartClick = useCallback(
+    (state: Parameters<typeof resolvePoint>[0]) => {
+      const next = resolvePoint(state, false)
+      if (!next) return
+      setSelectedXKey((cur) => (cur === next.point.xKey ? null : next.point.xKey))
+    },
+    [data],
+  )
+
+  useEffect(() => {
+    if (!selectedXKey) return
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setSelectedXKey(null)
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [selectedXKey])
+
+  const selectedPoint = selectedXKey
+    ? (data.find((d) => d.xKey === selectedXKey) ?? null)
+    : null
+
+  useEffect(() => {
+    if (selectedXKey && !data.some((d) => d.xKey === selectedXKey)) setSelectedXKey(null)
+  }, [data, selectedXKey])
+
   function clearHover() {
     hoverKeyRef.current = null
     setHover(null)
@@ -289,12 +361,23 @@ export function PortfolioChart({
       className={
         fillContainer
           ? 'flex h-full min-h-0 w-full flex-col'
-          : 'flex h-80 w-full flex-col'
+          : 'flex w-full flex-col'
       }
     >
       <div
+        className={
+          fillContainer
+            ? 'flex min-h-0 w-full flex-1 flex-col'
+            : 'flex h-80 w-full flex-col'
+        }
+      >
+      <div
         ref={chartAreaRef}
-        className="relative min-h-0 w-full flex-1 overflow-hidden"
+        className="relative min-h-0 w-full flex-1 cursor-pointer overflow-hidden outline-none [&_svg]:outline-none"
+        onMouseDown={(e) => {
+          if (panelRef.current?.contains(e.target as Node)) return
+          e.preventDefault()
+        }}
         onMouseLeave={clearHover}
       >
         <PortfolioBarsPlot
@@ -308,7 +391,10 @@ export function PortfolioChart({
           hasActuals={hasActuals}
           hasCash={hasCash}
           hasPerpetualGrowth={hasPerpetualGrowth}
+          showCashInvested={showCashInvested}
+          selectedXKey={selectedXKey}
           onHover={handleChartHover}
+          onClick={handleChartClick}
         />
 
         {hover && panelStyle && (
@@ -325,6 +411,10 @@ export function PortfolioChart({
               point={hover.point}
               currency={activeCurrency}
               colorByKey={colorByKey}
+              contributions={contributions}
+              usdToChf={usdToChf}
+              portfolio={portfolio}
+              showCashInvested={showCashInvested}
             />
           </div>
         )}
@@ -335,6 +425,26 @@ export function PortfolioChart({
           <span className="text-amber-300/90">Amber</span> = manual actuals (year-end)
         </p>
       ) : null}
+      </div>
+
+      {selectedPoint ? (
+        <div className="mt-3 shrink-0">
+          <PortfolioYearDetail
+            point={selectedPoint}
+            currency={activeCurrency}
+            colorByKey={colorByKey}
+            contributions={contributions}
+            usdToChf={usdToChf}
+            portfolio={portfolio}
+            showCashInvested={showCashInvested}
+            onClose={() => setSelectedXKey(null)}
+          />
+        </div>
+      ) : (
+        <p className="mt-2 shrink-0 text-[11px] text-white/35">
+          Click a year for a pie and full breakdown.
+        </p>
+      )}
     </div>
   )
 }
@@ -343,19 +453,39 @@ function HoverPanel({
   point,
   currency,
   colorByKey,
+  contributions,
+  usdToChf,
+  portfolio,
+  showCashInvested,
 }: {
   point: PortfolioChartPoint
   currency: DisplayCurrency
   colorByKey: Map<string, string>
+  contributions: PortfolioContributionsState | null
+  usdToChf: number | null
+  portfolio: SavedPortfolio
+  showCashInvested: boolean
 }) {
-  const title = point.isNow
-    ? 'Now — live positions'
-    : point.isActual
-      ? `${point.yearLabel} — actual (year-end)`
-      : point.isPerpetualGrowth
-        ? `${point.yearLabel} — growth`
-        : `${point.yearLabel}`
+  const title = pointTitle(point)
   const rows = (point.breakdown ?? []).filter((r) => r.value !== 0)
+  const total = point.total
+  const year = point.year ?? new Date().getFullYear()
+  const invested =
+    contributions != null
+      ? investedForRoiDisplay(
+          contributions,
+          year,
+          currency,
+          usdToChf,
+          portfolio,
+          new Date().getFullYear(),
+          point.isNow,
+        )
+      : null
+  const roi =
+    invested != null && invested > 0 && Number.isFinite(point.total)
+      ? simpleRoi(point.total, invested)
+      : null
   return (
     <div className="p-3 text-xs">
       <div className="mb-2 border-b border-white/10 pb-2">
@@ -363,6 +493,35 @@ function HoverPanel({
         <div className="mt-0.5 tabular-nums text-emerald-300">
           {formatMoney(point.total, currency)}
         </div>
+        {roi ? (
+          <div className="mt-1.5 space-y-0.5 text-white/55">
+            <div className="flex justify-between gap-4">
+              <span>Invested</span>
+              <span className="tabular-nums">{formatMoney(roi.invested, currency)}</span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>Gain</span>
+              <span className={`tabular-nums ${roi.gain >= 0 ? 'text-emerald-300/90' : 'text-rose-300/90'}`}>
+                {formatMoney(roi.gain, currency)}
+              </span>
+            </div>
+            <div className="flex justify-between gap-4">
+              <span>ROI</span>
+              <span className={`tabular-nums ${roi.roi >= 0 ? 'text-emerald-300/90' : 'text-rose-300/90'}`}>
+                {formatPercent(roi.roi)}
+              </span>
+            </div>
+          </div>
+        ) : null}
+        {showCashInvested &&
+        typeof point.cashSharePct === 'number' &&
+        typeof point.investedSharePct === 'number' ? (
+          <div className="mt-1.5 text-white/70">
+            <span className="text-emerald-300/90">{point.investedSharePct.toFixed(0)}% invested</span>
+            <span className="text-white/30"> · </span>
+            <span className="text-sky-300/90">{point.cashSharePct.toFixed(0)}% cash</span>
+          </div>
+        ) : null}
         {point.isActual && (
           <div className="mt-0.5 text-[10px] text-amber-300/80">Manual end-of-month actual</div>
         )}
@@ -373,26 +532,36 @@ function HoverPanel({
             <span className="flex min-w-0 items-center gap-1.5">
               <span
                 className="h-2 w-2 shrink-0 rounded-sm"
-                style={{
-                  background:
-                    r.key === 'actual'
-                      ? PORTFOLIO_ACTUAL_COLOR
-                      : (colorByKey.get(r.key) ?? '#94a3b8'),
-                }}
+                style={{ background: sliceColor(r, colorByKey) }}
               />
               <span className="truncate text-white/70">
                 {r.ticker}
                 {r.shares != null ? ` · ${r.shares} sh` : ''}
               </span>
             </span>
-            <span className="shrink-0 tabular-nums text-white/85">
-              {formatMoney(r.value, currency)}
+            <span className="shrink-0 text-right tabular-nums">
+              <span className="text-white/85">{formatMoney(r.value, currency)}</span>
+              {total > 0 ? (
+                <span className="ml-2 text-white/40">{formatPercent(r.value / total)}</span>
+              ) : null}
             </span>
           </li>
         ))}
       </ul>
     </div>
   )
+}
+
+function yearSelectStroke(
+  entry: PortfolioChartPoint,
+  selectedXKey: string | null,
+  fallback?: string,
+  fallbackW = 0,
+): { stroke?: string; strokeWidth: number } {
+  if (selectedXKey != null && entry.xKey === selectedXKey) {
+    return { stroke: 'rgba(255,255,255,0.85)', strokeWidth: 2 }
+  }
+  return { stroke: fallback, strokeWidth: fallbackW }
 }
 
 type BarsPlotProps = {
@@ -406,8 +575,17 @@ type BarsPlotProps = {
   hasActuals: boolean
   hasCash: boolean
   hasPerpetualGrowth: boolean
+  showCashInvested: boolean
+  selectedXKey: string | null
   onHover: (state: {
     isTooltipActive: boolean
+    activeLabel?: string | number
+    activeTooltipIndex?: number | string | unknown
+    activeIndex?: number | string | unknown
+    activeCoordinate?: { x?: number; y?: number }
+  }) => void
+  onClick: (state: {
+    isTooltipActive?: boolean
     activeLabel?: string | number
     activeTooltipIndex?: number | string | unknown
     activeIndex?: number | string | unknown
@@ -426,15 +604,20 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
   hasActuals,
   hasCash,
   hasPerpetualGrowth,
+  showCashInvested,
+  selectedXKey,
   onHover,
+  onClick,
 }: BarsPlotProps) {
   return (
     <ResponsiveContainer width="100%" height="100%">
-      <BarChart
+      <ComposedChart
         data={data}
-        margin={{ top: 8, right: 12, left: 4, bottom: 4 }}
+        margin={{ top: 8, right: showCashInvested ? 36 : 12, left: 4, bottom: 4 }}
         barCategoryGap={barCategoryGap}
         onMouseMove={onHover}
+        onClick={onClick}
+        style={{ cursor: 'pointer', outline: 'none' }}
       >
         <CartesianGrid
           stroke="rgba(255,255,255,0.06)"
@@ -455,6 +638,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
           }}
         />
         <YAxis
+          yAxisId="usd"
           stroke="rgba(255,255,255,0.35)"
           tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 11 }}
           tickLine={false}
@@ -462,6 +646,18 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
           width={72}
           axisLine={false}
         />
+        {showCashInvested ? (
+          <YAxis
+            yAxisId="pct"
+            orientation="right"
+            domain={[0, 100]}
+            tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 11 }}
+            tickLine={false}
+            axisLine={false}
+            width={36}
+            tickFormatter={(v: number) => `${v}%`}
+          />
+        ) : null}
         <Tooltip
           cursor={{ fill: 'rgba(255,255,255,0.06)' }}
           content={() => null}
@@ -470,6 +666,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
 
         {chartMode === 'total' ? (
           <Bar
+            yAxisId="usd"
             dataKey={PORTFOLIO_TOTAL_CHART_KEY}
             name="Portfolio"
             stackId="portfolio"
@@ -491,10 +688,12 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                         : PORTFOLIO_TOTAL_COLOR
                 }
                 fillOpacity={entry.isEmpty ? 0 : entry.isActual ? 0.95 : 0.9}
-                stroke={
-                  entry.isNow || entry.isActual ? 'rgba(255,255,255,0.4)' : undefined
-                }
-                strokeWidth={entry.isNow || entry.isActual ? 1.5 : 0}
+                {...yearSelectStroke(
+                  entry,
+                  selectedXKey,
+                  entry.isNow || entry.isActual ? 'rgba(255,255,255,0.4)' : undefined,
+                  entry.isNow || entry.isActual ? 1.5 : 0,
+                )}
               />
             ))}
           </Bar>
@@ -502,6 +701,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
           <>
             {equityRows.map((row, i) => (
               <Bar
+                yAxisId="usd"
                 key={row.key}
                 dataKey={row.key}
                 name={row.label}
@@ -529,14 +729,19 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                               ? 0.95
                               : 0.88
                     }
-                    stroke={entry.isNow ? 'rgba(255,255,255,0.35)' : undefined}
-                    strokeWidth={entry.isNow ? 1 : 0}
+                    {...yearSelectStroke(
+                      entry,
+                      selectedXKey,
+                      entry.isNow ? 'rgba(255,255,255,0.35)' : undefined,
+                      entry.isNow ? 1 : 0,
+                    )}
                   />
                 ))}
               </Bar>
             ))}
             {hasActuals && (
               <Bar
+                yAxisId="usd"
                 dataKey={PORTFOLIO_TOTAL_CHART_KEY}
                 name="Actual"
                 stackId="portfolio"
@@ -550,14 +755,19 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                     key={`act-${entry.xKey}`}
                     fill={PORTFOLIO_ACTUAL_COLOR}
                     fillOpacity={entry.isActual ? 0.95 : 0}
-                    stroke={entry.isActual ? 'rgba(255,255,255,0.4)' : undefined}
-                    strokeWidth={entry.isActual ? 1.5 : 0}
+                    {...yearSelectStroke(
+                      entry,
+                      selectedXKey,
+                      entry.isActual ? 'rgba(255,255,255,0.4)' : undefined,
+                      entry.isActual ? 1.5 : 0,
+                    )}
                   />
                 ))}
               </Bar>
             )}
             {hasCash && (
               <Bar
+                yAxisId="usd"
                 dataKey="cash"
                 name="Cash"
                 stackId="portfolio"
@@ -573,14 +783,19 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                     fillOpacity={
                       entry.isEmpty || entry.isPerpetualGrowth || entry.isActual ? 0 : 1
                     }
-                    stroke={entry.isNow ? 'rgba(255,255,255,0.35)' : undefined}
-                    strokeWidth={entry.isNow ? 1 : 0}
+                    {...yearSelectStroke(
+                      entry,
+                      selectedXKey,
+                      entry.isNow ? 'rgba(255,255,255,0.35)' : undefined,
+                      entry.isNow ? 1 : 0,
+                    )}
                   />
                 ))}
               </Bar>
             )}
             {hasPerpetualGrowth && (
               <Bar
+                yAxisId="usd"
                 dataKey={PERPETUAL_GROWTH_CHART_KEY}
                 name="Growth"
                 stackId="portfolio"
@@ -600,7 +815,33 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
             )}
           </>
         )}
-      </BarChart>
+        {showCashInvested ? (
+          <>
+            <Line
+              yAxisId="pct"
+              type="monotone"
+              dataKey="investedSharePct"
+              name="Invested %"
+              stroke="#34d399"
+              strokeWidth={2}
+              dot={{ r: 2.5, fill: '#34d399' }}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+            <Line
+              yAxisId="pct"
+              type="monotone"
+              dataKey="cashSharePct"
+              name="Cash %"
+              stroke="#38bdf8"
+              strokeWidth={2}
+              dot={{ r: 2.5, fill: '#38bdf8' }}
+              connectNulls={false}
+              isAnimationActive={false}
+            />
+          </>
+        ) : null}
+      </ComposedChart>
     </ResponsiveContainer>
   )
 })

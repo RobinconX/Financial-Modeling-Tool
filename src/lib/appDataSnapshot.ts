@@ -11,6 +11,7 @@ import type {
   SavedPortfolio,
   SavedScenario,
   SavingsState,
+  PortfolioContributionsState,
 } from '../types'
 import { loadScenarios, saveScenarios } from './storage'
 import { loadPortfolios, savePortfolios } from './portfolioStorage'
@@ -23,6 +24,11 @@ import { normalizeChartAnnotation } from './annotations'
 import { loadGoals, saveGoals } from './goalsStorage'
 import { normalizeNetWorthGoal } from './goals'
 import { withLinkedMirrorSuppressed } from './linkedMirrorGate'
+import {
+  loadPortfolioContributions,
+  normalizePortfolioContributions,
+  savePortfolioContributions,
+} from './portfolioContributionsStorage'
 
 export const APP_DATA_FILE_NAME = 'financial-model.json'
 export const APP_DATA_SNAPSHOT_VERSION = 1 as const
@@ -38,6 +44,7 @@ export type AppDataSnapshot = {
   comparables: SavedComparable[]
   annotations: ChartAnnotation[]
   goals: NetWorthGoal[]
+  portfolioContributions?: PortfolioContributionsState
 }
 
 export function collectAppData(): AppDataSnapshot {
@@ -52,6 +59,7 @@ export function collectAppData(): AppDataSnapshot {
     comparables: loadComparables(),
     annotations: loadAnnotations(),
     goals: loadGoals(),
+    portfolioContributions: loadPortfolioContributions(),
   }
 }
 
@@ -96,6 +104,7 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
           .map(normalizeNetWorthGoal)
           .filter((g): g is NetWorthGoal => g != null)
       : [],
+    portfolioContributions: normalizePortfolioContributions(raw.portfolioContributions),
   }
 }
 
@@ -131,6 +140,11 @@ export function applyAppDataToLocalStorage(
 
     const r8 = saveGoals(snapshot.goals ?? [])
     if (!r8.ok) return { ok: false, error: r8.error }
+
+    const r9 = savePortfolioContributions(
+      normalizePortfolioContributions(snapshot.portfolioContributions),
+    )
+    if (!r9.ok) return { ok: false, error: r9.error }
 
     return { ok: true }
   })

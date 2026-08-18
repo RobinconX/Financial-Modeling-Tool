@@ -11,6 +11,7 @@ import { SavingsView } from './components/savings/SavingsView'
 import { OverviewView } from './components/overview/OverviewView'
 import { HistoryView } from './components/history/HistoryView'
 import { useSavings } from './hooks/useSavings'
+import { usePortfolioContributions } from './hooks/usePortfolioContributions'
 import { DataSettingsPanel } from './components/settings/DataSettingsPanel'
 import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
@@ -172,6 +173,7 @@ export default function App() {
 
   const savings = useSavings()
   const savingsAccounts = savings.accounts
+  const portfolioContributions = usePortfolioContributions()
 
   const {
     comparables,
@@ -353,6 +355,10 @@ export default function App() {
               reorderPortfolios={reorderPortfolios}
               incomeCostLines={incomeCostLines}
               incomeCostScenarios={incomeCostScenarios}
+              contributions={portfolioContributions.contributions}
+              contributionsError={portfolioContributions.error}
+              setContributionYear={portfolioContributions.setYear}
+              setContributionsCurrency={portfolioContributions.setCurrency}
             />
           )}
 
