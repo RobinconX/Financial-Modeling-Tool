@@ -30,6 +30,7 @@ const SELECTED_PORTFOLIO_KEY = 'grok-lab-selected-portfolio'
 const PANEL_KEY = 'grok-lab-portfolio-panel'
 const CHART_MODE_KEY = 'grok-lab-portfolio-chart-mode'
 const CASH_INVESTED_KEY = 'grok-lab-portfolio-cash-invested'
+const SHOW_ROI_KEY = 'grok-lab-portfolio-show-roi'
 
 type WorkspaceTab = 'chart' | 'actuals' | PortfolioEditorPanel
 
@@ -95,6 +96,14 @@ function readCashInvested(): boolean {
   }
 }
 
+function readShowRoi(): boolean {
+  try {
+    return localStorage.getItem(SHOW_ROI_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 type Props = {
   scenarios: SavedScenario[]
   portfolios: SavedPortfolio[]
@@ -135,6 +144,7 @@ export function PortfolioView({
   const [actualsKind, setActualsKind] = useState<'value' | 'moneyin'>('value')
   const [chartMode, setChartMode] = useState<PortfolioChartMode>(readChartMode)
   const [showCashInvested, setShowCashInvested] = useState(readCashInvested)
+  const [showRoi, setShowRoi] = useState(readShowRoi)
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(readCurrency)
   const [usdToChf, setUsdToChf] = useState<number | null>(null)
   const [fxAsOf, setFxAsOf] = useState<string | null>(null)
@@ -743,6 +753,28 @@ export function PortfolioView({
                     >
                       Cash / invested
                     </button>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={showRoi}
+                      title="Overlay ROI % on the bars (right axis)"
+                      className={`rounded-md px-2 py-1 text-[11px] transition ${
+                        showRoi
+                          ? 'bg-fuchsia-500/20 text-fuchsia-200'
+                          : 'text-white/45 hover:bg-white/5 hover:text-white/70'
+                      }`}
+                      onClick={() => {
+                        const next = !showRoi
+                        setShowRoi(next)
+                        try {
+                          localStorage.setItem(SHOW_ROI_KEY, next ? '1' : '0')
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                    >
+                      ROI
+                    </button>
                     <label className="flex items-center gap-1.5 text-xs text-white/50">
                       From
                       <input
@@ -796,7 +828,7 @@ export function PortfolioView({
                 </div>
                 <FullscreenChart title="Portfolio value over time">
                   <PortfolioChart
-                    key={`chart-${selected.id}-${selected.updatedAt}-${activeCurrency}-${usdToChf ?? 0}-${periodFrom}-${periodTo}-${chartMode}-${grid.years.join(',')}`}
+                    key={`chart-${selected.id}-${selected.updatedAt}-${periodFrom}-${periodTo}-${chartMode}-${grid.years.join(',')}`}
                     grid={grid}
                     portfolio={resolvedSelected ?? selected}
                     scenarios={scenarios}
@@ -807,6 +839,7 @@ export function PortfolioView({
                     toYear={periodTo}
                     contributions={contributions}
                     showCashInvested={showCashInvested}
+                    showRoi={showRoi}
                   />
                 </FullscreenChart>
                 <div className="border-t border-white/[0.06] pt-4">

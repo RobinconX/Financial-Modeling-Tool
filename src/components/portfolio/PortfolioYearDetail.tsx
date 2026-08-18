@@ -33,6 +33,26 @@ export function pointTitle(point: PortfolioChartPoint): string {
   return point.yearLabel
 }
 
+function rowPrice(row: PortfolioChartBreakdownRow): number | null {
+  if (row.isCash || row.shares == null || row.shares === 0) return null
+  if (!Number.isFinite(row.value)) return null
+  return row.value / row.shares
+}
+
+function formatSharePrice(value: number | null, currency: string): string {
+  if (value == null || !Number.isFinite(value)) return '—'
+  try {
+    return new Intl.NumberFormat(undefined, {
+      style: 'currency',
+      currency,
+      minimumFractionDigits: 2,
+      maximumFractionDigits: 2,
+    }).format(value)
+  } catch {
+    return `${currency} ${value.toFixed(2)}`
+  }
+}
+
 export function sliceColor(
   row: PortfolioChartBreakdownRow,
   colorByKey: Map<string, string>,
@@ -168,6 +188,9 @@ export function PortfolioYearDetail({
                 <tr>
                   <th className="py-0.5 pr-3 font-medium">Position</th>
                   <th className="py-0.5 pr-3 text-right font-medium">Shares</th>
+                  <th className="py-0.5 pr-3 text-right font-medium">
+                    {point.isNow ? 'Price' : 'Projected'}
+                  </th>
                   <th className="py-0.5 pr-3 text-right font-medium">Value</th>
                   <th className="py-0.5 text-right font-medium">%</th>
                 </tr>
@@ -186,6 +209,9 @@ export function PortfolioYearDetail({
                     </td>
                     <td className="py-0.5 pr-3 text-right tabular-nums text-white/45">
                       {r.shares != null ? r.shares : '—'}
+                    </td>
+                    <td className="py-0.5 pr-3 text-right tabular-nums text-white/70">
+                      {formatSharePrice(rowPrice(r), currency)}
                     </td>
                     <td className="py-0.5 pr-3 text-right tabular-nums">
                       {formatMoney(r.value, currency)}

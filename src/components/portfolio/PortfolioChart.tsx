@@ -55,6 +55,7 @@ const HOLDING_COLORS = [
 ]
 const CASH_COLOR = '#64748b'
 const NOW_CASH_COLOR = '#94a3b8'
+const ROI_LINE_COLOR = '#e879f9'
 
 const PANEL_WIDTH = 280
 const PANEL_GAP = 10
@@ -75,6 +76,8 @@ type Props = {
   contributions?: PortfolioContributionsState | null
   /** Show cash / invested on hover and a % line chart */
   showCashInvested?: boolean
+  /** Overlay ROI % on the bars (right axis) */
+  showRoi?: boolean
   /** Grow to parent height (fullscreen overlay) */
   fillContainer?: boolean
 }
@@ -113,6 +116,26 @@ function convertPoint(
   return next
 }
 
+/** Right-axis domain: 0–100 for cash/invested; expand when ROI is outside that. */
+function pctAxisDomain(
+  data: PortfolioChartPoint[],
+  showRoi: boolean,
+  showCashInvested: boolean,
+): [number, number] {
+  if (!showRoi) return [0, 100]
+  let lo = 0
+  let hi = showCashInvested ? 100 : 0
+  for (const d of data) {
+    const v = d.roiPct
+    if (typeof v !== 'number' || !Number.isFinite(v)) continue
+    if (v < lo) lo = v
+    if (v > hi) hi = v
+  }
+  if (hi === lo) return showCashInvested ? [0, 100] : [0, 20]
+  const pad = Math.max(5, (hi - lo) * 0.1)
+  return [Math.floor(lo < 0 ? lo - pad : lo), Math.ceil(hi + pad)]
+}
+
 export function PortfolioChart({
   grid,
   portfolio,
@@ -125,6 +148,7 @@ export function PortfolioChart({
   toYear,
   contributions = null,
   showCashInvested = false,
+  showRoi = false,
   fillContainer = false,
 }: Props) {
   const activeCurrency: DisplayCurrency =
@@ -192,6 +216,22 @@ export function PortfolioChart({
           next.investedSharePct = ((total - cashDisp) / total) * 100
           next.cashDisp = cashDisp
         }
+        next.roiPct = null
+        if (!p.isEmpty && contributions != null && Number.isFinite(total)) {
+          const year = p.year ?? currentYear
+          const invested = investedForRoiDisplay(
+            contributions,
+            year,
+            activeCurrency,
+            usdToChf,
+            portfolio,
+            currentYear,
+            p.isNow,
+          )
+          const r =
+            invested != null && invested > 0 ? simpleRoi(total, invested) : null
+          if (r) next.roiPct = r.roi * 100
+        }
         return next
       })
     } catch (err) {
@@ -208,6 +248,7 @@ export function PortfolioChart({
     chartMode,
     fromYear,
     toYear,
+    contributions,
   ])
 
   const hasCash =
@@ -392,6 +433,7 @@ export function PortfolioChart({
           hasCash={hasCash}
           hasPerpetualGrowth={hasPerpetualGrowth}
           showCashInvested={showCashInvested}
+          showRoi={showRoi}
           selectedXKey={selectedXKey}
           onHover={handleChartHover}
           onClick={handleChartClick}
@@ -420,9 +462,19 @@ export function PortfolioChart({
         )}
       </div>
 
-      {hasActuals ? (
+      {hasActuals || showRoi ? (
         <p className="mt-1 shrink-0 text-[10px] text-white/35">
-          <span className="text-amber-300/90">Amber</span> = manual actuals (year-end)
+          {hasActuals ? (
+            <>
+              <span className="text-amber-300/90">Amber</span> = manual actuals (year-end)
+            </>
+          ) : null}
+          {hasActuals && showRoi ? <span className="text-white/25"> · </span> : null}
+          {showRoi ? (
+            <>
+              <span className="text-fuchsia-300/90">Fuchsia</span> = ROI
+            </>
+          ) : null}
         </p>
       ) : null}
       </div>
@@ -576,6 +628,7 @@ type BarsPlotProps = {
   hasCash: boolean
   hasPerpetualGrowth: boolean
   showCashInvested: boolean
+  showRoi: boolean
   selectedXKey: string | null
   onHover: (state: {
     isTooltipActive: boolean
@@ -605,15 +658,17 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
   hasCash,
   hasPerpetualGrowth,
   showCashInvested,
+  showRoi,
   selectedXKey,
   onHover,
   onClick,
 }: BarsPlotProps) {
+  const showPctAxis = showCashInvested || showRoi
   return (
     <ResponsiveContainer width="100%" height="100%">
       <ComposedChart
         data={data}
-        margin={{ top: 8, right: showCashInvested ? 36 : 12, left: 4, bottom: 4 }}
+        margin={{ top: 8, right: showPctAxis ? 42 : 12, left: 4, bottom: 4 }}
         barCategoryGap={barCategoryGap}
         onMouseMove={onHover}
         onClick={onClick}
@@ -646,16 +701,16 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
           width={72}
           axisLine={false}
         />
-        {showCashInvested ? (
+        {showPctAxis ? (
           <YAxis
             yAxisId="pct"
             orientation="right"
-            domain={[0, 100]}
+            domain={pctAxisDomain(data, showRoi, showCashInvested)}
             tick={{ fill: 'rgba(255,255,255,0.55)', fontSize: 11 }}
             tickLine={false}
             axisLine={false}
-            width={36}
-            tickFormatter={(v: number) => `${v}%`}
+            width={42}
+            tickFormatter={(v: number) => `${Math.round(v)}%`}
           />
         ) : null}
         <Tooltip
@@ -840,6 +895,19 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
               isAnimationActive={false}
             />
           </>
+        ) : null}
+        {showRoi ? (
+          <Line
+            yAxisId="pct"
+            type="monotone"
+            dataKey="roiPct"
+            name="ROI"
+            stroke={ROI_LINE_COLOR}
+            strokeWidth={2}
+            dot={{ r: 2.5, fill: ROI_LINE_COLOR }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
         ) : null}
       </ComposedChart>
     </ResponsiveContainer>
