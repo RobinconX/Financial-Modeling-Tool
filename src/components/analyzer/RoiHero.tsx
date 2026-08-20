@@ -113,9 +113,7 @@ export function RoiHero({
               onClick={() => onSelectBasis?.(row.basis)}
               className="rounded-lg border border-white/10 bg-black/30 px-2.5 py-1.5 text-left text-xs transition hover:border-white/25"
             >
-              <span className="text-white/45">
-                {row.basis === 'easy' ? `${row.year}` : BASIS_LABEL[row.basis]}
-              </span>
+              <span className="text-white/45">{row.year}</span>
               <span
                 className={`ml-2 font-semibold tabular-nums ${
                   row.cagr >= 0 ? 'text-emerald-400' : 'text-red-400'
@@ -123,11 +121,9 @@ export function RoiHero({
               >
                 {formatPercent(row.cagr)}
               </span>
-              {row.basis === 'easy' && (
-                <span className="ml-1.5 text-white/35 tabular-nums">
-                  {formatMoney(row.marketCap, currency)}
-                </span>
-              )}
+              <span className="ml-1.5 text-white/35 tabular-nums">
+                {formatMoney(row.marketCap, currency)}
+              </span>
             </button>
           ))}
         </div>

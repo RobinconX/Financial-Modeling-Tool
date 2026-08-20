@@ -270,13 +270,9 @@ export function ProjectionPanel({
   }, [scenarioId, easyProjections.length, advancedProjections]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const hero = pickHeroRow(allProjections, selectedBasis)
-  const secondary =
-    selectedBasis === 'easy'
-      ? easyProjections.filter((r) => hero && r.year !== hero.year)
-      : (['ps', 'pfcf', 'pe'] as ValuationBasis[])
-          .filter((b) => b !== selectedBasis)
-          .map((b) => pickHeroRow(advancedProjections, b))
-          .filter((r): r is NonNullable<typeof r> => r != null)
+  const secondary = allProjections.filter(
+    (r) => r.basis === selectedBasis && (!hero || r.year !== hero.year),
+  )
 
   function handleSave(
     input: SaveInput,
