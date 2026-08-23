@@ -9,6 +9,7 @@
  */
 import { fetchQuote, fetchQuotes } from '../../../server/quote'
 import { fetchFxRate } from '../../../server/fx'
+import { fetchOptionChain } from '../../../server/options'
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -47,6 +48,7 @@ export default {
           '/api/quote?symbol=AAPL',
           '/api/quote?symbols=AAPL,MSFT,GOOG',
           '/api/fx?from=USD&to=CHF',
+          '/api/options?symbol=AAPL',
         ],
       })
     }
@@ -59,6 +61,18 @@ export default {
         return json(quote, 200, { 'Cache-Control': 'public, max-age=300' })
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch FX rate'
+        return json({ error: message }, 502)
+      }
+    }
+
+    if (path.endsWith('/api/options') || path === '/api/options') {
+      const symbol = url.searchParams.get('symbol')?.trim() || ''
+      const expiration = url.searchParams.get('date')?.trim() || null
+      try {
+        const chain = await fetchOptionChain(symbol, expiration)
+        return json(chain, 200, { 'Cache-Control': 'public, max-age=60' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch option chain'
         return json({ error: message }, 502)
       }
     }

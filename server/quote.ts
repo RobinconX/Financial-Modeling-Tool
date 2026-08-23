@@ -78,7 +78,13 @@ const SPARK_TIMEOUT_MS = 5000
 const NASDAQ_TIMEOUT_MS = 1800
 const CHART_TIMEOUT_MS = 4000
 
-const SYMBOL_RE = /^[A-Z0-9.^=_-]{1,15}$/
+/** Equity tickers plus OCC option symbols (e.g. AAPL260821C00150000). */
+const SYMBOL_RE = /^[A-Z0-9.^=_-]{1,21}$/
+const OCC_RE = /^[A-Z]{1,6}\d{6}[CP]\d{8}$/
+
+export function isOccQuoteSymbol(symbol: string): boolean {
+  return OCC_RE.test(symbol.trim().toUpperCase())
+}
 
 export type FetchQuotesOptions = {
   /**
@@ -371,7 +377,11 @@ export async function fetchQuotes(
     try {
       const batch = await fetchYahooSparkBatch(chunk)
       if (!pricesOnly) {
-        await enrichQuotesWithMarketCap(batch)
+        const equities = new Map(
+          [...batch.entries()].filter(([sym]) => !isOccQuoteSymbol(sym)),
+        )
+        await enrichQuotesWithMarketCap(equities)
+        for (const [sym, q] of equities) batch.set(sym, q)
       }
       for (const [sym, q] of batch) bySymbol.set(sym, q)
     } catch {
@@ -379,21 +389,31 @@ export async function fetchQuotes(
     }
   }
 
-  if (!pricesOnly) {
-    const missing = unique.filter((s) => !bySymbol.has(s))
-    if (missing.length > 0) {
-      const settled = await Promise.all(
-        missing.map(async (symbol) => {
-          try {
-            return await fetchQuoteFallback(symbol)
-          } catch {
-            return null
+  const missing = unique.filter((s) => !bySymbol.has(s))
+  if (missing.length > 0) {
+    const settled = await Promise.all(
+      missing.map(async (symbol) => {
+        try {
+          if (pricesOnly || isOccQuoteSymbol(symbol)) {
+            const yahoo = await fetchYahooChart(symbol)
+            if (!yahoo) return null
+            return quoteFromFields({
+              symbol,
+              name: yahoo.name,
+              price: yahoo.price,
+              currency: yahoo.currency,
+              marketCap: null,
+              sharesOutstanding: null,
+            })
           }
-        }),
-      )
-      for (const q of settled) {
-        if (q) bySymbol.set(q.symbol, q)
-      }
+          return await fetchQuoteFallback(symbol)
+        } catch {
+          return null
+        }
+      }),
+    )
+    for (const q of settled) {
+      if (q) bySymbol.set(q.symbol, q)
     }
   }
 
@@ -403,6 +423,19 @@ export async function fetchQuotes(
 export async function fetchQuote(rawSymbol: string): Promise<Quote> {
   const symbol = normalizeSymbol(rawSymbol)
   if (!symbol) throw new Error('Invalid ticker symbol')
+
+  if (isOccQuoteSymbol(symbol)) {
+    const yahoo = await fetchYahooChart(symbol)
+    if (!yahoo) throw new Error(`No data for symbol ${symbol}`)
+    return quoteFromFields({
+      symbol,
+      name: yahoo.name,
+      price: yahoo.price,
+      currency: yahoo.currency,
+      marketCap: null,
+      sharesOutstanding: null,
+    })
+  }
 
   // Prefer full single-symbol path (price + mcap) for interactive loads.
   const full = await fetchQuoteFallback(symbol)

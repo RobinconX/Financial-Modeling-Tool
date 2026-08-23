@@ -397,6 +397,18 @@ export type PortfolioYearOverride = {
   valueDollars: number
 }
 
+/** Listed option contract (OCC). Now value = contracts × premium × multiplier. */
+export type OptionContract = {
+  underlying: string
+  /** Calendar expiration YYYY-MM-DD */
+  expiration: string
+  right: 'C' | 'P'
+  strike: number
+  /** Shares per contract (US listed equity = 100) */
+  multiplier: number
+  occSymbol: string
+}
+
 export type PortfolioHolding = {
   id: string
   symbol: string
@@ -425,6 +437,8 @@ export type PortfolioHolding = {
    * Set for options / custom instruments added as manual positions.
    */
   manualOnly?: boolean
+  /** When set, this holding is a listed option; quotes refresh the premium. */
+  option?: OptionContract
 }
 
 /** How a portfolio deposit amount is determined. */

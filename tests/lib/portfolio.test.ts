@@ -18,6 +18,7 @@ import {
   newAction,
   newHolding,
   newManualHolding,
+  newOptionHolding,
   newOpeningDeposit,
   newPortfolio,
   normalizePortfolioCashModel,
@@ -648,7 +649,22 @@ describe('portfolio actuals and chart', () => {
       ...newHolding('AAA'),
       id: 'h1',
       sharesHeld: 10,
-      manualCurrentPrice: 20,
+      scenarioId: 'sc1',
+    }
+    const sc: SavedScenario = {
+      id: 'sc1',
+      symbol: 'AAA',
+      name: 'S',
+      companyName: null,
+      currency: 'USD',
+      currentPrice: 20,
+      currentMarketCap: 20,
+      sharesOutstanding: 1,
+      mcapOverride: null,
+      easyRows: [],
+      advancedRows: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     }
     const p = basePortfolio({
       deposits: [newOpeningDeposit(0, 2026)],
@@ -663,8 +679,8 @@ describe('portfolio actuals and chart', () => {
         },
       ],
     })
-    const grid = buildPortfolioGrid(p, [], 2026, { throughYear: 2026 })
-    const data = buildPortfolioChartData(grid, p, [], 2026, {
+    const grid = buildPortfolioGrid(p, [sc], 2026, { throughYear: 2026 })
+    const data = buildPortfolioChartData(grid, p, [sc], 2026, {
       mode: 'stacked',
       fromYear: 2026,
       toYear: 2026,
@@ -764,6 +780,39 @@ describe('applyPortfolioValuesToTarget', () => {
     expect(aaaActs[0]!.id).not.toBe('a1')
   })
 
+  it('appends source-only option positions onto the target', () => {
+    const opt = newOptionHolding(
+      {
+        underlying: 'AAPL',
+        expiration: '2026-08-21',
+        right: 'C',
+        strike: 150,
+        multiplier: 100,
+        occSymbol: 'AAPL260821C00150000',
+      },
+      4.2,
+      -2,
+    )
+    const source = basePortfolio({
+      deposits: [newOpeningDeposit(1, 2026)],
+      holdings: [{ ...newHolding('AAA'), id: 's1', sharesHeld: 3 }, opt],
+    })
+    const target = basePortfolio({
+      id: 'p2',
+      name: 'Other',
+      deposits: [newOpeningDeposit(1, 2026)],
+      holdings: [{ ...newHolding('AAA'), id: 't1', sharesHeld: 1 }],
+    })
+    const next = applyPortfolioValuesToTarget(source, target, { holdings: true })
+    expect(next.holdings.find((h) => h.symbol === 'AAA')?.sharesHeld).toBe(3)
+    const copied = next.holdings.find((h) => h.option?.occSymbol === 'AAPL260821C00150000')
+    expect(copied).toBeTruthy()
+    expect(copied!.id).not.toBe(opt.id)
+    expect(copied!.sharesHeld).toBe(-2)
+    expect(copied!.manualCurrentPrice).toBeCloseTo(4.2)
+    expect(copied!.manualOnly).toBe(true)
+  })
+
   it('actuals-only overwrites monthly totals and currency', () => {
     const source = basePortfolio({
       deposits: [newOpeningDeposit(1, 2026)],
@@ -854,7 +903,22 @@ describe('cashAtYear with actions', () => {
       ...newHolding('AAA'),
       id: 'h1',
       sharesHeld: 10,
-      manualCurrentPrice: 50,
+      scenarioId: 'sc1',
+    }
+    const sc: SavedScenario = {
+      id: 'sc1',
+      symbol: 'AAA',
+      name: 'S',
+      companyName: null,
+      currency: 'USD',
+      currentPrice: 50,
+      currentMarketCap: 50,
+      sharesOutstanding: 1,
+      mcapOverride: null,
+      easyRows: [],
+      advancedRows: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
     }
     const p = basePortfolio({
       holdings: [holding],
@@ -862,7 +926,7 @@ describe('cashAtYear with actions', () => {
       actions: [newAction('buy', 'h1', 2026)].map((a) => ({ ...a, shares: 2 })),
     })
     // buy 2 * $50 = $100
-    expect(cashAtYear(p, 2026, [], 2026)).toBe(900)
+    expect(cashAtYear(p, 2026, [sc], 2026)).toBe(900)
   })
 
   it('uses explicit action price over live/scenario price', () => {

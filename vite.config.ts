@@ -4,6 +4,7 @@ import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fetchQuote, fetchQuotes } from './server/quote'
 import { fetchFxRate } from './server/fx'
+import { fetchOptionChain } from './server/options'
 
 function apiPlugin(): Plugin {
   const handler: Connect.NextHandleFunction = (req, res, next) => {
@@ -22,6 +23,24 @@ function apiPlugin(): Plugin {
           res.end(JSON.stringify(quote))
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to fetch FX rate'
+          res.statusCode = 502
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: message }))
+        }
+        return
+      }
+
+      if (url.pathname.startsWith('/api/options')) {
+        const symbol = url.searchParams.get('symbol')?.trim() || ''
+        const expiration = url.searchParams.get('date')?.trim() || null
+        try {
+          const chain = await fetchOptionChain(symbol, expiration)
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Cache-Control', 'public, max-age=60')
+          res.end(JSON.stringify(chain))
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to fetch option chain'
           res.statusCode = 502
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify({ error: message }))

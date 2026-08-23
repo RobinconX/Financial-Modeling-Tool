@@ -3,6 +3,7 @@ import type {
   CashflowLine,
   CashflowScenario,
   DisplayCurrency,
+  OptionContract,
   PerpetualYearlyDeposit,
   PortfolioDeposit,
   PortfolioDepositSource,
@@ -25,6 +26,7 @@ import {
   holdingLiveValue,
   newHolding,
   newManualHolding,
+  newOptionHolding,
   newOpeningDeposit,
   resolveCurrentPrice,
   resolveDepositAmount,
@@ -38,6 +40,8 @@ import { InfoTip } from '../common/InfoTip'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
 import { amountToDisplay, fixedAmountToUsd, fromDisplay, toDisplay } from '../../lib/fx'
 import { HoldingActionsEditor } from './PortfolioActionsEditor'
+import { PortfolioOptionPicker } from './PortfolioOptionPicker'
+import { optionIsExpired, optionLabel } from '../../lib/optionContract'
 
 export type PortfolioEditorPanel = 'cash' | 'positions' | 'growth' | 'all'
 
@@ -60,7 +64,7 @@ type Props = {
   /** Income/Cost scenarios for surplus-linked deposits (read-only). */
   incomeCostScenarios?: CashflowScenario[]
   incomeCostLines?: CashflowLine[]
-  /** Other portfolios for “copy cash & stocks to…” */
+  /** Other portfolios for “copy cash & positions to…” */
   otherPortfolios?: SavedPortfolio[]
   onUpdateOtherPortfolio?: (id: string, patch: Partial<SavedPortfolio>) => boolean
 }
@@ -124,6 +128,8 @@ export function PortfolioHoldingsEditor({
       ? portfolio.holdingSort
       : 'manual'
   const [showRenameHint, setShowRenameHint] = useState(false)
+  const [optionPickerOpen, setOptionPickerOpen] = useState(false)
+  const [pickingOptionId, setPickingOptionId] = useState<string | null>(null)
   const nameInputRef = useRef<HTMLInputElement>(null)
   const knownHoldingIdsRef = useRef<Set<string> | null>(null)
   const lastPortfolioIdRef = useRef(portfolio.id)
@@ -293,7 +299,70 @@ export function PortfolioHoldingsEditor({
 
   function addManualPosition() {
     onChange({
-      holdings: [...portfolio.holdings, newManualHolding('Option / manual')],
+      holdings: [...portfolio.holdings, newManualHolding('Manual position')],
+    })
+  }
+
+  function addOptionContract(contract: OptionContract, premium: number | null) {
+    const row = newOptionHolding(contract, premium, 1)
+    onChange({ holdings: [...portfolio.holdings, row] })
+    setOptionPickerOpen(false)
+    setExpanded((prev) => ({ ...prev, [row.id]: true }))
+  }
+
+  function holdingKind(h: PortfolioHolding): 'stock' | 'option' | 'manual' {
+    if (h.option || pickingOptionId === h.id) return 'option'
+    if (h.manualOnly) return 'manual'
+    return 'stock'
+  }
+
+  function setHoldingKind(h: PortfolioHolding, kind: 'stock' | 'option' | 'manual') {
+    if (kind === 'stock') {
+      setPickingOptionId((id) => (id === h.id ? null : id))
+      const symbol = h.option?.underlying ?? h.symbol
+      const match = scenarios.find((s) => s.symbol === symbol) ?? null
+      updateHolding(h.id, {
+        manualOnly: false,
+        option: undefined,
+        symbol,
+        scenarioId: match?.id ?? null,
+      })
+      return
+    }
+    if (kind === 'manual') {
+      setPickingOptionId((id) => (id === h.id ? null : id))
+      updateHolding(h.id, {
+        manualOnly: true,
+        option: undefined,
+        scenarioId: null,
+      })
+      return
+    }
+    if (h.option) {
+      setPickingOptionId((id) => (id === h.id ? null : id))
+      return
+    }
+    setPickingOptionId(h.id)
+    updateHolding(h.id, {
+      manualOnly: true,
+      scenarioId: null,
+    })
+  }
+
+  function applyOptionToHolding(
+    holdingId: string,
+    contract: OptionContract,
+    premium: number | null,
+  ) {
+    setPickingOptionId((id) => (id === holdingId ? null : id))
+    updateHolding(holdingId, {
+      symbol: contract.occSymbol,
+      label: optionLabel(contract),
+      scenarioId: null,
+      basis: 'easy',
+      manualOnly: true,
+      manualCurrentPrice: premium,
+      option: { ...contract, multiplier: contract.multiplier || 100 },
     })
   }
 
@@ -432,8 +501,8 @@ export function PortfolioHoldingsEditor({
       propagateMode === 'cash'
         ? 'cash'
         : propagateIncludeActions
-          ? 'stocks & actions'
-          : 'stocks'
+          ? 'positions & actions'
+          : 'positions'
     setPropagateMsg(`Copied ${what} to ${n} portfolio${n === 1 ? '' : 's'}.`)
     setPropagateMode(null)
   }
@@ -446,12 +515,12 @@ export function PortfolioHoldingsEditor({
         <div className="flex items-start justify-between gap-2">
           <div>
             <h4 className="text-sm font-semibold text-white/90">
-              {isCash ? 'Copy cash to other portfolios' : 'Copy stock positions'}
+              {isCash ? 'Copy cash to other portfolios' : 'Copy positions'}
             </h4>
             <p className="text-[11px] text-white/45">
               {isCash
                 ? 'Overwrite opening cash, planned deposits, and perpetual yearly deposit on the selected portfolios.'
-                : 'Overwrite matching tickers (by symbol) with this portfolio’s shares, scenario link, basis, and overrides.'}
+                : 'Overwrite matching symbols and add this portfolio’s stocks, options, and manuals that the target does not have.'}
             </p>
           </div>
           <button
@@ -813,9 +882,9 @@ export function PortfolioHoldingsEditor({
               type="button"
               className="btn-ghost !py-1.5 !text-xs"
               onClick={() => openPropagate('holdings')}
-              title="Copy stock positions (and optionally buy/sell actions) to other portfolios"
+              title="Copy stocks, options, and manuals (and optionally buy/sell actions) to other portfolios"
             >
-              Copy stocks…
+              Copy positions…
             </button>
           )}
           {projectionOptions.length > 0 ? (
@@ -848,13 +917,28 @@ export function PortfolioHoldingsEditor({
           <button
             type="button"
             className="btn-ghost !py-1.5 !text-xs"
-            onClick={addManualPosition}
-            title="Options or any instrument without a stock projection"
+            onClick={() => setOptionPickerOpen((v) => !v)}
+            title="Pick a listed option; premium stays live"
           >
-            + Manual / option
+            + Option
+          </button>
+          <button
+            type="button"
+            className="btn-ghost !py-1.5 !text-xs"
+            onClick={addManualPosition}
+            title="Any instrument without a live quote"
+          >
+            + Manual
           </button>
         </div>
       </div>
+      {optionPickerOpen && showPositions ? (
+        <PortfolioOptionPicker
+          scenarios={scenarios}
+          onAdd={addOptionContract}
+          onClose={() => setOptionPickerOpen(false)}
+        />
+      ) : null}
 
       {propagateMsg && propagateMode === null && showPositions && !showCash && (
         <p className="text-[11px] text-emerald-400/90">{propagateMsg}</p>
@@ -863,8 +947,9 @@ export function PortfolioHoldingsEditor({
 
       {portfolio.holdings.length === 0 && (
         <p className="text-sm text-white/40">
-          Add from saved projections (stocks), or <span className="text-white/60">+ Manual /
-          option</span> for positions valued without projections (qty × mark, or absolute $ by year).
+          Add from saved projections (stocks), <span className="text-white/60">+ Option</span> for
+          listed contracts with live premiums, or <span className="text-white/60">+ Manual</span>{' '}
+          for anything without a quote.
         </p>
       )}
 
@@ -891,9 +976,15 @@ export function PortfolioHoldingsEditor({
           }
 
           const isOpen = expanded[h.id] ?? false
-          const scenarioName = h.manualOnly
-            ? 'Manual / option'
-            : linked?.name ?? (h.scenarioId ? 'Missing scenario' : 'Manual')
+          const isOption = h.option != null
+          const expired = isOption && optionIsExpired(h.option!.expiration)
+          const scenarioName = isOption
+            ? expired
+              ? 'Option · expired'
+              : 'Option'
+            : h.manualOnly
+              ? 'Manual'
+              : linked?.name ?? (h.scenarioId ? 'Missing scenario' : 'Manual')
           const holdingActions = allActions.filter((a) => a.holdingId === h.id)
           const actionCount = holdingActions.length
           const displayName = holdingDisplayName(h)
@@ -926,7 +1017,7 @@ export function PortfolioHoldingsEditor({
                           {h.sharesHeld.toLocaleString(undefined, {
                             maximumFractionDigits: 4,
                           })}{' '}
-                          {h.manualOnly ? 'units' : 'sh'}
+                          {isOption ? 'contracts' : h.manualOnly ? 'units' : 'sh'}
                         </span>
                       )}
                       {currentValue != null && (
@@ -942,13 +1033,19 @@ export function PortfolioHoldingsEditor({
                     </div>
                     {!isOpen && (
                       <p className="mt-0.5 text-[11px] text-white/35">
-                        {h.manualOnly
-                          ? currentValue != null
-                            ? `Mark ${fmt(currentValue)} · no projection`
-                            : 'Set qty + unit price or year values'
-                          : currentPrice != null
-                            ? `@ ${fmtPx(currentPrice)} · ${h.basis.toUpperCase()}`
-                            : 'Expand to edit'}
+                        {isOption
+                          ? currentPrice != null
+                            ? `@ ${fmtPx(currentPrice)} ×100${expired ? ' · expired' : ' · live'}`
+                            : expired
+                              ? 'Expired · last mark kept'
+                              : 'Live option · waiting for quote'
+                          : h.manualOnly
+                            ? currentValue != null
+                              ? `Mark ${fmt(currentValue)} · no projection`
+                              : 'Set qty + unit price or year values'
+                            : currentPrice != null
+                              ? `@ ${fmtPx(currentPrice)} · ${h.basis.toUpperCase()}`
+                              : 'Expand to edit'}
                         {actionCount > 0
                           ? ` · ${holdingActions
                               .map(
@@ -972,14 +1069,49 @@ export function PortfolioHoldingsEditor({
 
               {isOpen && (
                 <div className="space-y-3 pb-2 pl-7 pt-2">
-                  {h.manualOnly ? (
+                  <div className="grid max-w-xs gap-1">
+                    <label className="label">Type</label>
+                    <select
+                      className="input"
+                      value={holdingKind(h)}
+                      aria-label="Position type"
+                      onChange={(e) =>
+                        setHoldingKind(h, e.target.value as 'stock' | 'option' | 'manual')
+                      }
+                    >
+                      <option value="stock">Stock</option>
+                      <option value="option">Option</option>
+                      <option value="manual">Manual</option>
+                    </select>
+                  </div>
+
+                  {(holdingKind(h) === 'option' && !h.option) || pickingOptionId === h.id ? (
+                    <PortfolioOptionPicker
+                      scenarios={scenarios}
+                      onAdd={(contract, premium) =>
+                        applyOptionToHolding(h.id, contract, premium)
+                      }
+                      onClose={() => setHoldingKind(h, 'manual')}
+                    />
+                  ) : null}
+
+                  {h.manualOnly && !(holdingKind(h) === 'option' && !h.option) ? (
                     <>
-                      <div className="flex items-center gap-1.5">
-                        <span className="text-[11px] text-amber-200/70">Manual position</span>
-                        <InfoTip label="About manual positions">
-                          Valued with unit mark × quantity, or absolute $ by year. Negative
-                          qty/mark/totals allowed (shorts, liabilities). Not linked to stock
-                          projections.
+                      <div className="flex flex-wrap items-center gap-1.5">
+                        <span className="text-[11px] text-amber-200/70">
+                          {isOption ? 'Listed option' : 'Manual position'}
+                        </span>
+                        {expired ? (
+                          <span className="rounded-full bg-white/10 px-1.5 py-0.5 text-[10px] text-white/55">
+                            Expired
+                          </span>
+                        ) : null}
+                        <InfoTip
+                          label={isOption ? 'About listed options' : 'About manual positions'}
+                        >
+                          {isOption
+                            ? 'Now = contracts × live premium × 100. Negative contracts = short (sold). Quotes refresh with stocks. After expiry the last mark is kept.'
+                            : 'Valued with unit mark × quantity, or absolute $ by year. Negative qty/mark/totals allowed (shorts, liabilities). Not linked to stock projections.'}
                         </InfoTip>
                       </div>
                       <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
@@ -992,43 +1124,46 @@ export function PortfolioHoldingsEditor({
                             onChange={(e) =>
                               updateHolding(h.id, {
                                 label: e.target.value,
-                                symbol: e.target.value
-                                  .trim()
-                                  .toUpperCase()
-                                  .replace(/[^A-Z0-9]/g, '')
-                                  .slice(0, 16) || h.symbol,
+                                symbol: isOption
+                                  ? h.symbol
+                                  : e.target.value
+                                      .trim()
+                                      .toUpperCase()
+                                      .replace(/[^A-Z0-9]/g, '')
+                                      .slice(0, 16) || h.symbol,
                               })
                             }
                           />
+                          {isOption ? (
+                            <p className="mt-1 text-[11px] text-white/35">{h.option!.occSymbol}</p>
+                          ) : null}
                         </div>
                         <div>
-                          <label className="label">Quantity (contracts / units)</label>
-                          <input
-                            className="input"
-                            type="number"
-                            inputMode="decimal"
-                            step="any"
-                            placeholder="e.g. 10 or -5"
-                            value={h.sharesHeld || ''}
-                            onChange={(e) => {
-                              const raw = e.target.value
-                              if (raw === '' || raw === '-') {
-                                updateHolding(h.id, { sharesHeld: 0 })
-                                return
-                              }
-                              const v = Number(raw)
-                              updateHolding(h.id, {
-                                sharesHeld: Number.isFinite(v) ? v : 0,
-                              })
-                            }}
+                          <label className="label">
+                            {isOption ? 'Contracts (×100)' : 'Quantity (contracts / units)'}
+                          </label>
+                          <SignedQtyInput
+                            value={h.sharesHeld}
+                            placeholder={isOption ? 'e.g. 2 or -2 (short)' : 'e.g. 10 or -5'}
+                            onCommit={(v) => updateHolding(h.id, { sharesHeld: v })}
                           />
+                          {isOption ? (
+                            <p className="mt-1 text-[11px] text-white/35">
+                              Negative = short / sold. −2 × premium × 100.
+                            </p>
+                          ) : null}
                         </div>
                         <div>
-                          <label className="label">Unit mark ({displayCurrency})</label>
+                          <label className="label">
+                            {isOption
+                              ? `Premium (${displayCurrency})${expired ? ' · last' : ' · live'}`
+                              : `Unit mark (${displayCurrency})`}
+                          </label>
                           <input
                             className="input"
                             type="text"
                             placeholder="e.g. 5.50 or -2"
+                            readOnly={isOption && !expired}
                             defaultValue={
                               h.manualCurrentPrice != null
                                 ? String(
@@ -1044,6 +1179,7 @@ export function PortfolioHoldingsEditor({
                             }
                             key={`px-m-${h.id}-${h.manualCurrentPrice}-${displayCurrency}-${usdToChf ?? 0}`}
                             onBlur={(e) => {
+                              if (isOption && !expired) return
                               const raw = e.target.value.trim()
                               if (!raw) {
                                 updateHolding(h.id, { manualCurrentPrice: null })
@@ -1058,8 +1194,12 @@ export function PortfolioHoldingsEditor({
                           />
                           <p className="mt-1 text-[11px] text-white/35">
                             {currentValue != null
-                              ? `Now = qty × mark = ${fmt(currentValue)}`
-                              : 'Or set absolute $ by year below'}
+                              ? isOption
+                                ? `Now = contracts × premium × 100 = ${fmt(currentValue)}`
+                                : `Now = qty × mark = ${fmt(currentValue)}`
+                              : isOption
+                                ? 'Waiting for live premium'
+                                : 'Or set absolute $ by year below'}
                           </p>
                         </div>
                       </div>
@@ -1186,50 +1326,14 @@ export function PortfolioHoldingsEditor({
                     </div>
                   )}
 
-                  {!h.manualOnly && (
-                    <div>
-                      <label className="label">
-                        Manual current price (optional, {displayCurrency})
-                      </label>
-                      <input
-                        className="input max-w-xs"
-                        type="text"
-                        placeholder="If scenario has no price"
-                        defaultValue={
-                          h.manualCurrentPrice != null
-                            ? String(
-                                roundInput(
-                                  toDisplay(h.manualCurrentPrice, displayCurrency, usdToChf),
-                                ),
-                              )
-                            : ''
-                        }
-                        key={`px-${h.id}-${h.manualCurrentPrice}-${displayCurrency}-${usdToChf ?? 0}`}
-                        onBlur={(e) => {
-                          const raw = e.target.value.trim()
-                          if (!raw) {
-                            updateHolding(h.id, { manualCurrentPrice: null })
-                            return
-                          }
-                          const book = parseBook(raw)
-                          updateHolding(h.id, {
-                            manualCurrentPrice: book != null && book > 0 ? book : null,
-                          })
-                        }}
-                      />
-                    </div>
-                  )}
-
+                  {h.manualOnly && !isOption ? (
                   <div className="rounded-lg border border-white/10 bg-black/20 p-3">
                     <label className="label">
-                      {h.manualOnly
-                        ? `Position value by year (${displayCurrency})`
-                        : `Absolute $ override by year (${displayCurrency})`}
+                      Position value by year ({displayCurrency})
                     </label>
                     <p className="mb-2 text-[10px] text-white/40">
-                      {h.manualOnly
-                        ? 'Optional. Overrides qty × mark for that year (e.g. $0 at expiry, or negative liability).'
-                        : 'Optional. Full position value for that year (wins over shares × price).'}
+                      Optional. Overrides qty × mark for that year (e.g. $0 at expiry, or negative
+                      liability).
                     </p>
                     <div className="flex flex-wrap gap-2">
                       <input
@@ -1242,7 +1346,7 @@ export function PortfolioHoldingsEditor({
                       <input
                         className="input min-w-[8rem] flex-1"
                         type="text"
-                        placeholder={h.manualOnly ? 'Total $ e.g. 12K' : 'Position $ e.g. 50K'}
+                        placeholder="Total $ e.g. 12K"
                         id={`ov-${h.id}`}
                         onKeyDown={(e) => {
                           if (e.key !== 'Enter') return
@@ -1309,15 +1413,18 @@ export function PortfolioHoldingsEditor({
                       </ul>
                     )}
                   </div>
+                  ) : null}
 
-                  <HoldingActionsEditor
-                    portfolio={portfolio}
-                    holding={h}
-                    scenarios={scenarios}
-                    onChange={onChange}
-                    displayCurrency={displayCurrency}
-                    usdToChf={usdToChf}
-                  />
+                  {!isOption ? (
+                    <HoldingActionsEditor
+                      portfolio={portfolio}
+                      holding={h}
+                      scenarios={scenarios}
+                      onChange={onChange}
+                      displayCurrency={displayCurrency}
+                      usdToChf={usdToChf}
+                    />
+                  ) : null}
                 </div>
               )}
             </div>
@@ -1334,6 +1441,46 @@ export function PortfolioHoldingsEditor({
  * Local-state row so typing a year does not remount or fight parent re-renders.
  * Commits to portfolio state only on blur / Enter.
  */
+function SignedQtyInput({
+  value,
+  onCommit,
+  placeholder,
+}: {
+  value: number
+  onCommit: (n: number) => void
+  placeholder?: string
+}) {
+  const [text, setText] = useState(value === 0 ? '' : String(value))
+  useEffect(() => {
+    setText(value === 0 ? '' : String(value))
+  }, [value])
+  return (
+    <input
+      className="input"
+      type="text"
+      inputMode="decimal"
+      placeholder={placeholder}
+      value={text}
+      onChange={(e) => {
+        const raw = e.target.value
+        if (raw !== '' && raw !== '-' && raw !== '.' && raw !== '-.' && !/^-?\d*\.?\d*$/.test(raw)) {
+          return
+        }
+        setText(raw)
+        if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return
+        const v = Number(raw)
+        if (Number.isFinite(v)) onCommit(v)
+      }}
+      onBlur={() => {
+        const v = Number(text)
+        const next = Number.isFinite(v) ? v : 0
+        onCommit(next)
+        setText(next === 0 ? '' : String(next))
+      }}
+    />
+  )
+}
+
 function roundInput(n: number): number {
   if (!Number.isFinite(n)) return n
   // Keep enough precision for inputs after FX conversion

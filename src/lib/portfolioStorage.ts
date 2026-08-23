@@ -1,10 +1,12 @@
 import type {
+  OptionContract,
   PerpetualYearlyDeposit,
   PortfolioAction,
   PortfolioDeposit,
   PortfolioHolding,
   SavedPortfolio,
 } from '../types'
+import { buildOccSymbol } from './optionContract'
 import { newDeposit, newHolding, normalizePortfolioCashModel } from './portfolio'
 
 export const PORTFOLIO_STORAGE_KEY = 'grok-lab.saved-portfolios.v1'
@@ -73,7 +75,32 @@ function normalizeHolding(raw: unknown): PortfolioHolding | null {
     yearOverrides,
     manualCurrentPrice: asNumberOrNull(raw.manualCurrentPrice),
     manualOnly: manualOnly || undefined,
+    option: normalizeOption(raw.option, symbol),
   }
+}
+
+function normalizeOption(raw: unknown, fallbackUnderlying: string): OptionContract | undefined {
+  if (!isRecord(raw)) return undefined
+  const right = raw.right === 'P' ? 'P' : raw.right === 'C' ? 'C' : null
+  const strike = asNumber(raw.strike, NaN)
+  const expiration = typeof raw.expiration === 'string' ? raw.expiration : ''
+  if (!right || !Number.isFinite(strike) || strike < 0 || !/^\d{4}-\d{2}-\d{2}$/.test(expiration)) {
+    return undefined
+  }
+  const underlying = (
+    typeof raw.underlying === 'string' ? raw.underlying : fallbackUnderlying
+  )
+    .trim()
+    .toUpperCase()
+  if (!underlying) return undefined
+  const multiplierRaw = asNumber(raw.multiplier, 100)
+  const multiplier = multiplierRaw > 0 ? multiplierRaw : 100
+  const occ =
+    typeof raw.occSymbol === 'string' && raw.occSymbol.trim()
+      ? raw.occSymbol.trim().toUpperCase()
+      : buildOccSymbol(underlying, expiration, right, strike)
+  if (!occ) return undefined
+  return { underlying, expiration, right, strike, multiplier, occSymbol: occ }
 }
 
 function normalizeDeposits(raw: Record<string, unknown>): PortfolioDeposit[] {

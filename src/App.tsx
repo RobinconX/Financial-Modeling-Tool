@@ -149,6 +149,7 @@ export default function App() {
     scenarios,
     portfolios,
     updateScenario,
+    updatePortfolio,
     quotesEnabled,
   )
 

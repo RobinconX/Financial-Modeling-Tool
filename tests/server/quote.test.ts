@@ -20,6 +20,35 @@ describe('fetchQuote', () => {
     await expect(fetchQuote('!!!')).rejects.toThrow(/Invalid ticker/)
   })
 
+  it('accepts OCC option symbols', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url)
+        if (u.includes('/chart/AAPL260821C00150000')) {
+          return jsonResponse({
+            chart: {
+              result: [
+                {
+                  meta: {
+                    symbol: 'AAPL260821C00150000',
+                    regularMarketPrice: 4.2,
+                    shortName: 'AAPL Aug 2026 150 call',
+                    currency: 'USD',
+                  },
+                },
+              ],
+            },
+          })
+        }
+        return jsonResponse({}, false)
+      }),
+    )
+    const q = await fetchQuote('AAPL260821C00150000')
+    expect(q.price).toBe(4.2)
+    expect(q.marketCap).toBeNull()
+  })
+
   it('uses chart + Nasdaq for single quote', async () => {
     vi.stubGlobal(
       'fetch',

@@ -1,9 +1,10 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { SavedComparable, SavedPortfolio, SavedScenario } from '../../types'
 import {
   deleteScenarioConfirmMessage,
   portfoliosUsingScenario,
 } from '../../lib/scenarioUsage'
+import { groupScenariosByTicker } from '../../lib/storage'
 import { ProjectionPanel } from './ProjectionPanel'
 import { ComparablesView } from './ComparablesView'
 
@@ -46,6 +47,155 @@ function sortScenariosByTicker(list: SavedScenario[]): SavedScenario[] {
       a.symbol.localeCompare(b.symbol, undefined, { sensitivity: 'base' }) ||
       a.name.localeCompare(b.name, undefined, { sensitivity: 'base' }) ||
       a.id.localeCompare(b.id),
+  )
+}
+
+function ProjectionSelector({
+  value,
+  onChange,
+  scenarios,
+  id,
+}: {
+  value: string
+  onChange: (v: string) => void
+  scenarios: SavedScenario[]
+  id: string
+}) {
+  const grouped = useMemo(() => groupScenariosByTicker(scenarios), [scenarios])
+  const [open, setOpen] = useState(false)
+  const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const rootRef = useRef<HTMLDivElement>(null)
+  const isDraft = value === DRAFT
+  const selected = isDraft ? null : (scenarios.find((s) => s.id === value) ?? null)
+
+  useEffect(() => {
+    if (!open) return
+    function onDoc(e: MouseEvent) {
+      if (rootRef.current?.contains(e.target as Node)) return
+      setOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
+
+  useEffect(() => {
+    if (!open || !selected) return
+    setExpanded((prev) => ({ ...prev, [selected.symbol]: true }))
+  }, [open, selected])
+
+  function pick(id: string) {
+    onChange(id)
+    setOpen(false)
+  }
+
+  function toggleTicker(symbol: string, cases: SavedScenario[]) {
+    if (cases.length === 1) {
+      pick(cases[0]!.id)
+      return
+    }
+    setExpanded((prev) => ({ ...prev, [symbol]: !prev[symbol] }))
+  }
+
+  return (
+    <div className="flex min-w-0 flex-1 flex-wrap items-end gap-2">
+      <div className="relative min-w-[12rem] flex-1" ref={rootRef}>
+        <label className="label !mb-1" htmlFor={id}>
+          Projection
+        </label>
+        <button
+          id={id}
+          type="button"
+          className="input flex w-full items-center gap-2 text-left"
+          onClick={() => setOpen((o) => !o)}
+          aria-expanded={open}
+          aria-haspopup="listbox"
+        >
+          <span className="min-w-0 flex-1 truncate">
+            {isDraft
+              ? 'New draft (unsaved)'
+              : selected
+                ? `${selected.symbol} · ${selected.name}`
+                : 'Choose saved…'}
+          </span>
+          <span className="shrink-0 text-white/40" aria-hidden>
+            ▾
+          </span>
+        </button>
+        {open && (
+          <ul
+            className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-y-auto rounded-xl border border-white/15 bg-[#121820] py-1 shadow-xl shadow-black/50"
+            role="listbox"
+          >
+            {grouped.length === 0 ? (
+              <li className="px-3 py-2 text-sm text-white/40">No saved projections</li>
+            ) : (
+              grouped.map((g) => {
+                const many = g.scenarios.length > 1
+                const isOpen = !many || expanded[g.symbol] === true
+                const company = g.scenarios.find((s) => s.companyName)?.companyName
+                return (
+                  <li key={g.symbol}>
+                    <button
+                      type="button"
+                      className="flex w-full items-center gap-2 px-3 py-2 text-left hover:bg-white/5"
+                      onClick={() => toggleTicker(g.symbol, g.scenarios)}
+                      aria-expanded={many ? isOpen : undefined}
+                    >
+                      {many ? (
+                        <span
+                          className={`inline-flex h-4 w-4 shrink-0 items-center justify-center text-[10px] text-white/40 transition-transform ${
+                            isOpen ? 'rotate-90' : ''
+                          }`}
+                          aria-hidden
+                        >
+                          ▸
+                        </span>
+                      ) : (
+                        <span className="inline-block w-4 shrink-0" aria-hidden />
+                      )}
+                      <span className="min-w-0 flex-1">
+                        <span className="block text-sm font-semibold text-white">{g.symbol}</span>
+                        <span className="block truncate text-[11px] text-white/40">
+                          {company ? `${company} · ` : ''}
+                          {many
+                            ? `${g.scenarios.length} projections`
+                            : g.scenarios[0]!.name}
+                        </span>
+                      </span>
+                    </button>
+                    {many && isOpen
+                      ? g.scenarios.map((sc) => (
+                          <button
+                            key={sc.id}
+                            type="button"
+                            role="option"
+                            aria-selected={sc.id === value}
+                            className={`flex w-full items-start px-3 py-1.5 pl-9 text-left text-sm hover:bg-white/5 ${
+                              sc.id === value ? 'bg-emerald-500/15 text-white' : 'text-white/80'
+                            }`}
+                            onClick={() => pick(sc.id)}
+                          >
+                            {sc.name}
+                          </button>
+                        ))
+                      : null}
+                  </li>
+                )
+              })
+            )}
+          </ul>
+        )}
+      </div>
+      <button
+        type="button"
+        className="btn-primary shrink-0 !py-2 !text-sm"
+        disabled={isDraft}
+        onClick={() => onChange(DRAFT)}
+        title={isDraft ? 'Already editing a new projection' : 'Start a new projection'}
+      >
+        New projection
+      </button>
+    </div>
   )
 }
 
@@ -106,54 +256,6 @@ export function ProjectionsView({
     if (selB === id) setSelB(DRAFT)
   }
 
-  function Selector({
-    value,
-    onChange,
-    id,
-  }: {
-    value: string
-    onChange: (v: string) => void
-    id: string
-  }) {
-    const isDraft = value === DRAFT
-    return (
-      <div className="flex min-w-0 flex-1 flex-wrap items-end gap-2">
-        <div className="min-w-[12rem] flex-1">
-          <label className="label !mb-1" htmlFor={id}>
-            Projection
-          </label>
-          <select
-            id={id}
-            className="input w-full"
-            value={isDraft ? '' : value}
-            onChange={(e) => {
-              const v = e.target.value
-              if (v) onChange(v)
-            }}
-          >
-            <option value="" disabled>
-              {isDraft ? 'New draft (unsaved)' : 'Choose saved…'}
-            </option>
-            {sorted.map((sc) => (
-              <option key={sc.id} value={sc.id}>
-                {sc.symbol} · {sc.name}
-              </option>
-            ))}
-          </select>
-        </div>
-        <button
-          type="button"
-          className="btn-primary shrink-0 !py-2 !text-sm"
-          disabled={isDraft}
-          onClick={() => onChange(DRAFT)}
-          title={isDraft ? 'Already editing a new projection' : 'Start a new projection'}
-        >
-          New projection
-        </button>
-      </div>
-    )
-  }
-
   return (
     <div className="space-y-5">
       <div
@@ -202,8 +304,20 @@ export function ProjectionsView({
         <>
       <div className="section-header border-b border-white/5 pb-4">
         <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
-          <Selector value={selA} onChange={setSelA} id="proj-select-a" />
-          {compare && <Selector value={selB} onChange={setSelB} id="proj-select-b" />}
+          <ProjectionSelector
+            value={selA}
+            onChange={setSelA}
+            scenarios={sorted}
+            id="proj-select-a"
+          />
+          {compare && (
+            <ProjectionSelector
+              value={selB}
+              onChange={setSelB}
+              scenarios={sorted}
+              id="proj-select-b"
+            />
+          )}
         </div>
         <div
           className="inline-flex gap-1 border-b border-white/10"

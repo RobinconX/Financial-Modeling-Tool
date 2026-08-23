@@ -1,5 +1,6 @@
 import type { DisplayCurrency } from '../types'
 import { apiUrl } from './apiBase'
+import { fetchFxRate } from '../../server/fx'
 
 export type FxQuote = {
   from: string
@@ -74,23 +75,27 @@ function fxPairKey(from: string, to: string): string {
   return `${from.trim().toUpperCase()}-${to.trim().toUpperCase()}`
 }
 
+function fetchedAsOf(quote: FxQuote): FxQuote {
+  return { ...quote, asOf: new Date().toISOString().slice(0, 10) }
+}
+
 async function requestFxRate(from: string, to: string): Promise<FxQuote> {
   const path = `/api/fx?from=${encodeURIComponent(from)}&to=${encodeURIComponent(to)}`
   try {
     const res = await fetch(apiUrl(path))
     if (res.ok) {
       const data = (await res.json()) as FxQuote & { error?: string }
-      if (Number.isFinite(data.rate) && data.rate > 0) return data
+      if (Number.isFinite(data.rate) && data.rate > 0) return fetchedAsOf(data)
     }
   } catch {
     /* try direct */
   }
-  return fetchFxRateDirect(from, to)
+  return fetchedAsOf(await fetchFxRateDirect(from, to))
 }
 
 /**
- * Prefer same-origin / external proxy; fall back to Frankfurter in the browser
- * (CORS-friendly) so CHF display still works on static GitHub Pages.
+ * Prefer same-origin / worker proxy (Yahoo live pair, ECB fallback).
+ * Direct browser fallback uses the same fetch so GitHub Pages still works.
  * Concurrent callers share one in-flight request; a short cache avoids a
  * second fetch when Overview / History / StrictMode remount.
  */
@@ -100,7 +105,7 @@ export async function fetchFxRateClient(
 ): Promise<FxQuote> {
   const key = fxPairKey(from, to)
   const cached = fxCache.get(key)
-  if (cached && Date.now() - cached.at < FX_CACHE_MS) return cached.quote
+  if (cached && Date.now() - cached.at < FX_CACHE_MS) return fetchedAsOf(cached.quote)
 
   const pending = fxInflight.get(key)
   if (pending) return pending
@@ -118,24 +123,5 @@ export async function fetchFxRateClient(
 }
 
 async function fetchFxRateDirect(from: string, to: string): Promise<FxQuote> {
-  const base = from.trim().toUpperCase()
-  const quote = to.trim().toUpperCase()
-  if (!base || !quote) throw new Error('Missing currency codes')
-  if (base === quote) {
-    return { from: base, to: quote, rate: 1, asOf: new Date().toISOString().slice(0, 10) }
-  }
-  const url = `https://api.frankfurter.app/latest?from=${encodeURIComponent(base)}&to=${encodeURIComponent(quote)}`
-  const res = await fetch(url, { headers: { Accept: 'application/json' } })
-  if (!res.ok) throw new Error(`FX request failed (${res.status})`)
-  const data = (await res.json()) as { date?: string; rates?: Record<string, number> }
-  const rate = data.rates?.[quote]
-  if (rate == null || !Number.isFinite(rate) || rate <= 0) {
-    throw new Error(`No rate for ${base}/${quote}`)
-  }
-  return {
-    from: base,
-    to: quote,
-    rate,
-    asOf: data.date ?? new Date().toISOString().slice(0, 10),
-  }
+  return fetchFxRate(from, to)
 }

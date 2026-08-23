@@ -7,6 +7,7 @@ import type {
   PortfolioDepositSource,
   PortfolioGrid,
   PortfolioGridRow,
+  OptionContract,
   PortfolioHolding,
   SavedPortfolio,
   SavedScenario,
@@ -20,6 +21,7 @@ import {
   resolveSharesOutstanding,
 } from './sharePrice'
 import { buildAdvancedProjections } from './valuation'
+import { holdingMultiplier, optionLabel } from './optionContract'
 
 /** Context to resolve surplus-linked deposits (Income/Cost is CHF; portfolio book is USD). */
 export type DepositResolveContext = {
@@ -173,7 +175,7 @@ export function withResolvedDepositAmounts(
 export type PropagatePortfolioFields = {
   /** Opening cash, planned deposits, and perpetual yearly deposit */
   cash?: boolean
-  /** Shares (and linked scenario/basis/overrides) matched by symbol */
+  /** Shares / contracts matched by symbol; source-only positions (incl. options) are added */
   holdings?: boolean
   /**
    * With holdings: also copy buy/sell actions for matched tickers
@@ -185,9 +187,9 @@ export type PropagatePortfolioFields = {
 }
 
 /**
- * Copy cash, stock positions, and/or actuals from source onto target.
- * Holdings are matched by symbol; target-only symbols are left unchanged.
- * Does not change target id/name/createdAt.
+ * Copy cash, positions, and/or actuals from source onto target.
+ * Holdings are matched by symbol; unmatched source positions are appended.
+ * Target-only symbols are left unchanged. Does not change target id/name/createdAt.
  */
 export function applyPortfolioValuesToTarget(
   source: SavedPortfolio,
@@ -251,14 +253,18 @@ export function applyPortfolioValuesToTarget(
       : null
   }
 
-  // source holding id → target holding id for matched symbols
+  // source holding id → target holding id (matched by symbol, or newly appended)
   const sourceHoldingToTarget = new Map<string, string>()
   if (doHoldings) {
+    const usedSourceIds = new Set<string>()
     holdings = target.holdings.map((th) => {
       const match = source.holdings.find(
-        (sh) => sh.symbol.toUpperCase() === th.symbol.toUpperCase(),
+        (sh) =>
+          !usedSourceIds.has(sh.id) &&
+          sh.symbol.toUpperCase() === th.symbol.toUpperCase(),
       )
       if (!match) return th
+      usedSourceIds.add(match.id)
       sourceHoldingToTarget.set(match.id, th.id)
       return {
         ...th,
@@ -267,8 +273,31 @@ export function applyPortfolioValuesToTarget(
         scenarioId: match.scenarioId,
         basis: match.basis,
         yearOverrides: (match.yearOverrides ?? []).map((o) => ({ ...o })),
+        option: match.option ? { ...match.option } : undefined,
+        label: match.label ?? th.label,
+        manualOnly: match.manualOnly === true,
       }
     })
+    for (const sh of source.holdings) {
+      if (usedSourceIds.has(sh.id)) continue
+      const newId = crypto.randomUUID()
+      sourceHoldingToTarget.set(sh.id, newId)
+      holdings = [
+        ...holdings,
+        {
+          id: newId,
+          symbol: sh.symbol,
+          label: sh.label ?? null,
+          sharesHeld: sh.sharesHeld,
+          scenarioId: sh.manualOnly ? null : sh.scenarioId,
+          basis: sh.basis,
+          yearOverrides: (sh.yearOverrides ?? []).map((o) => ({ ...o })),
+          manualCurrentPrice: sh.manualCurrentPrice,
+          manualOnly: sh.manualOnly === true,
+          option: sh.option ? { ...sh.option } : undefined,
+        },
+      ]
+    }
   }
 
   if (doActions && sourceHoldingToTarget.size > 0) {
@@ -355,6 +384,26 @@ export function newManualHolding(name = ''): PortfolioHolding {
     yearOverrides: [],
     manualCurrentPrice: null,
     manualOnly: true,
+  }
+}
+
+/** Listed option: qty = contracts; mark = premium; Now = qty × premium × 100. */
+export function newOptionHolding(
+  contract: OptionContract,
+  premium: number | null = null,
+  contracts = 1,
+): PortfolioHolding {
+  return {
+    id: crypto.randomUUID(),
+    symbol: contract.occSymbol,
+    label: optionLabel(contract),
+    sharesHeld: contracts,
+    scenarioId: null,
+    basis: 'easy',
+    yearOverrides: [],
+    manualCurrentPrice: premium,
+    manualOnly: true,
+    option: { ...contract, multiplier: contract.multiplier || 100 },
   }
 }
 
@@ -505,6 +554,7 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
       })),
       manualCurrentPrice: h.manualCurrentPrice,
       manualOnly: h.manualOnly === true,
+      option: h.option ? { ...h.option } : undefined,
     }
   })
 
@@ -685,11 +735,11 @@ export function resolveCurrentPrice(
   holding: PortfolioHolding,
   scenario: SavedScenario | null,
 ): number | null {
-  // Manual positions may use 0 or negative unit marks (liabilities / shorts).
+  // Manual / option marks only (stock type uses the linked quote / projection).
   if (
+    holding.manualOnly === true &&
     holding.manualCurrentPrice != null &&
-    Number.isFinite(holding.manualCurrentPrice) &&
-    (holding.manualOnly === true || holding.manualCurrentPrice > 0)
+    Number.isFinite(holding.manualCurrentPrice)
   ) {
     return holding.manualCurrentPrice
   }
@@ -1115,19 +1165,16 @@ export function computeHoldingValues(
 
     // Manual: any finite mark (incl. 0 / negative). Equity: positive price only.
     if (px != null && Number.isFinite(px) && (isManual || px > 0)) {
-      values.set(year, sh * px)
+      values.set(year, sh * px * holdingMultiplier(holding))
     }
   }
 
-  // Absolute $ overrides win (and work with qty 0 — full position value).
-  // Manual positions may set negative total values (liabilities).
-  for (const o of holding.yearOverrides) {
-    if (
-      o.year >= currentYear &&
-      Number.isFinite(o.valueDollars) &&
-      (isManual || o.valueDollars >= 0)
-    ) {
-      values.set(o.year, o.valueDollars)
+  // Absolute $ overrides (manual positions only).
+  if (isManual) {
+    for (const o of holding.yearOverrides) {
+      if (o.year >= currentYear && Number.isFinite(o.valueDollars)) {
+        values.set(o.year, o.valueDollars)
+      }
     }
   }
 
@@ -1147,14 +1194,11 @@ export function holdingLiveValue(
   currentYear = new Date().getFullYear(),
 ): number | null {
   const isManual = holding.manualOnly === true
-  // Absolute $ override for this year wins (same as year-end grid)
-  for (const o of holding.yearOverrides ?? []) {
-    if (
-      o.year === currentYear &&
-      Number.isFinite(o.valueDollars) &&
-      (isManual || o.valueDollars >= 0)
-    ) {
-      return o.valueDollars
+  if (isManual) {
+    for (const o of holding.yearOverrides ?? []) {
+      if (o.year === currentYear && Number.isFinite(o.valueDollars)) {
+        return o.valueDollars
+      }
     }
   }
 
@@ -1163,7 +1207,7 @@ export function holdingLiveValue(
 
   const px = resolveCurrentPrice(holding, isManual ? null : scenario)
   if (px != null && Number.isFinite(px) && (isManual || px > 0)) {
-    return sh * px
+    return sh * px * holdingMultiplier(holding)
   }
   return null
 }
