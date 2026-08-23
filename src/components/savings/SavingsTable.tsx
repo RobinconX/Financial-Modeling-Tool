@@ -114,7 +114,7 @@ export function SavingsTable({
                             className="input !w-28 !py-1 !text-xs tabular-nums border-emerald-500/30"
                             inputMode="decimal"
                             value={
-                              drafts[dk] ?? (nowVal ? String(nowVal) : '')
+                              drafts[dk] ?? (Number.isFinite(nowVal) ? String(nowVal) : '')
                             }
                             placeholder="0"
                             onChange={(e) =>
@@ -138,7 +138,7 @@ export function SavingsTable({
                         inputMode="decimal"
                         value={
                           drafts[draftKey(a.id, 'contrib')] ??
-                          (a.contribution ? String(a.contribution) : '')
+                          String(a.contribution ?? 0)
                         }
                         placeholder="0"
                         onChange={(e) =>
@@ -173,7 +173,7 @@ export function SavingsTable({
                         inputMode="decimal"
                         value={
                           drafts[draftKey(a.id, 'rate')] ??
-                          (a.annualRatePercent ? String(a.annualRatePercent) : '')
+                          String(a.annualRatePercent ?? 0)
                         }
                         placeholder="0"
                         onChange={(e) =>

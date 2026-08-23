@@ -160,6 +160,7 @@ export function AdvancedInputs({
                       min={0.0001}
                       step="0.01"
                       placeholder="1.0"
+                      commitOnBlur
                       onChange={(dilutionFactor) =>
                         updateRow(row.id, {
                           dilutionFactor:
@@ -192,6 +193,7 @@ export function AdvancedInputs({
                       onChange={(psMultiple) => updateRow(row.id, { psMultiple })}
                       placeholder="e.g. 8"
                       min={0}
+                      commitOnBlur
                     />
                   }
                   implied={formatImplied(
@@ -223,6 +225,7 @@ export function AdvancedInputs({
                       onChange={(pfcfMultiple) => updateRow(row.id, { pfcfMultiple })}
                       placeholder="e.g. 25"
                       min={0}
+                      commitOnBlur
                     />
                   }
                   implied={formatImplied(
@@ -254,6 +257,7 @@ export function AdvancedInputs({
                       onChange={(peMultiple) => updateRow(row.id, { peMultiple })}
                       placeholder="e.g. 30"
                       min={0}
+                      commitOnBlur
                     />
                   }
                   implied={formatImplied(

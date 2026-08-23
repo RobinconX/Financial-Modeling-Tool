@@ -929,39 +929,41 @@ export function holdingDisplayName(holding: PortfolioHolding): string {
   return (holding.symbol || '—').toUpperCase()
 }
 
-/** Human-readable row label for a holding (always derived fresh from scenario). */
+function qtyPhrase(holding: PortfolioHolding): string | null {
+  if (holding.sharesHeld === 0) return null
+  const n = holding.sharesHeld.toLocaleString(undefined, { maximumFractionDigits: 4 })
+  if (holding.option) {
+    return `${n} contract${Math.abs(holding.sharesHeld) === 1 ? '' : 's'}`
+  }
+  if (holding.manualOnly) {
+    return `${n} unit${Math.abs(holding.sharesHeld) === 1 ? '' : 's'}`
+  }
+  return `${n} sh`
+}
+
+/** Ticker, name, and current quantity (no later-share / action notes). */
 export function holdingPositionLabel(
   holding: PortfolioHolding,
   scenario: SavedScenario | null,
 ): string {
-  const name = holdingDisplayName(holding)
-  if (holding.manualOnly || (!holding.scenarioId && !scenario)) {
-    const qty =
-      holding.sharesHeld !== 0
-        ? `${holding.sharesHeld.toLocaleString(undefined, { maximumFractionDigits: 4 })} unit${Math.abs(holding.sharesHeld) === 1 ? '' : 's'}`
-        : null
-    return [name, 'Manual', qty].filter(Boolean).join(' · ')
+  const qty = qtyPhrase(holding)
+  if (holding.option || holding.manualOnly || (!holding.scenarioId && !scenario)) {
+    return [holdingDisplayName(holding), qty].filter(Boolean).join(' · ')
   }
-  const symbol = (holding.symbol || '—').toUpperCase()
-  const company =
-    scenario?.companyName &&
-    scenario.companyName.trim() &&
-    scenario.companyName.trim().toUpperCase() !== symbol
-      ? scenario.companyName.trim()
-      : null
-  const scenarioLabel = scenario?.name?.trim()
-    ? scenario.name.trim()
-    : holding.scenarioId
-      ? 'Missing scenario'
-      : 'Manual'
-  const shareLabel =
-    holding.sharesHeld > 0
-      ? `${holding.sharesHeld.toLocaleString(undefined, { maximumFractionDigits: 4 })} sh`
-      : null
-
-  return [name !== symbol ? name : symbol, company, scenarioLabel, shareLabel]
-    .filter(Boolean)
-    .join(' · ')
+  const ticker = (holding.symbol || '—').toUpperCase()
+  const custom = holding.label?.trim()
+  const name =
+    custom && custom.toUpperCase() !== ticker
+      ? custom
+      : scenario?.name?.trim()
+        ? scenario.name.trim()
+        : scenario?.companyName?.trim() &&
+            scenario.companyName.trim().toUpperCase() !== ticker
+          ? scenario.companyName.trim()
+          : holding.scenarioId
+            ? 'Missing scenario'
+            : null
+  return [ticker, name, qty].filter(Boolean).join(' · ')
 }
 
 /**
@@ -1373,12 +1375,6 @@ export function buildPortfolioGrid(
   }
 
   const equityRows: PortfolioGridRow[] = built.map(({ holding, scenario, warning }) => {
-    const endShares = sharesAtYear(holding, actions, lastStated)
-    const baseLabel = holdingPositionLabel(holding, scenario)
-    const actionNote =
-      actions.some((a) => a.holdingId === holding.id) && endShares !== holding.sharesHeld
-        ? ` → ${endShares.toLocaleString(undefined, { maximumFractionDigits: 4 })} sh later`
-        : ''
     const rowValues = years.map((y) => {
       if (y > lastStated) return null
       return holdingValueAtYear(holding, scenario, actions, y, currentYear)
@@ -1386,7 +1382,7 @@ export function buildPortfolioGrid(
     return {
       key: holding.id,
       kind: 'equity' as const,
-      label: baseLabel + actionNote,
+      label: holdingPositionLabel(holding, scenario),
       holdingId: holding.id,
       values: rowValues,
       warning,

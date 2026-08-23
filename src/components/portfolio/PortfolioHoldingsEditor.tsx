@@ -1258,25 +1258,11 @@ export function PortfolioHoldingsEditor({
                         </div>
                         <div>
                           <label className="label">Shares held</label>
-                          <input
-                            className="input"
-                            type="number"
-                            inputMode="decimal"
+                          <SignedQtyInput
+                            value={h.sharesHeld}
                             min={0}
-                            step="any"
                             placeholder="e.g. 100"
-                            value={h.sharesHeld || ''}
-                            onChange={(e) => {
-                              const raw = e.target.value
-                              if (raw === '') {
-                                updateHolding(h.id, { sharesHeld: 0 })
-                                return
-                              }
-                              const v = Number(raw)
-                              updateHolding(h.id, {
-                                sharesHeld: Number.isFinite(v) && v >= 0 ? v : 0,
-                              })
-                            }}
+                            onCommit={(v) => updateHolding(h.id, { sharesHeld: v })}
                           />
                           <p className="mt-1 text-[11px] text-white/35">
                             {currentPrice != null
@@ -1445,15 +1431,26 @@ function SignedQtyInput({
   value,
   onCommit,
   placeholder,
+  min,
 }: {
   value: number
   onCommit: (n: number) => void
   placeholder?: string
+  min?: number
 }) {
-  const [text, setText] = useState(value === 0 ? '' : String(value))
+  const [text, setText] = useState(String(value))
   useEffect(() => {
-    setText(value === 0 ? '' : String(value))
+    setText(String(value))
   }, [value])
+
+  function allowed(raw: string) {
+    if (raw === '' || raw === '.') return true
+    if (raw === '-' || raw === '-.' || raw.startsWith('-')) {
+      return min == null || min < 0
+    }
+    return /^\d*\.?\d*$/.test(raw)
+  }
+
   return (
     <input
       className="input"
@@ -1463,19 +1460,18 @@ function SignedQtyInput({
       value={text}
       onChange={(e) => {
         const raw = e.target.value
-        if (raw !== '' && raw !== '-' && raw !== '.' && raw !== '-.' && !/^-?\d*\.?\d*$/.test(raw)) {
-          return
-        }
+        if (!allowed(raw)) return
         setText(raw)
-        if (raw === '' || raw === '-' || raw === '.' || raw === '-.') return
-        const v = Number(raw)
-        if (Number.isFinite(v)) onCommit(v)
       }}
       onBlur={() => {
         const v = Number(text)
-        const next = Number.isFinite(v) ? v : 0
+        let next = Number.isFinite(v) ? v : 0
+        if (min != null && next < min) next = min
         onCommit(next)
-        setText(next === 0 ? '' : String(next))
+        setText(String(next))
+      }}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') e.currentTarget.blur()
       }}
     />
   )

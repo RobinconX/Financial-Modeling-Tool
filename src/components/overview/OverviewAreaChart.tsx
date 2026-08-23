@@ -17,9 +17,11 @@ import {
   assignOverviewSeriesColors,
   buildOverviewChartRows,
   OVERVIEW_CURRENCY,
+  sourceLabel,
   type OverviewBuildDeps,
   type OverviewChartRow,
 } from '../../lib/overview'
+import { runwayDrawnFromRow } from '../../lib/runway'
 import type { ChartAnnotation, NetWorthGoal, OverviewSeries } from '../../types'
 import { ChartGoalLines } from '../common/ChartGoals'
 import { chartYearTick } from '../common/ChartNotes'
@@ -159,8 +161,22 @@ export function OverviewAreaChart({
             <Tooltip
               content={({ active, label, payload }) => {
                 if (!active || !payload?.length) return null
-                const row = payload[0]?.payload as { total?: number; label?: string } | undefined
+                const row = payload[0]?.payload as OverviewChartRow | undefined
                 const total = typeof row?.total === 'number' ? row.total : null
+                const draw = typeof row?.__draw === 'number' ? row.__draw : null
+                const income = typeof row?.__income === 'number' ? row.__income : null
+                const fromAssets =
+                  typeof row?.__fromAssets === 'number' ? row.__fromAssets : null
+                const surplus = typeof row?.__surplus === 'number' ? row.__surplus : null
+                const nameById = new Map(
+                  sorted.map((s) => [s.id, s.name.trim() || sourceLabel(s.type)]),
+                )
+                const drawn = row
+                  ? runwayDrawnFromRow(row).map((d) => ({
+                      ...d,
+                      name: nameById.get(d.id) ?? d.id,
+                    }))
+                  : []
                 return (
                   <div className="rounded-lg border border-white/15 bg-[#121820] px-2.5 py-2 text-xs">
                     <div className="mb-1.5 font-medium text-white/80">
@@ -196,21 +212,61 @@ export function OverviewAreaChart({
                     ) : null}
                     {showRecorded &&
                     row &&
-                    typeof (row as { [RECORDED_ACTUAL_KEY]?: number | null })[RECORDED_ACTUAL_KEY] ===
-                      'number' ? (
+                    typeof row[RECORDED_ACTUAL_KEY] === 'number' ? (
                       <div className="mt-1 flex items-center justify-between gap-4 font-medium">
                         <span className="text-amber-300/80">Recorded</span>
                         <span className="tabular-nums text-amber-300/90">
-                          {formatMoney(
-                            (row as { [RECORDED_ACTUAL_KEY]: number })[RECORDED_ACTUAL_KEY],
-                            OVERVIEW_CURRENCY,
-                          )}
+                          {formatMoney(row[RECORDED_ACTUAL_KEY] as number, OVERVIEW_CURRENCY)}
                         </span>
                       </div>
                     ) : null}
+                    {draw != null ? (
+                      <div className="mt-1.5 space-y-0.5 border-t border-white/10 pt-1.5 text-[11px]">
+                        {income != null ? (
+                          <div className="flex items-center justify-between gap-4 text-white/55">
+                            <span>Income</span>
+                            <span className="tabular-nums">
+                              {formatMoney(income, OVERVIEW_CURRENCY)}
+                            </span>
+                          </div>
+                        ) : null}
+                        <div className="flex items-center justify-between gap-4 text-white/55">
+                          <span>Draw</span>
+                          <span className="tabular-nums">
+                            {formatMoney(draw, OVERVIEW_CURRENCY)}
+                          </span>
+                        </div>
+                        {fromAssets != null && fromAssets > 0 ? (
+                          <div className="flex items-center justify-between gap-4 text-white/55">
+                            <span>From assets</span>
+                            <span className="tabular-nums">
+                              {formatMoney(fromAssets, OVERVIEW_CURRENCY)}
+                            </span>
+                          </div>
+                        ) : null}
+                        {drawn.map((d) => (
+                          <div
+                            key={d.id}
+                            className="flex items-center justify-between gap-4 pl-2 text-rose-300/80"
+                          >
+                            <span className="truncate">{d.name}</span>
+                            <span className="shrink-0 tabular-nums">
+                              −{formatMoney(d.amount, OVERVIEW_CURRENCY)}
+                            </span>
+                          </div>
+                        ))}
+                        {surplus != null && surplus > 0 ? (
+                          <div className="flex items-center justify-between gap-4 text-white/55">
+                            <span>To leftover</span>
+                            <span className="tabular-nums">
+                              {formatMoney(surplus, OVERVIEW_CURRENCY)}
+                            </span>
+                          </div>
+                        ) : null}
+                      </div>
+                    ) : null}
                     {(() => {
-                      const xKey =
-                        (row as { xKey?: string } | undefined)?.xKey ?? String(label ?? '')
+                      const xKey = row?.xKey ?? String(label ?? '')
                       const notesHere = annotationsForXKey(annotations, xKey)
                       if (notesHere.length === 0) return null
                       return (

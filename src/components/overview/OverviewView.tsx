@@ -502,7 +502,7 @@ export function OverviewView({
               )}
             </h3>
             <InfoTip label="About overview chart">
-              {chartMode === 'compare'
+              {effectiveChartMode === 'compare'
                 ? 'Past years → Now (live) → future. Each line is total net worth for a scenario (enabled series only).'
                 : 'Past years → Now (live) → future. CHF. Bars or stacked area. Portfolio greens, savings blues, manual amber/violet.'}
             </InfoTip>
@@ -528,9 +528,18 @@ export function OverviewView({
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => setChartMode(opt.id)}
+                  onClick={() => {
+                    if (
+                      pageTab === 'runway' &&
+                      chartMode === 'compare' &&
+                      opt.id === 'bars'
+                    ) {
+                      return
+                    }
+                    setChartMode(opt.id)
+                  }}
                   className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
-                    chartMode === opt.id
+                    effectiveChartMode === opt.id
                       ? 'border-emerald-400 text-white'
                       : 'border-transparent text-white/50 hover:text-white/80'
                   }`}
@@ -595,7 +604,7 @@ export function OverviewView({
           </div>
         </div>
 
-        {chartMode === 'compare' && (
+        {pageTab === 'networth' && chartMode === 'compare' && (
           <div className="flex flex-wrap items-center gap-2">
             <span className="text-[11px] font-medium text-white/45">Show</span>
             {scenarios.map((s) => {
@@ -646,7 +655,7 @@ export function OverviewView({
 
         <FullscreenChart
           title={
-            chartMode === 'compare'
+            effectiveChartMode === 'compare'
               ? 'Overview · compare scenarios'
               : `Overview · ${selectedScenario?.name ?? 'net worth'}`
           }
@@ -706,6 +715,7 @@ export function OverviewView({
 
         {pageTab === 'runway' && selectedScenario ? (
           <RunwayConfig
+            key={selectedScenario.id}
             config={runwayConfig}
             incomeCostScenarios={incomeCostScenarios}
             incomeCostLines={incomeCostLines}

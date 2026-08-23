@@ -18,6 +18,44 @@ import { CopyScenarioDialog } from './CopyScenarioDialog'
 
 type WorkspaceTab = 'budget' | 'monthly'
 
+function ScenarioYearInput({
+  year,
+  onCommit,
+}: {
+  year: number
+  onCommit: (year: number) => void
+}) {
+  const [draft, setDraft] = useState(String(year))
+  useEffect(() => {
+    setDraft(String(year))
+  }, [year])
+
+  function commit() {
+    const y = Math.floor(Number(draft.trim()))
+    if (!Number.isFinite(y) || y < 1970 || y > 2100) {
+      setDraft(String(year))
+      return
+    }
+    onCommit(y)
+    setDraft(String(y))
+  }
+
+  return (
+    <input
+      id="ic-year"
+      className="input !w-20 !py-1 !text-xs tabular-nums"
+      type="number"
+      value={draft}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+      }}
+      title="Calendar year this budget describes"
+    />
+  )
+}
+
 type Props = {
   scenarios: CashflowScenario[]
   lines: CashflowLine[]
@@ -172,18 +210,10 @@ export function IncomeCostView({
               <label className="text-[10px] uppercase tracking-wider text-white/40" htmlFor="ic-year">
                 Year
               </label>
-              <input
-                id="ic-year"
-                className="input !w-20 !py-1 !text-xs tabular-nums"
-                type="number"
-                min={1970}
-                max={2100}
-                value={selected.year}
-                onChange={(e) => {
-                  const y = Math.floor(Number(e.target.value))
-                  if (Number.isFinite(y)) setScenarioYear(selected.id, y)
-                }}
-                title="Calendar year this budget describes"
+              <ScenarioYearInput
+                key={selected.id}
+                year={selected.year}
+                onCommit={(y) => setScenarioYear(selected.id, y)}
               />
             </div>
             <button

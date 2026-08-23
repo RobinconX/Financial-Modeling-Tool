@@ -1,13 +1,23 @@
 import { useMemo } from 'react'
 import { formatMoney, formatPercent } from '../../lib/format'
+import { InfoTip } from '../common/InfoTip'
 import { toDisplay } from '../../lib/fx'
-import { getOpeningCash, holdingLiveValue } from '../../lib/portfolio'
+import {
+  actionTradePrice,
+  depositInYear,
+  getActions,
+  getOpeningCash,
+  holdingDisplayName,
+  holdingLiveValue,
+} from '../../lib/portfolio'
 import { investedForRoiDisplay, simpleRoi } from '../../lib/portfolioContributions'
 import type {
   DisplayCurrency,
+  PortfolioAction,
   PortfolioContributionsState,
   PortfolioGrid,
   PortfolioGridRow,
+  PortfolioHolding,
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
@@ -111,9 +121,40 @@ export function PortfolioValueTable({
     }`
   }
 
-  function renderValue(v: number | null) {
-    if (v == null) return <span className="text-white/20">—</span>
-    return fmt(v)
+  function renderValue(
+    v: number | null,
+    hint?: string,
+    side: 'top' | 'bottom' = 'bottom',
+  ) {
+    return (
+      <span className="inline-flex items-center gap-1">
+        {v == null ? <span className="text-white/20">—</span> : fmt(v)}
+        {hint ? (
+          <InfoTip
+            label="Planned action this year"
+            align="end"
+            side={side}
+            trigger="▸"
+            panelClassName="!w-52 max-h-36 overflow-y-auto"
+          >
+            {hint.split('\n').map((line) => (
+              <span key={line} className="block">
+                {line}
+              </span>
+            ))}
+          </InfoTip>
+        ) : null}
+      </span>
+    )
+  }
+
+  function cellTitle(
+    row: PortfolioGridRow,
+    year: number | null,
+    isNow: boolean,
+  ): string | undefined {
+    if (!portfolio) return undefined
+    return valueCellHint(row, year, isNow, portfolio, scenarios, fmt)
   }
 
   return (
@@ -178,9 +219,11 @@ export function PortfolioValueTable({
                 </td>
                 {pastYears.map(({ y, i }) => {
                   const v = row.values[i] ?? null
+                  const title = cellTitle(row, y, false)
+                  const tipSide = row.kind === 'equity' ? 'bottom' : 'top'
                   return (
                     <td key={`${row.key}-${y}`} className={cellClass(row, v)}>
-                      {renderValue(v)}
+                      {renderValue(v, title, tipSide)}
                     </td>
                   )
                 })}
@@ -191,9 +234,11 @@ export function PortfolioValueTable({
                 )}
                 {futureYears.map(({ y, i }) => {
                   const v = row.values[i] ?? null
+                  const title = cellTitle(row, y, false)
+                  const tipSide = row.kind === 'equity' ? 'bottom' : 'top'
                   return (
                     <td key={`${row.key}-${y}`} className={cellClass(row, v)}>
-                      {renderValue(v)}
+                      {renderValue(v, title, tipSide)}
                     </td>
                   )
                 })}
@@ -238,6 +283,71 @@ export function PortfolioValueTable({
       </div>
     </div>
   )
+}
+
+function fmtQty(n: number): string {
+  return n.toLocaleString(undefined, { maximumFractionDigits: 4 })
+}
+
+function describeAction(
+  a: PortfolioAction,
+  holding: PortfolioHolding,
+  scenarios: SavedScenario[],
+  currentYear: number,
+  fmt: (v: number) => string,
+): string {
+  const sc =
+    holding.scenarioId && !holding.manualOnly
+      ? (scenarios.find((s) => s.id === holding.scenarioId) ?? null)
+      : null
+  const px = actionTradePrice(a, holding, sc, currentYear)
+  const name = holdingDisplayName(holding)
+  const unit = holding.option ? 'contract' : 'sh'
+  const cash = px != null && px > 0 ? a.shares * px : null
+  if (a.type === 'sell') {
+    return cash != null
+      ? `Sell ${fmtQty(a.shares)} ${unit} of ${name} at ${fmt(px!)} → ${fmt(cash)} to Cash`
+      : `Sell ${fmtQty(a.shares)} ${unit} of ${name} → proceeds to Cash`
+  }
+  return cash != null
+    ? `Buy ${fmtQty(a.shares)} ${unit} of ${name} at ${fmt(px!)} → ${fmt(cash)} from Cash`
+    : `Buy ${fmtQty(a.shares)} ${unit} of ${name} → paid from Cash`
+}
+
+function valueCellHint(
+  row: PortfolioGridRow,
+  year: number | null,
+  isNow: boolean,
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[],
+  fmt: (v: number) => string,
+): string | undefined {
+  if (isNow || year == null) return undefined
+  const currentYear = new Date().getFullYear()
+  const actions = getActions(portfolio)
+  const holdingsById = new Map(portfolio.holdings.map((h) => [h.id, h]))
+  const lines: string[] = []
+
+  if (row.kind === 'equity' && row.holdingId) {
+    const h = holdingsById.get(row.holdingId)
+    if (!h) return undefined
+    for (const a of actions) {
+      if (a.holdingId !== h.id || a.year !== year || !(a.shares > 0)) continue
+      lines.push(describeAction(a, h, scenarios, currentYear, fmt))
+    }
+  } else if (row.kind === 'cash') {
+    const dep = depositInYear(portfolio, year, currentYear)
+    if (dep > 0) lines.push(`Deposit ${fmt(dep)} this year`)
+    const trades = actions.filter((a) => a.year === year && a.shares > 0)
+    if (trades.some((a) => a.type === 'sell')) {
+      lines.push('Sells add proceeds here')
+    }
+    if (trades.some((a) => a.type === 'buy')) {
+      lines.push('Buys spend Cash')
+    }
+  }
+
+  return lines.length ? lines.join('\n') : undefined
 }
 
 function roiCell(

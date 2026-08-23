@@ -5,6 +5,7 @@ import type {
   WorkingBalanceDraw,
 } from '../types'
 import {
+  DEFAULT_SCENARIO_NAME,
   emptyIncomeCostState,
   newScenario,
   normalizeAmounts12,
@@ -30,8 +31,8 @@ function parseYearFromName(name: string): number | null {
 
 function normalizeScenario(raw: unknown, index: number): CashflowScenario | null {
   if (!isRecord(raw)) return null
-  const name = typeof raw.name === 'string' ? raw.name.trim() : ''
-  if (!name) return null
+  const trimmed = typeof raw.name === 'string' ? raw.name.trim() : ''
+  const name = trimmed || DEFAULT_SCENARIO_NAME
   const fromField = Math.floor(asNumber(raw.year, NaN))
   const year =
     Number.isFinite(fromField) && fromField >= 1970 && fromField <= 2100
@@ -156,29 +157,32 @@ function loadScenariosAndLines(parsed: Record<string, unknown>): {
   return { scenarios, lines, draws }
 }
 
+export function parseIncomeCostState(parsed: unknown): IncomeCostState {
+  if (!isRecord(parsed)) return emptyIncomeCostState()
+
+  // v3 (with draws) or v2 (no draws)
+  if (
+    (parsed.version === 3 || parsed.version === 2) &&
+    Array.isArray(parsed.scenarios)
+  ) {
+    const loaded = loadScenariosAndLines(parsed)
+    if (!loaded) return emptyIncomeCostState()
+    return { version: 3, ...loaded }
+  }
+
+  // v1 or unversioned with year-based lines
+  if (Array.isArray(parsed.lines)) {
+    return migrateV1(parsed)
+  }
+
+  return emptyIncomeCostState()
+}
+
 export function loadIncomeCost(): IncomeCostState {
   try {
     const raw = localStorage.getItem(INCOME_COST_STORAGE_KEY)
     if (!raw) return emptyIncomeCostState()
-    const parsed: unknown = JSON.parse(raw)
-    if (!isRecord(parsed)) return emptyIncomeCostState()
-
-    // v3 (with draws) or v2 (no draws)
-    if (
-      (parsed.version === 3 || parsed.version === 2) &&
-      Array.isArray(parsed.scenarios)
-    ) {
-      const loaded = loadScenariosAndLines(parsed)
-      if (!loaded) return emptyIncomeCostState()
-      return { version: 3, ...loaded }
-    }
-
-    // v1 or unversioned with year-based lines
-    if (Array.isArray(parsed.lines)) {
-      return migrateV1(parsed)
-    }
-
-    return emptyIncomeCostState()
+    return parseIncomeCostState(JSON.parse(raw))
   } catch {
     return emptyIncomeCostState()
   }

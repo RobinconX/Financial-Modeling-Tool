@@ -852,7 +852,7 @@ export function OverviewSeriesEditor({
                         <DraftTextField
                           label="Now pile (CHF)"
                           className="input !py-1.5 !text-xs tabular-nums"
-                          value={s.baseChf ? String(s.baseChf) : ''}
+                          value={String(s.baseChf ?? 0)}
                           placeholder="0"
                           onCommit={(raw) => {
                             const n = parseDraftNumber(raw, 0, 0)
@@ -862,11 +862,7 @@ export function OverviewSeriesEditor({
                         <DraftTextField
                           label="Rate % / year"
                           className="input !py-1.5 !text-xs tabular-nums"
-                          value={
-                            s.annualRatePercent != null && s.annualRatePercent !== 0
-                              ? String(s.annualRatePercent)
-                              : ''
-                          }
+                          value={String(s.annualRatePercent ?? 0)}
                           placeholder="0"
                           onCommit={(raw) => {
                             const n = parseDraftNumber(raw, 0)
@@ -916,7 +912,7 @@ export function OverviewSeriesEditor({
                         <DraftTextField
                           label="Base (CHF)"
                           className="input !py-1.5 !text-xs tabular-nums"
-                          value={s.baseChf ? String(s.baseChf) : ''}
+                          value={String(s.baseChf ?? 0)}
                           placeholder="0"
                           onCommit={(raw) => {
                             const n = parseDraftNumber(raw, 0, 0)
@@ -926,11 +922,7 @@ export function OverviewSeriesEditor({
                         <DraftTextField
                           label="Rate % / year"
                           className="input !py-1.5 !text-xs tabular-nums"
-                          value={
-                            s.annualRatePercent != null && s.annualRatePercent !== 0
-                              ? String(s.annualRatePercent)
-                              : ''
-                          }
+                          value={String(s.annualRatePercent ?? 0)}
                           placeholder="0"
                           onCommit={(raw) => {
                             const n = parseDraftNumber(raw, 0)

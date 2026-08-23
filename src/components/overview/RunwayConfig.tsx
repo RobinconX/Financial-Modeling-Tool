@@ -1,4 +1,4 @@
-import { useState } from 'react'
+import { useEffect, useState, type MouseEvent } from 'react'
 import type {
   CashflowLine,
   CashflowScenario,
@@ -10,12 +10,67 @@ import type {
 import { parseMoney, formatMoney } from '../../lib/format'
 import {
   defaultRunwayPeriod,
-  periodForYear,
   resolveRunwayDrawOrder,
   runwayIncomeDrawForYear,
 } from '../../lib/runway'
 import { InfoTip } from '../common/InfoTip'
 import { OVERVIEW_CURRENCY } from '../../lib/overview'
+
+/** Controlled number that types freely and commits on blur / Enter. */
+function CommitOnBlurNumber({
+  value,
+  parse,
+  onCommit,
+  className,
+  placeholder,
+  onMouseDown,
+}: {
+  value: number | null
+  /** `undefined` = invalid (revert). `null` = empty commit. */
+  parse: (raw: string) => number | null | undefined
+  onCommit: (n: number | null) => void
+  className: string
+  placeholder?: string
+  onMouseDown?: (e: MouseEvent<HTMLInputElement>) => void
+}) {
+  const shown = value == null ? '' : String(value)
+  const [draft, setDraft] = useState(shown)
+  useEffect(() => {
+    setDraft(shown)
+  }, [shown])
+
+  function commit() {
+    const result = parse(draft.trim())
+    if (result === undefined) {
+      setDraft(shown)
+      return
+    }
+    onCommit(result)
+    setDraft(result == null ? '' : String(result))
+  }
+
+  return (
+    <input
+      className={className}
+      type="number"
+      value={draft}
+      placeholder={placeholder}
+      onMouseDown={onMouseDown}
+      onChange={(e) => setDraft(e.target.value)}
+      onBlur={commit}
+      onKeyDown={(e) => {
+        if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+      }}
+    />
+  )
+}
+
+function parseYear(raw: string): number | undefined {
+  if (!raw) return undefined
+  const y = Math.floor(Number(raw))
+  if (!Number.isFinite(y) || y < 1900 || y > 2200) return undefined
+  return y
+}
 
 type Props = {
   config: OverviewRunwayConfig
@@ -40,8 +95,6 @@ export function RunwayConfig({
   const sortedIc = [...incomeCostScenarios].sort(
     (a, b) => a.year - b.year || a.sortOrder - b.sortOrder || a.name.localeCompare(b.name),
   )
-  const previewYear = periods[0]?.startYear ?? new Date().getFullYear()
-  const preview = runwayIncomeDrawForYear(config, previewYear, incomeCostLines)
   const drawList = resolveRunwayDrawOrder(series, config, savingsAccounts)
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
@@ -94,6 +147,11 @@ export function RunwayConfig({
         {periods.map((p, i) => {
           const until =
             i + 1 < periods.length ? String(periods[i + 1]!.startYear - 1) : 'chart To'
+          const { income, draw } = runwayIncomeDrawForYear(
+            config,
+            p.startYear,
+            incomeCostLines,
+          )
           return (
             <div
               key={`${p.startYear}-${i}`}
@@ -101,13 +159,13 @@ export function RunwayConfig({
             >
               <label className="space-y-1 text-white/50">
                 <span className="block text-[10px]">From</span>
-                <input
+                <CommitOnBlurNumber
                   className="input !w-[4.5rem] !py-1 !text-xs tabular-nums"
-                  type="number"
                   value={p.startYear}
-                  onChange={(e) =>
-                    patchPeriod(i, { startYear: Math.floor(Number(e.target.value)) || p.startYear })
-                  }
+                  parse={parseYear}
+                  onCommit={(y) => {
+                    if (y != null) patchPeriod(i, { startYear: y })
+                  }}
                 />
               </label>
               <span className="pb-1.5 text-[10px] text-white/30">→ {until}</span>
@@ -179,11 +237,15 @@ export function RunwayConfig({
                   {p.drawMode === 'percent' ? (
                     <label className="space-y-1 text-white/50">
                       <span className="block text-[10px]">Percent</span>
-                      <input
+                      <CommitOnBlurNumber
                         className="input !w-16 !py-1 !text-xs tabular-nums"
-                        type="number"
                         value={p.drawPercent}
-                        onChange={(e) => patchPeriod(i, { drawPercent: Number(e.target.value) })}
+                        parse={(raw) => {
+                          if (!raw) return 0
+                          const n = Number(raw)
+                          return Number.isFinite(n) ? n : undefined
+                        }}
+                        onCommit={(n) => patchPeriod(i, { drawPercent: n ?? 0 })}
                       />
                     </label>
                   ) : (
@@ -204,6 +266,11 @@ export function RunwayConfig({
               ) : (
                 <span className="pb-1.5 text-[10px] text-white/35">Draw = I/C costs</span>
               )}
+
+              <span className="pb-1.5 text-[10px] text-white/40 tabular-nums">
+                {formatMoney(income, OVERVIEW_CURRENCY)} in →{' '}
+                {formatMoney(draw, OVERVIEW_CURRENCY)} out
+              </span>
 
               {periods.length > 1 ? (
                 <button
@@ -231,11 +298,6 @@ export function RunwayConfig({
         >
           + Period
         </button>
-        <span className="text-[11px] text-white/40">
-          {periodForYear(config, previewYear).startYear}:{' '}
-          {formatMoney(preview.income, OVERVIEW_CURRENCY)} in →{' '}
-          {formatMoney(preview.draw, OVERVIEW_CURRENCY)} out
-        </span>
       </div>
 
       <div className="space-y-2 pt-1">
@@ -321,26 +383,13 @@ export function RunwayConfig({
               </button>
               <label className="flex items-center gap-1 text-[10px] text-white/45">
                 Locked until
-                <input
+                <CommitOnBlurNumber
                   className="input !w-[4.5rem] !py-0.5 !text-xs tabular-nums"
-                  type="number"
-                  defaultValue={s.drawLockedUntilYear ?? ''}
+                  value={s.drawLockedUntilYear ?? null}
                   placeholder="—"
+                  parse={(raw) => (raw ? parseYear(raw) : null)}
                   onMouseDown={(e) => e.stopPropagation()}
-                  onBlur={(e) => {
-                    const raw = e.target.value.trim()
-                    if (!raw) {
-                      onUpdateSeries(s.id, { drawLockedUntilYear: null })
-                      return
-                    }
-                    const y = Math.floor(Number(raw))
-                    onUpdateSeries(s.id, {
-                      drawLockedUntilYear:
-                        Number.isFinite(y) && y >= 1900 && y <= 2200
-                          ? y
-                          : s.drawLockedUntilYear ?? null,
-                    })
-                  }}
+                  onCommit={(y) => onUpdateSeries(s.id, { drawLockedUntilYear: y })}
                 />
               </label>
             </div>

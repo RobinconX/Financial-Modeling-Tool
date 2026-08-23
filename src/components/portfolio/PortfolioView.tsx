@@ -253,6 +253,7 @@ export function PortfolioView({
   const [periodTo, setPeriodTo] = useState(currentYear)
   const [fromDraft, setFromDraft] = useState(String(currentYear))
   const [toDraft, setToDraft] = useState(String(currentYear))
+  const [rangeCustom, setRangeCustom] = useState(false)
 
   const baseGrid = useMemo(() => {
     if (!selected) return null
@@ -269,9 +270,25 @@ export function PortfolioView({
 
   const selectedPortfolioId = selected?.id ?? null
 
-  // Reset period when switching portfolio or stated year span changes — not on every edit.
-  // Deps must always be the same length/order.
+  function autoFromYear() {
+    const earliest =
+      selectedPortfolioId && selected
+        ? earliestActualYear(selected, firstInputYear)
+        : firstInputYear
+    return Math.min(earliest, firstInputYear)
+  }
+
+  function applyAutoRange() {
+    const from = autoFromYear()
+    setPeriodFrom(from)
+    setPeriodTo(lastInputYear)
+    setFromDraft(String(from))
+    setToDraft(String(lastInputYear))
+  }
+
+  // Switching portfolio always takes the auto span.
   useEffect(() => {
+    setRangeCustom(false)
     const earliest =
       selectedPortfolioId && selected
         ? earliestActualYear(selected, firstInputYear)
@@ -281,8 +298,15 @@ export function PortfolioView({
     setPeriodTo(lastInputYear)
     setFromDraft(String(from))
     setToDraft(String(lastInputYear))
-    // eslint-disable-next-line react-hooks/exhaustive-deps -- only re-sync on id / year span
-  }, [selectedPortfolioId, firstInputYear, lastInputYear])
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- portfolio switch only
+  }, [selectedPortfolioId])
+
+  // Follow input-year span until the user sets a custom From–To.
+  useEffect(() => {
+    if (rangeCustom) return
+    applyAutoRange()
+    // eslint-disable-next-line react-hooks/exhaustive-deps -- auto-follow stated span
+  }, [firstInputYear, lastInputYear, rangeCustom])
 
   function applyPeriod(fromStr: string, toStr: string) {
     const from = Number(fromStr)
@@ -296,6 +320,8 @@ export function PortfolioView({
       a = b
       b = t
     }
+    const autoFrom = autoFromYear()
+    setRangeCustom(a !== autoFrom || b !== lastInputYear)
     setPeriodFrom(a)
     setPeriodTo(b)
     setFromDraft(String(a))
@@ -814,12 +840,8 @@ export function PortfolioView({
                       className="btn-ghost !py-1 !text-[11px]"
                       title="Reset to years with inputs / actuals"
                       onClick={() => {
-                        const earliest = earliestActualYear(selected, firstInputYear)
-                        const from = Math.min(earliest, firstInputYear)
-                        setPeriodFrom(from)
-                        setPeriodTo(lastInputYear)
-                        setFromDraft(String(from))
-                        setToDraft(String(lastInputYear))
+                        setRangeCustom(false)
+                        applyAutoRange()
                       }}
                     >
                       Inputs only
@@ -842,8 +864,16 @@ export function PortfolioView({
                     showRoi={showRoi}
                   />
                 </FullscreenChart>
-                <div className="border-t border-white/[0.06] pt-4">
-                  <h3 className="section-title mb-2">Value by year</h3>
+                <div className="relative z-20 border-t border-white/[0.06] pt-4">
+                  <div className="mb-2 flex items-center gap-1.5">
+                    <h3 className="section-title">Value by year</h3>
+                    <InfoTip label="About year values and actions">
+                      Now is the book as it sits today (shares held and opening cash). Planned
+                      buys and sells apply from their year in the year columns — they do not
+                      change Now. Selling a position adds proceeds to Cash; buying spends Cash.
+                      Deposits land in Cash in their year.
+                    </InfoTip>
+                  </div>
                   <PortfolioValueTable
                     grid={grid}
                     portfolio={resolvedSelected ?? selected}
