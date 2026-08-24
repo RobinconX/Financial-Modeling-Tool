@@ -1,0 +1,278 @@
+{
+  "version": 1,
+  "exportedAt": "2026-01-01T00:00:00.000Z",
+  "scenarios": [
+    {
+      "id": "scen-acme",
+      "symbol": "ACME",
+      "name": "Base",
+      "companyName": "Acme Example Corp",
+      "currency": "USD",
+      "currentPrice": 120,
+      "currentMarketCap": 240000000000,
+      "sharesOutstanding": 2000000000,
+      "mcapOverride": null,
+      "easyRows": [
+        { "id": "easy-2028", "year": 2028, "projectedMarketCap": 360000000000 },
+        { "id": "easy-2030", "year": 2030, "projectedMarketCap": 480000000000 }
+      ],
+      "advancedRows": [
+        {
+          "id": "adv-2028",
+          "year": 2028,
+          "dilutionFactor": 1.04,
+          "revenue": 40000000000,
+          "psMultiple": 9,
+          "fcf": 8000000000,
+          "pfcfMultiple": 45,
+          "profit": 6000000000,
+          "peMultiple": 60
+        }
+      ],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "portfolios": [
+    {
+      "id": "port-broker",
+      "name": "Broker",
+      "currentCash": 0,
+      "deposits": [
+        {
+          "id": "dep-open",
+          "year": 2026,
+          "amount": 20000,
+          "currency": "USD",
+          "isOpening": true,
+          "source": "fixed"
+        },
+        {
+          "id": "dep-2027",
+          "year": 2027,
+          "amount": 10000,
+          "currency": "USD",
+          "isOpening": false,
+          "source": "fixed"
+        }
+      ],
+      "perpetualYearlyDeposit": null,
+      "perpetualGrowthPercent": 4,
+      "actions": [
+        {
+          "id": "act-buy",
+          "type": "buy",
+          "holdingId": "hold-acme",
+          "year": 2027,
+          "shares": 20,
+          "price": 140,
+          "note": "Add on the Easy 2028 path"
+        }
+      ],
+      "holdings": [
+        {
+          "id": "hold-acme",
+          "symbol": "ACME",
+          "label": null,
+          "sharesHeld": 50,
+          "scenarioId": "scen-acme",
+          "basis": "easy",
+          "yearOverrides": [],
+          "manualCurrentPrice": null,
+          "manualOnly": false
+        }
+      ],
+      "holdingSort": "manual",
+      "actuals": {
+        "2025-12": 24000,
+        "2026-06": 26500
+      },
+      "actualsCurrency": "USD",
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "incomeCost": {
+    "version": 3,
+    "scenarios": [
+      { "id": "ic-2026", "name": "Work year", "sortOrder": 0, "year": 2026 }
+    ],
+    "lines": [
+      {
+        "id": "ic-salary",
+        "scenarioId": "ic-2026",
+        "kind": "income",
+        "name": "Salary",
+        "detail": "Example take-home",
+        "cadence": "recurring",
+        "yearlyAmount": 120000,
+        "lastEdited": "yearly",
+        "month": null
+      },
+      {
+        "id": "ic-rent",
+        "scenarioId": "ic-2026",
+        "kind": "cost",
+        "name": "Rent",
+        "cadence": "recurring",
+        "yearlyAmount": 24000,
+        "lastEdited": "yearly",
+        "month": null
+      },
+      {
+        "id": "ic-trip",
+        "scenarioId": "ic-2026",
+        "kind": "cost",
+        "name": "Travel",
+        "cadence": "one-time",
+        "yearlyAmount": 3000,
+        "lastEdited": "yearly",
+        "month": 7
+      }
+    ],
+    "draws": []
+  },
+  "savings": {
+    "version": 1,
+    "accounts": [
+      {
+        "id": "sav-cash",
+        "name": "Cash",
+        "role": "cash",
+        "actuals": { "2025-12": 18000, "2026-06": 20000 },
+        "contribution": 0,
+        "cadence": "monthly",
+        "annualRatePercent": 0.5,
+        "compoundUntilYear": null,
+        "contributeUntilYear": null,
+        "sortOrder": 0
+      },
+      {
+        "id": "sav-3a",
+        "name": "Pillar 3a",
+        "role": null,
+        "actuals": { "2025-12": 42000, "2026-06": 45000 },
+        "contribution": 500,
+        "cadence": "monthly",
+        "annualRatePercent": 3,
+        "compoundUntilYear": null,
+        "contributeUntilYear": null,
+        "sortOrder": 1
+      }
+    ]
+  },
+  "overview": {
+    "version": 2,
+    "selectedScenarioId": "ov-base",
+    "scenarios": [
+      {
+        "id": "ov-base",
+        "name": "Base",
+        "description": "Example stack: leftover, cash, 3a, and the broker portfolio.",
+        "sortOrder": 0,
+        "startYear": 2024,
+        "endYear": 2035,
+        "series": [
+          {
+            "id": "ov-leftover",
+            "name": "Leftover cash",
+            "enabled": true,
+            "sortOrder": 0,
+            "type": "incomeLeftover",
+            "color": null,
+            "baseChf": 8000,
+            "annualRatePercent": 0,
+            "baseYear": 2026,
+            "yearBindings": [{ "year": 2026, "incomeCostScenarioId": "ic-2026" }],
+            "perpetualYearlyChf": 0,
+            "compoundUntilYear": null,
+            "contributeUntilYear": null,
+            "drawLockedUntilYear": null,
+            "drawTiming": "growFirst"
+          },
+          {
+            "id": "ov-cash",
+            "name": "Cash",
+            "enabled": true,
+            "sortOrder": 1,
+            "type": "savings",
+            "color": null,
+            "savingsAccountId": "sav-cash",
+            "compoundUntilYear": null,
+            "contributeUntilYear": null,
+            "drawLockedUntilYear": null,
+            "drawTiming": "growFirst"
+          },
+          {
+            "id": "ov-3a",
+            "name": "Pillar 3a",
+            "enabled": true,
+            "sortOrder": 2,
+            "type": "savings",
+            "color": null,
+            "savingsAccountId": "sav-3a",
+            "compoundUntilYear": null,
+            "contributeUntilYear": null,
+            "drawLockedUntilYear": null,
+            "drawTiming": "growFirst"
+          },
+          {
+            "id": "ov-port",
+            "name": "Broker",
+            "enabled": true,
+            "sortOrder": 3,
+            "type": "portfolio",
+            "color": null,
+            "portfolioId": "port-broker",
+            "compoundUntilYear": null,
+            "contributeUntilYear": null,
+            "drawLockedUntilYear": null,
+            "drawTiming": "growFirst"
+          }
+        ],
+        "runway": {
+          "periods": [
+            {
+              "startYear": 2026,
+              "mode": "ic-keep",
+              "incomeCostScenarioId": "ic-2026",
+              "manualIncomeChf": 0,
+              "drawMode": "percent",
+              "drawPercent": 100,
+              "drawFixedChf": 0
+            }
+          ],
+          "drawOrder": ["ov-leftover", "ov-cash", "ov-3a", "ov-port"]
+        }
+      }
+    ]
+  },
+  "comparables": [
+    {
+      "id": "cmp-acme",
+      "name": "Acme bases",
+      "entries": [{ "scenarioId": "scen-acme", "basis": "easy" }],
+      "sortYear": 2030,
+      "sortDir": "desc",
+      "filterYears": [2028, 2030],
+      "createdAt": "2026-01-01T00:00:00.000Z",
+      "updatedAt": "2026-01-01T00:00:00.000Z"
+    }
+  ],
+  "annotations": [
+    {
+      "id": "note-start",
+      "year": 2026,
+      "month": null,
+      "label": "Example household — replace with your numbers"
+    }
+  ],
+  "goals": [
+    { "id": "goal-nw", "name": "Comfortable NW", "amountChf": 1000000, "year": 2035 }
+  ],
+  "portfolioContributions": {
+    "version": 1,
+    "currency": "USD",
+    "byYear": { "2025": 8000, "2026": 12000 }
+  }
+}

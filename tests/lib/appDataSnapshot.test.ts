@@ -26,6 +26,16 @@ describe('appDataSnapshot', () => {
     expect(parsed.portfolioContributions).toEqual({ version: 1, currency: 'USD', byYear: {} })
   })
 
+  it('still rejects a v2 multi-account envelope as a single snapshot', () => {
+    expect(
+      parseAppDataSnapshot({
+        version: 2,
+        selectedId: 'a',
+        accounts: [],
+      }),
+    ).toMatchObject({ error: expect.any(String) })
+  })
+
   it('rejects invalid payloads', () => {
     expect(parseAppDataSnapshot(null)).toMatchObject({ error: expect.any(String) })
     expect(parseAppDataSnapshot({})).toMatchObject({ error: expect.any(String) })

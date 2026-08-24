@@ -5,12 +5,12 @@
  * (the browser API requires it; Chromium).
  */
 import {
-  APP_DATA_FILE_NAME,
-  applyAppDataToLocalStorage,
-  collectAppData,
-  parseAppDataSnapshot,
-  type AppDataSnapshot,
-} from './appDataSnapshot'
+  hydrateOnStartup,
+  parseSaveFile,
+  payloadForLinkedFile,
+  type ParsedSaveFile,
+} from './accountCatalog'
+import { APP_DATA_FILE_NAME } from './appDataSnapshot'
 
 /** Minimal typings — not all TS DOM libs include File System Access yet. */
 type FsPermissionMode = 'read' | 'readwrite'
@@ -264,7 +264,7 @@ export async function requestLinkedFileAccess(options?: {
   if (options?.reloadFromFile !== false) {
     const snap = await readLinkedSnapshot()
     if (snap && !('error' in snap)) {
-      const applied = applyAppDataToLocalStorage(snap)
+      const applied = hydrateOnStartup(snap)
       if (applied.ok) reloaded = true
     } else if (snap && 'error' in snap) {
       return { ok: false, error: snap.error }
@@ -332,9 +332,9 @@ export async function linkDataFile(): Promise<
     const text = await file.text()
 
     if (text.trim()) {
-      let parsed: AppDataSnapshot | { error: string }
+      let parsed: ParsedSaveFile | { error: string }
       try {
-        parsed = parseAppDataSnapshot(JSON.parse(text) as unknown)
+        parsed = parseSaveFile(JSON.parse(text) as unknown)
       } catch (e) {
         const msg = e instanceof Error ? e.message : 'File is not valid JSON'
         lastError = msg
@@ -349,7 +349,7 @@ export async function linkDataFile(): Promise<
       await idbSetHandle(handle)
       lastError = null
 
-      const applied = applyAppDataToLocalStorage(parsed)
+      const applied = hydrateOnStartup(parsed)
       if (!applied.ok) {
         cachedHandle = null
         try {
@@ -368,7 +368,7 @@ export async function linkDataFile(): Promise<
     await idbSetHandle(handle)
     lastError = null
 
-    const writeResult = await writeLinkedSnapshot(collectAppData())
+    const writeResult = await writeLinkedSnapshot()
     if (!writeResult.ok) return writeResult
 
     return { ok: true, fileName: handle.name, action: 'seeded' }
@@ -408,7 +408,7 @@ export async function createDataFile(): Promise<
     cachedHandle = handle
     await idbSetHandle(handle)
     lastError = null
-    const writeResult = await writeLinkedSnapshot(collectAppData())
+    const writeResult = await writeLinkedSnapshot()
     if (!writeResult.ok) return writeResult
     return { ok: true, fileName: handle.name }
   } catch (e) {
@@ -442,7 +442,7 @@ export async function unlinkDataFile(): Promise<void> {
 let writeChain: Promise<unknown> = Promise.resolve()
 
 async function performLinkedWrite(
-  snapshot?: AppDataSnapshot,
+  snapshot?: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   if (!cachedHandle) {
     cachedHandle = await idbGetHandle()
@@ -455,7 +455,7 @@ async function performLinkedWrite(
     if (!canWrite) {
       return { ok: false, error: 'Write permission denied — re-link the data file' }
     }
-    const data = snapshot ?? collectAppData()
+    const data = snapshot ?? payloadForLinkedFile()
     const writable = await cachedHandle.createWritable()
     await writable.write(JSON.stringify(data, null, 2))
     await writable.close()
@@ -483,7 +483,7 @@ async function performLinkedWrite(
 
 /** One write at a time so overlapping createWritable() cannot truncate the file. */
 export async function writeLinkedSnapshot(
-  snapshot?: AppDataSnapshot,
+  snapshot?: unknown,
 ): Promise<{ ok: true } | { ok: false; error: string }> {
   const run = () => performLinkedWrite(snapshot)
   const result = writeChain.then(run, run)
@@ -495,7 +495,7 @@ export async function writeLinkedSnapshot(
 }
 
 export async function readLinkedSnapshot(): Promise<
-  AppDataSnapshot | { error: string } | null
+  ParsedSaveFile | { error: string } | null
 > {
   if (!cachedHandle) {
     cachedHandle = await idbGetHandle()
@@ -514,7 +514,7 @@ export async function readLinkedSnapshot(): Promise<
       // Empty new file — treat as no data yet
       return null
     }
-    return parseAppDataSnapshot(JSON.parse(text))
+    return parseSaveFile(JSON.parse(text))
   } catch (e) {
     return {
       error: e instanceof Error ? e.message : 'Failed to read data file',

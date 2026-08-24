@@ -2,10 +2,8 @@ import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import App from './App'
 import './index.css'
-import {
-  applyAppDataToLocalStorage,
-  type AppDataSnapshot,
-} from './lib/appDataSnapshot'
+import { hydrateOnStartup } from './lib/accountCatalog'
+import { maybeSeedExample } from './lib/exampleSeed'
 import { registerAppRemount } from './lib/appRemount'
 import { readLinkedSnapshot } from './lib/linkedDataFile'
 
@@ -24,7 +22,7 @@ async function hydrateFromLinkedFile(): Promise<void> {
       console.warn('[data] Linked file not loaded:', snap.error)
       return
     }
-    const result = applyAppDataToLocalStorage(snap as AppDataSnapshot)
+    const result = hydrateOnStartup(snap)
     if (!result.ok) {
       console.warn('[data] Failed to apply linked file:', result.error)
     }
@@ -53,6 +51,8 @@ registerAppRemount(() => {
   renderApp()
 })
 
-void hydrateFromLinkedFile().finally(() => {
-  renderApp()
-})
+void hydrateFromLinkedFile()
+  .then(() => maybeSeedExample())
+  .finally(() => {
+    renderApp()
+  })

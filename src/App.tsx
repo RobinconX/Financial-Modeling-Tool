@@ -15,6 +15,7 @@ import { usePortfolioContributions } from './hooks/usePortfolioContributions'
 import { DataSettingsPanel } from './components/settings/DataSettingsPanel'
 import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
+import { getAccountHint } from './lib/accountCatalog'
 import type { AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
@@ -259,6 +260,7 @@ export default function App() {
   }
 
   const meta = TAB_META[tab]
+  const accountHint = getAccountHint()
 
   return (
     <div className="flex h-screen overflow-hidden">
@@ -273,14 +275,30 @@ export default function App() {
           {navCollapsed ? (
             <p
               className="text-xs font-bold text-emerald-400/90"
-              title="Financial Modeling Tool"
+              title={
+                accountHint
+                  ? `Financial Modeling Tool — ${accountHint.name}`
+                  : 'Financial Modeling Tool'
+              }
             >
               FM
             </p>
           ) : (
-            <h1 className="text-base font-bold leading-snug tracking-tight text-emerald-400/90">
-              Financial Modeling Tool
-            </h1>
+            <div>
+              <h1 className="text-base font-bold leading-snug tracking-tight text-emerald-400/90">
+                Financial Modeling Tool
+              </h1>
+              {accountHint ? (
+                <button
+                  type="button"
+                  className="mt-0.5 block max-w-full truncate text-left text-[11px] text-white/45 hover:text-white/75"
+                  title="Open Data & backup to switch accounts"
+                  onClick={() => setTab('settings')}
+                >
+                  {accountHint.name}
+                </button>
+              ) : null}
+            </div>
           )}
         </div>
 

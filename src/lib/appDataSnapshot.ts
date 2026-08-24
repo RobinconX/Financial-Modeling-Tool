@@ -13,6 +13,10 @@ import type {
   SavingsState,
   PortfolioContributionsState,
 } from '../types'
+import { emptyIncomeCostState } from './incomeCost'
+import { defaultOverviewState } from './overview'
+import { emptyPortfolioContributions } from './portfolioContributions'
+import { emptySavingsState } from './savings'
 import { loadScenarios, saveScenarios } from './storage'
 import { loadPortfolios, savePortfolios } from './portfolioStorage'
 import { loadIncomeCost, saveIncomeCost } from './incomeCostStorage'
@@ -60,6 +64,23 @@ export function collectAppData(): AppDataSnapshot {
     annotations: loadAnnotations(),
     goals: loadGoals(),
     portfolioContributions: loadPortfolioContributions(),
+  }
+}
+
+/** Blank model — same shape as a first-time user. */
+export function emptyAppData(): AppDataSnapshot {
+  return {
+    version: APP_DATA_SNAPSHOT_VERSION,
+    exportedAt: new Date().toISOString(),
+    scenarios: [],
+    portfolios: [],
+    incomeCost: emptyIncomeCostState(),
+    savings: emptySavingsState(),
+    overview: defaultOverviewState(),
+    comparables: [],
+    annotations: [],
+    goals: [],
+    portfolioContributions: emptyPortfolioContributions(),
   }
 }
 
