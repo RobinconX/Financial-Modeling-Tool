@@ -1,5 +1,6 @@
 import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import type {
+  ComparableBasis,
   EasyProjection,
   Quote,
   SavedScenario,
@@ -40,6 +41,8 @@ type Props = {
    * Saved scenario to edit (auto-persist). Null = draft (TickerSearch + Save).
    */
   scenario: SavedScenario | null
+  /** Valuation basis to show when opening from Comparables */
+  initialBasis?: ComparableBasis
   onUpsertScenario: (
     input: SaveInput,
   ) => { scenario: SavedScenario; overwritten: boolean } | { error: string }
@@ -64,6 +67,7 @@ function scenarioToQuote(sc: SavedScenario): Quote {
 export function ProjectionPanel({
   title,
   scenario,
+  initialBasis,
   onUpsertScenario,
   onUpdateScenario,
   onDraftSaved,
@@ -82,7 +86,9 @@ export function ProjectionPanel({
   const [fetchError, setFetchError] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
-  const [selectedBasis, setSelectedBasis] = useState<ValuationBasis | 'easy'>('easy')
+  const [selectedBasis, setSelectedBasis] = useState<ValuationBasis | 'easy'>(
+    initialBasis ?? 'easy',
+  )
   /** Assumptions collapsed by default so ROI / charts lead; expand to edit. */
   const [easyOpen, setEasyOpen] = useState(isDraft)
   const [advancedOpen, setAdvancedOpen] = useState(false)
@@ -104,11 +110,11 @@ export function ProjectionPanel({
   // Prefer easy hero when switching saved scenario; collapse assumptions
   useEffect(() => {
     if (!scenario) return
-    setSelectedBasis('easy')
+    setSelectedBasis(initialBasis ?? 'easy')
     setRefreshError(null)
     setEasyOpen(false)
     setAdvancedOpen(false)
-  }, [scenario?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+  }, [scenario?.id, initialBasis]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const quote: Quote | null = isDraft ? draftQuote : scenario ? scenarioToQuote(scenario) : null
   const mcapOverride = isDraft ? draftMcapOverride : (scenario?.mcapOverride ?? null)

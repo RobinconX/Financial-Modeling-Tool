@@ -14,6 +14,7 @@ import {
   type PortfolioChartMode,
 } from '../../lib/portfolio'
 import { fetchFxRateClient } from '../../lib/fx'
+import { parseMoney } from '../../lib/format'
 import {
   PortfolioHoldingsEditor,
   type PortfolioEditorPanel,
@@ -31,6 +32,7 @@ const PANEL_KEY = 'grok-lab-portfolio-panel'
 const CHART_MODE_KEY = 'grok-lab-portfolio-chart-mode'
 const CASH_INVESTED_KEY = 'grok-lab-portfolio-cash-invested'
 const SHOW_ROI_KEY = 'grok-lab-portfolio-show-roi'
+const SHOW_TARGET_KEY = 'grok-lab-portfolio-show-target'
 
 type WorkspaceTab = 'chart' | 'actuals' | PortfolioEditorPanel
 
@@ -104,6 +106,14 @@ function readShowRoi(): boolean {
   }
 }
 
+function readShowTarget(): boolean {
+  try {
+    return localStorage.getItem(SHOW_TARGET_KEY) === '1'
+  } catch {
+    return false
+  }
+}
+
 type Props = {
   scenarios: SavedScenario[]
   portfolios: SavedPortfolio[]
@@ -145,6 +155,10 @@ export function PortfolioView({
   const [chartMode, setChartMode] = useState<PortfolioChartMode>(readChartMode)
   const [showCashInvested, setShowCashInvested] = useState(readCashInvested)
   const [showRoi, setShowRoi] = useState(readShowRoi)
+  const [showTarget, setShowTarget] = useState(readShowTarget)
+  const [anchorDraft, setAnchorDraft] = useState('')
+  const [rateDraft, setRateDraft] = useState('')
+  const [yearDraft, setYearDraft] = useState('')
   const [displayCurrency, setDisplayCurrency] = useState<DisplayCurrency>(readCurrency)
   const [usdToChf, setUsdToChf] = useState<number | null>(null)
   const [fxAsOf, setFxAsOf] = useState<string | null>(null)
@@ -269,6 +283,50 @@ export function PortfolioView({
     baseGrid && baseGrid.years.length > 0 ? baseGrid.years[0]! : currentYear
 
   const selectedPortfolioId = selected?.id ?? null
+
+  useEffect(() => {
+    const t = selected?.targetCompound
+    setAnchorDraft(t != null && t.amount > 0 ? String(t.amount) : '')
+    setRateDraft(t != null && Number.isFinite(t.ratePercent) ? String(t.ratePercent) : '')
+    setYearDraft(
+      t != null && Number.isFinite(t.year) ? String(t.year) : String(currentYear),
+    )
+  }, [
+    selectedPortfolioId,
+    selected?.targetCompound?.amount,
+    selected?.targetCompound?.ratePercent,
+    selected?.targetCompound?.currency,
+    selected?.targetCompound?.year,
+    currentYear,
+  ])
+
+  function commitTarget() {
+    if (!selected) return
+    const amount = parseMoney(anchorDraft)
+    const rate = Number(rateDraft)
+    if (amount == null || !(amount > 0) || !Number.isFinite(rate)) {
+      if (selected.targetCompound) updatePortfolio(selected.id, { targetCompound: null })
+      if (amount == null || !(amount > 0)) setAnchorDraft('')
+      if (!Number.isFinite(rate)) setRateDraft('')
+      return
+    }
+    const parsedYear = Number(yearDraft)
+    const year =
+      Number.isFinite(parsedYear) && parsedYear >= 1000 && parsedYear <= 9999
+        ? Math.floor(parsedYear)
+        : (selected.targetCompound?.year ?? currentYear)
+    updatePortfolio(selected.id, {
+      targetCompound: {
+        amount,
+        currency: displayCurrency,
+        ratePercent: rate,
+        year,
+      },
+    })
+    setAnchorDraft(String(amount))
+    setRateDraft(String(rate))
+    setYearDraft(String(year))
+  }
 
   function autoFromYear() {
     const earliest =
@@ -720,6 +778,7 @@ export function PortfolioView({
         <div className="panel min-h-0 min-w-0 space-y-5">
             {panel === 'chart' && grid && (
               <div className="space-y-5">
+                <div className="space-y-2">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="flex items-center gap-1.5">
                     <h3 className="section-title">Portfolio value</h3>
@@ -801,6 +860,28 @@ export function PortfolioView({
                     >
                       ROI
                     </button>
+                    <button
+                      type="button"
+                      role="switch"
+                      aria-checked={showTarget}
+                      title="Overlay a compounding target from an anchor year, adding cash contributions"
+                      className={`rounded-md px-2 py-1 text-[11px] transition ${
+                        showTarget
+                          ? 'bg-red-500/20 text-red-200'
+                          : 'text-white/45 hover:bg-white/5 hover:text-white/70'
+                      }`}
+                      onClick={() => {
+                        const next = !showTarget
+                        setShowTarget(next)
+                        try {
+                          localStorage.setItem(SHOW_TARGET_KEY, next ? '1' : '0')
+                        } catch {
+                          /* ignore */
+                        }
+                      }}
+                    >
+                      Target
+                    </button>
                     <label className="flex items-center gap-1.5 text-xs text-white/50">
                       From
                       <input
@@ -848,6 +929,53 @@ export function PortfolioView({
                     </button>
                   </div>
                 </div>
+                {showTarget ? (
+                  <div className="flex flex-wrap items-center justify-end gap-2">
+                    <label className="flex items-center gap-1.5 text-xs text-white/50">
+                      Year
+                      <input
+                        className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
+                        type="number"
+                        value={yearDraft}
+                        onChange={(e) => setYearDraft(e.target.value)}
+                        onBlur={commitTarget}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                        }}
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-white/50">
+                      Anchor
+                      <input
+                        className="input !w-[5.5rem] !py-1 !text-xs tabular-nums"
+                        inputMode="decimal"
+                        placeholder={displayCurrency === 'CHF' ? 'CHF' : '$'}
+                        value={anchorDraft}
+                        onChange={(e) => setAnchorDraft(e.target.value)}
+                        onBlur={commitTarget}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                        }}
+                      />
+                    </label>
+                    <label className="flex items-center gap-1.5 text-xs text-white/50">
+                      Rate
+                      <input
+                        className="input !w-14 !py-1 !text-xs tabular-nums"
+                        inputMode="decimal"
+                        placeholder="%"
+                        value={rateDraft}
+                        onChange={(e) => setRateDraft(e.target.value)}
+                        onBlur={commitTarget}
+                        onKeyDown={(e) => {
+                          if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
+                        }}
+                      />
+                      <span className="text-white/35">%</span>
+                    </label>
+                  </div>
+                ) : null}
+                </div>
                 <FullscreenChart title="Portfolio value over time">
                   <PortfolioChart
                     key={`chart-${selected.id}-${selected.updatedAt}-${periodFrom}-${periodTo}-${chartMode}-${grid.years.join(',')}`}
@@ -862,6 +990,7 @@ export function PortfolioView({
                     contributions={contributions}
                     showCashInvested={showCashInvested}
                     showRoi={showRoi}
+                    showTarget={showTarget}
                   />
                 </FullscreenChart>
                 <div className="relative z-20 border-t border-white/[0.06] pt-4">

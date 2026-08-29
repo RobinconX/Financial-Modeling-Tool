@@ -1,5 +1,10 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
-import type { SavedComparable, SavedPortfolio, SavedScenario } from '../../types'
+import type {
+  ComparableBasis,
+  SavedComparable,
+  SavedPortfolio,
+  SavedScenario,
+} from '../../types'
 import {
   deleteScenarioConfirmMessage,
   portfoliosUsingScenario,
@@ -227,6 +232,7 @@ export function ProjectionsView({
   /** Selection: DRAFT or scenario id */
   const [selA, setSelA] = useState<string>(() => sorted[0]?.id ?? DRAFT)
   const [selB, setSelB] = useState<string>(DRAFT)
+  const [openBasis, setOpenBasis] = useState<ComparableBasis | undefined>(undefined)
 
   // Keep A valid when list changes
   useEffect(() => {
@@ -299,6 +305,12 @@ export function ProjectionsView({
           createComparable={createComparable}
           updateComparable={updateComparable}
           deleteComparable={deleteComparable}
+          onOpenProjection={(id, basis) => {
+            setSelA(id)
+            setOpenBasis(basis)
+            setCompare(false)
+            setMode('analyze')
+          }}
         />
       ) : (
         <>
@@ -306,7 +318,10 @@ export function ProjectionsView({
         <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
           <ProjectionSelector
             value={selA}
-            onChange={setSelA}
+            onChange={(id) => {
+              setOpenBasis(undefined)
+              setSelA(id)
+            }}
             scenarios={sorted}
             id="proj-select-a"
           />
@@ -360,6 +375,7 @@ export function ProjectionsView({
           key={`a-${selA}`}
           title={compare ? 'Panel A' : undefined}
           scenario={scenarioA}
+          initialBasis={openBasis}
           onUpsertScenario={upsertScenario}
           onUpdateScenario={updateScenario}
           onDraftSaved={(sc) => setSelA(sc.id)}

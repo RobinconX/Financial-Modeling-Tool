@@ -608,6 +608,9 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
     holdingSort: source.holdingSort,
     actuals: source.actuals ? { ...source.actuals } : undefined,
     actualsCurrency: source.actualsCurrency,
+    targetCompound: source.targetCompound
+      ? { ...source.targetCompound }
+      : null,
     createdAt: now,
     updatedAt: now,
   })
@@ -1482,6 +1485,37 @@ export const PERPETUAL_GROWTH_COLOR = '#22c55e'
 export const PORTFOLIO_TOTAL_CHART_KEY = 'portfolioTotal'
 export const PORTFOLIO_TOTAL_COLOR = '#38bdf8'
 export const PORTFOLIO_ACTUAL_COLOR = '#f59e0b'
+export const PORTFOLIO_TARGET_CHART_KEY = 'targetCompound'
+export const PORTFOLIO_TARGET_COLOR = '#ef4444'
+
+/**
+ * Target path from a year-end anchor (USD book), then the same rule as years
+ * beyond projections: V_y = V_{y-1} × (1 + r/100) + depositInYear(y).
+ * Years before the anchor are null. Now uses the current-year path when
+ * currentYear ≥ anchorYear.
+ */
+export function targetCompoundValue(
+  amountUsd: number,
+  ratePercent: number,
+  anchorYear: number,
+  currentYear: number,
+  point: { isNow: boolean; year: number | null },
+  portfolio: SavedPortfolio,
+): number | null {
+  if (!(amountUsd > 0) || !Number.isFinite(ratePercent) || !Number.isFinite(anchorYear)) {
+    return null
+  }
+  const year = point.isNow ? currentYear : point.year
+  if (year == null || year < anchorYear) return null
+  if (year === anchorYear) return amountUsd
+  return compoundWithGrowthAndDeposits(
+    amountUsd,
+    anchorYear,
+    year,
+    ratePercent,
+    portfolio,
+  )
+}
 
 export type PortfolioChartMode = 'stacked' | 'total'
 

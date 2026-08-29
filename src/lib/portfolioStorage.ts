@@ -243,6 +243,26 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
       ? raw.holdingSort
       : undefined
 
+  let targetCompound: SavedPortfolio['targetCompound'] = null
+  if (isRecord(raw.targetCompound)) {
+    const amount = asNumber(raw.targetCompound.amount, NaN)
+    const ratePercent = asNumber(raw.targetCompound.ratePercent, NaN)
+    if (Number.isFinite(amount) && amount > 0 && Number.isFinite(ratePercent)) {
+      const yearRaw = asNumber(raw.targetCompound.year, NaN)
+      const year =
+        Number.isFinite(yearRaw) && yearRaw >= 1000 && yearRaw <= 9999
+          ? Math.floor(yearRaw)
+          : new Date().getFullYear()
+      targetCompound = {
+        amount,
+        currency:
+          raw.targetCompound.currency === 'CHF' ? 'CHF' : 'USD',
+        ratePercent,
+        year,
+      }
+    }
+  }
+
   return normalizePortfolioCashModel({
     id,
     name,
@@ -255,6 +275,7 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     holdingSort,
     actuals,
     actualsCurrency,
+    targetCompound,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   })

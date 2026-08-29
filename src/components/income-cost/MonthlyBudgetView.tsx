@@ -1,9 +1,8 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import {
   Bar,
   CartesianGrid,
   ComposedChart,
-  Legend,
   Line,
   ResponsiveContainer,
   Tooltip,
@@ -53,14 +52,83 @@ function formatAxis(v: number): string {
   return String(Math.round(v))
 }
 
-/** Tooltip / legend order = action sequence top → bottom */
-const TOOLTIP_ORDER = [
-  'Inflow',
-  'Outflow (budget)',
-  'Working balance',
-  'Draws',
-  'After draws',
+const SERIES_VIS_KEY = 'grok-lab-ic-monthly-series'
+
+/** Chart + table + summary: same names, order, and colors */
+const FLOW_SERIES = [
+  {
+    dataKey: 'income',
+    name: 'Inflow',
+    kind: 'bar' as const,
+    color: '#34d399',
+    fillOpacity: 0.85,
+  },
+  {
+    dataKey: 'cost',
+    name: 'Outflow',
+    kind: 'bar' as const,
+    color: '#fbbf24',
+    fillOpacity: 0.8,
+  },
+  {
+    dataKey: 'balance',
+    name: 'Balance',
+    kind: 'line' as const,
+    color: '#38bdf8',
+  },
+  {
+    dataKey: 'draw',
+    name: 'Draws',
+    kind: 'bar' as const,
+    color: '#f472b6',
+    fillOpacity: 0.85,
+  },
+  {
+    dataKey: 'balanceAfterDraws',
+    name: 'After draws',
+    kind: 'line' as const,
+    color: '#a78bfa',
+    dash: '5 4',
+  },
 ] as const
+
+type SeriesId = (typeof FLOW_SERIES)[number]['dataKey']
+type SeriesVisible = Record<SeriesId, boolean>
+
+const ALL_SERIES_ON: SeriesVisible = {
+  income: true,
+  cost: true,
+  balance: true,
+  draw: true,
+  balanceAfterDraws: true,
+}
+
+const TOOLTIP_ORDER: readonly string[] = FLOW_SERIES.map((s) => s.name)
+
+function readSeriesVisible(): SeriesVisible {
+  try {
+    const raw = localStorage.getItem(SERIES_VIS_KEY)
+    if (!raw) return { ...ALL_SERIES_ON }
+    const parsed: unknown = JSON.parse(raw)
+    if (!parsed || typeof parsed !== 'object') return { ...ALL_SERIES_ON }
+    const rec = parsed as Record<string, unknown>
+    const next = { ...ALL_SERIES_ON }
+    for (const s of FLOW_SERIES) {
+      if (rec[s.dataKey] === false) next[s.dataKey] = false
+    }
+    return next
+  } catch {
+    return { ...ALL_SERIES_ON }
+  }
+}
+
+function writeSeriesVisible(v: SeriesVisible) {
+  try {
+    localStorage.setItem(SERIES_VIS_KEY, JSON.stringify(v))
+  } catch {
+    /* ignore */
+  }
+}
 
 type TipPayloadItem = {
   name?: string
@@ -88,9 +156,7 @@ function MonthlyFlowTooltip({
   // Any unexpected series last
   for (const p of payload) {
     const n = String(p.name ?? p.dataKey ?? '')
-    if (!TOOLTIP_ORDER.includes(n as (typeof TOOLTIP_ORDER)[number])) {
-      ordered.push(p)
-    }
+    if (!TOOLTIP_ORDER.includes(n)) ordered.push(p)
   }
   return (
     <div className="rounded-lg border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
@@ -122,16 +188,66 @@ function MonthlyFlowTooltip({
   )
 }
 
+function SeriesLegend({
+  visible,
+  onToggle,
+}: {
+  visible: SeriesVisible
+  onToggle: (id: SeriesId) => void
+}) {
+  return (
+    <div
+      className="flex flex-wrap justify-center gap-x-3 gap-y-1 pt-2"
+      role="group"
+      aria-label="Chart series"
+    >
+      {FLOW_SERIES.map((s) => {
+        const on = visible[s.dataKey]
+        return (
+          <button
+            key={s.dataKey}
+            type="button"
+            role="switch"
+            aria-checked={on}
+            title={on ? `Hide ${s.name}` : `Show ${s.name}`}
+            className={`inline-flex items-center gap-1.5 text-[11px] transition ${
+              on ? 'text-white/70 hover:text-white' : 'text-white/30 hover:text-white/50'
+            }`}
+            onClick={() => onToggle(s.dataKey)}
+          >
+            <span
+              className={
+                s.kind === 'line'
+                  ? 'h-0.5 w-3 shrink-0 rounded-sm'
+                  : 'h-2 w-2 shrink-0 rounded-sm'
+              }
+              style={{ background: s.color, opacity: on ? 1 : 0.35 }}
+            />
+            {s.name}
+          </button>
+        )
+      })}
+    </div>
+  )
+}
+
 function MonthlyFlowChart({
   schedule,
+  seriesOn,
+  onToggleSeries,
   fillContainer = false,
 }: {
   schedule: ReturnType<typeof buildMonthlySchedule>
+  seriesOn: SeriesVisible
+  onToggleSeries: (id: SeriesId) => void
   fillContainer?: boolean
 }) {
   const hasAnyCash = schedule.some(
     (p) => p.income > 0 || p.cost > 0 || p.draw > 0,
   )
+  const visible = FLOW_SERIES.filter((s) => seriesOn[s.dataKey])
+  const showBars = visible.some((s) => s.kind === 'bar')
+  const showLines = visible.some((s) => s.kind === 'line')
   return (
     <div
       className={
@@ -146,6 +262,10 @@ function MonthlyFlowChart({
         {!hasAnyCash ? (
           <div className="flex h-full items-center justify-center text-sm text-white/40">
             Add income, costs, or draws to see the monthly path
+          </div>
+        ) : visible.length === 0 ? (
+          <div className="flex h-full items-center justify-center text-sm text-white/40">
+            Click a series below to show it
           </div>
         ) : (
           <ResponsiveContainer
@@ -164,80 +284,62 @@ function MonthlyFlowChart({
                 tickLine={false}
                 axisLine={{ stroke: 'rgba(255,255,255,0.08)' }}
               />
-              <YAxis
-                yAxisId="flow"
-                tick={{ fill: 'rgba(232,238,245,0.4)', fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                width={48}
-                tickFormatter={formatAxis}
-              />
-              <YAxis
-                yAxisId="bal"
-                orientation="right"
-                tick={{ fill: 'rgba(232,238,245,0.35)', fontSize: 10 }}
-                tickLine={false}
-                axisLine={false}
-                width={48}
-                tickFormatter={formatAxis}
-              />
+              {showBars ? (
+                <YAxis
+                  yAxisId="flow"
+                  tick={{ fill: 'rgba(232,238,245,0.4)', fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                  tickFormatter={formatAxis}
+                />
+              ) : null}
+              {showLines ? (
+                <YAxis
+                  yAxisId="bal"
+                  orientation="right"
+                  tick={{ fill: 'rgba(232,238,245,0.35)', fontSize: 10 }}
+                  tickLine={false}
+                  axisLine={false}
+                  width={48}
+                  tickFormatter={formatAxis}
+                />
+              ) : null}
               <Tooltip content={<MonthlyFlowTooltip />} />
-              <Legend
-                wrapperStyle={{ fontSize: 11, color: 'rgba(232,238,245,0.5)' }}
-              />
-              {/* Series order matches action flow; tooltip uses TOOLTIP_ORDER */}
-              <Bar
-                yAxisId="flow"
-                dataKey="income"
-                name="Inflow"
-                fill="#34d399"
-                fillOpacity={0.85}
-                radius={[3, 3, 0, 0]}
-                isAnimationActive={false}
-              />
-              <Bar
-                yAxisId="flow"
-                dataKey="cost"
-                name="Outflow (budget)"
-                fill="#fbbf24"
-                fillOpacity={0.8}
-                radius={[3, 3, 0, 0]}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="bal"
-                type="monotone"
-                dataKey="balance"
-                name="Working balance"
-                stroke="#38bdf8"
-                strokeWidth={2}
-                dot={{ r: 3, fill: '#38bdf8' }}
-                isAnimationActive={false}
-              />
-              <Bar
-                yAxisId="flow"
-                dataKey="draw"
-                name="Draws"
-                fill="#c084fc"
-                fillOpacity={0.85}
-                radius={[3, 3, 0, 0]}
-                isAnimationActive={false}
-              />
-              <Line
-                yAxisId="bal"
-                type="monotone"
-                dataKey="balanceAfterDraws"
-                name="After draws"
-                stroke="#f472b6"
-                strokeWidth={2}
-                strokeDasharray="5 4"
-                dot={{ r: 3, fill: '#f472b6' }}
-                isAnimationActive={false}
-              />
+              {visible.map((s) =>
+                s.kind === 'bar' ? (
+                  <Bar
+                    key={s.dataKey}
+                    yAxisId="flow"
+                    dataKey={s.dataKey}
+                    name={s.name}
+                    fill={s.color}
+                    fillOpacity={s.fillOpacity}
+                    radius={[3, 3, 0, 0]}
+                    isAnimationActive={false}
+                  />
+                ) : (
+                  <Line
+                    key={s.dataKey}
+                    yAxisId="bal"
+                    type="monotone"
+                    dataKey={s.dataKey}
+                    name={s.name}
+                    stroke={s.color}
+                    strokeWidth={2}
+                    strokeDasharray={'dash' in s ? s.dash : undefined}
+                    dot={{ r: 3, fill: s.color }}
+                    isAnimationActive={false}
+                  />
+                ),
+              )}
             </ComposedChart>
           </ResponsiveContainer>
         )}
       </div>
+      {hasAnyCash ? (
+        <SeriesLegend visible={seriesOn} onToggle={onToggleSeries} />
+      ) : null}
     </div>
   )
 }
@@ -382,6 +484,7 @@ export function MonthlyBudgetView({
   onRemoveDraw,
   onAddDraw,
 }: Props) {
+  const [seriesOn, setSeriesOn] = useState<SeriesVisible>(readSeriesVisible)
   const scenarioDraws = useMemo(
     () => drawsForScenario(draws, scenario.id),
     [draws, scenario.id],
@@ -432,30 +535,32 @@ export function MonthlyBudgetView({
           <Meta
             label={`Opening cash (Dec ${priorYear})`}
             value={formatMoney(openingCash, INCOME_COST_CURRENCY)}
-            accent="text-emerald-300/90"
+            accent="text-sky-300/90"
           />
           <Meta
             label="Annual income"
             value={formatMoney(totals.incomeYearly, INCOME_COST_CURRENCY)}
+            accent="text-emerald-300/90"
           />
           <Meta
             label="Annual cost"
             value={formatMoney(totals.costYearly, INCOME_COST_CURRENCY)}
+            accent="text-amber-200/90"
           />
           <Meta
             label="Annual net"
             value={formatMoney(totals.netYearly, INCOME_COST_CURRENCY)}
-            accent={totals.netYearly >= 0 ? 'text-emerald-400' : 'text-red-300'}
+            accent={totals.netYearly >= 0 ? 'text-white/90' : 'text-red-300'}
           />
           <Meta
             label="Year-end balance"
             value={formatMoney(yearEndWorking, INCOME_COST_CURRENCY)}
-            accent={yearEndWorking >= 0 ? 'text-sky-300' : 'text-red-300'}
+            accent={yearEndWorking >= 0 ? 'text-sky-300/90' : 'text-red-300'}
           />
           <Meta
             label="After draws (Dec)"
             value={formatMoney(yearEndAfterDraws, INCOME_COST_CURRENCY)}
-            accent={yearEndAfterDraws >= 0 ? 'text-pink-300' : 'text-red-300'}
+            accent={yearEndAfterDraws >= 0 ? 'text-violet-300/90' : 'text-red-300'}
           />
         </div>
       </div>
@@ -477,7 +582,17 @@ export function MonthlyBudgetView({
           </h3>
         </div>
         <FullscreenChart title={`${scenario.year} · monthly cash flow`}>
-          <MonthlyFlowChart schedule={schedule} />
+          <MonthlyFlowChart
+            schedule={schedule}
+            seriesOn={seriesOn}
+            onToggleSeries={(id) => {
+              setSeriesOn((prev) => {
+                const next = { ...prev, [id]: !prev[id] }
+                writeSeriesVisible(next)
+                return next
+              })
+            }}
+          />
         </FullscreenChart>
       </div>
 
@@ -518,14 +633,14 @@ export function MonthlyBudgetView({
                 >
                   {formatMoney(row.balance, INCOME_COST_CURRENCY)}
                 </td>
-                <td className="px-3 py-1.5 text-right tabular-nums text-violet-300/90">
+                <td className="px-3 py-1.5 text-right tabular-nums text-pink-300/90">
                   {row.draw > 0
                     ? formatMoney(row.draw, INCOME_COST_CURRENCY)
                     : '—'}
                 </td>
                 <td
                   className={`px-3 py-1.5 text-right font-medium tabular-nums ${
-                    row.balanceAfterDraws >= 0 ? 'text-pink-300/90' : 'text-red-300'
+                    row.balanceAfterDraws >= 0 ? 'text-violet-300/90' : 'text-red-300'
                   }`}
                 >
                   {formatMoney(row.balanceAfterDraws, INCOME_COST_CURRENCY)}
@@ -557,10 +672,10 @@ export function MonthlyBudgetView({
               <td className="px-3 py-2 text-right tabular-nums text-sky-300/90">
                 {formatMoney(yearEndWorking, INCOME_COST_CURRENCY)}
               </td>
-              <td className="px-3 py-2 text-right tabular-nums text-violet-300/90">
+              <td className="px-3 py-2 text-right tabular-nums text-pink-300/90">
                 {formatMoney(drawsYearTotal, INCOME_COST_CURRENCY)}
               </td>
-              <td className="px-3 py-2 text-right tabular-nums text-pink-300/90">
+              <td className="px-3 py-2 text-right tabular-nums text-violet-300/90">
                 {formatMoney(yearEndAfterDraws, INCOME_COST_CURRENCY)}
               </td>
             </tr>
@@ -576,7 +691,7 @@ export function MonthlyBudgetView({
       />
 
       {drawsYearTotal > 0 && (
-        <p className="text-[11px] text-violet-300/80">
+        <p className="text-[11px] text-pink-300/80">
           Draws this year: {formatMoney(drawsYearTotal, INCOME_COST_CURRENCY)}
         </p>
       )}

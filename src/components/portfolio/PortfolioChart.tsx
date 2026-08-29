@@ -20,7 +20,7 @@ import {
   YAxis,
 } from 'recharts'
 import { formatMoney, formatPercent } from '../../lib/format'
-import { toDisplay } from '../../lib/fx'
+import { fromDisplay, toDisplay } from '../../lib/fx'
 import { investedForRoiDisplay, simpleRoi } from '../../lib/portfolioContributions'
 import type {
   DisplayCurrency,
@@ -37,6 +37,9 @@ import {
   PORTFOLIO_ACTUAL_COLOR,
   PORTFOLIO_TOTAL_CHART_KEY,
   PORTFOLIO_TOTAL_COLOR,
+  PORTFOLIO_TARGET_CHART_KEY,
+  PORTFOLIO_TARGET_COLOR,
+  targetCompoundValue,
   type PortfolioChartBreakdownRow,
   type PortfolioChartMode,
   type PortfolioChartPoint,
@@ -78,6 +81,8 @@ type Props = {
   showCashInvested?: boolean
   /** Overlay ROI % on the bars (right axis) */
   showRoi?: boolean
+  /** Overlay target compound path on the value axis */
+  showTarget?: boolean
   /** Grow to parent height (fullscreen overlay) */
   fillContainer?: boolean
 }
@@ -149,6 +154,7 @@ export function PortfolioChart({
   contributions = null,
   showCashInvested = false,
   showRoi = false,
+  showTarget = false,
   fillContainer = false,
 }: Props) {
   const activeCurrency: DisplayCurrency =
@@ -232,6 +238,21 @@ export function PortfolioChart({
             invested != null && invested > 0 ? simpleRoi(total, invested) : null
           if (r) next.roiPct = r.roi * 100
         }
+        next[PORTFOLIO_TARGET_CHART_KEY] = null
+        if (showTarget && portfolio.targetCompound) {
+          const tc = portfolio.targetCompound
+          const amountUsd = fromDisplay(tc.amount, tc.currency, usdToChf)
+          const usd = targetCompoundValue(
+            amountUsd,
+            tc.ratePercent,
+            tc.year ?? currentYear,
+            currentYear,
+            p,
+            portfolio,
+          )
+          next[PORTFOLIO_TARGET_CHART_KEY] =
+            usd != null ? toDisplay(usd, activeCurrency, usdToChf) : null
+        }
         return next
       })
     } catch (err) {
@@ -249,6 +270,7 @@ export function PortfolioChart({
     fromYear,
     toYear,
     contributions,
+    showTarget,
   ])
 
   const hasCash =
@@ -434,6 +456,7 @@ export function PortfolioChart({
           hasPerpetualGrowth={hasPerpetualGrowth}
           showCashInvested={showCashInvested}
           showRoi={showRoi}
+          showTarget={showTarget}
           selectedXKey={selectedXKey}
           onHover={handleChartHover}
           onClick={handleChartClick}
@@ -457,22 +480,31 @@ export function PortfolioChart({
               usdToChf={usdToChf}
               portfolio={portfolio}
               showCashInvested={showCashInvested}
+              showTarget={showTarget}
             />
           </div>
         )}
       </div>
 
-      {hasActuals || showRoi ? (
+      {hasActuals || showRoi || showTarget ? (
         <p className="mt-1 shrink-0 text-[10px] text-white/35">
           {hasActuals ? (
             <>
               <span className="text-amber-300/90">Amber</span> = manual actuals (year-end)
             </>
           ) : null}
-          {hasActuals && showRoi ? <span className="text-white/25"> · </span> : null}
+          {hasActuals && (showRoi || showTarget) ? (
+            <span className="text-white/25"> · </span>
+          ) : null}
           {showRoi ? (
             <>
               <span className="text-fuchsia-300/90">Fuchsia</span> = ROI
+            </>
+          ) : null}
+          {showRoi && showTarget ? <span className="text-white/25"> · </span> : null}
+          {showTarget ? (
+            <>
+              <span className="text-red-300/90">Red</span> = target compound
             </>
           ) : null}
         </p>
@@ -509,6 +541,7 @@ function HoverPanel({
   usdToChf,
   portfolio,
   showCashInvested,
+  showTarget = false,
 }: {
   point: PortfolioChartPoint
   currency: DisplayCurrency
@@ -517,6 +550,7 @@ function HoverPanel({
   usdToChf: number | null
   portfolio: SavedPortfolio
   showCashInvested: boolean
+  showTarget?: boolean
 }) {
   const title = pointTitle(point)
   const rows = (point.breakdown ?? []).filter((r) => r.value !== 0)
@@ -563,6 +597,33 @@ function HoverPanel({
                 {formatPercent(roi.roi)}
               </span>
             </div>
+          </div>
+        ) : null}
+        {showTarget && typeof point[PORTFOLIO_TARGET_CHART_KEY] === 'number' ? (
+          <div className="mt-1.5 space-y-0.5 text-white/55">
+            <div className="flex justify-between gap-4">
+              <span>Target</span>
+              <span className="tabular-nums text-red-300/90">
+                {formatMoney(point[PORTFOLIO_TARGET_CHART_KEY] as number, currency)}
+              </span>
+            </div>
+            {Number.isFinite(point.total) ? (
+              <div className="flex justify-between gap-4">
+                <span>vs target</span>
+                <span
+                  className={`tabular-nums ${
+                    point.total - (point[PORTFOLIO_TARGET_CHART_KEY] as number) >= 0
+                      ? 'text-emerald-300/90'
+                      : 'text-rose-300/90'
+                  }`}
+                >
+                  {formatMoney(
+                    point.total - (point[PORTFOLIO_TARGET_CHART_KEY] as number),
+                    currency,
+                  )}
+                </span>
+              </div>
+            ) : null}
           </div>
         ) : null}
         {showCashInvested &&
@@ -629,6 +690,7 @@ type BarsPlotProps = {
   hasPerpetualGrowth: boolean
   showCashInvested: boolean
   showRoi: boolean
+  showTarget: boolean
   selectedXKey: string | null
   onHover: (state: {
     isTooltipActive: boolean
@@ -659,6 +721,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
   hasPerpetualGrowth,
   showCashInvested,
   showRoi,
+  showTarget,
   selectedXKey,
   onHover,
   onClick,
@@ -905,6 +968,20 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
             stroke={ROI_LINE_COLOR}
             strokeWidth={2}
             dot={{ r: 2.5, fill: ROI_LINE_COLOR }}
+            connectNulls={false}
+            isAnimationActive={false}
+          />
+        ) : null}
+        {showTarget ? (
+          <Line
+            yAxisId="usd"
+            type="monotone"
+            dataKey={PORTFOLIO_TARGET_CHART_KEY}
+            name="Target"
+            stroke={PORTFOLIO_TARGET_COLOR}
+            strokeWidth={2}
+            strokeDasharray="5 4"
+            dot={{ r: 2.5, fill: PORTFOLIO_TARGET_COLOR }}
             connectNulls={false}
             isAnimationActive={false}
           />

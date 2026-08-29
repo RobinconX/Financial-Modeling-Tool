@@ -4,7 +4,6 @@ import {
   availableBases,
   buildComparableTable,
   defaultBasisForScenario,
-  formatShareCount,
   normalizeFilterYears,
   pruneComparableEntries,
   sortComparableRows,
@@ -31,6 +30,7 @@ type Props = {
   createComparable: (name?: string) => SavedComparable | null
   updateComparable: (id: string, patch: Partial<SavedComparable>) => boolean
   deleteComparable: (id: string) => boolean
+  onOpenProjection?: (scenarioId: string, basis: ComparableBasis) => void
 }
 
 function readSelectedId(list: SavedComparable[]): string | null {
@@ -50,6 +50,7 @@ export function ComparablesView({
   createComparable,
   updateComparable,
   deleteComparable,
+  onOpenProjection,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() => readSelectedId(comparables))
   const [query, setQuery] = useState('')
@@ -421,14 +422,17 @@ export function ComparablesView({
                         Ticker / scenario
                       </th>
                       <th className="px-3 py-2 text-right font-medium">Price now</th>
-                      <th className="px-3 py-2 text-right font-medium">Shares</th>
-                      {visibleYears.map((y) => {
+                      {visibleYears.map((y, yi) => {
                         const active = sortYear === y
                         return (
                           <th
                             key={y}
-                            className={`px-3 py-2 text-right font-medium ${
-                              active ? 'text-emerald-300/90' : ''
+                            className={`border-l px-3 py-2 text-right font-medium ${
+                              yi % 2 === 1 ? 'bg-white/[0.03]' : ''
+                            } ${
+                              active
+                                ? 'border-emerald-500/25 text-emerald-300/90'
+                                : 'border-white/12'
                             }`}
                             colSpan={active ? 3 : 2}
                           >
@@ -445,13 +449,20 @@ export function ComparablesView({
                     <tr className="text-[10px] text-white/35">
                       <th className="sticky left-0 z-10 bg-[#121820]" />
                       <th />
-                      <th />
-                      {visibleYears.map((y) => {
+                      {visibleYears.map((y, yi) => {
                         const active = sortYear === y
+                        const tone = `${yi % 2 === 1 ? 'bg-white/[0.03]' : ''} ${
+                          active ? 'border-emerald-500/25' : 'border-white/12'
+                        }`
                         return (
                           <Fragment key={`h-${y}`}>
-                            <th className="px-3 py-1 text-right font-normal">Price</th>
-                            <th className="px-3 py-1 text-right font-normal">
+                            <th
+                              className={`border-l px-3 py-1 text-right font-normal ${tone}`}
+                            >
+                              <span className="mr-1 tabular-nums text-white/30">{y}</span>
+                              Price
+                            </th>
+                            <th className={`px-3 py-1 text-right font-normal ${tone}`}>
                               <button
                                 type="button"
                                 className={`uppercase tracking-wide ${
@@ -466,7 +477,9 @@ export function ComparablesView({
                               </button>
                             </th>
                             {active ? (
-                              <th className="px-3 py-1 text-right font-normal text-emerald-300/80">
+                              <th
+                                className={`px-3 py-1 text-right font-normal text-emerald-300/80 ${tone}`}
+                              >
                                 ROI p.a.
                               </th>
                             ) : null}
@@ -480,14 +493,23 @@ export function ComparablesView({
                       const sc = scenarios.find((s) => s.id === row.scenarioId)
                       const bases = sc ? availableBases(sc) : [row.basis]
                       return (
-                        <tr key={row.scenarioId} className="border-t border-white/5 text-white/85">
-                          <td className="sticky left-0 z-10 bg-[#121820] px-3 py-2">
+                        <tr
+                          key={row.scenarioId}
+                          className={`group border-t border-white/5 text-white/85 ${
+                            onOpenProjection
+                              ? 'cursor-pointer hover:bg-white/[0.04]'
+                              : ''
+                          }`}
+                          onClick={() => onOpenProjection?.(row.scenarioId, row.basis)}
+                        >
+                          <td className="sticky left-0 z-10 bg-[#121820] px-3 py-2 group-hover:bg-[#141a22]">
                             <div className="flex flex-wrap items-center gap-1.5">
                               <span className="font-medium">{row.label}</span>
                               {bases.length > 1 ? (
                                 <select
                                   className="input !w-auto !py-0.5 !text-[10px]"
                                   value={row.basis}
+                                  onClick={(e) => e.stopPropagation()}
                                   onChange={(e) =>
                                     setBasis(row.scenarioId, e.target.value as ComparableBasis)
                                   }
@@ -509,26 +531,30 @@ export function ComparablesView({
                           <td className="px-3 py-2 text-right tabular-nums">
                             {formatPrice(row.priceNow, row.currency)}
                           </td>
-                          <td className="px-3 py-2 text-right tabular-nums text-white/70">
-                            {formatShareCount(row.shares)}
-                          </td>
-                          {visibleYears.map((y) => {
+                          {visibleYears.map((y, yi) => {
                             const cell = row.byYear[y]
                             const isSort = sortYear === y
+                            const tone = `${yi % 2 === 1 ? 'bg-white/[0.03]' : ''} ${
+                              isSort ? 'border-emerald-500/20' : 'border-white/10'
+                            }`
                             return (
                               <Fragment key={`${row.scenarioId}-${y}`}>
-                                <td className="px-3 py-2 text-right tabular-nums text-white/80">
+                                <td
+                                  className={`border-l px-3 py-2 text-right tabular-nums text-white/80 ${tone}`}
+                                >
                                   {formatPrice(cell?.price ?? null, row.currency)}
                                 </td>
                                 <td
-                                  className={`px-3 py-2 text-right tabular-nums ${
+                                  className={`px-3 py-2 text-right tabular-nums ${tone} ${
                                     isSort ? 'text-emerald-300/90' : ''
                                   }`}
                                 >
                                   {formatPercent(cell?.roi ?? null)}
                                 </td>
                                 {isSort ? (
-                                  <td className="px-3 py-2 text-right tabular-nums text-emerald-300/90">
+                                  <td
+                                    className={`px-3 py-2 text-right tabular-nums text-emerald-300/90 ${tone}`}
+                                  >
                                     {formatPercent(cell?.cagr ?? null)}
                                   </td>
                                 ) : null}

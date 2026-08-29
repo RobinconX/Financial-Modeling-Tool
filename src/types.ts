@@ -565,6 +565,17 @@ export type SavedPortfolio = {
   actuals?: Record<string, number>
   /** Denomination of `actuals` amounts. Missing = USD (legacy). */
   actualsCurrency?: DisplayCurrency
+  /**
+   * Chart overlay: year-end `amount` (in `currency`) at `year`, then
+   * V_y = V_{y-1} × (1 + ratePercent/100) + depositInYear(y) — same as
+   * years beyond projections.
+   */
+  targetCompound?: {
+    amount: number
+    currency: DisplayCurrency
+    ratePercent: number
+    year: number
+  } | null
   createdAt: string
   updatedAt: string
 }
