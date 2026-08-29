@@ -249,6 +249,7 @@ export function PortfolioChart({
             currentYear,
             p,
             portfolio,
+            grid.lastStatedYear ?? currentYear,
           )
           next[PORTFOLIO_TARGET_CHART_KEY] =
             usd != null ? toDisplay(usd, activeCurrency, usdToChf) : null

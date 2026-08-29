@@ -1489,10 +1489,33 @@ export const PORTFOLIO_TARGET_CHART_KEY = 'targetCompound'
 export const PORTFOLIO_TARGET_COLOR = '#ef4444'
 
 /**
- * Target path from a year-end anchor (USD book), then the same rule as years
- * beyond projections: V_y = V_{y-1} × (1 + r/100) + depositInYear(y).
- * Years before the anchor are null. Now uses the current-year path when
- * currentYear ≥ anchorYear.
+ * Cash the target path adds at year-end `year` after the anchor:
+ * scheduled deposits that year, plus perpetual yearly cash only after
+ * the last stated projection year.
+ */
+function targetCashInYear(
+  portfolio: SavedPortfolio,
+  year: number,
+  lastStatedYear: number,
+): number {
+  const explicit = getDeposits(portfolio)
+    .filter((d) => !d.isOpening && d.year === year)
+    .reduce((s, d) => {
+      const n = Number.isFinite(d.amount) ? d.amount : 0
+      return s + Math.max(0, n)
+    }, 0)
+  const perpetual =
+    year > lastStatedYear
+      ? resolvePerpetualYearlyAmount(portfolio.perpetualYearlyDeposit)
+      : 0
+  return explicit + perpetual
+}
+
+/**
+ * Target path: amount at the anchor year, then each later year
+ * V_y = V_{y-1} × (1 + r/100) + expected cash that year.
+ * Perpetual yearly cash starts only after `lastStatedYear`.
+ * Now uses the current-year path when currentYear ≥ anchorYear.
  */
 export function targetCompoundValue(
   amountUsd: number,
@@ -1501,6 +1524,7 @@ export function targetCompoundValue(
   currentYear: number,
   point: { isNow: boolean; year: number | null },
   portfolio: SavedPortfolio,
+  lastStatedYear = currentYear,
 ): number | null {
   if (!(amountUsd > 0) || !Number.isFinite(ratePercent) || !Number.isFinite(anchorYear)) {
     return null
@@ -1508,13 +1532,12 @@ export function targetCompoundValue(
   const year = point.isNow ? currentYear : point.year
   if (year == null || year < anchorYear) return null
   if (year === anchorYear) return amountUsd
-  return compoundWithGrowthAndDeposits(
-    amountUsd,
-    anchorYear,
-    year,
-    ratePercent,
-    portfolio,
-  )
+  let v = amountUsd
+  const r = ratePercent / 100
+  for (let y = anchorYear + 1; y <= year; y++) {
+    v = v * (1 + r) + targetCashInYear(portfolio, y, lastStatedYear)
+  }
+  return v
 }
 
 export type PortfolioChartMode = 'stacked' | 'total'

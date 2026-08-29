@@ -1094,7 +1094,10 @@ describe('surplus-linked deposits', () => {
 describe('targetCompoundValue', () => {
   const empty = basePortfolio({ deposits: [newOpeningDeposit(0, 2026)], holdings: [] })
 
-  it('is the anchor at the anchor year; later years compound like perpetual growth', () => {
+  it('is the anchor at the labeled year; later years compound then add cash', () => {
+    expect(
+      targetCompoundValue(100_000, 7, 2026, 2026, { isNow: true, year: null }, empty),
+    ).toBe(100_000)
     expect(
       targetCompoundValue(100_000, 7, 2026, 2026, { isNow: false, year: 2026 }, empty),
     ).toBe(100_000)
@@ -1104,49 +1107,38 @@ describe('targetCompoundValue', () => {
     expect(
       targetCompoundValue(100_000, 7, 2026, 2026, { isNow: false, year: 2028 }, empty),
     ).toBeCloseTo(100_000 * 1.07 ** 2, 6)
-    expect(
-      targetCompoundValue(100_000, 7, 2026, 2026, { isNow: true, year: null }, empty),
-    ).toBe(100_000)
   })
 
-  it('adds cash contributions after the anchor year, same as years beyond projections', () => {
+  it('year after the anchor compounds then adds scheduled deposits; perpetual only after last projection', () => {
     const p = basePortfolio({
-      deposits: [newOpeningDeposit(10_000, 2026)],
-      holdings: [],
-      perpetualYearlyDeposit: { amount: 1_000, source: 'fixed' },
-    })
-    // 2027: 10000 * 1.1 + 1000 = 12000
-    // 2028: 12000 * 1.1 + 1000 = 14200
-    expect(
-      targetCompoundValue(10_000, 10, 2026, 2026, { isNow: false, year: 2026 }, p),
-    ).toBe(10_000)
-    expect(
-      targetCompoundValue(10_000, 10, 2026, 2026, { isNow: false, year: 2027 }, p),
-    ).toBeCloseTo(12_000, 6)
-    expect(
-      targetCompoundValue(10_000, 10, 2026, 2026, { isNow: false, year: 2028 }, p),
-    ).toBeCloseTo(14_200, 6)
-    expect(
-      compoundWithGrowthAndDeposits(10_000, 2026, 2028, 10, p),
-    ).toBeCloseTo(14_200, 6)
-    expect(
-      targetCompoundValue(10_000, 10, 2026, 2027, { isNow: true, year: null }, p),
-    ).toBeCloseTo(12_000, 6)
-
-    const withOneOff = basePortfolio({
       deposits: [
         newOpeningDeposit(10_000, 2026),
         { id: 'd1', year: 2027, amount: 2_000 },
+        { id: 'd2', year: 2028, amount: 500 },
       ],
       holdings: [],
+      perpetualYearlyDeposit: { amount: 1_000, source: 'fixed' },
     })
-    // 2027: 10000 * 1.1 + 2000 = 13000; 2028: 13000 * 1.1
+    const lastStated = 2028
+    // 2026: 10000 (anchor)
+    // 2027: 10000 * 1.1 + 2000 = 13000 (no perpetual while projections remain)
+    // 2028: 13000 * 1.1 + 500 = 14800
+    // 2029: 14800 * 1.1 + 1000 perpetual = 17280
     expect(
-      targetCompoundValue(10_000, 10, 2026, 2026, { isNow: false, year: 2027 }, withOneOff),
+      targetCompoundValue(10_000, 10, 2026, 2026, { isNow: false, year: 2026 }, p, lastStated),
+    ).toBe(10_000)
+    expect(
+      targetCompoundValue(10_000, 10, 2026, 2026, { isNow: false, year: 2027 }, p, lastStated),
     ).toBeCloseTo(13_000, 6)
     expect(
-      targetCompoundValue(10_000, 10, 2026, 2026, { isNow: false, year: 2028 }, withOneOff),
-    ).toBeCloseTo(14_300, 6)
+      targetCompoundValue(10_000, 10, 2026, 2026, { isNow: false, year: 2028 }, p, lastStated),
+    ).toBeCloseTo(14_800, 6)
+    expect(
+      targetCompoundValue(10_000, 10, 2026, 2026, { isNow: false, year: 2029 }, p, lastStated),
+    ).toBeCloseTo(17_280, 6)
+    expect(
+      targetCompoundValue(10_000, 10, 2026, 2027, { isNow: true, year: null }, p, lastStated),
+    ).toBeCloseTo(13_000, 6)
   })
 
   it('skips years before the anchor and invalid amounts', () => {
