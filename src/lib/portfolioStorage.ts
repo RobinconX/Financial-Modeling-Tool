@@ -11,6 +11,8 @@ import { buildOccSymbol } from './optionContract'
 import { newDeposit, newHolding, normalizePortfolioCashModel } from './portfolio'
 
 export const PORTFOLIO_STORAGE_KEY = 'grok-lab.saved-portfolios.v1'
+/** Legacy UI-only key; still read so older sessions keep their selection. */
+const LEGACY_SELECTED_PORTFOLIO_KEY = 'grok-lab-selected-portfolio'
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null
@@ -282,13 +284,22 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
   })
 }
 
-export function loadPortfolios(): SavedPortfolio[] {
+function readPayload(): Record<string, unknown> | null {
   try {
     const raw = localStorage.getItem(PORTFOLIO_STORAGE_KEY)
-    if (!raw) return []
+    if (!raw) return null
     const parsed: unknown = JSON.parse(raw)
-    if (!isRecord(parsed) || !Array.isArray(parsed.portfolios)) {
-      console.warn('[portfolioStorage] Invalid payload; resetting')
+    return isRecord(parsed) ? parsed : null
+  } catch {
+    return null
+  }
+}
+
+export function loadPortfolios(): SavedPortfolio[] {
+  try {
+    const parsed = readPayload()
+    if (!parsed || !Array.isArray(parsed.portfolios)) {
+      if (parsed) console.warn('[portfolioStorage] Invalid payload; resetting')
       return []
     }
     return parsed.portfolios
@@ -300,14 +311,36 @@ export function loadPortfolios(): SavedPortfolio[] {
   }
 }
 
+export function loadSelectedPortfolioId(): string | null {
+  const parsed = readPayload()
+  if (parsed && typeof parsed.selectedId === 'string' && parsed.selectedId) {
+    return parsed.selectedId
+  }
+  try {
+    const legacy = localStorage.getItem(LEGACY_SELECTED_PORTFOLIO_KEY)
+    return legacy && legacy.length > 0 ? legacy : null
+  } catch {
+    return null
+  }
+}
+
 export function savePortfolios(
   portfolios: SavedPortfolio[],
+  selectedId?: string | null,
 ): { ok: true } | { ok: false; error: string } {
   try {
+    const requested = selectedId !== undefined ? selectedId : loadSelectedPortfolioId()
+    const valid =
+      requested && portfolios.some((p) => p.id === requested) ? requested : null
     localStorage.setItem(
       PORTFOLIO_STORAGE_KEY,
-      JSON.stringify({ version: 1, portfolios }),
+      JSON.stringify({ version: 1, portfolios, selectedId: valid }),
     )
+    try {
+      if (valid) localStorage.setItem(LEGACY_SELECTED_PORTFOLIO_KEY, valid)
+    } catch {
+      /* ignore */
+    }
     queueAppDataChanged()
     return { ok: true }
   } catch (err) {
@@ -319,6 +352,10 @@ export function savePortfolios(
           : 'Failed to save portfolios'
     return { ok: false, error: message }
   }
+}
+
+export function persistSelectedPortfolioId(id: string | null): boolean {
+  return savePortfolios(loadPortfolios(), id).ok
 }
 
 export { newHolding }

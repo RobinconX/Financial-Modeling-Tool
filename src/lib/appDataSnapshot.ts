@@ -18,7 +18,7 @@ import { defaultOverviewState } from './overview'
 import { emptyPortfolioContributions } from './portfolioContributions'
 import { emptySavingsState } from './savings'
 import { loadScenarios, saveScenarios } from './storage'
-import { loadPortfolios, savePortfolios } from './portfolioStorage'
+import { loadPortfolios, loadSelectedPortfolioId, savePortfolios } from './portfolioStorage'
 import { loadIncomeCost, saveIncomeCost } from './incomeCostStorage'
 import { loadSavings, saveSavings } from './savingsStorage'
 import { loadOverview, saveOverview } from './overviewStorage'
@@ -48,6 +48,7 @@ export type AppDataSnapshot = {
   exportedAt: string
   scenarios: SavedScenario[]
   portfolios: SavedPortfolio[]
+  selectedPortfolioId?: string | null
   incomeCost: IncomeCostState
   savings: SavingsState
   overview: OverviewState
@@ -65,6 +66,7 @@ export function collectAppData(): AppDataSnapshot {
     exportedAt: new Date().toISOString(),
     scenarios: loadScenarios(),
     portfolios: loadPortfolios(),
+    selectedPortfolioId: loadSelectedPortfolioId(),
     incomeCost: loadIncomeCost(),
     savings: loadSavings(),
     overview: loadOverview(),
@@ -83,6 +85,7 @@ export function emptyAppData(): AppDataSnapshot {
     exportedAt: new Date().toISOString(),
     scenarios: [],
     portfolios: [],
+    selectedPortfolioId: null,
     incomeCost: emptyIncomeCostState(),
     savings: emptySavingsState(),
     overview: defaultOverviewState(),
@@ -119,6 +122,12 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
       typeof raw.exportedAt === 'string' ? raw.exportedAt : new Date().toISOString(),
     scenarios: raw.scenarios as SavedScenario[],
     portfolios: raw.portfolios as SavedPortfolio[],
+    selectedPortfolioId:
+      typeof raw.selectedPortfolioId === 'string' && raw.selectedPortfolioId
+        ? raw.selectedPortfolioId
+        : raw.selectedPortfolioId === null
+          ? null
+          : undefined,
     incomeCost: raw.incomeCost as IncomeCostState,
     savings: raw.savings as SavingsState,
     overview: raw.overview as OverviewState,
@@ -152,7 +161,7 @@ export function applyAppDataToLocalStorage(
     const r1 = saveScenarios(snapshot.scenarios)
     if (!r1.ok) return { ok: false, error: r1.error }
 
-    const r2 = savePortfolios(snapshot.portfolios)
+    const r2 = savePortfolios(snapshot.portfolios, snapshot.selectedPortfolioId)
     if (!r2.ok) return { ok: false, error: r2.error }
 
     const r3 = saveIncomeCost(snapshot.incomeCost)

@@ -43,6 +43,22 @@ describe('appDataSnapshot', () => {
     expect(parsed.linkedSaveMode).toBe('edits')
   })
 
+  it('keeps selectedPortfolioId on a snapshot', () => {
+    const parsed = parseAppDataSnapshot({
+      version: APP_DATA_SNAPSHOT_VERSION,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      scenarios: [],
+      portfolios: [],
+      selectedPortfolioId: 'port-2',
+      incomeCost: { version: 3, scenarios: [], lines: [], draws: [] },
+      savings: { version: 1, accounts: [] },
+      overview: { version: 2, scenarios: [], selectedScenarioId: null },
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed) return
+    expect(parsed.selectedPortfolioId).toBe('port-2')
+  })
+
   it('still rejects a v2 multi-account envelope as a single snapshot', () => {
     expect(
       parseAppDataSnapshot({

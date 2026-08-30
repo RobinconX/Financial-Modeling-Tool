@@ -16,6 +16,10 @@ import {
 import { fetchFxRateClient } from '../../lib/fx'
 import { parseMoney } from '../../lib/format'
 import {
+  loadSelectedPortfolioId,
+  persistSelectedPortfolioId,
+} from '../../lib/portfolioStorage'
+import {
   PortfolioHoldingsEditor,
   type PortfolioEditorPanel,
 } from './PortfolioHoldingsEditor'
@@ -27,7 +31,6 @@ import { FullscreenChart } from '../common/FullscreenChart'
 import { InfoTip } from '../common/InfoTip'
 
 const CURRENCY_KEY = 'grok-lab-portfolio-currency'
-const SELECTED_PORTFOLIO_KEY = 'grok-lab-selected-portfolio'
 const PANEL_KEY = 'grok-lab-portfolio-panel'
 const CHART_MODE_KEY = 'grok-lab-portfolio-chart-mode'
 const CASH_INVESTED_KEY = 'grok-lab-portfolio-cash-invested'
@@ -54,12 +57,8 @@ function readCurrency(): DisplayCurrency {
 }
 
 function readSelectedPortfolioId(portfolios: SavedPortfolio[]): string | null {
-  try {
-    const v = localStorage.getItem(SELECTED_PORTFOLIO_KEY)
-    if (v && portfolios.some((p) => p.id === v)) return v
-  } catch {
-    /* ignore */
-  }
+  const v = loadSelectedPortfolioId()
+  if (v && portfolios.some((p) => p.id === v)) return v
   return portfolios[0]?.id ?? null
 }
 
@@ -198,13 +197,9 @@ export function PortfolioView({
   }, [chartMode])
 
   useEffect(() => {
-    if (selectedId) {
-      try {
-        localStorage.setItem(SELECTED_PORTFOLIO_KEY, selectedId)
-      } catch {
-        /* ignore */
-      }
-    }
+    if (!selectedId) return
+    if (loadSelectedPortfolioId() === selectedId) return
+    persistSelectedPortfolioId(selectedId)
   }, [selectedId])
 
   const loadFx = useCallback(async () => {
@@ -227,6 +222,11 @@ export function PortfolioView({
 
   useEffect(() => {
     if (selectedId && portfolios.some((p) => p.id === selectedId)) return
+    const stored = loadSelectedPortfolioId()
+    if (stored && portfolios.some((p) => p.id === stored)) {
+      setSelectedId(stored)
+      return
+    }
     setSelectedId(portfolios[0]?.id ?? null)
   }, [portfolios, selectedId])
 
