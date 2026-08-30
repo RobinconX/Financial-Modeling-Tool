@@ -31,6 +31,7 @@ import {
   growthExCash,
   cagrFrom,
   cagrExCash,
+  cagrExCashFromStart,
   withResolvedDepositAmounts,
   yearEndActualUsd,
 } from '../../src/lib/portfolio'
@@ -1233,5 +1234,20 @@ describe('growthExCash and cagrFrom', () => {
     expect(cagrExCash(totals, () => 1_000, 2024, 2026)).toBeCloseTo(0.1, 10)
     // Naive end/start CAGR would be ~19%
     expect(cagrFrom(14_200, 10_000, 2)).toBeGreaterThan(0.18)
+  })
+
+  it('uses the start amount as prior, including the first actual year', () => {
+    const totals = new Map([
+      [2024, 12_000],
+      [2025, 14_200],
+    ])
+    const cash = () => 1_000
+    // First year-end vs start: no cash strip → 12000/10000 − 1 = 20%
+    expect(cagrExCashFromStart(10_000, totals, cash, 2024, 2024)).toBeCloseTo(0.2, 10)
+    // Then 2025 strips cash: (14200 − 1000) / 12000 − 1 = 10%
+    expect(cagrExCashFromStart(10_000, totals, cash, 2024, 2025)).toBeCloseTo(
+      Math.sqrt(1.2 * 1.1) - 1,
+      10,
+    )
   })
 })

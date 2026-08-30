@@ -13,7 +13,7 @@ import type {
 } from '../../types'
 import {
   PORTFOLIO_ACTUAL_COLOR,
-  cagrExCash,
+  cagrExCashFromStart as cagrExCash,
   growthExCash,
   targetCashInYear,
   targetCompoundStep,
@@ -139,25 +139,41 @@ export function PortfolioYearDetail({
       usdToChf,
     )
   }
+  const anchorDisp =
+    tc != null
+      ? toDisplay(fromDisplay(tc.amount, tc.currency, usdToChf), currency, usdToChf)
+      : 0
   const priorTotal =
     point.year != null ? yearTotals?.get(point.year - 1) : undefined
+  const priorForYear =
+    priorTotal ??
+    (tc != null && point.year === tc.year ? anchorDisp : undefined)
+  const vsTypedAnchor =
+    priorTotal == null && tc != null && point.year === tc.year
   const yearPerf =
-    !point.isNow && priorTotal != null && Number.isFinite(total) && point.year != null
-      ? growthExCash(total, priorTotal, cashDispFor(point.year))
+    !point.isNow &&
+    priorForYear != null &&
+    Number.isFinite(total) &&
+    point.year != null
+      ? growthExCash(
+          total,
+          priorForYear,
+          vsTypedAnchor ? 0 : cashDispFor(point.year),
+        )
       : null
-  const totalsForCagr = yearTotals ? new Map(yearTotals) : new Map<number, number>()
-  if (tc != null && !totalsForCagr.has(tc.year)) {
-    totalsForCagr.set(
-      tc.year,
-      toDisplay(fromDisplay(tc.amount, tc.currency, usdToChf), currency, usdToChf),
-    )
-  }
   const cagr =
     !point.isNow &&
     tc != null &&
     point.year != null &&
-    point.year > tc.year
-      ? cagrExCash(totalsForCagr, cashDispFor, tc.year, point.year)
+    point.year >= tc.year &&
+    yearTotals != null
+      ? cagrExCash(
+          anchorDisp,
+          yearTotals,
+          cashDispFor,
+          tc.year,
+          point.year,
+        )
       : null
 
   return (

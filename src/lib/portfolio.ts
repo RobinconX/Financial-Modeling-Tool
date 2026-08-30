@@ -1719,6 +1719,39 @@ export function cagrExCash(
   return product ** (1 / n) - 1
 }
 
+/**
+ * CAGR from a typed starting amount to year-end of `toYear`, stripping cash.
+ * The first year-end is measured vs the start amount with no cash strip
+ * (both are levels for that year). Later years strip that year’s cash.
+ */
+export function cagrExCashFromStart(
+  startAmount: number,
+  totalsByYear: Map<number, number>,
+  cashForYear: (year: number) => number,
+  fromYear: number,
+  toYear: number,
+): number | null {
+  if (!(startAmount > 0) || toYear < fromYear) return null
+  let product = 1
+  let periods = 0
+  let prior = startAmount
+  for (let y = fromYear; y <= toYear; y++) {
+    const end = totalsByYear.get(y)
+    if (end == null) {
+      if (periods === 0) continue
+      return null
+    }
+    const cash = periods === 0 ? 0 : cashForYear(y)
+    const g = growthExCash(end, prior, cash)
+    if (g == null) return null
+    product *= 1 + g
+    periods += 1
+    prior = end
+  }
+  if (periods <= 0) return null
+  return product ** (1 / periods) - 1
+}
+
 export type PortfolioChartMode = 'stacked' | 'total'
 
 export type BuildPortfolioChartOptions = {
