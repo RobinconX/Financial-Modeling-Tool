@@ -567,7 +567,8 @@ export type SavedPortfolio = {
   actualsCurrency?: DisplayCurrency
   /**
    * Chart overlay: `amount` (in `currency`) at `year`. Later years:
-   * V_y = V_{y-1} × (1 + ratePercent/100) + scheduled deposits that year.
+   * V_y = V_{y-1} × (1 + ratePercent/100) + cash that year.
+   * Past years use Money-in; current/future use scheduled deposits.
    * Perpetual yearly cash only after the last stated projection year.
    */
   targetCompound?: {

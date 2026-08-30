@@ -864,7 +864,7 @@ export function PortfolioView({
                       type="button"
                       role="switch"
                       aria-checked={showTarget}
-                      title="Overlay a compounding target from an anchor year, then add expected cash each later year"
+                      title="Overlay a compounding target from an anchor year. Past years add Money-in; later years add planned deposits."
                       className={`rounded-md px-2 py-1 text-[11px] transition ${
                         showTarget
                           ? 'bg-red-500/20 text-red-200'

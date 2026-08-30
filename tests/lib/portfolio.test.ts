@@ -26,6 +26,7 @@ import {
   PORTFOLIO_TOTAL_CHART_KEY,
   resolveDepositAmount,
   sharesAtYear,
+  targetCompoundStep,
   targetCompoundValue,
   withResolvedDepositAmounts,
   yearEndActualUsd,
@@ -1097,7 +1098,7 @@ describe('targetCompoundValue', () => {
   it('is the anchor at the labeled year; later years compound then add cash', () => {
     expect(
       targetCompoundValue(100_000, 7, 2026, 2026, { isNow: true, year: null }, empty),
-    ).toBe(100_000)
+    ).toBeNull()
     expect(
       targetCompoundValue(100_000, 7, 2026, 2026, { isNow: false, year: 2026 }, empty),
     ).toBe(100_000)
@@ -1138,7 +1139,7 @@ describe('targetCompoundValue', () => {
     ).toBeCloseTo(17_280, 6)
     expect(
       targetCompoundValue(10_000, 10, 2026, 2027, { isNow: true, year: null }, p, lastStated),
-    ).toBeCloseTo(13_000, 6)
+    ).toBeNull()
   })
 
   it('skips years before the anchor and invalid amounts', () => {
@@ -1150,6 +1151,59 @@ describe('targetCompoundValue', () => {
     ).toBeNull()
     expect(
       targetCompoundValue(0, 7, 2026, 2026, { isNow: false, year: 2026 }, empty),
+    ).toBeNull()
+  })
+
+  it('uses Money-in as cash in past years when compounding from an older base', () => {
+    const p = basePortfolio({
+      deposits: [newOpeningDeposit(0, 2026), { id: 'd1', year: 2026, amount: 9_999 }],
+      holdings: [],
+    })
+    const moneyIn = {
+      version: 1 as const,
+      currency: 'USD' as const,
+      byYear: { '2025': 2_000, '2026': 3_000 },
+    }
+    // 2024: 10000 (anchor). 2025 is past vs currentYear 2026 → + money-in 2000
+    // 2025: 10000 * 1.1 + 2000 = 13000
+    // 2026 current: scheduled deposit 9999 (not money-in 3000)
+    // 2026: 13000 * 1.1 + 9999 = 24299
+    expect(
+      targetCompoundValue(
+        10_000, 10, 2024, 2026, { isNow: false, year: 2024 }, p, 2028, moneyIn,
+      ),
+    ).toBe(10_000)
+    expect(
+      targetCompoundValue(
+        10_000, 10, 2024, 2026, { isNow: false, year: 2025 }, p, 2028, moneyIn,
+      ),
+    ).toBeCloseTo(13_000, 6)
+    expect(
+      targetCompoundValue(
+        10_000, 10, 2024, 2026, { isNow: false, year: 2026 }, p, 2028, moneyIn,
+      ),
+    ).toBeCloseTo(24_299, 6)
+  })
+
+  it('explains one year-end step from the prior target', () => {
+    const p = basePortfolio({
+      deposits: [newOpeningDeposit(0, 2026), { id: 'd1', year: 2027, amount: 2_000 }],
+      holdings: [],
+    })
+    const anchor = targetCompoundStep(10_000, 10, 2026, 2026, 2026, p, 2028)
+    expect(anchor).toMatchObject({ isAnchor: true, targetUsd: 10_000, cashUsd: 0 })
+    const step = targetCompoundStep(10_000, 10, 2026, 2026, 2027, p, 2028)
+    expect(step).toMatchObject({
+      isAnchor: false,
+      priorUsd: 10_000,
+      grownUsd: 11_000,
+      cashUsd: 2_000,
+      cashLabel: 'Deposits',
+      targetUsd: 13_000,
+    })
+    expect(targetCompoundStep(10_000, 10, 2026, 2026, 2026, p, 2028)).toBeTruthy()
+    expect(
+      targetCompoundStep(10_000, 10, 2026, 2026, 2025, p, 2028),
     ).toBeNull()
   })
 })

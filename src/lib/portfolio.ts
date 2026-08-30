@@ -5,6 +5,7 @@ import type {
   PortfolioAction,
   PortfolioDeposit,
   PortfolioDepositSource,
+  PortfolioContributionsState,
   PortfolioGrid,
   PortfolioGridRow,
   OptionContract,
@@ -14,7 +15,7 @@ import type {
   ValuationBasis,
 } from '../types'
 import { scenarioTotals } from './incomeCost'
-import { fixedAmountToUsd } from './fx'
+import { fixedAmountToUsd, fromDisplay } from './fx'
 import {
   effectiveMarketCap,
   impliedSharePrice,
@@ -1488,16 +1489,33 @@ export const PORTFOLIO_ACTUAL_COLOR = '#f59e0b'
 export const PORTFOLIO_TARGET_CHART_KEY = 'targetCompound'
 export const PORTFOLIO_TARGET_COLOR = '#ef4444'
 
+function moneyInUsdForYear(
+  contributions: PortfolioContributionsState | null | undefined,
+  year: number,
+  usdToChf: number | null,
+): number {
+  if (!contributions) return 0
+  const raw = contributions.byYear[String(year)]
+  if (!(Number.isFinite(raw) && raw > 0)) return 0
+  return fromDisplay(raw, contributions.currency, usdToChf)
+}
+
 /**
- * Cash the target path adds at year-end `year` after the anchor:
- * scheduled deposits that year, plus perpetual yearly cash only after
- * the last stated projection year.
+ * Cash the target path adds at year-end `year` after the anchor.
+ * Past years: Money-in for that year. Current/future: scheduled deposits,
+ * plus perpetual yearly cash only after the last stated projection year.
  */
 function targetCashInYear(
   portfolio: SavedPortfolio,
   year: number,
+  currentYear: number,
   lastStatedYear: number,
+  contributions: PortfolioContributionsState | null | undefined,
+  usdToChf: number | null,
 ): number {
+  if (year < currentYear) {
+    return moneyInUsdForYear(contributions, year, usdToChf)
+  }
   const explicit = getDeposits(portfolio)
     .filter((d) => !d.isOpening && d.year === year)
     .reduce((s, d) => {
@@ -1513,9 +1531,10 @@ function targetCashInYear(
 
 /**
  * Target path: amount at the anchor year, then each later year
- * V_y = V_{y-1} × (1 + r/100) + expected cash that year.
+ * V_y = V_{y-1} × (1 + r/100) + cash that year.
+ * Past years use Money-in; later years use planned deposits.
  * Perpetual yearly cash starts only after `lastStatedYear`.
- * Now uses the current-year path when currentYear ≥ anchorYear.
+ * Now is skipped — the path is year-end only.
  */
 export function targetCompoundValue(
   amountUsd: number,
@@ -1525,19 +1544,132 @@ export function targetCompoundValue(
   point: { isNow: boolean; year: number | null },
   portfolio: SavedPortfolio,
   lastStatedYear = currentYear,
+  contributions?: PortfolioContributionsState | null,
+  usdToChf: number | null = null,
 ): number | null {
   if (!(amountUsd > 0) || !Number.isFinite(ratePercent) || !Number.isFinite(anchorYear)) {
     return null
   }
-  const year = point.isNow ? currentYear : point.year
+  if (point.isNow) return null
+  const year = point.year
   if (year == null || year < anchorYear) return null
   if (year === anchorYear) return amountUsd
   let v = amountUsd
   const r = ratePercent / 100
   for (let y = anchorYear + 1; y <= year; y++) {
-    v = v * (1 + r) + targetCashInYear(portfolio, y, lastStatedYear)
+    v =
+      v * (1 + r) +
+      targetCashInYear(
+        portfolio,
+        y,
+        currentYear,
+        lastStatedYear,
+        contributions,
+        usdToChf,
+      )
   }
   return v
+}
+
+export type TargetCashLabel = 'Money in' | 'Deposits' | 'Yearly cash' | 'Deposits + yearly cash'
+
+export type TargetCompoundStep = {
+  year: number
+  isAnchor: boolean
+  ratePercent: number
+  priorUsd: number | null
+  grownUsd: number | null
+  cashUsd: number
+  cashLabel: TargetCashLabel | null
+  targetUsd: number
+}
+
+function targetCashLabel(
+  year: number,
+  currentYear: number,
+  lastStatedYear: number,
+  cashUsd: number,
+  portfolio: SavedPortfolio,
+): TargetCashLabel | null {
+  if (!(cashUsd > 0)) return null
+  if (year < currentYear) return 'Money in'
+  const perpetual =
+    year > lastStatedYear
+      ? resolvePerpetualYearlyAmount(portfolio.perpetualYearlyDeposit)
+      : 0
+  const explicit = cashUsd - perpetual
+  if (explicit > 0 && perpetual > 0) return 'Deposits + yearly cash'
+  if (perpetual > 0) return 'Yearly cash'
+  return 'Deposits'
+}
+
+/** One year-end step on the target path, for the year-detail panel. */
+export function targetCompoundStep(
+  amountUsd: number,
+  ratePercent: number,
+  anchorYear: number,
+  currentYear: number,
+  year: number,
+  portfolio: SavedPortfolio,
+  lastStatedYear = currentYear,
+  contributions?: PortfolioContributionsState | null,
+  usdToChf: number | null = null,
+): TargetCompoundStep | null {
+  const targetUsd = targetCompoundValue(
+    amountUsd,
+    ratePercent,
+    anchorYear,
+    currentYear,
+    { isNow: false, year },
+    portfolio,
+    lastStatedYear,
+    contributions,
+    usdToChf,
+  )
+  if (targetUsd == null) return null
+  if (year === anchorYear) {
+    return {
+      year,
+      isAnchor: true,
+      ratePercent,
+      priorUsd: null,
+      grownUsd: null,
+      cashUsd: 0,
+      cashLabel: null,
+      targetUsd,
+    }
+  }
+  const priorUsd = targetCompoundValue(
+    amountUsd,
+    ratePercent,
+    anchorYear,
+    currentYear,
+    { isNow: false, year: year - 1 },
+    portfolio,
+    lastStatedYear,
+    contributions,
+    usdToChf,
+  )
+  if (priorUsd == null) return null
+  const grownUsd = priorUsd * (1 + ratePercent / 100)
+  const cashUsd = targetCashInYear(
+    portfolio,
+    year,
+    currentYear,
+    lastStatedYear,
+    contributions,
+    usdToChf,
+  )
+  return {
+    year,
+    isAnchor: false,
+    ratePercent,
+    priorUsd,
+    grownUsd,
+    cashUsd,
+    cashLabel: targetCashLabel(year, currentYear, lastStatedYear, cashUsd, portfolio),
+    targetUsd,
+  }
 }
 
 export type PortfolioChartMode = 'stacked' | 'total'

@@ -250,6 +250,8 @@ export function PortfolioChart({
             p,
             portfolio,
             grid.lastStatedYear ?? currentYear,
+            contributions,
+            usdToChf,
           )
           next[PORTFOLIO_TARGET_CHART_KEY] =
             usd != null ? toDisplay(usd, activeCurrency, usdToChf) : null
@@ -522,6 +524,8 @@ export function PortfolioChart({
             usdToChf={usdToChf}
             portfolio={portfolio}
             showCashInvested={showCashInvested}
+            showTarget={showTarget}
+            lastStatedYear={grid.lastStatedYear}
             onClose={() => setSelectedXKey(null)}
           />
         </div>
@@ -983,7 +987,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
             strokeWidth={2}
             strokeDasharray="5 4"
             dot={{ r: 2.5, fill: PORTFOLIO_TARGET_COLOR }}
-            connectNulls={false}
+            connectNulls
             isAnimationActive={false}
           />
         ) : null}

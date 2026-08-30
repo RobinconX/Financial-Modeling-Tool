@@ -1,5 +1,6 @@
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts'
 import { formatMoney, formatPercent } from '../../lib/format'
+import { fromDisplay, toDisplay } from '../../lib/fx'
 import {
   investedForRoiDisplay,
   simpleRoi,
@@ -11,6 +12,7 @@ import type {
 } from '../../types'
 import {
   PORTFOLIO_ACTUAL_COLOR,
+  targetCompoundStep,
   type PortfolioChartBreakdownRow,
   type PortfolioChartPoint,
 } from '../../lib/portfolio'
@@ -23,6 +25,8 @@ type Props = {
   usdToChf: number | null
   portfolio: SavedPortfolio
   showCashInvested: boolean
+  showTarget?: boolean
+  lastStatedYear?: number
   onClose: () => void
 }
 
@@ -69,11 +73,14 @@ export function PortfolioYearDetail({
   usdToChf,
   portfolio,
   showCashInvested,
+  showTarget = false,
+  lastStatedYear,
   onClose,
 }: Props) {
   const rows = (point.breakdown ?? []).filter((r) => r.value !== 0)
   const total = point.total
-  const year = point.year ?? new Date().getFullYear()
+  const currentYear = new Date().getFullYear()
+  const year = point.year ?? currentYear
   const invested =
     contributions != null
       ? investedForRoiDisplay(
@@ -82,7 +89,7 @@ export function PortfolioYearDetail({
           currency,
           usdToChf,
           portfolio,
-          new Date().getFullYear(),
+          currentYear,
           point.isNow,
         )
       : null
@@ -90,6 +97,23 @@ export function PortfolioYearDetail({
     invested != null && invested > 0 && Number.isFinite(total)
       ? simpleRoi(total, invested)
       : null
+
+  const tc = showTarget ? portfolio.targetCompound : null
+  const targetStep =
+    tc != null && point.year != null && !point.isNow
+      ? targetCompoundStep(
+          fromDisplay(tc.amount, tc.currency, usdToChf),
+          tc.ratePercent,
+          tc.year,
+          currentYear,
+          point.year,
+          portfolio,
+          lastStatedYear ?? currentYear,
+          contributions,
+          usdToChf,
+        )
+      : null
+  const money = (usd: number) => formatMoney(toDisplay(usd, currency, usdToChf), currency)
 
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3">
@@ -152,6 +176,63 @@ export function PortfolioYearDetail({
         <p className="mt-1 text-[10px] text-amber-300/80">
           Year-end actual is a single total — no per-position split.
         </p>
+      ) : null}
+
+      {targetStep ? (
+        <div className="mt-3 space-y-1 border-t border-white/[0.06] pt-2 text-[11px] text-white/55">
+          <div className="text-[10px] font-semibold uppercase tracking-wider text-red-300/80">
+            Target
+          </div>
+          {targetStep.isAnchor ? (
+            <div className="flex justify-between gap-4">
+              <span>Anchor {targetStep.year}</span>
+              <span className="tabular-nums text-red-300/90">
+                {money(targetStep.targetUsd)}
+              </span>
+            </div>
+          ) : (
+            <>
+              <div className="flex justify-between gap-4">
+                <span>Prior year-end</span>
+                <span className="tabular-nums">{money(targetStep.priorUsd ?? 0)}</span>
+              </div>
+              <div className="flex justify-between gap-4">
+                <span>Prior year-end × {targetStep.ratePercent}%</span>
+                <span className="tabular-nums">{money(targetStep.grownUsd ?? 0)}</span>
+              </div>
+              {targetStep.cashLabel ? (
+                <div className="flex justify-between gap-4">
+                  <span>+ {targetStep.cashLabel}</span>
+                  <span className="tabular-nums">{money(targetStep.cashUsd)}</span>
+                </div>
+              ) : null}
+              <div className="flex justify-between gap-4 text-white/80">
+                <span>Target {targetStep.year}</span>
+                <span className="tabular-nums text-red-300/90">
+                  {money(targetStep.targetUsd)}
+                </span>
+              </div>
+            </>
+          )}
+          {Number.isFinite(total) ? (
+            <div className="flex justify-between gap-4">
+              <span>vs this year</span>
+              <span
+                className={`tabular-nums ${
+                  total - toDisplay(targetStep.targetUsd, currency, usdToChf) >= 0
+                    ? 'text-emerald-300/90'
+                    : 'text-rose-300/90'
+                }`}
+              >
+                {formatMoney(
+                  total - toDisplay(targetStep.targetUsd, currency, usdToChf),
+                  currency,
+                )}
+              </span>
+            </div>
+          ) : null}
+          <div className="border-b border-white/[0.06] pt-2" />
+        </div>
       ) : null}
 
       <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start">
