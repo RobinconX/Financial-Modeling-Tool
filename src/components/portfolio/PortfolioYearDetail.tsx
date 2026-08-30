@@ -2,6 +2,7 @@ import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts'
 import { formatMoney, formatPercent } from '../../lib/format'
 import { fromDisplay, toDisplay } from '../../lib/fx'
 import {
+  contributionInYearDisplay,
   investedForRoiDisplay,
   simpleRoi,
 } from '../../lib/portfolioContributions'
@@ -12,6 +13,9 @@ import type {
 } from '../../types'
 import {
   PORTFOLIO_ACTUAL_COLOR,
+  cagrExCash,
+  growthExCash,
+  targetCashInYear,
   targetCompoundStep,
   type PortfolioChartBreakdownRow,
   type PortfolioChartPoint,
@@ -27,6 +31,8 @@ type Props = {
   showCashInvested: boolean
   showTarget?: boolean
   lastStatedYear?: number
+  /** Year-end totals in the active display currency (no Now). */
+  yearTotals?: Map<number, number>
   onClose: () => void
 }
 
@@ -75,6 +81,7 @@ export function PortfolioYearDetail({
   showCashInvested,
   showTarget = false,
   lastStatedYear,
+  yearTotals,
   onClose,
 }: Props) {
   const rows = (point.breakdown ?? []).filter((r) => r.value !== 0)
@@ -114,6 +121,44 @@ export function PortfolioYearDetail({
         )
       : null
   const money = (usd: number) => formatMoney(toDisplay(usd, currency, usdToChf), currency)
+  const statedYear = lastStatedYear ?? currentYear
+  const cashDispFor = (y: number) => {
+    if (y < currentYear) {
+      return contributionInYearDisplay(contributions, y, currency, usdToChf)
+    }
+    return toDisplay(
+      targetCashInYear(
+        portfolio,
+        y,
+        currentYear,
+        statedYear,
+        contributions,
+        usdToChf,
+      ),
+      currency,
+      usdToChf,
+    )
+  }
+  const priorTotal =
+    point.year != null ? yearTotals?.get(point.year - 1) : undefined
+  const yearPerf =
+    !point.isNow && priorTotal != null && Number.isFinite(total) && point.year != null
+      ? growthExCash(total, priorTotal, cashDispFor(point.year))
+      : null
+  const totalsForCagr = yearTotals ? new Map(yearTotals) : new Map<number, number>()
+  if (tc != null && !totalsForCagr.has(tc.year)) {
+    totalsForCagr.set(
+      tc.year,
+      toDisplay(fromDisplay(tc.amount, tc.currency, usdToChf), currency, usdToChf),
+    )
+  }
+  const cagr =
+    !point.isNow &&
+    tc != null &&
+    point.year != null &&
+    point.year > tc.year
+      ? cagrExCash(totalsForCagr, cashDispFor, tc.year, point.year)
+      : null
 
   return (
     <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3">
@@ -228,6 +273,30 @@ export function PortfolioYearDetail({
                   total - toDisplay(targetStep.targetUsd, currency, usdToChf),
                   currency,
                 )}
+              </span>
+            </div>
+          ) : null}
+          {yearPerf != null ? (
+            <div className="flex justify-between gap-4">
+              <span>This year</span>
+              <span
+                className={`tabular-nums ${
+                  yearPerf >= 0 ? 'text-emerald-300/90' : 'text-rose-300/90'
+                }`}
+              >
+                {formatPercent(yearPerf)}
+              </span>
+            </div>
+          ) : null}
+          {cagr != null && tc != null ? (
+            <div className="flex justify-between gap-4">
+              <span>CAGR from {tc.year}</span>
+              <span
+                className={`tabular-nums ${
+                  cagr >= 0 ? 'text-emerald-300/90' : 'text-rose-300/90'
+                }`}
+              >
+                {formatPercent(cagr)}
               </span>
             </div>
           ) : null}

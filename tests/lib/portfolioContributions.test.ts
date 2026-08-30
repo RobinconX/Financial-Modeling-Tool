@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   emptyPortfolioContributions,
+  contributionInYearDisplay,
   investedAt,
   investedAtDisplay,
   cashToInvestedPct,
@@ -22,6 +23,17 @@ describe('portfolio contributions', () => {
     expect(investedAt(state, 2025)).toBe(15_000)
     expect(investedAt(state, 2026)).toBe(15_000)
     expect(investedAt(state, 2027)).toBe(23_000)
+  })
+
+  it('returns one year’s money-in in the display currency', () => {
+    const state = {
+      version: 1 as const,
+      currency: 'USD' as const,
+      byYear: { '2025': 2_000 },
+    }
+    expect(contributionInYearDisplay(state, 2025, 'USD', null)).toBe(2_000)
+    expect(contributionInYearDisplay(state, 2024, 'USD', null)).toBe(0)
+    expect(contributionInYearDisplay(null, 2025, 'USD', null)).toBe(0)
   })
 
   it('cash / invested is null when nothing is invested', () => {

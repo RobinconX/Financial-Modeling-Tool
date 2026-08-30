@@ -17,6 +17,20 @@ export function contributionYears(state: PortfolioContributionsState): number[] 
   return out.sort((a, b) => a - b)
 }
 
+/** Money-in entered for a single calendar year, in the display currency. */
+export function contributionInYearDisplay(
+  state: PortfolioContributionsState | null | undefined,
+  year: number,
+  displayCurrency: DisplayCurrency,
+  usdToChf: number | null,
+): number {
+  if (!state) return 0
+  const raw = state.byYear[String(year)]
+  if (!(Number.isFinite(raw) && raw > 0)) return 0
+  const n = amountToDisplay(raw, state.currency, displayCurrency, usdToChf)
+  return Number.isFinite(n) && n > 0 ? n : 0
+}
+
 /** Sum of entered contributions with year <= `year` (stored currency). */
 export function investedAt(state: PortfolioContributionsState, year: number): number {
   let sum = 0

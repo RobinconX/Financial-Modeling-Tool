@@ -28,6 +28,9 @@ import {
   sharesAtYear,
   targetCompoundStep,
   targetCompoundValue,
+  growthExCash,
+  cagrFrom,
+  cagrExCash,
   withResolvedDepositAmounts,
   yearEndActualUsd,
 } from '../../src/lib/portfolio'
@@ -1205,5 +1208,30 @@ describe('targetCompoundValue', () => {
     expect(
       targetCompoundStep(10_000, 10, 2026, 2026, 2025, p, 2028),
     ).toBeNull()
+  })
+})
+
+describe('growthExCash and cagrFrom', () => {
+  it('treats cash as added after growth', () => {
+    expect(growthExCash(12_000, 10_000, 1_000)).toBeCloseTo(0.1, 10)
+    expect(growthExCash(11_000, 10_000, 0)).toBeCloseTo(0.1, 10)
+    expect(growthExCash(10_000, 0, 0)).toBeNull()
+  })
+
+  it('is the annualized rate from the start amount', () => {
+    expect(cagrFrom(12_100, 10_000, 2)).toBeCloseTo(0.1, 10)
+    expect(cagrFrom(10_000, 10_000, 3)).toBeCloseTo(0, 10)
+    expect(cagrFrom(10_000, 10_000, 0)).toBeNull()
+  })
+
+  it('strips each year’s cash before annualizing', () => {
+    const totals = new Map([
+      [2024, 10_000],
+      [2025, 12_000],
+      [2026, 14_200],
+    ])
+    expect(cagrExCash(totals, () => 1_000, 2024, 2026)).toBeCloseTo(0.1, 10)
+    // Naive end/start CAGR would be ~19%
+    expect(cagrFrom(14_200, 10_000, 2)).toBeGreaterThan(0.18)
   })
 })

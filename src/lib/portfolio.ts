@@ -1505,7 +1505,7 @@ function moneyInUsdForYear(
  * Past years: Money-in for that year. Current/future: scheduled deposits,
  * plus perpetual yearly cash only after the last stated projection year.
  */
-function targetCashInYear(
+export function targetCashInYear(
   portfolio: SavedPortfolio,
   year: number,
   currentYear: number,
@@ -1670,6 +1670,53 @@ export function targetCompoundStep(
     cashLabel: targetCashLabel(year, currentYear, lastStatedYear, cashUsd, portfolio),
     targetUsd,
   }
+}
+
+/** (end − cash) / start − 1. Cash is added after growth, same as the target path. */
+export function growthExCash(
+  end: number,
+  start: number,
+  cash = 0,
+): number | null {
+  if (!(start > 0) || !Number.isFinite(end) || !Number.isFinite(cash)) return null
+  return (end - cash) / start - 1
+}
+
+/** Compound annual growth from `start` to `end` over `years` periods. */
+export function cagrFrom(
+  end: number,
+  start: number,
+  years: number,
+): number | null {
+  if (!(start > 0) || !(end > 0) || !(years > 0)) return null
+  if (!Number.isFinite(end) || !Number.isFinite(start) || !Number.isFinite(years)) {
+    return null
+  }
+  return (end / start) ** (1 / years) - 1
+}
+
+/**
+ * CAGR of year-end values after stripping each year's cash (same as the target
+ * path). Needs a total for every year from `fromYear` through `toYear`.
+ */
+export function cagrExCash(
+  totalsByYear: Map<number, number>,
+  cashForYear: (year: number) => number,
+  fromYear: number,
+  toYear: number,
+): number | null {
+  const n = toYear - fromYear
+  if (n <= 0) return null
+  let product = 1
+  for (let y = fromYear + 1; y <= toYear; y++) {
+    const start = totalsByYear.get(y - 1)
+    const end = totalsByYear.get(y)
+    if (start == null || end == null) return null
+    const g = growthExCash(end, start, cashForYear(y))
+    if (g == null) return null
+    product *= 1 + g
+  }
+  return product ** (1 / n) - 1
 }
 
 export type PortfolioChartMode = 'stacked' | 'total'

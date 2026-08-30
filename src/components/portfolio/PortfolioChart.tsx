@@ -287,6 +287,14 @@ export function PortfolioChart({
     )
 
   const hasActuals = data.some((d) => d.isActual)
+  const yearTotals = useMemo(() => {
+    const m = new Map<number, number>()
+    for (const p of data) {
+      if (p.isNow || p.year == null || !Number.isFinite(p.total)) continue
+      m.set(p.year, p.total)
+    }
+    return m
+  }, [data])
   const colorByKey = useMemo(() => {
     const map = new Map<string, string>()
     equityRows.forEach((row, i) => {
@@ -526,6 +534,7 @@ export function PortfolioChart({
             showCashInvested={showCashInvested}
             showTarget={showTarget}
             lastStatedYear={grid.lastStatedYear}
+            yearTotals={yearTotals}
             onClose={() => setSelectedXKey(null)}
           />
         </div>
