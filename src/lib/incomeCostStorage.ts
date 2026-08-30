@@ -10,6 +10,7 @@ import {
   newScenario,
   normalizeAmounts12,
 } from './incomeCost'
+import { queueAppDataChanged } from './linkedMirrorGate'
 
 export const INCOME_COST_STORAGE_KEY = 'grok-lab.income-cost.v1'
 
@@ -199,7 +200,7 @@ export function saveIncomeCost(
       draws: state.draws ?? [],
     }
     localStorage.setItem(INCOME_COST_STORAGE_KEY, JSON.stringify(payload))
-    void import('./dataSync').then((m) => m.notifyAppDataChanged())
+    queueAppDataChanged()
     return { ok: true }
   } catch (err) {
     return {

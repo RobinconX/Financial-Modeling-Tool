@@ -1,5 +1,6 @@
 import type { ChartAnnotation } from '../types'
 import { normalizeChartAnnotation } from './annotations'
+import { queueAppDataChanged } from './linkedMirrorGate'
 
 export const ANNOTATIONS_STORAGE_KEY = 'grok-lab.chart-annotations.v1'
 
@@ -34,7 +35,7 @@ export function saveAnnotations(
       ANNOTATIONS_STORAGE_KEY,
       JSON.stringify({ version: 1, annotations }),
     )
-    void import('./dataSync').then((m) => m.notifyAppDataChanged())
+    queueAppDataChanged()
     return { ok: true }
   } catch (err) {
     const message =

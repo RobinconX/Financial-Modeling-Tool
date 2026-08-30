@@ -1,5 +1,6 @@
 import type { ComparableEntry, SavedComparable } from '../types'
 import { isComparableBasis, newComparable } from './comparables'
+import { queueAppDataChanged } from './linkedMirrorGate'
 
 export const COMPARABLES_STORAGE_KEY = 'grok-lab.saved-comparables.v1'
 
@@ -75,7 +76,7 @@ export function saveComparables(
       COMPARABLES_STORAGE_KEY,
       JSON.stringify({ version: 1, comparables }),
     )
-    void import('./dataSync').then((m) => m.notifyAppDataChanged())
+    queueAppDataChanged()
     return { ok: true }
   } catch (err) {
     const message =

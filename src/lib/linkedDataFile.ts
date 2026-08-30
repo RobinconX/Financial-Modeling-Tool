@@ -594,6 +594,63 @@ function emitSaveEvent(event: LinkedFileSaveEvent): void {
 
 /** Wait this long after the last edit before writing the linked file. */
 export const LINKED_FILE_SAVE_DEBOUNCE_MS = 4000
+/** While editing continuously, also write at least this often (edits + periodic mode). */
+export const LINKED_FILE_SAVE_PERIOD_MS = 30_000
+
+export const LINKED_SAVE_MODE_KEY = 'grok-lab-linked-save-mode'
+export type LinkedSaveMode = 'edits-periodic' | 'edits'
+
+let memorySaveMode: LinkedSaveMode | null = null
+
+export function getLinkedSaveMode(): LinkedSaveMode {
+  try {
+    const v = localStorage.getItem(LINKED_SAVE_MODE_KEY)
+    if (v === 'edits' || v === 'edits-periodic') return v
+  } catch {
+    /* ignore */
+  }
+  return memorySaveMode ?? 'edits-periodic'
+}
+
+export function setLinkedSaveMode(mode: LinkedSaveMode): void {
+  memorySaveMode = mode
+  try {
+    localStorage.setItem(LINKED_SAVE_MODE_KEY, mode)
+  } catch {
+    /* ignore */
+  }
+  syncPeriodicLinkedSaves()
+}
+
+let periodTimer: ReturnType<typeof setInterval> | null = null
+
+function shouldRunPeriodicTimer(): boolean {
+  if (typeof window === 'undefined') return false
+  try {
+    if (import.meta.env?.MODE === 'test') return false
+  } catch {
+    /* ignore */
+  }
+  return true
+}
+
+function syncPeriodicLinkedSaves(): void {
+  const want =
+    shouldRunPeriodicTimer() && getLinkedSaveMode() === 'edits-periodic'
+  if (want) {
+    if (periodTimer) return
+    periodTimer = setInterval(() => {
+      if (getLinkedSaveMode() !== 'edits-periodic') return
+      if (!debounceActive && !writeQueued) return
+      scheduleLinkedFileWrite(0)
+    }, LINKED_FILE_SAVE_PERIOD_MS)
+    return
+  }
+  if (periodTimer) {
+    clearInterval(periodTimer)
+    periodTimer = null
+  }
+}
 
 async function flushLinkedWrite(): Promise<void> {
   if (writeFlushing) {
@@ -676,3 +733,5 @@ export function scheduleLinkedFileWrite(
 export function notifyAppDataChanged(): void {
   scheduleLinkedFileWrite()
 }
+
+if (shouldRunPeriodicTimer()) syncPeriodicLinkedSaves()

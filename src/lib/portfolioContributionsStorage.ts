@@ -1,5 +1,6 @@
 import type { DisplayCurrency, PortfolioContributionsState } from '../types'
 import { emptyPortfolioContributions } from './portfolioContributions'
+import { queueAppDataChanged } from './linkedMirrorGate'
 
 export const PORTFOLIO_CONTRIBUTIONS_KEY = 'grok-lab.portfolioContributions.v1'
 
@@ -42,7 +43,7 @@ export function savePortfolioContributions(
   try {
     const payload = normalizePortfolioContributions(state)
     localStorage.setItem(PORTFOLIO_CONTRIBUTIONS_KEY, JSON.stringify(payload))
-    void import('./dataSync').then((m) => m.notifyAppDataChanged())
+    queueAppDataChanged()
     return { ok: true }
   } catch (e) {
     return { ok: false, error: e instanceof Error ? e.message : 'Failed to save contributions' }

@@ -3,6 +3,7 @@ import type { SavedPortfolio, SavedScenario } from '../types'
 import { fetchQuotesClient } from '../lib/quote'
 import { marketCapFromSharePrice } from '../lib/sharePrice'
 import { optionIsExpired } from '../lib/optionContract'
+import { withLinkedMirrorSuppressed } from '../lib/linkedMirrorGate'
 
 export const QUOTE_REFRESH_MS = 5 * 60 * 1000
 
@@ -76,55 +77,68 @@ export function useAutoQuoteRefresh(
       }
 
       const quoteBySym = new Map(quotes.map((q) => [q.symbol.toUpperCase(), q]))
-      for (const s of scenariosRef.current) {
-        const q = quoteBySym.get(s.symbol.toUpperCase())
-        if (!q) continue
-        let shares: number | null =
-          q.sharesOutstanding != null &&
-          Number.isFinite(q.sharesOutstanding) &&
-          q.sharesOutstanding > 0
-            ? q.sharesOutstanding
-            : s.sharesOutstanding != null &&
-                Number.isFinite(s.sharesOutstanding) &&
-                s.sharesOutstanding > 0
-              ? s.sharesOutstanding
-              : null
-        if (
-          shares == null &&
-          s.currentMarketCap != null &&
-          s.currentMarketCap > 0 &&
-          s.currentPrice != null &&
-          s.currentPrice > 0
-        ) {
-          shares = s.currentMarketCap / s.currentPrice
+      // Live marks stay in memory / localStorage; they must not write the linked file.
+      withLinkedMirrorSuppressed(() => {
+        for (const s of scenariosRef.current) {
+          const q = quoteBySym.get(s.symbol.toUpperCase())
+          if (!q) continue
+          let shares: number | null =
+            q.sharesOutstanding != null &&
+            Number.isFinite(q.sharesOutstanding) &&
+            q.sharesOutstanding > 0
+              ? q.sharesOutstanding
+              : s.sharesOutstanding != null &&
+                  Number.isFinite(s.sharesOutstanding) &&
+                  s.sharesOutstanding > 0
+                ? s.sharesOutstanding
+                : null
+          if (
+            shares == null &&
+            s.currentMarketCap != null &&
+            s.currentMarketCap > 0 &&
+            s.currentPrice != null &&
+            s.currentPrice > 0
+          ) {
+            shares = s.currentMarketCap / s.currentPrice
+          }
+
+          const mcap =
+            q.marketCap ??
+            marketCapFromSharePrice(q.price, shares) ??
+            s.currentMarketCap
+
+          if (
+            s.companyName === q.name &&
+            s.currency === q.currency &&
+            s.currentPrice === q.price &&
+            s.currentMarketCap === mcap &&
+            s.sharesOutstanding === shares
+          ) {
+            continue
+          }
+
+          updateRef.current(s.id, {
+            companyName: q.name,
+            currency: q.currency,
+            currentPrice: q.price,
+            currentMarketCap: mcap,
+            sharesOutstanding: shares,
+          })
         }
 
-        const mcap =
-          q.marketCap ??
-          marketCapFromSharePrice(q.price, shares) ??
-          s.currentMarketCap
-
-        updateRef.current(s.id, {
-          companyName: q.name,
-          currency: q.currency,
-          currentPrice: q.price,
-          currentMarketCap: mcap,
-          sharesOutstanding: shares,
-        })
-      }
-
-      for (const p of portfoliosRef.current) {
-        let changed = false
-        const holdings = (p.holdings ?? []).map((h) => {
-          const occ = h.option?.occSymbol?.toUpperCase()
-          if (!occ || !h.option || optionIsExpired(h.option.expiration)) return h
-          const q = quoteBySym.get(occ)
-          if (!q || q.price === h.manualCurrentPrice) return h
-          changed = true
-          return { ...h, manualCurrentPrice: q.price }
-        })
-        if (changed) updatePortfolioRef.current(p.id, { holdings })
-      }
+        for (const p of portfoliosRef.current) {
+          let changed = false
+          const holdings = (p.holdings ?? []).map((h) => {
+            const occ = h.option?.occSymbol?.toUpperCase()
+            if (!occ || !h.option || optionIsExpired(h.option.expiration)) return h
+            const q = quoteBySym.get(occ)
+            if (!q || q.price === h.manualCurrentPrice) return h
+            changed = true
+            return { ...h, manualCurrentPrice: q.price }
+          })
+          if (changed) updatePortfolioRef.current(p.id, { holdings })
+        }
+      })
     } finally {
       refreshingRef.current = false
       setQuotesLoading(false)

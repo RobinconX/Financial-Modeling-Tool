@@ -10,6 +10,7 @@ import {
   ensurePermanentLeftover,
   newOverviewScenario,
 } from './overview'
+import { queueAppDataChanged } from './linkedMirrorGate'
 import { normalizeRunwayConfig } from './runway'
 
 export const OVERVIEW_STORAGE_KEY = 'grok-lab.overview.v1'
@@ -224,7 +225,7 @@ export function saveOverview(state: OverviewState): { ok: true } | { ok: false; 
       selectedScenarioId: state.selectedScenarioId,
     }
     localStorage.setItem(OVERVIEW_STORAGE_KEY, JSON.stringify(payload))
-    void import('./dataSync').then((m) => m.notifyAppDataChanged())
+    queueAppDataChanged()
     return { ok: true }
   } catch (e) {
     const msg = e instanceof Error ? e.message : 'Failed to save overview'

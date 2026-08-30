@@ -1,5 +1,6 @@
 import type { NetWorthGoal } from '../types'
 import { normalizeNetWorthGoal } from './goals'
+import { queueAppDataChanged } from './linkedMirrorGate'
 
 export const GOALS_STORAGE_KEY = 'grok-lab.goals.v1'
 
@@ -31,7 +32,7 @@ export function saveGoals(
 ): { ok: true } | { ok: false; error: string } {
   try {
     localStorage.setItem(GOALS_STORAGE_KEY, JSON.stringify({ version: 1, goals }))
-    void import('./dataSync').then((m) => m.notifyAppDataChanged())
+    queueAppDataChanged()
     return { ok: true }
   } catch (err) {
     const message =

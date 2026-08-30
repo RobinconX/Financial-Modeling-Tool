@@ -6,6 +6,7 @@ import type {
   PortfolioHolding,
   SavedPortfolio,
 } from '../types'
+import { queueAppDataChanged } from './linkedMirrorGate'
 import { buildOccSymbol } from './optionContract'
 import { newDeposit, newHolding, normalizePortfolioCashModel } from './portfolio'
 
@@ -307,8 +308,7 @@ export function savePortfolios(
       PORTFOLIO_STORAGE_KEY,
       JSON.stringify({ version: 1, portfolios }),
     )
-    // Lazy import avoids circular init if dataSync loads storage modules
-    void import('./dataSync').then((m) => m.notifyAppDataChanged())
+    queueAppDataChanged()
     return { ok: true }
   } catch (err) {
     const message =

@@ -31,7 +31,10 @@ import {
   requestLinkedFileAccess,
   unlinkDataFile,
   writeLinkedSnapshot,
+  getLinkedSaveMode,
+  setLinkedSaveMode,
   type LinkedFileStatus,
+  type LinkedSaveMode,
 } from '../../lib/linkedDataFile'
 import { InfoTip } from '../common/InfoTip'
 
@@ -50,6 +53,7 @@ export function DataSettingsPanel({ onClose }: Props) {
     | null
   >(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
+  const [saveMode, setSaveMode] = useState<LinkedSaveMode>(getLinkedSaveMode)
   const catalog = loadCatalog()
   const accountCount = catalog?.accounts.length ?? 1
   const multi = accountCount > 1
@@ -256,8 +260,9 @@ export function DataSettingsPanel({ onClose }: Props) {
           <h3 className="section-title text-emerald-300/90">Linked data file</h3>
           <InfoTip label="About linked file">
             Continuous link needs the File System Access API (desktop Chrome or Edge). After
-            linking, edits wait ~4s of idle, then save once. Put the file in OneDrive/Dropbox for
-            multi-PC backup. iPhone/iPad cannot do continuous linking — use Export / Import.
+            linking, edits wait ~4s of idle, then save. Periodic mode also writes every 30s while
+            you keep editing. Put the file in OneDrive/Dropbox for multi-PC backup. iPhone/iPad
+            cannot do continuous linking — use Export / Import.
           </InfoTip>
         </div>
         {!fsa ? (
@@ -346,6 +351,45 @@ export function DataSettingsPanel({ onClose }: Props) {
                   </button>
                 </>
               )}
+            </div>
+            <div className="space-y-1.5">
+              <div className="flex flex-wrap items-center gap-2">
+                <span className="text-xs text-white/50">Auto-save</span>
+                <div
+                  className="inline-flex gap-1 border-b border-white/10"
+                  role="group"
+                  aria-label="Linked file auto-save"
+                >
+                  {(
+                    [
+                      { id: 'edits-periodic' as const, label: 'Edits + periodic' },
+                      { id: 'edits' as const, label: 'Edits only' },
+                    ] as const
+                  ).map((opt) => (
+                    <button
+                      key={opt.id}
+                      type="button"
+                      className={`-mb-px border-b-2 px-2.5 py-1 text-[11px] font-medium transition ${
+                        saveMode === opt.id
+                          ? 'border-emerald-400 text-white'
+                          : 'border-transparent text-white/50 hover:text-white/80'
+                      }`}
+                      aria-pressed={saveMode === opt.id}
+                      onClick={() => {
+                        setLinkedSaveMode(opt.id)
+                        setSaveMode(opt.id)
+                      }}
+                    >
+                      {opt.label}
+                    </button>
+                  ))}
+                </div>
+              </div>
+              <p className="text-[11px] leading-snug text-white/40">
+                {saveMode === 'edits-periodic'
+                  ? 'Writes ~4s after you stop typing, and at least every 30s while you keep editing.'
+                  : 'Writes ~4s after you stop typing. No extra writes while you keep editing.'}
+              </p>
             </div>
           </>
         )}

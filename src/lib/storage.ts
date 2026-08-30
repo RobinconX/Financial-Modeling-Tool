@@ -1,4 +1,5 @@
 import type { SavedScenario, StoragePayload } from '../types'
+import { queueAppDataChanged } from './linkedMirrorGate'
 import {
   newEasyProjection,
   sortEasyProjections,
@@ -106,7 +107,7 @@ export function saveScenarios(scenarios: SavedScenario[]): { ok: true } | { ok: 
   try {
     const payload: StoragePayload = { version: 1, scenarios }
     localStorage.setItem(STORAGE_KEY, JSON.stringify(payload))
-    void import('./dataSync').then((m) => m.notifyAppDataChanged())
+    queueAppDataChanged()
     return { ok: true }
   } catch (err) {
     const message =
