@@ -10,6 +10,12 @@ import {
   type AppDataSnapshot,
 } from './appDataSnapshot'
 import { withLinkedMirrorSuppressed } from './linkedMirrorGate'
+import {
+  applyLinkedSaveMode,
+  getLinkedSaveMode,
+  parseLinkedSaveMode,
+  type LinkedSaveMode,
+} from './linkedSaveMode'
 
 export const ACCOUNT_CATALOG_KEY = 'grok-lab.accounts.v1'
 export const DEFAULT_ACCOUNT_NAME = 'Mine'
@@ -27,6 +33,8 @@ export type AccountCatalog = {
   version: typeof ACCOUNT_CATALOG_VERSION
   selectedId: string
   accounts: AccountRecord[]
+  /** File-level linked-file auto-save. Optional on older saves. */
+  linkedSaveMode?: LinkedSaveMode
 }
 
 export type ParsedSaveFile =
@@ -51,6 +59,7 @@ export function wrapSnapshotAsCatalog(
     version: ACCOUNT_CATALOG_VERSION,
     selectedId: accountId,
     accounts: [{ id: accountId, name: name.trim() || DEFAULT_ACCOUNT_NAME, snapshot }],
+    linkedSaveMode: snapshot.linkedSaveMode ?? getLinkedSaveMode(),
   }
 }
 
@@ -81,7 +90,12 @@ export function parseSaveFile(raw: unknown): ParsedSaveFile | { error: string } 
     }
     return {
       kind: 'catalog',
-      catalog: { version: ACCOUNT_CATALOG_VERSION, selectedId, accounts },
+      catalog: {
+        version: ACCOUNT_CATALOG_VERSION,
+        selectedId,
+        accounts,
+        linkedSaveMode: parseLinkedSaveMode(raw.linkedSaveMode),
+      },
     }
   }
 
@@ -171,6 +185,7 @@ export function serializeSaveFile(catalog: AccountCatalog): unknown {
     version: ACCOUNT_CATALOG_VERSION,
     selectedId: catalog.selectedId,
     accounts: catalog.accounts,
+    linkedSaveMode: catalog.linkedSaveMode ?? getLinkedSaveMode(),
   }
 }
 
@@ -211,6 +226,7 @@ export function syncLiveIntoCatalog(): AccountCatalog {
   const live = collectAppData()
   const next: AccountCatalog = {
     ...cat,
+    linkedSaveMode: getLinkedSaveMode(),
     accounts: cat.accounts.map((a) =>
       a.id === cat.selectedId ? { ...a, snapshot: live } : a,
     ),
@@ -226,6 +242,7 @@ export function payloadForLinkedFile(): unknown {
       const live = collectAppData()
       saveCatalog({
         ...cat,
+        linkedSaveMode: getLinkedSaveMode(),
         accounts: [{ ...cat.accounts[0]!, snapshot: live }],
       })
       return live
@@ -249,7 +266,12 @@ export function applyLoadedSave(
     const selected =
       parsed.catalog.accounts.find((a) => a.id === parsed.catalog.selectedId) ??
       parsed.catalog.accounts[0]!
-    return applyAppDataToLocalStorage(selected.snapshot)
+    const applied = applyAppDataToLocalStorage(selected.snapshot)
+    if (!applied.ok) return applied
+    if (parsed.catalog.linkedSaveMode) {
+      applyLinkedSaveMode(parsed.catalog.linkedSaveMode)
+    }
+    return { ok: true }
   })
 }
 

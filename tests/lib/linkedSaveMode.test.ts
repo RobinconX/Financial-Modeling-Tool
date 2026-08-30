@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest'
-import { getLinkedSaveMode, setLinkedSaveMode } from '../../src/lib/linkedDataFile'
+import { applyLinkedSaveMode, getLinkedSaveMode } from '../../src/lib/linkedSaveMode'
 
 describe('linked save mode', () => {
   it('defaults to edits + periodic before any choice', () => {
@@ -7,9 +7,9 @@ describe('linked save mode', () => {
   })
 
   it('round-trips edits-only and edits + periodic', () => {
-    setLinkedSaveMode('edits')
+    applyLinkedSaveMode('edits')
     expect(getLinkedSaveMode()).toBe('edits')
-    setLinkedSaveMode('edits-periodic')
+    applyLinkedSaveMode('edits-periodic')
     expect(getLinkedSaveMode()).toBe('edits-periodic')
   })
 })

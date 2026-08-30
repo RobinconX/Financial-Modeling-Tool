@@ -11,6 +11,14 @@ import {
   type ParsedSaveFile,
 } from './accountCatalog'
 import { APP_DATA_FILE_NAME } from './appDataSnapshot'
+import {
+  applyLinkedSaveMode,
+  getLinkedSaveMode,
+  LINKED_SAVE_MODE_KEY,
+  type LinkedSaveMode,
+} from './linkedSaveMode'
+
+export { getLinkedSaveMode, LINKED_SAVE_MODE_KEY, type LinkedSaveMode }
 
 /** Minimal typings — not all TS DOM libs include File System Access yet. */
 type FsPermissionMode = 'read' | 'readwrite'
@@ -265,7 +273,10 @@ export async function requestLinkedFileAccess(options?: {
     const snap = await readLinkedSnapshot()
     if (snap && !('error' in snap)) {
       const applied = hydrateOnStartup(snap)
-      if (applied.ok) reloaded = true
+      if (applied.ok) {
+        reloaded = true
+        syncPeriodicLinkedSaves()
+      }
     } else if (snap && 'error' in snap) {
       return { ok: false, error: snap.error }
     }
@@ -597,29 +608,10 @@ export const LINKED_FILE_SAVE_DEBOUNCE_MS = 4000
 /** While editing continuously, also write at least this often (edits + periodic mode). */
 export const LINKED_FILE_SAVE_PERIOD_MS = 30_000
 
-export const LINKED_SAVE_MODE_KEY = 'grok-lab-linked-save-mode'
-export type LinkedSaveMode = 'edits-periodic' | 'edits'
-
-let memorySaveMode: LinkedSaveMode | null = null
-
-export function getLinkedSaveMode(): LinkedSaveMode {
-  try {
-    const v = localStorage.getItem(LINKED_SAVE_MODE_KEY)
-    if (v === 'edits' || v === 'edits-periodic') return v
-  } catch {
-    /* ignore */
-  }
-  return memorySaveMode ?? 'edits-periodic'
-}
-
 export function setLinkedSaveMode(mode: LinkedSaveMode): void {
-  memorySaveMode = mode
-  try {
-    localStorage.setItem(LINKED_SAVE_MODE_KEY, mode)
-  } catch {
-    /* ignore */
-  }
+  applyLinkedSaveMode(mode)
   syncPeriodicLinkedSaves()
+  scheduleLinkedFileWrite(0)
 }
 
 let periodTimer: ReturnType<typeof setInterval> | null = null
@@ -634,7 +626,7 @@ function shouldRunPeriodicTimer(): boolean {
   return true
 }
 
-function syncPeriodicLinkedSaves(): void {
+export function syncPeriodicLinkedSaves(): void {
   const want =
     shouldRunPeriodicTimer() && getLinkedSaveMode() === 'edits-periodic'
   if (want) {

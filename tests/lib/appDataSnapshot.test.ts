@@ -24,6 +24,23 @@ describe('appDataSnapshot', () => {
     expect(parsed.annotations).toEqual([])
     expect(parsed.goals).toEqual([])
     expect(parsed.portfolioContributions).toEqual({ version: 1, currency: 'USD', byYear: {} })
+    expect(parsed.linkedSaveMode).toBeUndefined()
+  })
+
+  it('keeps linkedSaveMode on a snapshot', () => {
+    const parsed = parseAppDataSnapshot({
+      version: APP_DATA_SNAPSHOT_VERSION,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      scenarios: [],
+      portfolios: [],
+      incomeCost: { version: 3, scenarios: [], lines: [], draws: [] },
+      savings: { version: 1, accounts: [] },
+      overview: { version: 2, scenarios: [], selectedScenarioId: null },
+      linkedSaveMode: 'edits',
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed) return
+    expect(parsed.linkedSaveMode).toBe('edits')
   })
 
   it('still rejects a v2 multi-account envelope as a single snapshot', () => {

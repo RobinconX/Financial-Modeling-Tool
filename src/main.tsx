@@ -5,7 +5,7 @@ import './index.css'
 import { hydrateOnStartup } from './lib/accountCatalog'
 import { maybeSeedExample } from './lib/exampleSeed'
 import { registerAppRemount } from './lib/appRemount'
-import { readLinkedSnapshot } from './lib/linkedDataFile'
+import { readLinkedSnapshot, syncPeriodicLinkedSaves } from './lib/linkedDataFile'
 
 /**
  * If a data file is linked and readable, load it into localStorage before React
@@ -26,6 +26,7 @@ async function hydrateFromLinkedFile(): Promise<void> {
     if (!result.ok) {
       console.warn('[data] Failed to apply linked file:', result.error)
     }
+    syncPeriodicLinkedSaves()
   } catch (e) {
     console.warn('[data] Hydrate skipped', e)
   }

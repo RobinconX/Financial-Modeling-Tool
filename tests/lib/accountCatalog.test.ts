@@ -53,6 +53,19 @@ describe('parseSaveFile', () => {
     expect(parsed.catalog.accounts[1]?.name).toBe('Client')
   })
 
+  it('reads linkedSaveMode on a v2 save', () => {
+    const a = wrapSnapshotAsCatalog(snap(), 'Mine', 'id-a')
+    const parsed = parseSaveFile({
+      version: 2,
+      selectedId: 'id-a',
+      linkedSaveMode: 'edits',
+      accounts: a.accounts,
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed || parsed.kind !== 'catalog') return
+    expect(parsed.catalog.linkedSaveMode).toBe('edits')
+  })
+
   it('rejects empty v2 accounts', () => {
     expect(parseSaveFile({ version: 2, selectedId: 'x', accounts: [] })).toMatchObject({
       error: expect.any(String),
@@ -72,9 +85,14 @@ describe('serializeSaveFile', () => {
   it('writes v2 envelope when there are several accounts', () => {
     const cat = wrapSnapshotAsCatalog(snap(), 'Mine', 'id-a')
     cat.accounts.push({ id: 'id-b', name: 'Other', snapshot: snap() })
-    const out = serializeSaveFile(cat) as { version: number; accounts: unknown[] }
+    const out = serializeSaveFile(cat) as {
+      version: number
+      accounts: unknown[]
+      linkedSaveMode?: string
+    }
     expect(out.version).toBe(2)
     expect(out.accounts).toHaveLength(2)
+    expect(out.linkedSaveMode).toBeDefined()
   })
 })
 

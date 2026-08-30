@@ -33,6 +33,12 @@ import {
   normalizePortfolioContributions,
   savePortfolioContributions,
 } from './portfolioContributionsStorage'
+import {
+  applyLinkedSaveMode,
+  getLinkedSaveMode,
+  parseLinkedSaveMode,
+  type LinkedSaveMode,
+} from './linkedSaveMode'
 
 export const APP_DATA_FILE_NAME = 'financial-model.json'
 export const APP_DATA_SNAPSHOT_VERSION = 1 as const
@@ -49,6 +55,8 @@ export type AppDataSnapshot = {
   annotations: ChartAnnotation[]
   goals: NetWorthGoal[]
   portfolioContributions?: PortfolioContributionsState
+  /** How the linked file auto-saves. File-level; optional on older saves. */
+  linkedSaveMode?: LinkedSaveMode
 }
 
 export function collectAppData(): AppDataSnapshot {
@@ -64,6 +72,7 @@ export function collectAppData(): AppDataSnapshot {
     annotations: loadAnnotations(),
     goals: loadGoals(),
     portfolioContributions: loadPortfolioContributions(),
+    linkedSaveMode: getLinkedSaveMode(),
   }
 }
 
@@ -81,6 +90,7 @@ export function emptyAppData(): AppDataSnapshot {
     annotations: [],
     goals: [],
     portfolioContributions: emptyPortfolioContributions(),
+    linkedSaveMode: getLinkedSaveMode(),
   }
 }
 
@@ -126,6 +136,7 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
           .filter((g): g is NetWorthGoal => g != null)
       : [],
     portfolioContributions: normalizePortfolioContributions(raw.portfolioContributions),
+    linkedSaveMode: parseLinkedSaveMode(raw.linkedSaveMode),
   }
 }
 
@@ -166,6 +177,8 @@ export function applyAppDataToLocalStorage(
       normalizePortfolioContributions(snapshot.portfolioContributions),
     )
     if (!r9.ok) return { ok: false, error: r9.error }
+
+    if (snapshot.linkedSaveMode) applyLinkedSaveMode(snapshot.linkedSaveMode)
 
     return { ok: true }
   })
