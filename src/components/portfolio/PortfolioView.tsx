@@ -4,6 +4,7 @@ import type {
   CashflowScenario,
   DisplayCurrency,
   PortfolioContributionsState,
+  PortfolioActualsState,
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
@@ -128,6 +129,9 @@ type Props = {
   contributionsError: string | null
   setContributionYear: (year: number, amount: number | null) => void
   setContributionsCurrency: (currency: DisplayCurrency) => void
+  portfolioActuals: PortfolioActualsState
+  actualsError: string | null
+  setPortfolioActuals: (next: PortfolioActualsState) => void
 }
 
 export function PortfolioView({
@@ -145,6 +149,9 @@ export function PortfolioView({
   contributionsError,
   setContributionYear,
   setContributionsCurrency,
+  portfolioActuals,
+  actualsError,
+  setPortfolioActuals,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     readSelectedPortfolioId(portfolios),
@@ -331,7 +338,7 @@ export function PortfolioView({
   function autoFromYear() {
     const earliest =
       selectedPortfolioId && selected
-        ? earliestActualYear(selected, firstInputYear)
+        ? earliestActualYear(portfolioActuals, firstInputYear)
         : firstInputYear
     return Math.min(earliest, firstInputYear)
   }
@@ -349,7 +356,7 @@ export function PortfolioView({
     setRangeCustom(false)
     const earliest =
       selectedPortfolioId && selected
-        ? earliestActualYear(selected, firstInputYear)
+        ? earliestActualYear(portfolioActuals, firstInputYear)
         : firstInputYear
     const from = Math.min(earliest, firstInputYear)
     setPeriodFrom(from)
@@ -978,7 +985,7 @@ export function PortfolioView({
                 </div>
                 <FullscreenChart title="Portfolio value over time">
                   <PortfolioChart
-                    key={`chart-${selected.id}-${selected.updatedAt}-${periodFrom}-${periodTo}-${chartMode}-${grid.years.join(',')}`}
+                    key={`chart-${selected.id}-${selected.updatedAt}-${periodFrom}-${periodTo}-${chartMode}-${grid.years.join(',')}-${Object.keys(portfolioActuals.byMonth).join(',')}`}
                     grid={grid}
                     portfolio={resolvedSelected ?? selected}
                     scenarios={scenarios}
@@ -991,6 +998,7 @@ export function PortfolioView({
                     showCashInvested={showCashInvested}
                     showRoi={showRoi}
                     showTarget={showTarget}
+                    actuals={portfolioActuals}
                   />
                 </FullscreenChart>
                 <div className="relative z-20 border-t border-white/[0.06] pt-4">
@@ -1046,14 +1054,16 @@ export function PortfolioView({
                     </button>
                   ))}
                 </div>
+                <p className="text-[11px] text-white/40">
+                  Same record for every portfolio.
+                </p>
                 {actualsKind === 'value' ? (
                   <PortfolioActualsEditor
-                    portfolio={selected}
-                    onChange={(patch) => updatePortfolio(selected.id, patch)}
+                    actuals={portfolioActuals}
+                    onChange={setPortfolioActuals}
                     displayCurrency={activeCurrency}
                     usdToChf={usdToChf}
-                    otherPortfolios={portfolios.filter((p) => p.id !== selected.id)}
-                    onUpdateOtherPortfolio={updatePortfolio}
+                    error={actualsError}
                   />
                 ) : (
                   <PortfolioMoneyIn

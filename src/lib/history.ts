@@ -1,9 +1,10 @@
-import type { SavedPortfolio, SavingsAccount } from '../types'
+import type { PortfolioActualsState, SavedPortfolio, SavingsAccount } from '../types'
 import {
   getActualsCurrency,
   getActualsMap,
   parseActualKey,
 } from './portfolio'
+import { hasActualMonths } from './portfolioActuals'
 import { addMonthsToKey, currentPeriodKey, parsePeriodKey } from './savings'
 
 export type HistoryKind = 'portfolio' | 'savings'
@@ -58,6 +59,9 @@ export function historySeriesId(kind: HistoryKind, sourceId: string): string {
   return `${kind}:${sourceId}`
 }
 
+/** Shared investing actuals — one History series for all portfolio scenarios. */
+export const SHARED_PORTFOLIO_SOURCE_ID = 'shared'
+
 function monthlyPointsFromMap(map: Record<string, number>): HistorySeriesPoint[] {
   const out: HistorySeriesPoint[] = []
   for (const [key, raw] of Object.entries(map)) {
@@ -82,19 +86,18 @@ export function rollupYearly(points: HistorySeriesPoint[]): HistorySeriesPoint[]
 }
 
 export function collectHistorySeries(
-  portfolios: SavedPortfolio[],
+  _portfolios: SavedPortfolio[],
   accounts: SavingsAccount[],
   usdToChf: number | null,
+  portfolioActuals?: PortfolioActualsState | null,
 ): HistorySeries[] {
   const out: HistorySeries[] = []
-  let pShade = 0
   let sShade = 0
 
-  for (const p of portfolios) {
-    const map = getActualsMap(p)
+  if (hasActualMonths(portfolioActuals)) {
+    const map = getActualsMap(portfolioActuals)
     const raw = monthlyPointsFromMap(map)
-    if (raw.length === 0) continue
-    const cur = getActualsCurrency(p)
+    const cur = getActualsCurrency(portfolioActuals)
     const canChf = cur === 'CHF' || (usdToChf != null && usdToChf > 0)
     const points =
       cur === 'CHF'
@@ -103,11 +106,11 @@ export function collectHistorySeries(
           ? raw.map((pt) => ({ ...pt, value: pt.value * usdToChf! }))
           : raw
     out.push({
-      id: historySeriesId('portfolio', p.id),
-      sourceId: p.id,
+      id: historySeriesId('portfolio', SHARED_PORTFOLIO_SOURCE_ID),
+      sourceId: SHARED_PORTFOLIO_SOURCE_ID,
       kind: 'portfolio',
-      name: p.name.trim() || 'Portfolio',
-      color: PORTFOLIO_SHADES[pShade++ % PORTFOLIO_SHADES.length]!,
+      name: 'Portfolio',
+      color: PORTFOLIO_SHADES[0]!,
       inChf: canChf,
       points,
     })

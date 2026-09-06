@@ -83,11 +83,6 @@
         }
       ],
       "holdingSort": "manual",
-      "actuals": {
-        "2025-12": 24000,
-        "2026-06": 26500
-      },
-      "actualsCurrency": "USD",
       "createdAt": "2026-01-01T00:00:00.000Z",
       "updatedAt": "2026-01-01T00:00:00.000Z"
     }
@@ -274,5 +269,13 @@
     "version": 1,
     "currency": "USD",
     "byYear": { "2025": 8000, "2026": 12000 }
+  },
+  "portfolioActuals": {
+    "version": 1,
+    "currency": "USD",
+    "byMonth": {
+      "2025-12": 24000,
+      "2026-06": 26500
+    }
   }
 }

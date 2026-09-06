@@ -108,6 +108,7 @@ export function parseSaveFile(raw: unknown): ParsedSaveFile | { error: string } 
 /** True when this snapshot is more than a blank first-run model. */
 export function isSnapshotPopulated(s: AppDataSnapshot): boolean {
   if (s.scenarios.length > 0 || s.portfolios.length > 0) return true
+  if (Object.values(s.portfolioActuals?.byMonth ?? {}).some((v) => Number(v) > 0)) return true
   if (s.incomeCost.lines.length > 0 || (s.incomeCost.draws?.length ?? 0) > 0) return true
   if ((s.comparables?.length ?? 0) > 0) return true
   if ((s.goals?.length ?? 0) > 0) return true

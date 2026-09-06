@@ -89,7 +89,7 @@ export function RoiHero({
         />
         {hero && hero.basis !== 'easy' && Math.abs(hero.dilutionFactor - 1) >= 1e-9 && (
           <>
-            <Stat label="Dilution" value={`${hero.dilutionFactor.toFixed(2)}× shares`} />
+            <Stat label="Shares vs today" value={`${hero.dilutionFactor.toFixed(2)}×`} />
             <Stat label="Equity value" value={formatMoney(hero.equityValue, currency)} />
           </>
         )}
@@ -122,7 +122,12 @@ export function RoiHero({
                 {formatPercent(row.cagr)}
               </span>
               <span className="ml-1.5 text-white/35 tabular-nums">
-                {formatMoney(row.marketCap, currency)}
+                {formatMoney(
+                  row.basis !== 'easy' && Math.abs(row.dilutionFactor - 1) >= 1e-9
+                    ? row.equityValue
+                    : row.marketCap,
+                  currency,
+                )}
               </span>
             </button>
           ))}

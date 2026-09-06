@@ -3,6 +3,7 @@ import type {
   CashflowLine,
   CashflowScenario,
   OverviewSeriesType,
+  PortfolioActualsState,
   SavedPortfolio,
   SavedScenario,
   SavingsAccount,
@@ -40,6 +41,7 @@ type Props = {
   savingsAccounts: SavingsAccount[]
   incomeCostLines: CashflowLine[]
   incomeCostScenarios?: CashflowScenario[]
+  portfolioActuals?: PortfolioActualsState | null
 }
 
 type ChartMode = 'bars' | 'area' | 'compare'
@@ -68,6 +70,7 @@ export function OverviewView({
   savingsAccounts,
   incomeCostLines,
   incomeCostScenarios = [],
+  portfolioActuals = null,
 }: Props) {
   const {
     scenarios,
@@ -212,8 +215,9 @@ export function OverviewView({
       incomeCostLines,
       usdToChf,
       asOf,
+      portfolioActuals,
     }),
-    [portfolios, stockScenarios, savingsAccounts, incomeCostLines, usdToChf, asOf],
+    [portfolios, stockScenarios, savingsAccounts, incomeCostLines, usdToChf, asOf, portfolioActuals],
   )
 
   const shownCompareIds = useMemo(() => {

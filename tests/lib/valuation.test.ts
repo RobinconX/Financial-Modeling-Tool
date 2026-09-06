@@ -7,6 +7,7 @@ import {
   cagr,
   cagrInterpolate,
   easyCagrGapYears,
+  cumulativeDilutionByYear,
   equityValueAfterDilution,
   impliedFromPE,
   impliedFromPFCF,
@@ -85,6 +86,21 @@ describe('interpolateByCagr / cagrInterpolate', () => {
   })
 })
 
+function yearRow(
+  partial: Pick<YearProjection, 'id' | 'year'> & Partial<YearProjection>,
+): YearProjection {
+  return {
+    dilutionFactor: 1,
+    revenue: null,
+    psMultiple: null,
+    fcf: null,
+    pfcfMultiple: null,
+    profit: null,
+    peMultiple: null,
+    ...partial,
+  }
+}
+
 describe('dilution helpers', () => {
   it('normalizes dilution defaults', () => {
     expect(normalizeDilution(null)).toBe(1)
@@ -94,6 +110,27 @@ describe('dilution helpers', () => {
 
   it('reduces equity claim after dilution', () => {
     expect(equityValueAfterDilution(110, 1.1)).toBeCloseTo(100)
+  })
+
+  it('compounds yearly dilution in year order', () => {
+    const map = cumulativeDilutionByYear([
+      yearRow({ id: 'b', year: 2028, dilutionFactor: 1.1 }),
+      yearRow({ id: 'a', year: 2027, dilutionFactor: 1.1 }),
+    ])
+    expect(map.get(2027)).toBeCloseTo(1.1)
+    expect(map.get(2028)).toBeCloseTo(1.21)
+  })
+
+  it('ignores years before fromYear (already in today’s share count)', () => {
+    const map = cumulativeDilutionByYear(
+      [
+        yearRow({ id: 'p', year: 2020, dilutionFactor: 2 }),
+        yearRow({ id: 'f', year: 2028, dilutionFactor: 1.1 }),
+      ],
+      2026,
+    )
+    expect(map.has(2020)).toBe(false)
+    expect(map.get(2028)).toBeCloseTo(1.1)
   })
 })
 
@@ -225,6 +262,21 @@ describe('materializeAdvancedCagrYears', () => {
     expect(mid.revenue).toBeCloseTo(10 * Math.SQRT2, 10)
     expect(mid.psMultiple).toBeCloseTo(10, 10)
   })
+
+  it('keeps filled-from-today years at 1.0 yearly dilution', () => {
+    const rows: YearProjection[] = [
+      yearRow({
+        id: 'a',
+        year: 2030,
+        dilutionFactor: 1.05,
+        revenue: 20,
+        psMultiple: 10,
+      }),
+    ]
+    const filled = materializeAdvancedCagrYears(rows, 100, 2026)
+    expect(filled.find((r) => r.year === 2028)!.dilutionFactor).toBe(1)
+    expect(filled.find((r) => r.year === 2030)!.dilutionFactor).toBe(1.05)
+  })
 })
 
 describe('buildAdvancedProjections', () => {
@@ -258,6 +310,37 @@ describe('buildAdvancedProjections', () => {
     const pe = out.find((r) => r.basis === 'pe')!
     expect(pe.marketCap).toBe(20)
     expect(pe.equityValue).toBe(10)
+    expect(pe.totalReturn).toBeCloseTo(totalReturn(50, 10))
+    const undiluted = buildAdvancedProjections(50, rows, year).find((r) => r.basis === 'pe')!
+    expect(undiluted.equityValue).toBe(20)
+    expect(pe.cagr).toBeLessThan(undiluted.cagr)
+  })
+
+  it('compounds yearly dilution across stated years', () => {
+    const stacked: YearProjection[] = [
+      yearRow({
+        id: 'a',
+        year: year + 2,
+        dilutionFactor: 1.1,
+        revenue: 10,
+        psMultiple: 10,
+      }),
+      yearRow({
+        id: 'b',
+        year: year + 4,
+        dilutionFactor: 1.1,
+        revenue: 10,
+        psMultiple: 10,
+      }),
+    ]
+    const out = buildAdvancedProjections(50, stacked, year)
+    const first = out.find((r) => r.year === year + 2 && r.basis === 'ps')!
+    const second = out.find((r) => r.year === year + 4 && r.basis === 'ps')!
+    expect(first.marketCap).toBe(100)
+    expect(first.dilutionFactor).toBeCloseTo(1.1)
+    expect(first.equityValue).toBeCloseTo(100 / 1.1)
+    expect(second.dilutionFactor).toBeCloseTo(1.21)
+    expect(second.equityValue).toBeCloseTo(100 / 1.21)
   })
 })
 
@@ -276,6 +359,48 @@ describe('buildChartSeries CAGR path', () => {
     expect(mid.easyActual).toBeUndefined()
     const end = series.find((p) => p.year === 2030)!
     expect(end.easyActual).toBe(true)
+  })
+
+  it('advanced series uses post-dilution equity, not firm mcap', () => {
+    const rows: YearProjection[] = [
+      {
+        id: 'y',
+        year: 2030,
+        dilutionFactor: 2,
+        revenue: 20,
+        psMultiple: 10, // firm mcap 200
+        fcf: null,
+        pfcfMultiple: null,
+        profit: null,
+        peMultiple: null,
+      },
+    ]
+    const series = buildChartSeries(100, 'advanced', [], rows, 2026)
+    const end = series.find((p) => p.year === 2030)!
+    expect(end.ps).toBe(100) // 200 / 2
+    expect(end.psActual).toBe(true)
+  })
+
+  it('compounds yearly dilution on the advanced chart path', () => {
+    const rows: YearProjection[] = [
+      yearRow({
+        id: 'a',
+        year: 2028,
+        dilutionFactor: 1.1,
+        revenue: 20,
+        psMultiple: 10,
+      }),
+      yearRow({
+        id: 'b',
+        year: 2030,
+        dilutionFactor: 1.1,
+        revenue: 20,
+        psMultiple: 10,
+      }),
+    ]
+    const series = buildChartSeries(100, 'advanced', [], rows, 2026)
+    expect(series.find((p) => p.year === 2028)!.ps).toBeCloseTo(200 / 1.1)
+    expect(series.find((p) => p.year === 2030)!.ps).toBeCloseTo(200 / 1.21)
   })
 })
 

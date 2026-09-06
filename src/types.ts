@@ -22,9 +22,8 @@ export type YearProjection = {
   id: string
   year: number
   /**
-   * Cumulative share count vs today.
-   * 1.0 = no dilution; 1.1 = 10% more shares by this year.
-   * Shareholder ROI uses (mcap growth) / dilutionFactor.
+   * Extra shares this year vs the prior stated year (1.0 = none; 1.05 = +5% this year).
+   * Shareholder equity divides mcap by the product of these yearly factors up to this year.
    */
   dilutionFactor: number
   revenue: number | null
@@ -55,6 +54,7 @@ export type ProjectionRow = {
   marketCap: number
   /** Equity-value equivalent after dilution (= marketCap / dilutionFactor) */
   equityValue: number
+  /** Cumulative shares vs today (product of yearly dilution inputs through this year). */
   dilutionFactor: number
   totalReturn: number
   cagr: number
@@ -255,6 +255,14 @@ export type PortfolioContributionsState = {
   currency: DisplayCurrency
   /** Calendar year → amount in `currency`. */
   byYear: Record<string, number>
+}
+
+/** Shared end-of-month portfolio totals (all scenarios). Past bars / History. */
+export type PortfolioActualsState = {
+  version: 1
+  currency: DisplayCurrency
+  /** `YYYY-MM` → amount in `currency`. */
+  byMonth: Record<string, number>
 }
 
 // --- Overview (net-worth stack config; display CHF) ---
@@ -559,11 +567,10 @@ export type SavedPortfolio = {
    */
   holdingSort?: PortfolioHoldingSort
   /**
-   * End-of-month whole-portfolio totals (manual actuals).
-   * Keys: `YYYY-MM`. Amounts in `actualsCurrency` (default USD).
+   * @deprecated Shared in `PortfolioActualsState`. Parsed only to migrate old saves.
    */
   actuals?: Record<string, number>
-  /** Denomination of `actuals` amounts. Missing = USD (legacy). */
+  /** @deprecated See `PortfolioActualsState.currency`. */
   actualsCurrency?: DisplayCurrency
   /**
    * Chart overlay: `amount` (in `currency`) at `year`. Later years:

@@ -496,8 +496,9 @@ export function ProjectionPanel({
           }
           tip={
             <InfoTip label="About advanced assumptions">
-              Per year: fundamentals × multiples for implied mcap. Dilution factor scales
-              shareholder ROI (1.0 = none). Leave unused bases blank.
+              Per year: fundamentals × multiples for implied mcap. Dilution is that year’s extra
+              shares (1.05 = +5%) and compounds with earlier years. 1.0 = none. Leave unused
+              bases blank.
             </InfoTip>
           }
         />

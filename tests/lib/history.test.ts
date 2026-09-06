@@ -7,9 +7,17 @@ import {
   historySeriesId,
   rollupYearly,
   seriesCompleteness,
+  SHARED_PORTFOLIO_SOURCE_ID,
 } from '../../src/lib/history'
 import { newPortfolio } from '../../src/lib/portfolio'
-import type { SavingsAccount } from '../../src/types'
+import type { PortfolioActualsState, SavingsAccount } from '../../src/types'
+
+function sharedActuals(
+  byMonth: Record<string, number>,
+  currency: PortfolioActualsState['currency'] = 'USD',
+): PortfolioActualsState {
+  return { version: 1, currency, byMonth }
+}
 
 function savings(partial: Partial<SavingsAccount> & Pick<SavingsAccount, 'id' | 'name'>): SavingsAccount {
   return {
@@ -37,19 +45,22 @@ describe('rollupYearly', () => {
 })
 
 describe('collectHistorySeries', () => {
-  it('skips empty actuals and converts USD portfolios when FX is present', () => {
+  it('skips empty actuals and converts USD investing actuals when FX is present', () => {
     const usd = newPortfolio('Broker')
-    usd.actuals = { '2025-12': 100_000 }
-    usd.actualsCurrency = 'USD'
     const empty = newPortfolio('Empty')
     const cash = savings({
       id: 'c',
       name: 'Cash',
       actuals: { '2025-12': 10_000 },
     })
-    const series = collectHistorySeries([usd, empty], [cash], 0.8)
+    const series = collectHistorySeries(
+      [usd, empty],
+      [cash],
+      0.8,
+      sharedActuals({ '2025-12': 100_000 }),
+    )
     expect(series).toHaveLength(2)
-    expect(series[0]!.id).toBe(historySeriesId('portfolio', usd.id))
+    expect(series[0]!.id).toBe(historySeriesId('portfolio', SHARED_PORTFOLIO_SOURCE_ID))
     expect(series[0]!.inChf).toBe(true)
     expect(series[0]!.points[0]!.value).toBeCloseTo(80_000)
     expect(series[1]!.kind).toBe('savings')
@@ -58,25 +69,44 @@ describe('collectHistorySeries', () => {
 
   it('leaves USD series unconverted without FX', () => {
     const usd = newPortfolio('Broker')
-    usd.actuals = { '2025-12': 100_000 }
-    usd.actualsCurrency = 'USD'
-    const series = collectHistorySeries([usd], [], null)
+    const series = collectHistorySeries(
+      [usd],
+      [],
+      null,
+      sharedActuals({ '2025-12': 100_000 }),
+    )
     expect(series).toHaveLength(1)
     expect(series[0]!.inChf).toBe(false)
     expect(series[0]!.points[0]!.value).toBe(100_000)
+  })
+
+  it('emits one investing series even with two portfolios', () => {
+    const a = newPortfolio('A')
+    const b = newPortfolio('B')
+    const series = collectHistorySeries(
+      [a, b],
+      [],
+      0.8,
+      sharedActuals({ '2025-12': 50_000 }),
+    )
+    expect(series.filter((s) => s.kind === 'portfolio')).toHaveLength(1)
+    expect(series[0]!.points[0]!.value).toBeCloseTo(40_000)
   })
 })
 
 describe('buildHistoryChart / table / snapshot', () => {
   const p = newPortfolio('Broker')
-  p.actuals = { '2024-12': 80_000, '2025-06': 90_000, '2025-12': 100_000 }
-  p.actualsCurrency = 'CHF'
   const cash = savings({
     id: 'c',
     name: 'Cash',
     actuals: { '2024-12': 20_000, '2025-12': 25_000 },
   })
-  const series = collectHistorySeries([p], [cash], null)
+  const series = collectHistorySeries(
+    [p],
+    [cash],
+    null,
+    sharedActuals({ '2024-12': 80_000, '2025-06': 90_000, '2025-12': 100_000 }, 'CHF'),
+  )
 
   it('unions monthly keys and totals CHF series', () => {
     const chart = buildHistoryChart(series, 'monthly', 2024, 2025)
@@ -94,7 +124,7 @@ describe('buildHistoryChart / table / snapshot', () => {
 
   it('table YoY uses consecutive year-ends', () => {
     const table = buildHistoryTable(series, 2024, 2025)
-    const broker = table.rows.find((r) => r.name === 'Broker')!
+    const broker = table.rows.find((r) => r.name === 'Portfolio')!
     expect(broker.byYear[2024]).toBe(80_000)
     expect(broker.byYear[2025]).toBe(100_000)
     expect(broker.yoy).toBeCloseTo(0.25)

@@ -39,10 +39,18 @@ import { portfolioTotalUsdAtYear as overviewPortfolioTotalUsdAtYear } from '../.
 import type {
   CashflowLine,
   PortfolioAction,
+  PortfolioActualsState,
   PortfolioHolding,
   SavedPortfolio,
   SavedScenario,
 } from '../../src/types'
+
+function sharedActuals(
+  byMonth: Record<string, number>,
+  currency: PortfolioActualsState['currency'] = 'USD',
+): PortfolioActualsState {
+  return { version: 1, currency, byMonth }
+}
 
 function basePortfolio(overrides: Partial<SavedPortfolio> = {}): SavedPortfolio {
   const now = new Date().toISOString()
@@ -611,32 +619,29 @@ describe('manual / option positions', () => {
 
 describe('portfolio actuals and chart', () => {
   it('yearEndActualUsd uses last month with a value', () => {
-    const p = basePortfolio({
-      actuals: {
-        [makeActualKey(2024, 3)]: 100,
-        [makeActualKey(2024, 11)]: 200,
-        [makeActualKey(2024, 6)]: 150,
-      },
-      actualsCurrency: 'USD',
+    const actuals = sharedActuals({
+      [makeActualKey(2024, 3)]: 100,
+      [makeActualKey(2024, 11)]: 200,
+      [makeActualKey(2024, 6)]: 150,
     })
-    expect(yearEndActualUsd(p, 2024, null)).toBe(200)
-    expect(yearEndActualUsd(p, 2023, null)).toBeNull()
+    expect(yearEndActualUsd(actuals, 2024, null)).toBe(200)
+    expect(yearEndActualUsd(actuals, 2023, null)).toBeNull()
   })
 
   it('chart includes Now between past actuals and current year', () => {
     const p = basePortfolio({
       deposits: [newOpeningDeposit(1_000, 2026)],
-      actuals: {
-        [makeActualKey(2024, 12)]: 50_000,
-        [makeActualKey(2025, 6)]: 55_000,
-      },
-      actualsCurrency: 'USD',
+    })
+    const actuals = sharedActuals({
+      [makeActualKey(2024, 12)]: 50_000,
+      [makeActualKey(2025, 6)]: 55_000,
     })
     const grid = buildPortfolioGrid(p, [], 2026, { throughYear: 2027 })
     const data = buildPortfolioChartData(grid, p, [], 2026, {
       mode: 'total',
       fromYear: 2024,
       toYear: 2027,
+      actuals,
     })
     const years = data.map((d) => (d.isNow ? 'now' : String(d.year)))
     expect(years).toEqual(['2024', '2025', 'now', '2026', '2027'])
@@ -648,6 +653,17 @@ describe('portfolio actuals and chart', () => {
     expect(y2024?.[PORTFOLIO_TOTAL_CHART_KEY]).toBe(50_000)
     const y2025 = data.find((d) => d.year === 2025)
     expect(y2025?.total).toBe(55_000)
+  })
+
+  it('two portfolios share the same past actual bar', () => {
+    const actuals = sharedActuals({ [makeActualKey(2024, 12)]: 80_000 })
+    const a = basePortfolio({ id: 'a', deposits: [newOpeningDeposit(1, 2026)] })
+    const b = basePortfolio({ id: 'b', deposits: [newOpeningDeposit(2, 2026)] })
+    const opts = { mode: 'total' as const, fromYear: 2024, toYear: 2026, actuals }
+    const da = buildPortfolioChartData(buildPortfolioGrid(a, [], 2026), a, [], 2026, opts)
+    const db = buildPortfolioChartData(buildPortfolioGrid(b, [], 2026), b, [], 2026, opts)
+    expect(da.find((d) => d.year === 2024)?.total).toBe(80_000)
+    expect(db.find((d) => d.year === 2024)?.total).toBe(80_000)
   })
 
   it('Now bar uses sharesHeld only — ignores buy/sell actions', () => {
@@ -819,32 +835,6 @@ describe('applyPortfolioValuesToTarget', () => {
     expect(copied!.manualOnly).toBe(true)
   })
 
-  it('actuals-only overwrites monthly totals and currency', () => {
-    const source = basePortfolio({
-      deposits: [newOpeningDeposit(1, 2026)],
-      actuals: { '2024-12': 100_000, '2025-06': 110_000 },
-      actualsCurrency: 'CHF',
-    })
-    const target = basePortfolio({
-      id: 'p2',
-      name: 'Other',
-      deposits: [newOpeningDeposit(99, 2026)],
-      actuals: { '2023-01': 1 },
-      actualsCurrency: 'USD',
-    })
-    const next = applyPortfolioValuesToTarget(source, target, { actuals: true })
-    expect(next.actuals).toEqual({ '2024-12': 100_000, '2025-06': 110_000 })
-    expect(next.actualsCurrency).toBe('CHF')
-    expect(getOpeningCash(next)).toBe(99)
-    expect(next.id).toBe('p2')
-
-    const cleared = applyPortfolioValuesToTarget(
-      basePortfolio({ deposits: [newOpeningDeposit(1, 2026)] }),
-      target,
-      { actuals: true },
-    )
-    expect(cleared.actuals).toBeUndefined()
-  })
 })
 
 describe('already deposited', () => {
@@ -1001,6 +991,16 @@ describe('clonePortfolio', () => {
     expect(surplus).toBeTruthy()
     expect(surplus!.surplusScenarioId).toBe('sc-1')
     expect(surplus!.surplusPercent).toBe(40)
+  })
+
+  it('does not copy embedded actuals (shared store owns them)', () => {
+    const source = basePortfolio({
+      actuals: { '2024-12': 100_000 },
+      actualsCurrency: 'CHF',
+    })
+    const copy = clonePortfolio(source, 'Copy')
+    expect(copy.actuals).toBeUndefined()
+    expect(copy.actualsCurrency).toBeUndefined()
   })
 })
 

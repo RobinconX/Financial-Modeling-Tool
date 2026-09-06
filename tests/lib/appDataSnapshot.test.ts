@@ -24,6 +24,7 @@ describe('appDataSnapshot', () => {
     expect(parsed.annotations).toEqual([])
     expect(parsed.goals).toEqual([])
     expect(parsed.portfolioContributions).toEqual({ version: 1, currency: 'USD', byYear: {} })
+    expect(parsed.portfolioActuals).toEqual({ version: 1, currency: 'USD', byMonth: {} })
     expect(parsed.linkedSaveMode).toBeUndefined()
   })
 
@@ -41,6 +42,38 @@ describe('appDataSnapshot', () => {
     expect('error' in parsed).toBe(false)
     if ('error' in parsed) return
     expect(parsed.linkedSaveMode).toBe('edits')
+  })
+
+  it('promotes embedded portfolio actuals when snapshot has no shared store', () => {
+    const parsed = parseAppDataSnapshot({
+      version: APP_DATA_SNAPSHOT_VERSION,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      scenarios: [],
+      portfolios: [
+        {
+          id: 'p1',
+          name: 'Main',
+          currentCash: 0,
+          deposits: [],
+          holdings: [],
+          actions: [],
+          actuals: { '2024-12': 42_000 },
+          actualsCurrency: 'CHF',
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      incomeCost: { version: 3, scenarios: [], lines: [], draws: [] },
+      savings: { version: 1, accounts: [] },
+      overview: { version: 2, scenarios: [], selectedScenarioId: null },
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed) return
+    expect(parsed.portfolioActuals).toEqual({
+      version: 1,
+      currency: 'CHF',
+      byMonth: { '2024-12': 42_000 },
+    })
   })
 
   it('keeps selectedPortfolioId on a snapshot', () => {

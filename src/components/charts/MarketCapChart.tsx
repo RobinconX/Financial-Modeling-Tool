@@ -158,7 +158,7 @@ export function MarketCapChart({
             disabled={!canShowPrice}
             title={
               canShowPrice
-                ? 'Share price = market cap ÷ shares outstanding'
+                ? 'Share price = plotted value ÷ current shares'
                 : 'Needs shares outstanding (refresh quote)'
             }
             aria-pressed={effectiveMetric === 'price'}

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
-import type { SavedPortfolio, SavingsAccount } from '../../types'
+import type { PortfolioActualsState, SavedPortfolio, SavingsAccount } from '../../types'
 import { fetchFxRateClient } from '../../lib/fx'
 import { formatMoney, formatPercent } from '../../lib/format'
 import {
@@ -28,6 +28,7 @@ const SPLIT_KEY = 'grok-lab-history-chart-split'
 type Props = {
   portfolios: SavedPortfolio[]
   savingsAccounts: SavingsAccount[]
+  portfolioActuals?: PortfolioActualsState | null
 }
 
 function readJsonIds(): string[] | null {
@@ -70,7 +71,11 @@ function readSplit(): HistoryChartSplit {
   return 'total'
 }
 
-export function HistoryView({ portfolios, savingsAccounts }: Props) {
+export function HistoryView({
+  portfolios,
+  savingsAccounts,
+  portfolioActuals = null,
+}: Props) {
   const [usdToChf, setUsdToChf] = useState<number | null>(null)
   const [fxError, setFxError] = useState<string | null>(null)
   const [resolution, setResolution] = useState<HistoryResolution>(readRes)
@@ -107,8 +112,8 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
   }, [loadFx])
 
   const allSeries = useMemo(
-    () => collectHistorySeries(portfolios, savingsAccounts, usdToChf),
-    [portfolios, savingsAccounts, usdToChf],
+    () => collectHistorySeries(portfolios, savingsAccounts, usdToChf, portfolioActuals),
+    [portfolios, savingsAccounts, usdToChf, portfolioActuals],
   )
 
   const includedIds = useMemo(() => {
@@ -241,8 +246,8 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <InfoTip label="About history">
-            Recorded end-of-month actuals only — portfolios and savings. Yearly uses the last month
-            you entered in that year. Totals are CHF; USD portfolios join once a rate is available.
+            Recorded end-of-month actuals only — investing (shared) and savings. Yearly uses the last
+            month you entered in that year. Totals are CHF; USD actuals join once a rate is available.
           </InfoTip>
           <Seg
             label="Resolution"
@@ -312,7 +317,7 @@ export function HistoryView({ portfolios, savingsAccounts }: Props) {
 
       {needsFx ? (
         <p className="text-[11px] text-amber-300/90">
-          Some portfolio actuals are in USD
+          Investing actuals are in USD
           {fxError ? ` — ${fxError}` : ' and need a CHF rate to join the total'}.
           <button type="button" className="btn-ghost ml-2 !py-0.5 !text-[11px]" onClick={() => void loadFx()}>
             Retry FX

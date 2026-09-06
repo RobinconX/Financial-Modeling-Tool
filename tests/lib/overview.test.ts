@@ -19,9 +19,17 @@ import type {
   CashflowLine,
   OverviewScenario,
   OverviewSeries,
+  PortfolioActualsState,
   SavedPortfolio,
   SavingsAccount,
 } from '../../src/types'
+
+function sharedActuals(
+  byMonth: Record<string, number>,
+  currency: PortfolioActualsState['currency'] = 'USD',
+): PortfolioActualsState {
+  return { version: 1, currency, byMonth }
+}
 
 const asOf = new Date(2026, 6, 15) // Jul 2026
 
@@ -341,6 +349,10 @@ describe('buildOverviewChartRows', () => {
       incomeCostLines: [],
       usdToChf: 0.9,
       asOf,
+      portfolioActuals: sharedActuals({
+        [makeActualKey(2024, 12)]: 100_000,
+        [makeActualKey(2025, 6)]: 120_000,
+      }),
     }
     const rows = buildOverviewChartRows(
       {
@@ -375,6 +387,54 @@ describe('buildOverviewChartRows', () => {
     // last actual in 2025 is June 120k USD → 108k CHF
     expect(y2025?.['p']).toBeCloseTo(108_000, 4)
     expect(y2025?.total).toBeCloseTo(118_000, 4)
+  })
+
+  it('counts shared portfolio actuals once when two portfolio series are enabled', () => {
+    const a: SavedPortfolio = {
+      id: 'port-a',
+      name: 'A',
+      currentCash: 0,
+      deposits: [],
+      holdings: [],
+      actions: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const b = { ...a, id: 'port-b', name: 'B' }
+    const deps = {
+      portfolios: [a, b],
+      stockScenarios: [],
+      savingsAccounts: [],
+      incomeCostLines: [],
+      usdToChf: 0.9,
+      asOf,
+      portfolioActuals: sharedActuals({ [makeActualKey(2024, 12)]: 100_000 }),
+    }
+    const series: OverviewSeries[] = [
+      {
+        id: 'pa',
+        name: 'A',
+        enabled: true,
+        sortOrder: 0,
+        type: 'portfolio',
+        portfolioId: 'port-a',
+      },
+      {
+        id: 'pb',
+        name: 'B',
+        enabled: true,
+        sortOrder: 1,
+        type: 'portfolio',
+        portfolioId: 'port-b',
+      },
+    ]
+    const rows = buildOverviewChartRows({ startYear: 2024, endYear: 2026, series }, deps)
+    const y2024 = rows.find((r) => r.xKey === '2024')
+    expect(y2024?.['pa']).toBeCloseTo(90_000, 4)
+    expect(y2024?.['pb']).toBe(0)
+    expect(y2024?.total).toBeCloseTo(90_000, 4)
+    const recorded = recordedOverviewByYear(series, deps)
+    expect(recorded.get(2024)).toBeCloseTo(90_000, 4)
   })
 })
 
@@ -839,6 +899,10 @@ describe('recordedOverviewByYear', () => {
     incomeCostLines: [],
     usdToChf: 0.9,
     asOf,
+    portfolioActuals: sharedActuals({
+      [makeActualKey(2024, 12)]: 100_000,
+      [makeActualKey(2025, 6)]: 120_000,
+    }),
   }
 
   it('sums enabled portfolio + savings actuals the same way past bars do', () => {

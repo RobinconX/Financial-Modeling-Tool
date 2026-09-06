@@ -106,10 +106,33 @@ export function normalizeDilution(factor: number | null | undefined): number {
 
 /**
  * Shareholder claim on future mcap after dilution.
- * dilutionFactor = future shares / today shares (1.0 = none).
+ * `dilutionFactor` here is cumulative shares vs today (1.0 = none).
  */
 export function equityValueAfterDilution(marketCap: number, dilutionFactor: number): number {
   return marketCap / normalizeDilution(dilutionFactor)
+}
+
+/**
+ * Product of yearly dilution rates up to each year.
+ * Last row wins when two rows share a year. Years before `fromYear` are ignored
+ * (today’s share count already includes the past).
+ */
+export function cumulativeDilutionByYear(
+  rows: YearProjection[],
+  fromYear?: number,
+): Map<number, number> {
+  const yearly = new Map<number, number>()
+  for (const row of sortYearProjections(rows)) {
+    if (fromYear != null && row.year < fromYear) continue
+    yearly.set(row.year, normalizeDilution(row.dilutionFactor))
+  }
+  const out = new Map<number, number>()
+  let cum = 1
+  for (const year of [...yearly.keys()].sort((a, b) => a - b)) {
+    cum *= yearly.get(year)!
+    out.set(year, cum)
+  }
+  return out
 }
 
 export function impliedFromPS(revenue: number, ps: number): number {
@@ -181,11 +204,12 @@ export function buildAdvancedProjections(
   const asOfDate = resolveAsOf(asOf)
   const results: ProjectionRow[] = []
   const bases: ValuationBasis[] = ['ps', 'pfcf', 'pe']
+  const cumulative = cumulativeDilutionByYear(rows, asOfDate.getFullYear())
 
   for (const row of rows) {
     const years = yearsUntilProjectionEnd(row.year, asOfDate)
     if (years < 0) continue
-    const dilution = normalizeDilution(row.dilutionFactor)
+    const dilution = cumulative.get(row.year) ?? normalizeDilution(row.dilutionFactor)
     for (const basis of bases) {
       const mcap = impliedForBasis(row, basis)
       if (mcap == null || mcap <= 0) continue
@@ -418,7 +442,9 @@ export function advancedCagrGapYears(
 
 /**
  * Insert real advanced year rows between consecutive stated years, interpolating
- * fundamentals / multiples / dilution by implied CAGR.
+ * fundamentals / multiples / yearly dilution by implied CAGR.
+ * Dilution is a per-year rate: gap years between user-stated years interpolate
+ * that rate; years filled from today stay at 1.0 (no assumed dilution).
  * With `currentMarketCap`, also fills from today to the first fillable year
  * (works with a single future projection). Does not overwrite existing years.
  */
@@ -462,8 +488,10 @@ export function materializeAdvancedCagrYears(
     for (let y = a.year + 1; y < b.year; y++) {
       if (byYear.has(y)) continue
       const dilution =
-        interpPositiveField(a.year, a.dilutionFactor, b.year, b.dilutionFactor, y) ??
-        normalizeDilution(a.dilutionFactor)
+        a.id === '__cagr_start__'
+          ? 1
+          : interpPositiveField(a.year, a.dilutionFactor, b.year, b.dilutionFactor, y) ??
+            normalizeDilution(a.dilutionFactor)
       byYear.set(y, {
         id: crypto.randomUUID(),
         year: y,
@@ -575,6 +603,7 @@ export function buildChartSeries(
   let hasPs = false
   let hasPfcf = false
   let hasPe = false
+  const cumulative = cumulativeDilutionByYear(advancedRows, currentYear)
 
   for (const row of sortYearProjections(advancedRows)) {
     if (row.year < currentYear) continue
@@ -583,20 +612,22 @@ export function buildChartSeries(
     const pe = impliedForBasis(row, 'pe')
     if (ps == null && pfcf == null && pe == null) continue
 
+    // Shareholder path: same equity claim used for ROI / table share price
+    const dilution = cumulative.get(row.year) ?? normalizeDilution(row.dilutionFactor)
     maxYear = Math.max(maxYear, row.year)
     const point = sparse.get(row.year) ?? { year: row.year }
     if (ps != null) {
-      point.ps = ps
+      point.ps = equityValueAfterDilution(ps, dilution)
       point.psActual = true
       hasPs = true
     }
     if (pfcf != null) {
-      point.pfcf = pfcf
+      point.pfcf = equityValueAfterDilution(pfcf, dilution)
       point.pfcfActual = true
       hasPfcf = true
     }
     if (pe != null) {
-      point.pe = pe
+      point.pe = equityValueAfterDilution(pe, dilution)
       point.peActual = true
       hasPe = true
     }

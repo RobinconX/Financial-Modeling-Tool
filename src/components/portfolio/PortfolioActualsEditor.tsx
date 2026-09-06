@@ -1,12 +1,12 @@
 import { useMemo, useState } from 'react'
-import type { DisplayCurrency, SavedPortfolio } from '../../types'
+import type { DisplayCurrency, PortfolioActualsState } from '../../types'
 import {
-  applyPortfolioValuesToTarget,
   getActualsCurrency,
   getActualsMap,
   listActualYears,
   makeActualKey,
 } from '../../lib/portfolio'
+import { clearActualYear, hasActualMonths, setActualMonth } from '../../lib/portfolioActuals'
 import { amountToDisplay } from '../../lib/fx'
 import { formatMoney, parseMoney } from '../../lib/format'
 import { handleSheetNavKey, parseClipboardGrid } from '../../lib/sheetGrid'
@@ -28,13 +28,11 @@ const MONTHS = [
 ] as const
 
 type Props = {
-  portfolio: SavedPortfolio
-  onChange: (patch: Partial<SavedPortfolio>) => void
+  actuals: PortfolioActualsState
+  onChange: (next: PortfolioActualsState) => void
   displayCurrency: DisplayCurrency
   usdToChf: number | null
-  /** Other portfolios for “copy actuals to…” */
-  otherPortfolios?: SavedPortfolio[]
-  onUpdateOtherPortfolio?: (id: string, patch: Partial<SavedPortfolio>) => boolean
+  error?: string | null
 }
 
 function roundInput(n: number): number {
@@ -43,18 +41,17 @@ function roundInput(n: number): number {
 }
 
 export function PortfolioActualsEditor({
-  portfolio,
+  actuals,
   onChange,
   displayCurrency,
   usdToChf,
-  otherPortfolios = [],
-  onUpdateOtherPortfolio,
+  error,
 }: Props) {
   const currentYear = new Date().getFullYear()
   const currentMonth = new Date().getMonth() + 1
-  const actuals = getActualsMap(portfolio)
-  const storeCurrency = getActualsCurrency(portfolio)
-  const yearsWithData = listActualYears(portfolio)
+  const map = getActualsMap(actuals)
+  const storeCurrency = getActualsCurrency(actuals)
+  const yearsWithData = listActualYears(actuals)
 
   const yearOptions = useMemo(() => {
     const set = new Set<number>([currentYear, ...yearsWithData])
@@ -64,51 +61,48 @@ export function PortfolioActualsEditor({
 
   const [year, setYear] = useState(currentYear)
   const [addYearText, setAddYearText] = useState('')
-  const [showPropagate, setShowPropagate] = useState(false)
-  const [propagateIds, setPropagateIds] = useState<Record<string, boolean>>({})
-  const [propagateMsg, setPropagateMsg] = useState<string | null>(null)
 
-  const entryCurrency: DisplayCurrency =
-    portfolio.actualsCurrency ??
-    (Object.keys(actuals).length === 0 ? displayCurrency : storeCurrency)
+  const entryCurrency: DisplayCurrency = hasActualMonths(actuals)
+    ? storeCurrency
+    : displayCurrency
 
-  function commitActuals(next: Record<string, number>) {
-    onChange({
-      actuals: Object.keys(next).length ? next : undefined,
-      actualsCurrency: entryCurrency,
-    })
+  function commit(next: PortfolioActualsState) {
+    const currency =
+      Object.keys(next.byMonth).length === 0 ? entryCurrency : next.currency
+    onChange({ ...next, currency })
   }
 
-  function writeMonth(next: Record<string, number>, month: number, raw: string) {
-    if (year > currentYear || (year === currentYear && month > currentMonth)) return
-    const key = makeActualKey(year, month)
+  function writeMonth(state: PortfolioActualsState, month: number, raw: string) {
+    if (year > currentYear || (year === currentYear && month > currentMonth)) return state
     const trimmed = raw.trim()
-    if (!trimmed) {
-      delete next[key]
-      return
-    }
+    if (!trimmed) return setActualMonth(state, year, month, null)
     const parsed = parseMoney(trimmed)
-    if (parsed == null || parsed < 0) return
-    next[key] = parsed
+    if (parsed == null || parsed < 0) return state
+    return setActualMonth(state, year, month, parsed)
   }
 
   function setMonthValue(month: number, raw: string) {
-    const next = { ...actuals }
-    writeMonth(next, month, raw)
-    commitActuals(next)
+    let next = actuals
+    if (!hasActualMonths(actuals) && actuals.currency !== entryCurrency) {
+      next = { ...actuals, currency: entryCurrency }
+    }
+    commit(writeMonth(next, month, raw))
   }
 
   function pasteMonths(startRow: number, text: string): boolean {
     const grid = parseClipboardGrid(text)
     if (grid.length === 0) return false
     if (grid.length === 1 && (grid[0]?.length ?? 0) <= 1) return false
-    const next = { ...actuals }
+    let next = actuals
+    if (!hasActualMonths(actuals) && actuals.currency !== entryCurrency) {
+      next = { ...actuals, currency: entryCurrency }
+    }
     for (let i = 0; i < grid.length; i++) {
       const month = startRow + i + 1
       if (month < 1 || month > 12) break
-      writeMonth(next, month, grid[i]?.[0] ?? '')
+      next = writeMonth(next, month, grid[i]?.[0] ?? '')
     }
-    commitActuals(next)
+    commit(next)
     return true
   }
 
@@ -119,51 +113,10 @@ export function PortfolioActualsEditor({
     setAddYearText('')
   }
 
-  function clearYear() {
-    const next = { ...actuals }
-    for (let m = 1; m <= 12; m++) {
-      delete next[makeActualKey(year, m)]
-    }
-    commitActuals(next)
-  }
-
-  function openPropagate() {
-    const init: Record<string, boolean> = {}
-    for (const p of otherPortfolios) init[p.id] = true
-    setPropagateIds(init)
-    setPropagateMsg(null)
-    setShowPropagate(true)
-  }
-
-  function applyPropagate() {
-    if (!onUpdateOtherPortfolio) return
-    const targets = otherPortfolios.filter((p) => propagateIds[p.id])
-    if (targets.length === 0) {
-      setPropagateMsg('Select at least one portfolio.')
-      return
-    }
-    let n = 0
-    for (const t of targets) {
-      const next = applyPortfolioValuesToTarget(portfolio, t, { actuals: true })
-      if (
-        onUpdateOtherPortfolio(t.id, {
-          actuals: next.actuals,
-          actualsCurrency: next.actualsCurrency,
-        })
-      ) {
-        n += 1
-      }
-    }
-    setPropagateMsg(`Copied actuals to ${n} portfolio${n === 1 ? '' : 's'}.`)
-    setShowPropagate(false)
-  }
-
   const monthsFilled = MONTHS.reduce((n, _, i) => {
-    const v = actuals[makeActualKey(year, i + 1)]
+    const v = map[makeActualKey(year, i + 1)]
     return n + (v != null && Number.isFinite(v) ? 1 : 0)
   }, 0)
-
-  const totalKeys = Object.keys(actuals).length
 
   return (
     <div className="space-y-4">
@@ -171,92 +124,14 @@ export function PortfolioActualsEditor({
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-emerald-300/90">Monthly actuals</h3>
           <InfoTip label="About portfolio actuals">
-            Enter end-of-month portfolio totals (once per month). Stored in {entryCurrency}. Arrow
-            keys move · Enter down · paste a column from Excel. Chart uses the last actual of each
-            year for past bars.
+            End-of-month totals for the whole investing pile — shared by every portfolio scenario.
+            Stored in {entryCurrency}. Arrow keys move · Enter down · paste a column from Excel.
+            Charts use the last actual of each year for past bars.
           </InfoTip>
         </div>
-        {otherPortfolios.length > 0 && onUpdateOtherPortfolio && (
-          <button
-            type="button"
-            className="btn-ghost !py-1 !text-xs"
-            onClick={openPropagate}
-            title="Overwrite monthly actuals on other portfolios with this portfolio’s values"
-          >
-            Copy actuals…
-          </button>
-        )}
       </div>
 
-      {propagateMsg && (
-        <p className="text-[11px] text-emerald-300/90">{propagateMsg}</p>
-      )}
-
-      {showPropagate && otherPortfolios.length > 0 && onUpdateOtherPortfolio && (
-        <div className="space-y-3 rounded-lg border border-emerald-500/30 bg-emerald-500/10 p-3">
-          <div className="flex items-start justify-between gap-2">
-            <div>
-              <h4 className="text-sm font-semibold text-white/90">
-                Copy actuals to other portfolios
-              </h4>
-              <p className="text-[11px] text-white/45">
-                Overwrite monthly end-of-month totals and actuals currency on the selected
-                portfolios
-                {totalKeys > 0
-                  ? ` (${totalKeys} month${totalKeys === 1 ? '' : 's'} in this portfolio).`
-                  : ' (this portfolio has no actuals — targets will be cleared).'}
-              </p>
-            </div>
-            <button
-              type="button"
-              className="btn-ghost !py-1 !text-xs"
-              onClick={() => setShowPropagate(false)}
-            >
-              Cancel
-            </button>
-          </div>
-          <div className="max-h-40 space-y-1 overflow-y-auto rounded-md border border-white/10 bg-black/20 p-2">
-            <div className="mb-1 flex gap-2">
-              <button
-                type="button"
-                className="text-[11px] text-emerald-400/90 hover:underline"
-                onClick={() => {
-                  const all: Record<string, boolean> = {}
-                  for (const p of otherPortfolios) all[p.id] = true
-                  setPropagateIds(all)
-                }}
-              >
-                Select all
-              </button>
-              <button
-                type="button"
-                className="text-[11px] text-white/45 hover:underline"
-                onClick={() => setPropagateIds({})}
-              >
-                None
-              </button>
-            </div>
-            {otherPortfolios.map((p) => (
-              <label
-                key={p.id}
-                className="flex cursor-pointer items-center gap-2 rounded px-1 py-0.5 text-sm text-white/80 hover:bg-white/5"
-              >
-                <input
-                  type="checkbox"
-                  checked={!!propagateIds[p.id]}
-                  onChange={(e) =>
-                    setPropagateIds((prev) => ({ ...prev, [p.id]: e.target.checked }))
-                  }
-                />
-                <span className="truncate">{p.name}</span>
-              </label>
-            ))}
-          </div>
-          <button type="button" className="btn-primary !py-1.5 !text-xs" onClick={applyPropagate}>
-            Apply to selected
-          </button>
-        </div>
-      )}
+      {error ? <p className="text-sm text-red-300">{error}</p> : null}
 
       <div className="flex flex-wrap items-end gap-3">
         <div>
@@ -301,7 +176,7 @@ export function PortfolioActualsEditor({
           <button
             type="button"
             className="btn-ghost !py-1.5 !text-xs text-red-300/80"
-            onClick={clearYear}
+            onClick={() => commit(clearActualYear(actuals, year))}
           >
             Clear {year}
           </button>
@@ -323,7 +198,7 @@ export function PortfolioActualsEditor({
             {MONTHS.map((label, i) => {
               const month = i + 1
               const key = makeActualKey(year, month)
-              const stored = actuals[key]
+              const stored = map[key]
               const isFuture =
                 year > currentYear || (year === currentYear && month > currentMonth)
               const display =

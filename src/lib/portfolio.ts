@@ -5,6 +5,7 @@ import type {
   PortfolioAction,
   PortfolioDeposit,
   PortfolioDepositSource,
+  PortfolioActualsState,
   PortfolioContributionsState,
   PortfolioGrid,
   PortfolioGridRow,
@@ -183,12 +184,10 @@ export type PropagatePortfolioFields = {
    * (holding ids remapped source → target).
    */
   actions?: boolean
-  /** Monthly end-of-month actuals map + currency (full overwrite) */
-  actuals?: boolean
 }
 
 /**
- * Copy cash, positions, and/or actuals from source onto target.
+ * Copy cash and/or positions from source onto target.
  * Holdings are matched by symbol; unmatched source positions are appended.
  * Target-only symbols are left unchanged. Does not change target id/name/createdAt.
  */
@@ -200,15 +199,12 @@ export function applyPortfolioValuesToTarget(
   const doCash = !!fields.cash
   const doHoldings = !!fields.holdings
   const doActions = !!fields.actions && doHoldings
-  const doActuals = !!fields.actuals
-  if (!doCash && !doHoldings && !doActuals) return target
+  if (!doCash && !doHoldings) return target
 
   let deposits = getDeposits(target)
   let perpetualYearlyDeposit = target.perpetualYearlyDeposit ?? null
   let holdings = target.holdings
   let actions = getActions(target)
-  let actuals = target.actuals
-  let actualsCurrency = target.actualsCurrency
 
   if (doCash) {
     const srcDeps = getDeposits(source)
@@ -323,19 +319,12 @@ export function applyPortfolioValuesToTarget(
     actions = [...kept, ...copied]
   }
 
-  if (doActuals) {
-    actuals = source.actuals ? { ...source.actuals } : undefined
-    actualsCurrency = source.actualsCurrency
-  }
-
   return normalizePortfolioCashModel({
     ...target,
     deposits,
     perpetualYearlyDeposit,
     holdings,
     actions,
-    actuals,
-    actualsCurrency,
     currentCash: 0,
     updatedAt: new Date().toISOString(),
   })
@@ -439,36 +428,40 @@ export function parseActualKey(
   return { year, month }
 }
 
-export function getActualsMap(portfolio: SavedPortfolio): Record<string, number> {
-  if (!portfolio.actuals || typeof portfolio.actuals !== 'object') return {}
-  return portfolio.actuals
+export function getActualsMap(
+  state: PortfolioActualsState | null | undefined,
+): Record<string, number> {
+  if (!state?.byMonth || typeof state.byMonth !== 'object') return {}
+  return state.byMonth
 }
 
-export function getActualsCurrency(portfolio: SavedPortfolio): DisplayCurrency {
-  return portfolio.actualsCurrency === 'CHF' ? 'CHF' : 'USD'
+export function getActualsCurrency(
+  state: PortfolioActualsState | null | undefined,
+): DisplayCurrency {
+  return state?.currency === 'CHF' ? 'CHF' : 'USD'
 }
 
 /** Nominal actual amount for a month (as stored), or null if unset. */
 export function actualAmountAtMonth(
-  portfolio: SavedPortfolio,
+  state: PortfolioActualsState | null | undefined,
   year: number,
   month: number,
 ): number | null {
-  const v = getActualsMap(portfolio)[makeActualKey(year, month)]
+  const v = getActualsMap(state)[makeActualKey(year, month)]
   if (v == null || !Number.isFinite(v) || v < 0) return null
   return v
 }
 
 /** Actual total in USD book for chart/math. */
 export function actualUsdAtMonth(
-  portfolio: SavedPortfolio,
+  state: PortfolioActualsState | null | undefined,
   year: number,
   month: number,
   usdToChf?: number | null,
 ): number | null {
-  const amount = actualAmountAtMonth(portfolio, year, month)
+  const amount = actualAmountAtMonth(state, year, month)
   if (amount == null) return null
-  return fixedAmountToUsd(amount, getActualsCurrency(portfolio), usdToChf)
+  return fixedAmountToUsd(amount, getActualsCurrency(state), usdToChf)
 }
 
 /**
@@ -476,11 +469,11 @@ export function actualUsdAtMonth(
  * Used as the year-end bar for past years on the chart.
  */
 export function yearEndActualUsd(
-  portfolio: SavedPortfolio,
+  state: PortfolioActualsState | null | undefined,
   year: number,
   usdToChf?: number | null,
 ): number | null {
-  const map = getActualsMap(portfolio)
+  const map = getActualsMap(state)
   let bestMonth = 0
   let best: number | null = null
   for (const [key, raw] of Object.entries(map)) {
@@ -489,16 +482,16 @@ export function yearEndActualUsd(
     if (raw == null || !Number.isFinite(raw) || raw < 0) continue
     if (p.month >= bestMonth) {
       bestMonth = p.month
-      best = fixedAmountToUsd(raw, getActualsCurrency(portfolio), usdToChf)
+      best = fixedAmountToUsd(raw, getActualsCurrency(state), usdToChf)
     }
   }
   return best
 }
 
 /** Calendar years that have at least one actual month entry. */
-export function listActualYears(portfolio: SavedPortfolio): number[] {
+export function listActualYears(state: PortfolioActualsState | null | undefined): number[] {
   const years = new Set<number>()
-  for (const key of Object.keys(getActualsMap(portfolio))) {
+  for (const key of Object.keys(getActualsMap(state))) {
     const p = parseActualKey(key)
     if (p) years.add(p.year)
   }
@@ -506,10 +499,10 @@ export function listActualYears(portfolio: SavedPortfolio): number[] {
 }
 
 export function earliestActualYear(
-  portfolio: SavedPortfolio,
+  state: PortfolioActualsState | null | undefined,
   fallback: number,
 ): number {
-  const years = listActualYears(portfolio)
+  const years = listActualYears(state)
   return years.length > 0 ? years[0]! : fallback
 }
 
@@ -607,8 +600,6 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
     actions,
     holdings,
     holdingSort: source.holdingSort,
-    actuals: source.actuals ? { ...source.actuals } : undefined,
-    actualsCurrency: source.actualsCurrency,
     targetCompound: source.targetCompound
       ? { ...source.targetCompound }
       : null,
@@ -1762,6 +1753,8 @@ export type BuildPortfolioChartOptions = {
   toYear?: number
   /** FX for converting CHF-denominated actuals to USD book */
   usdToChf?: number | null
+  /** Shared end-of-month totals (all scenarios). */
+  actuals?: PortfolioActualsState | null
 }
 
 /**
@@ -1780,6 +1773,7 @@ export function buildPortfolioChartData(
 ): PortfolioChartPoint[] {
   const mode: PortfolioChartMode = options?.mode === 'total' ? 'total' : 'stacked'
   const usdToChf = options?.usdToChf ?? null
+  const actuals = options?.actuals ?? null
   const equityRows = grid.rows.filter((r) => r.kind === 'equity')
   const indexByYear = new Map(grid.years.map((y, i) => [y, i]))
   const byScenarioId = new Map(scenarios.map((s) => [s.id, s]))
@@ -1799,7 +1793,7 @@ export function buildPortfolioChartData(
           Number.isFinite(h.manualCurrentPrice) &&
           (h.manualOnly === true || h.manualCurrentPrice > 0)),
     ) ||
-    Object.keys(getActualsMap(portfolio)).length > 0 ||
+    Object.keys(getActualsMap(actuals)).length > 0 ||
     grid.years.length > 0 ||
     (cashRow?.values.some((v) => v != null && v !== 0) ?? false)
   if (!hasLive) return []
@@ -1880,7 +1874,7 @@ export function buildPortfolioChartData(
   let fromY = Math.floor(options?.fromYear ?? defaultFrom)
   let toY = Math.floor(options?.toYear ?? defaultTo)
   if (mode === 'total') {
-    const earliest = earliestActualYear(portfolio, fromY)
+    const earliest = earliestActualYear(actuals, fromY)
     if (earliest < fromY && options?.fromYear == null) fromY = earliest
   }
   if (toY < fromY) {
@@ -1910,7 +1904,7 @@ export function buildPortfolioChartData(
 
     // Past years: prefer year-end actual in total mode
     if (year < currentYear) {
-      const actual = yearEndActualUsd(portfolio, year, usdToChf)
+      const actual = yearEndActualUsd(actuals, year, usdToChf)
       if (actual == null) {
         // Skip empty past years in stacked mode; keep gap only if inside continuous range for total
         if (mode === 'stacked') continue

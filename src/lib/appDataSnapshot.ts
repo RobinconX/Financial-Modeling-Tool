@@ -11,11 +11,18 @@ import type {
   SavedPortfolio,
   SavedScenario,
   SavingsState,
+  PortfolioActualsState,
   PortfolioContributionsState,
 } from '../types'
 import { emptyIncomeCostState } from './incomeCost'
 import { defaultOverviewState } from './overview'
 import { emptyPortfolioContributions } from './portfolioContributions'
+import {
+  emptyPortfolioActuals,
+  hasActualMonths,
+  normalizePortfolioActuals,
+  pickActualsFromPortfolios,
+} from './portfolioActuals'
 import { emptySavingsState } from './savings'
 import { loadScenarios, saveScenarios } from './storage'
 import { loadPortfolios, loadSelectedPortfolioId, savePortfolios } from './portfolioStorage'
@@ -33,6 +40,10 @@ import {
   normalizePortfolioContributions,
   savePortfolioContributions,
 } from './portfolioContributionsStorage'
+import {
+  loadPortfolioActuals,
+  savePortfolioActuals,
+} from './portfolioActualsStorage'
 import {
   applyLinkedSaveMode,
   getLinkedSaveMode,
@@ -56,6 +67,7 @@ export type AppDataSnapshot = {
   annotations: ChartAnnotation[]
   goals: NetWorthGoal[]
   portfolioContributions?: PortfolioContributionsState
+  portfolioActuals?: PortfolioActualsState
   /** How the linked file auto-saves. File-level; optional on older saves. */
   linkedSaveMode?: LinkedSaveMode
 }
@@ -74,6 +86,7 @@ export function collectAppData(): AppDataSnapshot {
     annotations: loadAnnotations(),
     goals: loadGoals(),
     portfolioContributions: loadPortfolioContributions(),
+    portfolioActuals: loadPortfolioActuals(),
     linkedSaveMode: getLinkedSaveMode(),
   }
 }
@@ -93,6 +106,7 @@ export function emptyAppData(): AppDataSnapshot {
     annotations: [],
     goals: [],
     portfolioContributions: emptyPortfolioContributions(),
+    portfolioActuals: emptyPortfolioActuals(),
     linkedSaveMode: getLinkedSaveMode(),
   }
 }
@@ -145,6 +159,14 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
           .filter((g): g is NetWorthGoal => g != null)
       : [],
     portfolioContributions: normalizePortfolioContributions(raw.portfolioContributions),
+    portfolioActuals: (() => {
+      const stored = normalizePortfolioActuals(raw.portfolioActuals)
+      if (hasActualMonths(stored)) return stored
+      return pickActualsFromPortfolios(
+        raw.portfolios as SavedPortfolio[],
+        typeof raw.selectedPortfolioId === 'string' ? raw.selectedPortfolioId : null,
+      )
+    })(),
     linkedSaveMode: parseLinkedSaveMode(raw.linkedSaveMode),
   }
 }
@@ -186,6 +208,12 @@ export function applyAppDataToLocalStorage(
       normalizePortfolioContributions(snapshot.portfolioContributions),
     )
     if (!r9.ok) return { ok: false, error: r9.error }
+
+    const actuals = hasActualMonths(snapshot.portfolioActuals)
+      ? normalizePortfolioActuals(snapshot.portfolioActuals)
+      : pickActualsFromPortfolios(snapshot.portfolios, snapshot.selectedPortfolioId)
+    const r10 = savePortfolioActuals(actuals)
+    if (!r10.ok) return { ok: false, error: r10.error }
 
     if (snapshot.linkedSaveMode) applyLinkedSaveMode(snapshot.linkedSaveMode)
 

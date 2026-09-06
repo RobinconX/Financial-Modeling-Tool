@@ -12,6 +12,7 @@ import { OverviewView } from './components/overview/OverviewView'
 import { HistoryView } from './components/history/HistoryView'
 import { useSavings } from './hooks/useSavings'
 import { usePortfolioContributions } from './hooks/usePortfolioContributions'
+import { usePortfolioActuals } from './hooks/usePortfolioActuals'
 import { DataSettingsPanel } from './components/settings/DataSettingsPanel'
 import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
@@ -176,6 +177,7 @@ export default function App() {
   const savings = useSavings()
   const savingsAccounts = savings.accounts
   const portfolioContributions = usePortfolioContributions()
+  const portfolioActuals = usePortfolioActuals()
 
   const {
     comparables,
@@ -378,6 +380,9 @@ export default function App() {
               contributionsError={portfolioContributions.error}
               setContributionYear={portfolioContributions.setYear}
               setContributionsCurrency={portfolioContributions.setCurrency}
+              portfolioActuals={portfolioActuals.actuals}
+              actualsError={portfolioActuals.error}
+              setPortfolioActuals={portfolioActuals.replace}
             />
           )}
 
@@ -388,11 +393,16 @@ export default function App() {
               savingsAccounts={savingsAccounts}
               incomeCostLines={incomeCostLines}
               incomeCostScenarios={incomeCostScenarios}
+              portfolioActuals={portfolioActuals.actuals}
             />
           )}
 
           {tab === 'history' && (
-            <HistoryView portfolios={portfolios} savingsAccounts={savingsAccounts} />
+            <HistoryView
+              portfolios={portfolios}
+              savingsAccounts={savingsAccounts}
+              portfolioActuals={portfolioActuals.actuals}
+            />
           )}
 
           {tab === 'income-cost' && (

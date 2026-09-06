@@ -26,6 +26,7 @@ import type {
   DisplayCurrency,
   PortfolioContributionsState,
   PortfolioGrid,
+  PortfolioActualsState,
   SavedPortfolio,
 } from '../../types'
 import {
@@ -77,6 +78,7 @@ type Props = {
   fromYear?: number
   toYear?: number
   contributions?: PortfolioContributionsState | null
+  actuals?: PortfolioActualsState | null
   /** Show cash / invested on hover and a % line chart */
   showCashInvested?: boolean
   /** Overlay ROI % on the bars (right axis) */
@@ -152,6 +154,7 @@ export function PortfolioChart({
   fromYear,
   toYear,
   contributions = null,
+  actuals = null,
   showCashInvested = false,
   showRoi = false,
   showTarget = false,
@@ -188,6 +191,7 @@ export function PortfolioChart({
           fromYear,
           toYear,
           usdToChf,
+          actuals,
         },
       )
       const keys = [
@@ -273,6 +277,7 @@ export function PortfolioChart({
     fromYear,
     toYear,
     contributions,
+    actuals,
     showTarget,
   ])
 

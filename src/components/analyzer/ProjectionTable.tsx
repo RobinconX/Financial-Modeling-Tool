@@ -235,7 +235,7 @@ export function ProjectionTable({
                 {showPrice && <th className="px-3 py-2 font-medium">Share price</th>}
                 {showDilution && (
                   <>
-                    <th className="px-3 py-2 font-medium">Dilution</th>
+                    <th className="px-3 py-2 font-medium">Shares vs today</th>
                     <th className="px-3 py-2 font-medium">Equity value</th>
                   </>
                 )}

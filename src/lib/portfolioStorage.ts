@@ -8,6 +8,7 @@ import type {
 } from '../types'
 import { queueAppDataChanged } from './linkedMirrorGate'
 import { buildOccSymbol } from './optionContract'
+import { stripPortfolioActuals } from './portfolioActuals'
 import { newDeposit, newHolding, normalizePortfolioCashModel } from './portfolio'
 
 export const PORTFOLIO_STORAGE_KEY = 'grok-lab.saved-portfolios.v1'
@@ -334,7 +335,11 @@ export function savePortfolios(
       requested && portfolios.some((p) => p.id === requested) ? requested : null
     localStorage.setItem(
       PORTFOLIO_STORAGE_KEY,
-      JSON.stringify({ version: 1, portfolios, selectedId: valid }),
+      JSON.stringify({
+        version: 1,
+        portfolios: portfolios.map(stripPortfolioActuals),
+        selectedId: valid,
+      }),
     )
     try {
       if (valid) localStorage.setItem(LEGACY_SELECTED_PORTFOLIO_KEY, valid)

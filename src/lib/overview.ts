@@ -5,6 +5,7 @@ import type {
   OverviewSeriesType,
   OverviewState,
   OverviewYearBinding,
+  PortfolioActualsState,
   SavedPortfolio,
   SavedScenario,
   SavingsAccount,
@@ -69,6 +70,8 @@ export type OverviewBuildDeps = {
   savingsAccounts: SavingsAccount[]
   incomeCostLines: CashflowLine[]
   usdToChf: number | null
+  /** Shared investing actuals (all portfolio scenarios). */
+  portfolioActuals?: PortfolioActualsState | null
   asOf?: Date
   /**
    * Portfolio ids from enabled portfolio series on the Overview scenario being
@@ -760,8 +763,8 @@ export function portfolioBreakdownChfAtYear(
   }
 
   // Past years: year-end actual (if recorded) as a single stack segment
-  if (year < currentYear) {
-    const actualUsd = yearEndActualUsd(resolved, year, deps.usdToChf)
+  if (year < currentYear && isFirstEnabledPortfolioSeries(series, deps)) {
+    const actualUsd = yearEndActualUsd(deps.portfolioActuals, year, deps.usdToChf)
     if (actualUsd != null) {
       return [
         {
@@ -1072,20 +1075,13 @@ export function recordedOverviewByYear(
   const asOf = deps.asOf ?? new Date()
   const currentYear = asOf.getFullYear()
 
-  const portfolios: SavedPortfolio[] = []
-  const seenP = new Set<string>()
+  const anyPortfolio = series.some((s) => s.enabled && s.type === 'portfolio')
   const accounts: SavingsAccount[] = []
   const seenA = new Set<string>()
 
   for (const s of series) {
     if (!s.enabled) continue
-    if (s.type === 'portfolio' && s.portfolioId && !seenP.has(s.portfolioId)) {
-      const p = deps.portfolios.find((x) => x.id === s.portfolioId)
-      if (p) {
-        seenP.add(p.id)
-        portfolios.push(p)
-      }
-    } else if (s.type === 'savings' && s.savingsAccountId && !seenA.has(s.savingsAccountId)) {
+    if (s.type === 'savings' && s.savingsAccountId && !seenA.has(s.savingsAccountId)) {
       const a = deps.savingsAccounts.find((x) => x.id === s.savingsAccountId)
       if (a) {
         seenA.add(a.id)
@@ -1095,8 +1091,8 @@ export function recordedOverviewByYear(
   }
 
   let minY = currentYear
-  for (const p of portfolios) {
-    for (const y of listActualYears(p)) {
+  if (anyPortfolio) {
+    for (const y of listActualYears(deps.portfolioActuals)) {
       if (y < minY) minY = y
     }
   }
@@ -1113,14 +1109,19 @@ export function recordedOverviewByYear(
   for (let year = minY; year < currentYear; year++) {
     let sum = 0
     let any = false
-    for (const p of portfolios) {
-      const usd = yearEndActualUsd(p, year, deps.usdToChf)
-      if (usd == null) continue
-      if (getActualsCurrency(p) === 'USD' && (deps.usdToChf == null || deps.usdToChf <= 0)) {
-        continue
+    if (anyPortfolio) {
+      const usd = yearEndActualUsd(deps.portfolioActuals, year, deps.usdToChf)
+      if (usd != null) {
+        if (
+          !(
+            getActualsCurrency(deps.portfolioActuals) === 'USD' &&
+            (deps.usdToChf == null || deps.usdToChf <= 0)
+          )
+        ) {
+          sum += toDisplay(usd, 'CHF', deps.usdToChf)
+          any = true
+        }
       }
-      sum += toDisplay(usd, 'CHF', deps.usdToChf)
-      any = true
     }
     const decKey = makePeriodKey(year, 12)
     for (const a of accounts) {
@@ -1162,9 +1163,10 @@ export function seriesValueChf(
     if (!p) return 0
     if (deps.usdToChf == null || deps.usdToChf <= 0) return 0
 
-    // Past years: stack year-end actual when present (matches Portfolio chart)
+    // Past years: shared actual once (first enabled portfolio series only)
     if (year < currentYear) {
-      const actualUsd = yearEndActualUsd(p, year, deps.usdToChf)
+      if (!isFirstEnabledPortfolioSeries(series, deps)) return 0
+      const actualUsd = yearEndActualUsd(deps.portfolioActuals, year, deps.usdToChf)
       if (actualUsd != null) {
         return toDisplay(actualUsd, 'CHF', deps.usdToChf)
       }
@@ -1234,6 +1236,21 @@ export function enabledSeries(series: OverviewSeries[]): OverviewSeries[] {
   return [...series]
     .filter((s) => s.enabled)
     .sort((a, b) => a.sortOrder - b.sortOrder || a.name.localeCompare(b.name))
+}
+
+function firstEnabledPortfolioSeries(
+  series: OverviewSeries[] | undefined,
+): OverviewSeries | undefined {
+  return enabledSeries(series ?? []).find((s) => s.type === 'portfolio')
+}
+
+function isFirstEnabledPortfolioSeries(
+  series: OverviewSeries,
+  deps: OverviewBuildDeps,
+): boolean {
+  const first = firstEnabledPortfolioSeries(deps.overviewSeries)
+  if (first) return first.id === series.id
+  return series.type === 'portfolio'
 }
 
 function overviewPortfolioIdsFromSeries(series: OverviewSeries[]): string[] {

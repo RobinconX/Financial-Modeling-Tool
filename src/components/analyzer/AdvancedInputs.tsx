@@ -2,9 +2,11 @@ import { useEffect, useState, type ReactNode } from 'react'
 import type { YearProjection } from '../../types'
 import {
   advancedCagrGapYears,
+  cumulativeDilutionByYear,
   equityValueAfterDilution,
   materializeAdvancedCagrYears,
   newYearProjection,
+  normalizeDilution,
   sortYearProjections,
 } from '../../lib/valuation'
 import { impliedSharePrice } from '../../lib/sharePrice'
@@ -79,6 +81,7 @@ export function AdvancedInputs({
   }
 
   const cagrGaps = advancedCagrGapYears(rows, currentMarketCap, currentYear)
+  const cumulativeByYear = cumulativeDilutionByYear(sorted, currentYear)
 
   function fillIntermediateYears() {
     if (cagrGaps.length === 0) return
@@ -96,6 +99,8 @@ export function AdvancedInputs({
       ) : null}
       {sorted.map((row, index) => {
         const isOpen = expanded[row.id] ?? false
+        const yearly = normalizeDilution(row.dilutionFactor)
+        const cumulative = cumulativeByYear.get(row.year) ?? yearly
         return (
           <div
             key={row.id}
@@ -121,7 +126,14 @@ export function AdvancedInputs({
                     <span className="text-sm font-semibold text-white/90">{row.year}</span>
                     <span className="text-xs text-white/40">Year projection {index + 1}</span>
                   </div>
-                  {!isOpen && <CollapsedOverview row={row} currency={currency} />}
+                  {!isOpen && (
+                    <CollapsedOverview
+                      row={row}
+                      yearly={yearly}
+                      cumulative={cumulative}
+                      currency={currency}
+                    />
+                  )}
                 </div>
               </button>
 
@@ -155,7 +167,7 @@ export function AdvancedInputs({
                   />
                   <div>
                     <NumberInput
-                      label="Share dilution factor"
+                      label="Dilution this year"
                       value={row.dilutionFactor}
                       min={0.0001}
                       step="0.01"
@@ -169,7 +181,7 @@ export function AdvancedInputs({
                       }
                     />
                     <p className="mt-1 text-[11px] text-white/35">
-                      {dilutionHint(row.dilutionFactor)}
+                      {dilutionHint(yearly, cumulative)}
                     </p>
                   </div>
                 </div>
@@ -200,7 +212,7 @@ export function AdvancedInputs({
                     row.revenue != null && row.psMultiple != null
                       ? row.revenue * row.psMultiple
                       : null,
-                    row.dilutionFactor,
+                    cumulative,
                     sharesOutstanding,
                     currency,
                   )}
@@ -232,7 +244,7 @@ export function AdvancedInputs({
                     row.fcf != null && row.pfcfMultiple != null
                       ? row.fcf * row.pfcfMultiple
                       : null,
-                    row.dilutionFactor,
+                    cumulative,
                     sharesOutstanding,
                     currency,
                   )}
@@ -264,7 +276,7 @@ export function AdvancedInputs({
                     row.profit != null && row.peMultiple != null
                       ? row.profit * row.peMultiple
                       : null,
-                    row.dilutionFactor,
+                    cumulative,
                     sharesOutstanding,
                     currency,
                   )}
@@ -299,12 +311,17 @@ export function AdvancedInputs({
   )
 }
 
-function dilutionHint(factor: number): string {
-  if (!Number.isFinite(factor) || factor <= 0) return '1.0 = no dilution'
-  if (Math.abs(factor - 1) < 1e-9) return 'No dilution — ROI uses full mcap growth'
-  const pct = (factor - 1) * 100
-  const sign = pct > 0 ? '+' : ''
-  return `${sign}${pct.toFixed(1)}% share count vs today · equity ROI ÷ ${factor.toFixed(2)}`
+function dilutionHint(yearly: number, cumulative: number): string {
+  if (!Number.isFinite(yearly) || yearly <= 0) return '1.0 = no extra shares this year'
+  const yPct = (yearly - 1) * 100
+  const ySign = yPct > 0 ? '+' : ''
+  if (Math.abs(yearly - 1) < 1e-9 && Math.abs(cumulative - 1) < 1e-9) {
+    return '1.0 = no extra shares this year'
+  }
+  if (Math.abs(yearly - 1) < 1e-9) {
+    return `No extra this year · still ${cumulative.toFixed(2)}× vs today`
+  }
+  return `${ySign}${yPct.toFixed(1)}% this year · ${cumulative.toFixed(2)}× vs today`
 }
 
 function formatImplied(
@@ -317,22 +334,43 @@ function formatImplied(
   const equity = equityValueAfterDilution(mcap, dilutionFactor)
   const px = impliedSharePrice(equity, sharesOutstanding)
   const mcapStr = formatMoney(mcap, currency)
+  const diluted = Math.abs(equity - mcap) >= 1e-6
+  if (diluted) {
+    const eqStr = formatMoney(equity, currency)
+    if (px != null) {
+      return `${mcapStr} mcap · equity ${eqStr} · ${formatPrice(px, currency)} /sh`
+    }
+    return `${mcapStr} mcap · equity ${eqStr}`
+  }
   if (px != null) {
     return `${mcapStr} mcap · ${formatPrice(px, currency)} /sh`
   }
   return mcapStr
 }
 
-function CollapsedOverview({ row, currency }: { row: YearProjection; currency: string }) {
+function CollapsedOverview({
+  row,
+  yearly,
+  cumulative,
+  currency,
+}: {
+  row: YearProjection
+  yearly: number
+  cumulative: number
+  currency: string
+}) {
   const chips: { key: string; label: string; detail: string; accent: string }[] = []
-  const dilution = row.dilutionFactor > 0 ? row.dilutionFactor : 1
 
-  if (Math.abs(dilution - 1) >= 1e-9) {
-    const pct = (dilution - 1) * 100
+  if (Math.abs(yearly - 1) >= 1e-9 || Math.abs(cumulative - 1) >= 1e-9) {
+    const pct = (yearly - 1) * 100
+    const detail =
+      Math.abs(yearly - 1) < 1e-9
+        ? `no extra this year · ${cumulative.toFixed(2)}× vs today`
+        : `${pct >= 0 ? '+' : ''}${pct.toFixed(1)}% this year · ${cumulative.toFixed(2)}× vs today`
     chips.push({
       key: 'dilution',
       label: 'Dilution',
-      detail: `${dilution.toFixed(2)}× shares (${pct >= 0 ? '+' : ''}${pct.toFixed(1)}%)`,
+      detail,
       accent: 'border-rose-500/30 bg-rose-500/10 text-rose-200',
     })
   }

@@ -94,9 +94,11 @@ export function buildTableExportSheets(data: AppDataSnapshot): TableExportSheet[
   }
 
   const portActuals: Cell[][] = []
-  for (const p of data.portfolios) {
-    for (const key of Object.keys(p.actuals ?? {}).sort()) {
-      portActuals.push([p.name, key, p.actualsCurrency ?? 'USD', p.actuals![key]!])
+  const sharedActuals = data.portfolioActuals
+  if (sharedActuals) {
+    const cur = sharedActuals.currency ?? 'USD'
+    for (const key of Object.keys(sharedActuals.byMonth ?? {}).sort()) {
+      portActuals.push([key, cur, sharedActuals.byMonth[key]!])
     }
   }
 
@@ -204,8 +206,8 @@ export function buildTableExportSheets(data: AppDataSnapshot): TableExportSheet[
     { name: 'Savings actuals', headers: ['account', 'period', 'balance'], rows: savingsActuals },
     {
       name: 'Portfolios',
-      headers: ['name', 'perpetualGrowthPercent', 'actualsCurrency'],
-      rows: data.portfolios.map((p) => [p.name, p.perpetualGrowthPercent ?? '', p.actualsCurrency ?? 'USD']),
+      headers: ['name', 'perpetualGrowthPercent'],
+      rows: data.portfolios.map((p) => [p.name, p.perpetualGrowthPercent ?? '']),
     },
     {
       name: 'Holdings',
@@ -229,7 +231,7 @@ export function buildTableExportSheets(data: AppDataSnapshot): TableExportSheet[
     },
     {
       name: 'Portfolio actuals',
-      headers: ['portfolio', 'period', 'currency', 'total'],
+      headers: ['period', 'currency', 'total'],
       rows: portActuals,
     },
     {
