@@ -100,6 +100,10 @@ export type SavedComparable = {
   sortYear: number | null
   sortDir: 'desc' | 'asc'
   /**
+   * Goal-gap horizon (Easy year). Null = default (2030 if present, else max Easy year).
+   */
+  goalYear?: number | null
+  /**
    * Years to show in the table. Null / empty = none (user adds years).
    * Period or sparse set — same list.
    */

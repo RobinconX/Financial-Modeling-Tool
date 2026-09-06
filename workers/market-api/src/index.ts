@@ -10,6 +10,7 @@
 import { fetchQuote, fetchQuotes } from '../../../server/quote'
 import { fetchFxRate } from '../../../server/fx'
 import { fetchOptionChain } from '../../../server/options'
+import { fetchPriceHistory } from '../../../server/history'
 
 const corsHeaders: Record<string, string> = {
   'Access-Control-Allow-Origin': '*',
@@ -47,6 +48,7 @@ export default {
         routes: [
           '/api/quote?symbol=AAPL',
           '/api/quote?symbols=AAPL,MSFT,GOOG',
+          '/api/history?symbol=AAPL',
           '/api/fx?from=USD&to=CHF',
           '/api/options?symbol=AAPL',
         ],
@@ -74,6 +76,17 @@ export default {
       } catch (err) {
         const message = err instanceof Error ? err.message : 'Failed to fetch option chain'
         return json({ error: message }, 502)
+      }
+    }
+
+    if (path.endsWith('/api/history') || path === '/api/history') {
+      const symbol = url.searchParams.get('symbol')?.trim() || ''
+      try {
+        const history = await fetchPriceHistory(symbol)
+        return json(history, 200, { 'Cache-Control': 'no-store' })
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'Failed to fetch history'
+        return json({ error: message }, 404)
       }
     }
 

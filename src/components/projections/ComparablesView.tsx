@@ -10,9 +10,24 @@ import {
   visibleComparableYears,
   yearsInPeriod,
 } from '../../lib/comparables'
+import {
+  buildGoalGapTable,
+  resolveGoalYear,
+  unionEasyYears,
+} from '../../lib/goalGap'
+import {
+  fetchPriceHistoryClient,
+  isHistoryFresh,
+  type CachedPriceHistory,
+} from '../../lib/priceHistory'
+import {
+  loadCachedPriceHistory,
+  saveCachedPriceHistory,
+} from '../../lib/priceHistoryStorage'
 import { groupScenariosByTicker } from '../../lib/storage'
 import { formatPercent, formatPrice } from '../../lib/format'
 import { InfoTip } from '../common/InfoTip'
+import { GoalGapSection, OVERLAY_COLORS } from './GoalGapSection'
 
 const SELECTED_KEY = 'grok-lab-selected-comparable'
 
@@ -54,6 +69,10 @@ export function ComparablesView({
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() => readSelectedId(comparables))
   const [query, setQuery] = useState('')
+  const [overlayIds, setOverlayIds] = useState<string[]>([])
+  const [histories, setHistories] = useState<Record<string, CachedPriceHistory>>({})
+  const [histLoading, setHistLoading] = useState<Set<string>>(() => new Set())
+  const [histErrors, setHistErrors] = useState<Record<string, string>>({})
 
   useEffect(() => {
     if (selectedId && comparables.some((c) => c.id === selectedId)) return
@@ -96,6 +115,79 @@ export function ComparablesView({
     () => sortComparableRows(table.rows, sortYear, sortDir),
     [table.rows, sortYear, sortDir],
   )
+
+  const horizonYears = useMemo(
+    () => unionEasyYears(entries, scenarios),
+    [entries, scenarios],
+  )
+  const goalYear = resolveGoalYear(selected?.goalYear, horizonYears)
+  const gapRows = useMemo(
+    () => buildGoalGapTable(entries, scenarios, goalYear),
+    [entries, scenarios, goalYear],
+  )
+  const gapSymbols = useMemo(
+    () => [...new Set(gapRows.map((r) => r.symbol.toUpperCase()).filter(Boolean))],
+    [gapRows],
+  )
+
+  useEffect(() => {
+    setOverlayIds([])
+  }, [selectedId])
+
+  useEffect(() => {
+    if (gapSymbols.length === 0) return
+    let cancelled = false
+    const stale: string[] = []
+    const next: Record<string, CachedPriceHistory> = {}
+    for (const symbol of gapSymbols) {
+      const cached = loadCachedPriceHistory(symbol)
+      if (cached) next[symbol] = cached
+      if (!cached || !isHistoryFresh(cached.fetchedAt)) stale.push(symbol)
+    }
+    setHistories((prev) => ({ ...prev, ...next }))
+    if (stale.length === 0) return
+
+    setHistLoading((prev) => {
+      const s = new Set(prev)
+      for (const symbol of stale) s.add(symbol)
+      return s
+    })
+    void Promise.all(
+      stale.map(async (symbol) => {
+        try {
+          const result = await fetchPriceHistoryClient(symbol)
+          if (cancelled) return
+          const cached: CachedPriceHistory = {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+          }
+          saveCachedPriceHistory(cached)
+          setHistories((prev) => ({ ...prev, [symbol]: cached }))
+          setHistErrors((prev) => {
+            const n = { ...prev }
+            delete n[symbol]
+            return n
+          })
+        } catch (err) {
+          if (cancelled) return
+          const message = err instanceof Error ? err.message : `No history for ${symbol}`
+          if (/VITE_API_BASE|Network error|dev server/i.test(message)) {
+            setHistErrors((prev) => ({ ...prev, [symbol]: message }))
+          }
+        } finally {
+          if (cancelled) return
+          setHistLoading((prev) => {
+            const s = new Set(prev)
+            s.delete(symbol)
+            return s
+          })
+        }
+      }),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [gapSymbols.join(',')])
 
   const [fromDraft, setFromDraft] = useState('')
   const [toDraft, setToDraft] = useState('')
@@ -230,9 +322,9 @@ export function ComparablesView({
           </select>
         </label>
         <InfoTip label="About comparables">
-          Pick saved projections to compare. Add year columns you want (none are on by
-          default). Year figures are year-end. Sort by a year’s ROI to rank names; ROI
-          p.a. annualizes from today to that year-end.
+          Pick saved projections to compare. Add year columns you want (none are on by default).
+          Year figures are year-end. Sort by a year’s ROI to rank names. Click a row for remaining
+          upside vs the Easy goal; click the name to open the projection.
         </InfoTip>
         <button type="button" className="btn-ghost !py-1 !text-xs" onClick={handleNew}>
           + New
@@ -492,19 +584,44 @@ export function ComparablesView({
                     {sortedRows.map((row) => {
                       const sc = scenarios.find((s) => s.id === row.scenarioId)
                       const bases = sc ? availableBases(sc) : [row.basis]
+                      const on = overlayIds.includes(row.scenarioId)
+                      const colorIdx = overlayIds.indexOf(row.scenarioId)
                       return (
                         <tr
                           key={row.scenarioId}
-                          className={`group border-t border-white/5 text-white/85 ${
-                            onOpenProjection
-                              ? 'cursor-pointer hover:bg-white/[0.04]'
-                              : ''
+                          className={`group cursor-pointer border-t border-white/5 text-white/85 hover:bg-white/[0.04] ${
+                            on ? 'bg-emerald-500/[0.08]' : ''
                           }`}
-                          onClick={() => onOpenProjection?.(row.scenarioId, row.basis)}
+                          onClick={() => {
+                            setOverlayIds((prev) =>
+                              prev.includes(row.scenarioId)
+                                ? prev.filter((id) => id !== row.scenarioId)
+                                : [...prev, row.scenarioId],
+                            )
+                          }}
                         >
                           <td className="sticky left-0 z-10 bg-[#121820] px-3 py-2 group-hover:bg-[#141a22]">
                             <div className="flex flex-wrap items-center gap-1.5">
-                              <span className="font-medium">{row.label}</span>
+                              {on ? (
+                                <span
+                                  className="inline-block h-2 w-2 shrink-0 rounded-full"
+                                  style={{
+                                    background:
+                                      OVERLAY_COLORS[colorIdx % OVERLAY_COLORS.length],
+                                  }}
+                                />
+                              ) : null}
+                              <button
+                                type="button"
+                                className="font-medium text-left hover:underline"
+                                title="Open projection"
+                                onClick={(e) => {
+                                  e.stopPropagation()
+                                  onOpenProjection?.(row.scenarioId, row.basis)
+                                }}
+                              >
+                                {row.label}
+                              </button>
                               {bases.length > 1 ? (
                                 <select
                                   className="input !w-auto !py-0.5 !text-[10px]"
@@ -567,6 +684,22 @@ export function ComparablesView({
                   </tbody>
                 </table>
               </div>
+              {overlayIds.length === 0 ? (
+                <p className="text-[11px] text-white/35">
+                  Click a row for remaining upside. Click the name to open the projection.
+                </p>
+              ) : (
+                <GoalGapSection
+                  overlayIds={overlayIds}
+                  onClear={() => setOverlayIds([])}
+                  rows={gapRows}
+                  scenarios={scenarios}
+                  goalYear={goalYear}
+                  histories={histories}
+                  loadingSymbols={histLoading}
+                  errors={histErrors}
+                />
+              )}
             </div>
           )}
         </>

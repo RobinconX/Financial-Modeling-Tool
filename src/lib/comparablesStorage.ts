@@ -30,6 +30,11 @@ export function normalizeComparable(raw: unknown): SavedComparable | null {
       ? Math.floor(Number(raw.sortYear))
       : null
   const sortDir = raw.sortDir === 'asc' ? 'asc' : 'desc'
+  const goalYearRaw = raw.goalYear
+  const goalYear =
+    goalYearRaw != null && Number.isFinite(Number(goalYearRaw))
+      ? Math.floor(Number(goalYearRaw))
+      : null
   const filterYears = Array.isArray(raw.filterYears)
     ? [...new Set(
         raw.filterYears
@@ -44,6 +49,7 @@ export function normalizeComparable(raw: unknown): SavedComparable | null {
     entries,
     sortYear,
     sortDir,
+    goalYear,
     filterYears: filterYears ?? [],
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,

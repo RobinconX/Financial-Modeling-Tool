@@ -5,6 +5,7 @@ import tailwindcss from '@tailwindcss/vite'
 import { fetchQuote, fetchQuotes } from './server/quote'
 import { fetchFxRate } from './server/fx'
 import { fetchOptionChain } from './server/options'
+import { fetchPriceHistory } from './server/history'
 
 function apiPlugin(): Plugin {
   const handler: Connect.NextHandleFunction = (req, res, next) => {
@@ -42,6 +43,23 @@ function apiPlugin(): Plugin {
         } catch (err) {
           const message = err instanceof Error ? err.message : 'Failed to fetch option chain'
           res.statusCode = 502
+          res.setHeader('Content-Type', 'application/json')
+          res.end(JSON.stringify({ error: message }))
+        }
+        return
+      }
+
+      if (url.pathname.startsWith('/api/history')) {
+        const symbol = url.searchParams.get('symbol')?.trim() || ''
+        try {
+          const history = await fetchPriceHistory(symbol)
+          res.statusCode = 200
+          res.setHeader('Content-Type', 'application/json')
+          res.setHeader('Cache-Control', 'no-store')
+          res.end(JSON.stringify(history))
+        } catch (err) {
+          const message = err instanceof Error ? err.message : 'Failed to fetch history'
+          res.statusCode = 404
           res.setHeader('Content-Type', 'application/json')
           res.end(JSON.stringify({ error: message }))
         }
