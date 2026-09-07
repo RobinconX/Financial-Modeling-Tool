@@ -3,7 +3,9 @@ import {
   buildGoalGapTable,
   defaultGoalYear,
   easyGoalPrice,
+  goalPriceForBasis,
   mergeUpsideSeries,
+  pathSeries,
   remainingUpside,
   resolveGoalYear,
   sortGoalGapRows,
@@ -47,6 +49,31 @@ describe('easy goal price', () => {
     expect(easyGoalPrice(acme, 2030)).toBe(240)
     expect(easyGoalPrice(acme, 2028)).toBe(180)
     expect(easyGoalPrice(acme, 2029)).toBeNull()
+  })
+
+  it('uses the selected basis (P/E equity ÷ shares), not Easy', () => {
+    const pe = sc({
+      id: 'pe',
+      symbol: 'ACME',
+      name: 'PE',
+      easyRows: [{ id: 'e', year: 2030, projectedMarketCap: 480_000_000_000 }],
+      advancedRows: [
+        {
+          id: 'a',
+          year: 2030,
+          dilutionFactor: 1,
+          revenue: null,
+          psMultiple: null,
+          fcf: null,
+          pfcfMultiple: null,
+          profit: 10_000_000_000,
+          peMultiple: 20,
+        },
+      ],
+    })
+    // profit × PE = 200B / 2B sh = $100, vs Easy $240
+    expect(goalPriceForBasis(pe, 'pe', 2030, 2026)).toBe(100)
+    expect(goalPriceForBasis(pe, 'easy', 2030, 2026)).toBe(240)
   })
 
   it('remaining upside is goal / spot − 1', () => {
@@ -128,6 +155,7 @@ describe('buildGoalGapTable', () => {
         scenarioName: 'None',
         label: 'ZZZ / None',
         currency: 'USD',
+        basis: 'easy' as const,
         spot: 10,
         goalYear: null,
         goalPrice: null,
@@ -152,6 +180,31 @@ describe('upsideSeries', () => {
       { date: '2025-01-02', upside: 1 },
       { date: '2025-06-01', upside: 0.5 },
     ])
+  })
+
+  it('CAGR series annualizes to the goal year-end from each close', () => {
+    const pts = pathSeries(240, [{ date: '2026-01-01', close: 120 }], 'cagr', 2030)
+    const span = yearsUntilProjectionEnd(2030, new Date(2026, 0, 1))
+    expect(pts).toHaveLength(1)
+    expect(pts[0]!.upside).toBeCloseTo(cagr(120, 240, span))
+  })
+
+  it('pins the last point to current spot and date (matches table)', () => {
+    const today = '2026-09-06'
+    const pts = pathSeries(
+      240,
+      [
+        { date: '2026-09-05', close: 119 },
+        { date: today, close: 118 },
+      ],
+      'cagr',
+      2030,
+      { date: today, price: 120 },
+    )
+    expect(pts.map((p) => p.date)).toEqual(['2026-09-05', today])
+    const span = yearsUntilProjectionEnd(2030, new Date(2026, 8, 6))
+    expect(pts[1]!.upside).toBeCloseTo(cagr(120, 240, span))
+    expect(pts[1]!.upside).not.toBeCloseTo(cagr(118, 240, span), 8)
   })
 
   it('merges overlay series on a shared date axis', () => {

@@ -2,10 +2,12 @@ import { useMemo, useState } from 'react'
 import type { SavedScenario } from '../../types'
 import type { CachedPriceHistory } from '../../lib/priceHistory'
 import {
-  easyGoalPrice,
-  statedEasyYears,
-  upsideSeries,
+  goalPriceForBasis,
+  localIsoDate,
+  pathSeries,
+  statedYearsForBasis,
   type GoalGapRow,
+  type GoalPathMetric,
 } from '../../lib/goalGap'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { GoalGapChart } from './GoalGapChart'
@@ -43,6 +45,7 @@ export function GoalGapSection({
   errors,
 }: Props) {
   const [chartYear, setChartYear] = useState<number | null>(null)
+  const [metric, setMetric] = useState<GoalPathMetric>('upside')
 
   const overlayRows = overlayIds
     .map((id) => rows.find((r) => r.scenarioId === id))
@@ -52,7 +55,7 @@ export function GoalGapSection({
     const set = new Set<number>()
     for (const r of overlayRows) {
       const sc = scenarios.find((s) => s.id === r.scenarioId)
-      if (sc) for (const y of statedEasyYears(sc)) set.add(y)
+      if (sc) for (const y of statedYearsForBasis(sc, r.basis)) set.add(y)
     }
     return [...set].sort((a, b) => a - b)
   }, [overlayRows, scenarios])
@@ -69,7 +72,7 @@ export function GoalGapSection({
     return overlayRows.flatMap((row, i) => {
       const sc = scenarios.find((s) => s.id === row.scenarioId)
       if (!sc) return []
-      const goal = easyGoalPrice(sc, effectiveChartYear)
+      const goal = goalPriceForBasis(sc, row.basis, effectiveChartYear)
       const hist = histories[row.symbol.toUpperCase()]
       if (goal == null || !hist) return []
       return [
@@ -77,11 +80,19 @@ export function GoalGapSection({
           key: row.scenarioId,
           name: row.label,
           color: OVERLAY_COLORS[i % OVERLAY_COLORS.length]!,
-          points: upsideSeries(goal, hist.points),
+          points: pathSeries(
+            goal,
+            hist.points,
+            metric,
+            effectiveChartYear,
+            row.spot != null && row.spot > 0
+              ? { date: localIsoDate(), price: row.spot }
+              : null,
+          ),
         },
       ]
     })
-  }, [overlayRows, scenarios, effectiveChartYear, histories])
+  }, [overlayRows, scenarios, effectiveChartYear, histories, metric])
 
   const loading = overlayRows.some((r) => loadingSymbols.has(r.symbol.toUpperCase()))
   const error =
@@ -92,7 +103,34 @@ export function GoalGapSection({
   return (
     <div className="space-y-2 border-t border-white/[0.06] pt-4">
       <div className="flex flex-wrap items-end gap-3">
-        <h3 className="section-title">Remaining upside</h3>
+        <h3 className="section-title">
+          {metric === 'cagr' ? 'CAGR' : 'Remaining upside'}
+        </h3>
+        <div
+          className="inline-flex gap-1 border-b border-white/10"
+          role="group"
+          aria-label="Chart metric"
+        >
+          {(
+            [
+              { id: 'upside' as const, label: 'Upside %' },
+              { id: 'cagr' as const, label: 'CAGR %' },
+            ]
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setMetric(t.id)}
+              className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
+                metric === t.id
+                  ? 'border-emerald-400 text-white'
+                  : 'border-transparent text-white/50 hover:text-white/80'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
         <label className="flex items-center gap-1.5 text-xs text-white/50">
           Goal year
           <select
@@ -117,9 +155,13 @@ export function GoalGapSection({
           </button>
         ) : null}
       </div>
-      <FullscreenChart title="Remaining upside" className="w-full min-w-0">
+      <FullscreenChart
+        title={metric === 'cagr' ? 'CAGR to goal' : 'Remaining upside'}
+        className="w-full min-w-0"
+      >
         <GoalGapChart
           series={chartSeries}
+          metric={metric}
           loading={loading && chartSeries.every((s) => s.points.length < 2)}
           error={error}
         />

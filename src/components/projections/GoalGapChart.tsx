@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 import { formatPercent } from '../../lib/format'
-import { mergeUpsideSeries, type UpsidePoint } from '../../lib/goalGap'
+import { mergeUpsideSeries, type GoalPathMetric, type UpsidePoint } from '../../lib/goalGap'
 
 export type GoalGapChartSeries = {
   key: string
@@ -21,6 +21,7 @@ export type GoalGapChartSeries = {
 
 type Props = {
   series: GoalGapChartSeries[]
+  metric?: GoalPathMetric
   loading?: boolean
   error?: string | null
   fillContainer?: boolean
@@ -88,10 +89,12 @@ function pickTicks(dates: string[], count = 5): string[] {
 
 export function GoalGapChart({
   series,
+  metric = 'upside',
   loading,
   error,
   fillContainer = false,
 }: Props) {
+  const valueLabel = metric === 'cagr' ? 'CAGR' : 'Remaining upside'
   const plot = useMemo(
     () => series.filter((s) => s.points.length >= 2),
     [series],
@@ -224,7 +227,7 @@ export function GoalGapChart({
               labelStyle={{ color: 'rgba(255,255,255,0.6)' }}
               formatter={(value, name) => {
                 const n = typeof value === 'number' ? value : Number(value)
-                return [formatPercent(n), String(name)]
+                return [formatPercent(n), `${String(name)} · ${valueLabel}`]
               }}
               labelFormatter={(label) => String(label)}
             />

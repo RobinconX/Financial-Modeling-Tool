@@ -1,7 +1,17 @@
-import type { ComparableEntry, SavedScenario } from '../types'
-import { pruneComparableEntries, priceNowForScenario, sharesForScenario } from './comparables'
+import type { ComparableBasis, ComparableEntry, SavedScenario } from '../types'
+import {
+  availableBases,
+  currentMcapForScenario,
+  pruneComparableEntries,
+  priceNowForScenario,
+  sharesForScenario,
+} from './comparables'
 import { impliedSharePrice } from './sharePrice'
-import { cagr, yearsUntilProjectionEnd } from './valuation'
+import {
+  buildAdvancedProjections,
+  cagr,
+  yearsUntilProjectionEnd,
+} from './valuation'
 
 export const PREFERRED_GOAL_YEAR = 2030
 
@@ -11,13 +21,16 @@ export type GoalGapRow = {
   scenarioName: string
   label: string
   currency: string
+  basis: ComparableBasis
   spot: number | null
-  /** Horizon used for this row; null when the scenario has no Easy at `goalYear`. */
+  /** Horizon used for this row; null when this basis has no projection at `goalYear`. */
   goalYear: number | null
   goalPrice: number | null
   upside: number | null
   cagr: number | null
 }
+
+export type GoalPathMetric = 'upside' | 'cagr'
 
 export type PriceClose = {
   date: string
@@ -55,6 +68,37 @@ export function easyGoalPrice(sc: SavedScenario, year: number): number | null {
   return impliedSharePrice(row.projectedMarketCap, sharesForScenario(sc))
 }
 
+export function statedYearsForBasis(
+  sc: SavedScenario,
+  basis: ComparableBasis,
+  asOf: Date | number = new Date(),
+): number[] {
+  if (basis === 'easy') return statedEasyYears(sc)
+  const mcap = currentMcapForScenario(sc)
+  if (mcap == null || mcap <= 0) return []
+  const years = buildAdvancedProjections(mcap, sc.advancedRows, asOf)
+    .filter((r) => r.basis === basis)
+    .map((r) => r.year)
+  return [...new Set(years)].sort((a, b) => a - b)
+}
+
+/** Share-price goal for the selected basis at a stated year (Easy or PS/PFCF/PE). */
+export function goalPriceForBasis(
+  sc: SavedScenario,
+  basis: ComparableBasis,
+  year: number,
+  asOf: Date | number = new Date(),
+): number | null {
+  if (basis === 'easy') return easyGoalPrice(sc, year)
+  const mcap = currentMcapForScenario(sc)
+  if (mcap == null || mcap <= 0) return null
+  const row = buildAdvancedProjections(mcap, sc.advancedRows, asOf).find(
+    (r) => r.basis === basis && r.year === year,
+  )
+  if (!row || !(row.equityValue > 0)) return null
+  return impliedSharePrice(row.equityValue, sharesForScenario(sc))
+}
+
 export function remainingUpside(goal: number, spot: number): number | null {
   if (!(goal > 0) || !(spot > 0) || !Number.isFinite(goal) || !Number.isFinite(spot)) {
     return null
@@ -71,7 +115,9 @@ export function unionEasyYears(
   for (const e of pruneComparableEntries(entries, scenarios)) {
     const sc = byId.get(e.scenarioId)
     if (!sc) continue
-    for (const y of statedEasyYears(sc)) set.add(y)
+    const avail = availableBases(sc)
+    const basis = avail.includes(e.basis) ? e.basis : (avail[0] ?? e.basis)
+    for (const y of statedYearsForBasis(sc, basis)) set.add(y)
   }
   return [...set].sort((a, b) => a - b)
 }
@@ -97,10 +143,13 @@ export function buildGoalGapTable(
   for (const e of pruneComparableEntries(entries, scenarios)) {
     const sc = byId.get(e.scenarioId)
     if (!sc) continue
+    const avail = availableBases(sc, asOfDate.getFullYear())
+    const basis = avail.includes(e.basis) ? e.basis : (avail[0] ?? e.basis)
     const spot = priceNowForScenario(sc)
-    const hasYear = goalYear != null && statedEasyYears(sc).includes(goalYear)
+    const hasYear =
+      goalYear != null && statedYearsForBasis(sc, basis, asOfDate).includes(goalYear)
     const year = hasYear ? goalYear : null
-    const goalPrice = year != null ? easyGoalPrice(sc, year) : null
+    const goalPrice = year != null ? goalPriceForBasis(sc, basis, year, asOfDate) : null
     const upside =
       goalPrice != null && spot != null ? remainingUpside(goalPrice, spot) : null
     let cagrVal: number | null = null
@@ -115,6 +164,7 @@ export function buildGoalGapTable(
       scenarioName: sc.name,
       label: `${sc.symbol} / ${sc.name}`,
       currency: sc.currency || 'USD',
+      basis,
       spot,
       goalYear: year,
       goalPrice,
@@ -144,12 +194,63 @@ export function sortGoalGapRows(
   })
 }
 
+function parseCloseDate(iso: string): Date {
+  const [y, m, d] = iso.split('-').map(Number)
+  return new Date(y ?? 0, (m ?? 1) - 1, d ?? 1)
+}
+
+/** Local calendar YYYY-MM-DD (same clock as table CAGR). */
+export function localIsoDate(d = new Date()): string {
+  const y = d.getFullYear()
+  const m = String(d.getMonth() + 1).padStart(2, '0')
+  const day = String(d.getDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function pointAtPrice(
+  goal: number,
+  price: number,
+  date: string,
+  metric: GoalPathMetric,
+  goalYear: number,
+): UpsidePoint | null {
+  if (!(price > 0) || !Number.isFinite(price)) return null
+  if (metric === 'upside') {
+    const u = remainingUpside(goal, price)
+    return u == null ? null : { date, upside: u }
+  }
+  const yrs = yearsUntilProjectionEnd(goalYear, parseCloseDate(date))
+  const r = cagr(price, goal, yrs)
+  if (!Number.isFinite(r)) return null
+  return { date, upside: r }
+}
+
 export function upsideSeries(goal: number, closes: PriceClose[]): UpsidePoint[] {
+  return pathSeries(goal, closes, 'upside', 2030)
+}
+
+/**
+ * Remaining upside or CAGR from each close to a fixed goal at year-end.
+ * `current` replaces any close on that date so the last point matches the table.
+ */
+export function pathSeries(
+  goal: number,
+  closes: PriceClose[],
+  metric: GoalPathMetric,
+  goalYear: number,
+  current?: { date: string; price: number } | null,
+): UpsidePoint[] {
   if (!(goal > 0) || !Number.isFinite(goal)) return []
+  const skipDate = current?.date
   const out: UpsidePoint[] = []
   for (const p of closes) {
-    if (!(p.close > 0) || !Number.isFinite(p.close)) continue
-    out.push({ date: p.date, upside: goal / p.close - 1 })
+    if (skipDate && p.date === skipDate) continue
+    const pt = pointAtPrice(goal, p.close, p.date, metric, goalYear)
+    if (pt) out.push(pt)
+  }
+  if (current != null) {
+    const nowPt = pointAtPrice(goal, current.price, current.date, metric, goalYear)
+    if (nowPt) out.push(nowPt)
   }
   return out
 }

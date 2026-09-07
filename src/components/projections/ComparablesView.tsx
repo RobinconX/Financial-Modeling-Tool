@@ -324,7 +324,7 @@ export function ComparablesView({
         <InfoTip label="About comparables">
           Pick saved projections to compare. Add year columns you want (none are on by default).
           Year figures are year-end. Sort by a year’s ROI to rank names. Click a row for remaining
-          upside vs the Easy goal; click the name to open the projection.
+          upside (or CAGR) vs that row’s selected basis; click the name to open the projection.
         </InfoTip>
         <button type="button" className="btn-ghost !py-1 !text-xs" onClick={handleNew}>
           + New
