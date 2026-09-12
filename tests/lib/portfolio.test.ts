@@ -14,6 +14,8 @@ import {
   getScenarioSharePriceByYear,
   holdingValueAtYear,
   holdingLiveValue,
+  portfolioNowUsd,
+  statedGoalSpeedContributions,
   makeActualKey,
   newAction,
   newHolding,
@@ -129,6 +131,60 @@ describe('opening cash and deposits', () => {
     expect(cashFromDeposits(p, 2027)).toBe(12_000)
     expect(cashFromDeposits(p, 2028)).toBe(13_000) // +1k
     expect(cashFromDeposits(p, 2030)).toBe(15_000) // +1k × 3
+  })
+})
+
+describe('statedGoalSpeedContributions', () => {
+  it('skips opening and past years; current year is remaining only', () => {
+    const p = basePortfolio({
+      deposits: [
+        newOpeningDeposit(10_000, 2026),
+        { id: 'd2', year: 2026, amount: 5_000, alreadyDeposited: 2_000 },
+        { id: 'd3', year: 2027, amount: 8_000 },
+        { id: 'd4', year: 2025, amount: 1_000 },
+      ],
+    })
+    expect(statedGoalSpeedContributions(p, 2026)).toEqual([
+      { year: 2026, amount: 3_000 },
+      { year: 2027, amount: 8_000 },
+    ])
+  })
+
+  it('includes perpetual yearly after the last explicit deposit', () => {
+    const p = basePortfolio({
+      deposits: [
+        newOpeningDeposit(10_000, 2026),
+        { id: 'd2', year: 2027, amount: 2_000 },
+      ],
+      perpetualYearlyDeposit: { amount: 1_000, source: 'fixed' },
+    })
+    const rows = statedGoalSpeedContributions(p, 2026, 2029)
+    expect(rows).toEqual([
+      { year: 2027, amount: 2_000 },
+      { year: 2028, amount: 1_000 },
+      { year: 2029, amount: 1_000 },
+    ])
+  })
+})
+
+describe('portfolioNowUsd', () => {
+  it('is opening cash plus live holdings and ignores future deposits', () => {
+    const holding = {
+      ...newManualHolding('CASHY'),
+      id: 'h1',
+      sharesHeld: 10,
+      manualCurrentPrice: 5,
+    }
+    const p = basePortfolio({
+      deposits: [
+        newOpeningDeposit(1_000, 2026),
+        { id: 'd2', year: 2027, amount: 9_999 },
+      ],
+      holdings: [holding],
+      perpetualYearlyDeposit: { amount: 5_000, source: 'fixed' },
+      actions: [{ id: 'a1', type: 'buy', holdingId: 'h1', year: 2027, shares: 100 }],
+    })
+    expect(portfolioNowUsd(p, [], 2026)).toBe(1_000 + 50)
   })
 })
 
@@ -991,6 +1047,23 @@ describe('clonePortfolio', () => {
     expect(surplus).toBeTruthy()
     expect(surplus!.surplusScenarioId).toBe('sc-1')
     expect(surplus!.surplusPercent).toBe(40)
+  })
+
+  it('copies goal-speed inputs with new extra ids', () => {
+    const source = basePortfolio({
+      goalSpeed: {
+        goalAmount: 500_000,
+        currency: 'CHF',
+        ratePercent: 8,
+        customStart: 120_000,
+        extras: [{ id: 'ex-old', year: 2027, amount: 10_000 }],
+      },
+    })
+    const copy = clonePortfolio(source, 'Copy')
+    expect(copy.goalSpeed?.goalAmount).toBe(500_000)
+    expect(copy.goalSpeed?.currency).toBe('CHF')
+    expect(copy.goalSpeed?.extras[0]?.year).toBe(2027)
+    expect(copy.goalSpeed?.extras[0]?.id).not.toBe('ex-old')
   })
 
   it('does not copy embedded actuals (shared store owns them)', () => {

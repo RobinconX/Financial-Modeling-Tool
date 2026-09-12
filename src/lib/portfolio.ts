@@ -603,6 +603,15 @@ export function clonePortfolio(source: SavedPortfolio, name: string): SavedPortf
     targetCompound: source.targetCompound
       ? { ...source.targetCompound }
       : null,
+    goalSpeed: source.goalSpeed
+      ? {
+          ...source.goalSpeed,
+          extras: (source.goalSpeed.extras ?? []).map((e) => ({
+            ...e,
+            id: crypto.randomUUID(),
+          })),
+        }
+      : null,
     createdAt: now,
     updatedAt: now,
   })
@@ -825,6 +834,32 @@ export function depositInYear(
   const perYear =
     year > last ? resolvePerpetualYearlyAmount(portfolio.perpetualYearlyDeposit) : 0
   return explicit + perYear
+}
+
+/**
+ * Planned cash in (not opening) from this year onward, USD book.
+ * Current year is remaining (planned − already). Includes perpetual yearly
+ * after the last explicit deposit, for a bounded horizon.
+ * Thought-experiment only — does not change stored deposits.
+ */
+export function statedGoalSpeedContributions(
+  portfolio: SavedPortfolio,
+  currentYear = new Date().getFullYear(),
+  throughYear?: number,
+): { year: number; amount: number }[] {
+  const last = lastExplicitDepositYear(portfolio, currentYear)
+  const perpetual = resolvePerpetualYearlyAmount(portfolio.perpetualYearlyDeposit)
+  let to = throughYear
+  if (to == null) {
+    to = last
+    if (perpetual > 0) to = Math.max(last, currentYear) + DEFAULT_PERPETUAL_GROWTH_HORIZON
+  }
+  const out: { year: number; amount: number }[] = []
+  for (let y = currentYear; y <= to; y++) {
+    const amount = depositInYear(portfolio, y, currentYear)
+    if (amount > 0) out.push({ year: y, amount })
+  }
+  return out
 }
 
 /** Shares held at year Y after buy/sell actions through that year. */
@@ -1207,6 +1242,25 @@ export function holdingLiveValue(
     return sh * px * holdingMultiplier(holding)
   }
   return null
+}
+
+/**
+ * Live book used as Goal-speed Now: opening cash + holdings at today's mark.
+ * Ignores future deposits, perpetual yearly cash, and planned buy/sells.
+ */
+export function portfolioNowUsd(
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[] = [],
+  currentYear = new Date().getFullYear(),
+): number {
+  let total = getOpeningCash(portfolio)
+  const byId = new Map(scenarios.map((s) => [s.id, s]))
+  for (const h of portfolio.holdings) {
+    const scenario =
+      h.scenarioId && !h.manualOnly ? (byId.get(h.scenarioId) ?? null) : null
+    total += holdingLiveValue(h, scenario, [], currentYear) ?? 0
+  }
+  return total
 }
 
 /**

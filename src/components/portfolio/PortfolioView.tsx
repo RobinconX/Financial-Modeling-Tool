@@ -20,6 +20,7 @@ import {
   loadSelectedPortfolioId,
   persistSelectedPortfolioId,
 } from '../../lib/portfolioStorage'
+import { GoalSpeedPanel } from './GoalSpeedPanel'
 import {
   PortfolioHoldingsEditor,
   type PortfolioEditorPanel,
@@ -38,7 +39,7 @@ const CASH_INVESTED_KEY = 'grok-lab-portfolio-cash-invested'
 const SHOW_ROI_KEY = 'grok-lab-portfolio-show-roi'
 const SHOW_TARGET_KEY = 'grok-lab-portfolio-show-target'
 
-type WorkspaceTab = 'chart' | 'actuals' | PortfolioEditorPanel
+type WorkspaceTab = 'chart' | 'actuals' | 'goal' | PortfolioEditorPanel
 
 const TABS: { id: WorkspaceTab; label: string; short: string }[] = [
   { id: 'chart', label: 'Chart', short: 'Chart' },
@@ -46,6 +47,7 @@ const TABS: { id: WorkspaceTab; label: string; short: string }[] = [
   { id: 'cash', label: 'Cash', short: 'Cash' },
   { id: 'positions', label: 'Positions', short: 'Pos.' },
   { id: 'growth', label: 'Growth', short: 'Growth' },
+  { id: 'goal', label: 'Contribution effectiveness', short: 'Effect.' },
 ]
 
 function readCurrency(): DisplayCurrency {
@@ -71,7 +73,8 @@ function readPanel(): WorkspaceTab {
       v === 'actuals' ||
       v === 'cash' ||
       v === 'positions' ||
-      v === 'growth'
+      v === 'growth' ||
+      v === 'goal'
     )
       return v
   } catch {
@@ -1077,6 +1080,17 @@ export function PortfolioView({
                   />
                 )}
               </div>
+            )}
+
+            {panel === 'goal' && (
+              <GoalSpeedPanel
+                portfolio={selected}
+                scenarios={scenarios}
+                displayCurrency={activeCurrency}
+                usdToChf={usdToChf}
+                incomeCostLines={incomeCostLines}
+                onChange={(patch) => updatePortfolio(selected.id, patch)}
+              />
             )}
 
             {editorPanel && (

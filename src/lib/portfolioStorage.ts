@@ -267,6 +267,56 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     }
   }
 
+  let goalSpeed: SavedPortfolio['goalSpeed'] = null
+  if (isRecord(raw.goalSpeed)) {
+    const goalAmount = Math.max(0, asNumber(raw.goalSpeed.goalAmount, 0))
+    const ratePercent = asNumberOrNull(raw.goalSpeed.ratePercent)
+    const customStart = asNumberOrNull(raw.goalSpeed.customStart)
+    const extras = Array.isArray(raw.goalSpeed.extras)
+      ? raw.goalSpeed.extras
+          .map((e) => {
+            if (!isRecord(e)) return null
+            const year = Math.floor(asNumber(e.year, 0))
+            const amount = asNumber(e.amount, 0)
+            if (year < 1000 || year > 9999 || !Number.isFinite(amount) || amount < 0) {
+              return null
+            }
+            return {
+              id: typeof e.id === 'string' ? e.id : crypto.randomUUID(),
+              year,
+              amount,
+            }
+          })
+          .filter((e): e is { id: string; year: number; amount: number } => e != null)
+      : []
+    const extrasMode =
+      raw.goalSpeed.extrasMode === 'stated' || raw.goalSpeed.extrasMode === 'custom'
+        ? raw.goalSpeed.extrasMode
+        : extras.length > 0
+          ? 'custom'
+          : 'stated'
+    if (
+      goalAmount > 0 ||
+      customStart != null ||
+      extras.length > 0 ||
+      ratePercent != null ||
+      raw.goalSpeed.extrasMode === 'stated' ||
+      raw.goalSpeed.extrasMode === 'custom'
+    ) {
+      goalSpeed = {
+        goalAmount,
+        currency: raw.goalSpeed.currency === 'CHF' ? 'CHF' : 'USD',
+        ratePercent,
+        customStart:
+          customStart != null && Number.isFinite(customStart) && customStart >= 0
+            ? customStart
+            : null,
+        extrasMode,
+        extras,
+      }
+    }
+  }
+
   return normalizePortfolioCashModel({
     id,
     name,
@@ -280,6 +330,7 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     actuals,
     actualsCurrency,
     targetCompound,
+    goalSpeed,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   })

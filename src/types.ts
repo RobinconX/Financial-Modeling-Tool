@@ -588,6 +588,24 @@ export type SavedPortfolio = {
     ratePercent: number
     year: number
   } | null
+  /**
+   * What-if: extra cash vs a wealth goal. Base is Now (or customStart),
+   * no future deposits. Amounts in `currency`.
+   */
+  goalSpeed?: {
+    goalAmount: number
+    currency: DisplayCurrency
+    /** null = use perpetualGrowthPercent */
+    ratePercent: number | null
+    /** null = use live Now */
+    customStart: number | null
+    /**
+     * `stated` = Cash-tab planned deposits (read-only here).
+     * `custom` = extras below. Missing: custom if extras exist, else stated.
+     */
+    extrasMode?: 'stated' | 'custom'
+    extras: { id: string; year: number; amount: number }[]
+  } | null
   createdAt: string
   updatedAt: string
 }
