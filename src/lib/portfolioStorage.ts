@@ -272,6 +272,11 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     const goalAmount = Math.max(0, asNumber(raw.goalSpeed.goalAmount, 0))
     const ratePercent = asNumberOrNull(raw.goalSpeed.ratePercent)
     const customStart = asNumberOrNull(raw.goalSpeed.customStart)
+    const startYearRaw = asNumberOrNull(raw.goalSpeed.startYear)
+    const startYear =
+      startYearRaw != null && startYearRaw >= 1000 && startYearRaw <= 9999
+        ? Math.floor(startYearRaw)
+        : null
     const extras = Array.isArray(raw.goalSpeed.extras)
       ? raw.goalSpeed.extras
           .map((e) => {
@@ -301,7 +306,8 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
       extras.length > 0 ||
       ratePercent != null ||
       raw.goalSpeed.extrasMode === 'stated' ||
-      raw.goalSpeed.extrasMode === 'custom'
+      raw.goalSpeed.extrasMode === 'custom' ||
+      startYear != null
     ) {
       goalSpeed = {
         goalAmount,
@@ -311,6 +317,7 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
           customStart != null && Number.isFinite(customStart) && customStart >= 0
             ? customStart
             : null,
+        startYear,
         extrasMode,
         extras,
       }

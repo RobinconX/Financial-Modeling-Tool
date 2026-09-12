@@ -20,6 +20,7 @@ function solve(partial: {
   ratePercent?: number
   extras?: { year: number; amount: number }[]
   maxYears?: number
+  anchorYear?: number
 }) {
   return solveGoalSpeedPath({
     start: partial.start ?? 100_000,
@@ -28,6 +29,7 @@ function solve(partial: {
     extras: partial.extras ?? [],
     today: TODAY,
     maxYears: partial.maxYears,
+    anchorYear: partial.anchorYear,
   })
 }
 
@@ -90,6 +92,38 @@ describe('solveGoalSpeedPath', () => {
     expect(r.hit.date.startsWith('2037-03')).toBe(true)
     expect(r.hit.yearsFromToday).toBeCloseTo(stub + tGrowth, 10)
     expect(r.hit.duration.totalMonths).toBe(Math.round((stub + tGrowth) * 12))
+  })
+
+  it('projected year-end start has no today-stub; first growth is the next year', () => {
+    const r = solve({
+      start: 100_000,
+      goal: 200_000,
+      ratePercent: 7,
+      extras: [],
+      anchorYear: 2028,
+    })
+    expect(r.hit.reached).toBe(true)
+    if (!r.hit.reached) return
+    const tGrowth = Math.log(2) / Math.log(1.07)
+    expect(r.hit.yearsFromToday).toBeCloseTo(tGrowth, 10)
+    expect(r.series[0]?.date).toBe('2028-12-31')
+  })
+
+  it('adds extras at the anchor year-end with no growth that year', () => {
+    const r = solve({
+      start: 100_000,
+      goal: 1_000_000,
+      ratePercent: 7,
+      extras: [
+        { year: 2027, amount: 50_000 },
+        { year: 2028, amount: 10_000 },
+      ],
+      anchorYear: 2028,
+    })
+    const eoy2028 = [...r.series].reverse().find((p) => p.date === '2028-12-31')
+    expect(eoy2028?.wealth).toBe(110_000)
+    const jan2029 = r.series.find((p) => p.date === '2029-01-01')
+    expect(jan2029?.wealth).toBe(110_000)
   })
 
   it('never reaches within the cap', () => {

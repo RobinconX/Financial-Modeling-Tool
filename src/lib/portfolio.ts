@@ -846,16 +846,19 @@ export function statedGoalSpeedContributions(
   portfolio: SavedPortfolio,
   currentYear = new Date().getFullYear(),
   throughYear?: number,
+  /** Inclusive first contribution year. Default: currentYear. */
+  fromYear?: number,
 ): { year: number; amount: number }[] {
+  const from = fromYear ?? currentYear
   const last = lastExplicitDepositYear(portfolio, currentYear)
   const perpetual = resolvePerpetualYearlyAmount(portfolio.perpetualYearlyDeposit)
   let to = throughYear
   if (to == null) {
     to = last
-    if (perpetual > 0) to = Math.max(last, currentYear) + DEFAULT_PERPETUAL_GROWTH_HORIZON
+    if (perpetual > 0) to = Math.max(last, from) + DEFAULT_PERPETUAL_GROWTH_HORIZON
   }
   const out: { year: number; amount: number }[] = []
-  for (let y = currentYear; y <= to; y++) {
+  for (let y = from; y <= to; y++) {
     const amount = depositInYear(portfolio, y, currentYear)
     if (amount > 0) out.push({ year: y, amount })
   }

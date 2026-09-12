@@ -165,6 +165,20 @@ describe('statedGoalSpeedContributions', () => {
       { year: 2029, amount: 1_000 },
     ])
   })
+
+  it('fromYear is inclusive', () => {
+    const p = basePortfolio({
+      deposits: [
+        newOpeningDeposit(10_000, 2026),
+        { id: 'd2', year: 2028, amount: 5_000 },
+        { id: 'd3', year: 2029, amount: 8_000 },
+      ],
+    })
+    expect(statedGoalSpeedContributions(p, 2026, undefined, 2028)).toEqual([
+      { year: 2028, amount: 5_000 },
+      { year: 2029, amount: 8_000 },
+    ])
+  })
 })
 
 describe('portfolioNowUsd', () => {

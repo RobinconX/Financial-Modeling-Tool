@@ -26,10 +26,12 @@ type Props = {
   goal: number
   currency: string
   today: Date
+  /** Label for t ≈ 0 (Now, or a projected year-end). */
+  originTick?: string
 }
 
-function tickYear(t: number, today: Date): string {
-  if (t < 0.05) return 'Now'
+function tickYear(t: number, today: Date, originTick: string): string {
+  if (t < 0.05) return originTick
   const start = Date.UTC(today.getFullYear(), today.getMonth(), today.getDate())
   return String(new Date(start + t * 365.25 * 86_400_000).getUTCFullYear())
 }
@@ -59,7 +61,13 @@ function hitGapLabels(rows: GoalSpeedTableRow[]) {
   return gaps
 }
 
-export function GoalSpeedChart({ rows, goal, currency, today }: Props) {
+export function GoalSpeedChart({
+  rows,
+  goal,
+  currency,
+  today,
+  originTick = 'Now',
+}: Props) {
   const data = mergeGoalSpeedSeries(rows, goal)
   const gaps = hitGapLabels(rows)
   if (data.length < 2) {
@@ -83,7 +91,7 @@ export function GoalSpeedChart({ rows, goal, currency, today }: Props) {
               dataKey="t"
               type="number"
               tick={{ fill: 'rgba(255,255,255,0.45)', fontSize: 11 }}
-              tickFormatter={(t: number) => tickYear(t, today)}
+              tickFormatter={(t: number) => tickYear(t, today, originTick)}
               axisLine={{ stroke: 'rgba(255,255,255,0.12)' }}
               tickLine={false}
             />

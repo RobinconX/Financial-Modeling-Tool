@@ -21,7 +21,11 @@ import {
   type GoalSpeedTableRow,
 } from '../../lib/goalSpeed'
 import {
+  DEFAULT_PERPETUAL_GROWTH_HORIZON,
+  getPerpetualGrowthRate,
+  lastStatedProjectionYear,
   portfolioNowUsd,
+  portfolioTotalUsdAtYear,
   statedGoalSpeedContributions,
   withResolvedDepositAmounts,
 } from '../../lib/portfolio'
@@ -92,17 +96,38 @@ export function GoalSpeedPanel({
     [stored?.extras, fromCur, displayCurrency, usdToChf],
   )
 
-  const statedExtras = useMemo(() => {
-    const resolved = withResolvedDepositAmounts(portfolio, {
-      incomeCostLines,
-      usdToChf,
-    })
-    return statedGoalSpeedContributions(resolved, currentYear).map((e) => ({
-      id: `stated-${e.year}`,
-      year: e.year,
-      amount: toDisplay(e.amount, displayCurrency, usdToChf),
-    }))
-  }, [portfolio, incomeCostLines, usdToChf, currentYear, displayCurrency])
+  const resolved = useMemo(
+    () =>
+      withResolvedDepositAmounts(portfolio, {
+        incomeCostLines,
+        usdToChf,
+      }),
+    [portfolio, incomeCostLines, usdToChf],
+  )
+
+  const startYear =
+    stored?.startYear != null && stored.startYear >= currentYear
+      ? Math.floor(stored.startYear)
+      : null
+  const usingCustom = customDisplay != null
+  const usingYear = !usingCustom && startYear != null
+  const usingNow = !usingCustom && startYear == null
+  const anchorYear = usingYear ? startYear : null
+
+  const statedExtras = useMemo(
+    () =>
+      statedGoalSpeedContributions(
+        resolved,
+        currentYear,
+        undefined,
+        usingYear ? startYear : currentYear,
+      ).map((e) => ({
+        id: `stated-${e.year}`,
+        year: e.year,
+        amount: toDisplay(e.amount, displayCurrency, usdToChf),
+      })),
+    [resolved, currentYear, displayCurrency, usdToChf, usingYear, startYear],
+  )
 
   const extras = extrasMode === 'stated' ? statedExtras : customExtras
 
@@ -115,8 +140,36 @@ export function GoalSpeedPanel({
         : null
   const usingPortfolioRate = stored?.ratePercent == null
 
-  const start = customDisplay != null ? customDisplay : nowDisplay
-  const usingCustom = customDisplay != null
+  const yearEndUsd = usingYear
+    ? portfolioTotalUsdAtYear(resolved, scenarios, startYear, currentYear)
+    : null
+  const yearEndDisplay =
+    yearEndUsd != null ? toDisplay(yearEndUsd, displayCurrency, usdToChf) : null
+  const sameYearStated =
+    extrasMode === 'stated' && usingYear
+      ? extras
+          .filter((e) => e.year === startYear)
+          .reduce((s, e) => s + (e.amount > 0 ? e.amount : 0), 0)
+      : 0
+  const start = usingCustom
+    ? customDisplay
+    : usingYear
+      ? Math.max(0, (yearEndDisplay ?? 0) - sameYearStated)
+      : nowDisplay
+
+  const startYears = useMemo(() => {
+    const last = lastStatedProjectionYear(resolved, scenarios, currentYear)
+    const to =
+      getPerpetualGrowthRate(resolved) !== 0
+        ? Math.max(last, currentYear) + DEFAULT_PERPETUAL_GROWTH_HORIZON
+        : Math.max(last, currentYear)
+    const years: number[] = []
+    for (let y = currentYear; y <= to; y++) years.push(y)
+    return years
+  }, [resolved, scenarios, currentYear])
+
+  const clockToday = usingYear ? new Date(startYear, 11, 31) : today
+  const extraMinYear = usingYear ? startYear : currentYear
 
   const [goalDraft, setGoalDraft] = useState('')
   const [rateDraft, setRateDraft] = useState('')
@@ -148,6 +201,7 @@ export function GoalSpeedPanel({
         patch.ratePercent !== undefined ? patch.ratePercent : (stored?.ratePercent ?? null),
       customStart:
         patch.customStart !== undefined ? patch.customStart : customDisplay,
+      startYear: patch.startYear !== undefined ? patch.startYear : startYear,
       extrasMode: patch.extrasMode ?? extrasMode,
       extras: nextExtras,
     }
@@ -186,11 +240,11 @@ export function GoalSpeedPanel({
   function commitCustomStart(raw: string) {
     const parsed = parseMoney(raw.trim())
     if (parsed == null || !(parsed > 0)) {
-      persist({ customStart: null })
+      persist({ customStart: null, startYear: null })
       setStartDraft('')
       return
     }
-    persist({ customStart: parsed })
+    persist({ customStart: parsed, startYear: null })
     setStartDraft(formatInputNumber(parsed, 2))
   }
 
@@ -246,10 +300,11 @@ export function GoalSpeedPanel({
       start,
       goal: goalDisplay,
       ratePercent,
-      extras: extras.filter((e) => e.amount > 0 && e.year >= currentYear),
-      today,
+      extras: extras.filter((e) => e.amount > 0 && e.year >= extraMinYear),
+      today: clockToday,
+      anchorYear: anchorYear ?? undefined,
     })
-  }, [block, start, goalDisplay, ratePercent, extras, today, currentYear])
+  }, [block, start, goalDisplay, ratePercent, extras, clockToday, extraMinYear, anchorYear])
 
   const base = rows[0]
   const last = rows.length > 1 ? rows[rows.length - 1] : null
@@ -263,12 +318,12 @@ export function GoalSpeedPanel({
       <div className="flex items-center gap-1.5">
         <h3 className="section-title">Contribution effectiveness</h3>
         <InfoTip label="About contribution effectiveness">
-          How much sooner extra contributions get you to a wealth goal. Base is
-          today&apos;s book (Now) with no planned future deposits. Stated mode
-          copies planned deposits from the Cash tab (read-only here). Custom mode
-          is a local what-if and never writes back. Contributions land at year-end
-          and start compounding the year after. Relative effectiveness is exact
-          time saved per unit vs the last contribution year (last year is 1.00×).
+          How much sooner extra contributions get you to a wealth goal. Now is
+          today&apos;s live book. A projected year-end uses the same total as the
+          Chart for that year; the clock starts 31 Dec of that year. Stated
+          contributions are Cash-tab deposits after the start year. Custom extras
+          never write back to Cash. Relative effectiveness is exact time saved per
+          unit vs the last contribution year (last year is 1.00×).
         </InfoTip>
       </div>
 
@@ -317,19 +372,73 @@ export function GoalSpeedPanel({
           </p>
         </div>
         <div>
-          <label className="label">Start</label>
-          <div className="mb-1.5 flex gap-1 border-b border-white/10" role="group" aria-label="Start amount">
+          <div className="mb-1 flex items-center gap-1.5">
+            <label className="label !mb-0" htmlFor="goal-speed-start-year">
+              Start from
+            </label>
+            <InfoTip label="About the starting point">
+              Now is today&apos;s live book (holdings + opening cash). Chart year-end
+              is the same total as that year on the Portfolio chart; the clock
+              starts 31 Dec and first growth is the next year. Custom is any amount
+              you type. This tab never changes Cash or Chart.
+            </InfoTip>
+          </div>
+          <div className="mb-1.5 flex flex-wrap items-end gap-x-2 gap-y-1" role="group" aria-label="Start from">
             <button
               type="button"
               className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
-                !usingCustom
+                usingNow
                   ? 'border-emerald-400 text-white'
                   : 'border-transparent text-white/50 hover:text-white/80'
               }`}
-              onClick={() => persist({ customStart: null })}
+              onClick={() => persist({ customStart: null, startYear: null })}
             >
               Now
             </button>
+            <button
+              type="button"
+              className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
+                usingYear
+                  ? 'border-emerald-400 text-white'
+                  : 'border-transparent text-white/50 hover:text-white/80'
+              }`}
+              onClick={() =>
+                persist({
+                  customStart: null,
+                  startYear: startYear ?? currentYear,
+                })
+              }
+            >
+              Chart year-end
+            </button>
+            <select
+              id="goal-speed-start-year"
+              className={`input !mb-0 !w-[9.5rem] !py-0.5 !text-xs ${
+                usingYear ? 'border-emerald-400/60' : 'opacity-50'
+              }`}
+              value={usingYear ? String(startYear) : ''}
+              disabled={!usingYear && startYears.length === 0}
+              onChange={(e) => {
+                const y = Number(e.target.value)
+                if (!Number.isFinite(y)) return
+                persist({ customStart: null, startYear: y })
+              }}
+              onFocus={() => {
+                if (!usingYear) {
+                  persist({ customStart: null, startYear: startYear ?? currentYear })
+                }
+              }}
+              aria-label="Chart year-end"
+            >
+              <option value="" disabled>
+                Choose year
+              </option>
+              {startYears.map((y) => (
+                <option key={y} value={y}>
+                  {y} year-end
+                </option>
+              ))}
+            </select>
             <button
               type="button"
               className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
@@ -337,7 +446,12 @@ export function GoalSpeedPanel({
                   ? 'border-emerald-400 text-white'
                   : 'border-transparent text-white/50 hover:text-white/80'
               }`}
-              onClick={() => persist({ customStart: Math.max(0, nowDisplay) })}
+              onClick={() =>
+                persist({
+                  customStart: Math.max(0, start),
+                  startYear: null,
+                })
+              }
             >
               Custom
             </button>
@@ -360,10 +474,20 @@ export function GoalSpeedPanel({
             </div>
           ) : (
             <p className="py-2 text-sm tabular-nums text-white/80">
-              {formatMoney(nowDisplay, displayCurrency)}
-              <span className="ml-1.5 text-[11px] text-white/40">live book, no future deposits</span>
+              {formatMoney(start, displayCurrency)}
             </p>
           )}
+          <p className="text-[11px] text-white/40">
+            {usingCustom
+              ? 'Typed starting amount. Clock from today, like Now.'
+              : usingYear
+                ? `Portfolio chart total at 31 Dec ${startYear}. Time-to-goal is counted from then; first growth is ${startYear + 1}.${
+                    sameYearStated > 0
+                      ? ' Stated cash in that year is treated as an extra (taken out of this total so it isn’t counted twice).'
+                      : ''
+                  }`
+                : 'Today’s live holdings + opening cash. Planned future deposits are extras, not part of this start.'}
+          </p>
         </div>
       </div>
 
@@ -410,13 +534,19 @@ export function GoalSpeedPanel({
         </div>
         {extrasMode === 'stated' && (
           <p className="text-[11px] text-white/40">
-            Planned deposits from the Cash tab. This view does not change them.
+            Planned deposits from the Cash tab
+            {usingYear ? ` from ${startYear} on` : ''}. This view does not change them.
+            {usingYear && sameYearStated > 0
+              ? ' This year’s stated cash is pulled out of the year-end total so it can count as an extra.'
+              : ''}
           </p>
         )}
         {extras.length === 0 ? (
           <p className="text-[12px] text-white/40">
             {extrasMode === 'stated'
-              ? 'No planned Cash-tab deposits from this year on.'
+              ? usingYear
+                ? `No planned Cash-tab deposits after ${startYear}.`
+                : 'No planned Cash-tab deposits from this year on.'
               : 'Optional. Add a year to see how much sooner contributions get you to the goal.'}
           </p>
         ) : extrasMode === 'stated' ? (
@@ -448,7 +578,7 @@ export function GoalSpeedPanel({
                 year={e.year}
                 amount={e.amount}
                 currency={displayCurrency}
-                minYear={currentYear}
+                minYear={extraMinYear}
                 onYear={(year) => updateExtra(e.id, { year })}
                 onAmount={(amount) => updateExtra(e.id, { amount })}
                 onRemove={() => removeExtra(e.id)}
@@ -495,7 +625,9 @@ export function GoalSpeedPanel({
                     </span>
                   </th>
                   <th className="py-1.5 pr-3 font-medium">Goal date</th>
-                  <th className="py-1.5 pr-3 font-medium">Time from today</th>
+                  <th className="py-1.5 pr-3 font-medium">
+                    {usingYear ? `Time from ${startYear}` : 'Time from today'}
+                  </th>
                   <th className="py-1.5 pr-3 font-medium">Faster than previous</th>
                   <th className="relative z-20 py-1.5 font-medium">
                     <span className="inline-flex items-center gap-1">
@@ -521,7 +653,8 @@ export function GoalSpeedPanel({
                       ratePercent={ratePercent ?? 0}
                       start={start}
                       goal={goalDisplay}
-                      today={today}
+                      today={clockToday}
+                      anchorYear={anchorYear}
                       onToggle={() => setOpenKey(open ? null : row.key)}
                     />
                   )
@@ -535,7 +668,8 @@ export function GoalSpeedPanel({
             rows={rows}
             goal={goalDisplay}
             currency={displayCurrency}
-            today={today}
+            today={clockToday}
+            originTick={usingYear ? String(startYear) : 'Now'}
           />
         </>
       )}
@@ -661,6 +795,7 @@ function RowWithBreakdown({
   start,
   goal,
   today,
+  anchorYear,
   onToggle,
 }: {
   row: GoalSpeedTableRow
@@ -670,6 +805,7 @@ function RowWithBreakdown({
   start: number
   goal: number
   today: Date
+  anchorYear: number | null
   onToggle: () => void
 }) {
   const steps = useMemo(() => {
@@ -680,8 +816,9 @@ function RowWithBreakdown({
       ratePercent,
       extras: row.extrasIncluded,
       today,
+      anchorYear: anchorYear ?? undefined,
     })
-  }, [open, start, goal, ratePercent, row.extrasIncluded, today])
+  }, [open, start, goal, ratePercent, row.extrasIncluded, today, anchorYear])
 
   return (
     <>

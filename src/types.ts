@@ -600,6 +600,11 @@ export type SavedPortfolio = {
     /** null = use live Now */
     customStart: number | null
     /**
+     * Projected year-end to stand on. Null = Now (or Custom if customStart is set).
+     * Ignored when customStart is set.
+     */
+    startYear?: number | null
+    /**
      * `stated` = Cash-tab planned deposits (read-only here).
      * `custom` = extras below. Missing: custom if extras exist, else stated.
      */

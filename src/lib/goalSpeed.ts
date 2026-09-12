@@ -59,6 +59,11 @@ export type GoalSpeedSolveInput = {
   ratePercent: number
   extras: { year: number; amount: number }[]
   today: Date
+  /**
+   * Stand at 31 Dec of this year. No today-stub; first growth is the next year.
+   * Extras in this year and earlier are ignored. Omit for Now (clock from today).
+   */
+  anchorYear?: number
   maxYears?: number
 }
 
@@ -226,14 +231,49 @@ function tOf(today: Ymd, date: Ymd, tie = 0): number {
 }
 
 /**
- * Exact years from today to fraction `t` of calendar `year` (t=0 Jan 1, t=1 next Jan 1).
- * After this year, growth years are 365.25-day compounding years (not leap-day calendar).
+ * Exact years from the clock origin to fraction `t` of calendar `year`
+ * (t=0 Jan 1, t=1 next Jan 1). After Y0, growth years are 365.25-day years.
+ * `fromYearEnd`: origin is 31 Dec Y0 (no today-stub).
  */
-function yearsUntil(today: Ymd, year: number, t: number): number {
-  const y0 = today.y
+function yearsUntil(
+  today: Ymd,
+  year: number,
+  t: number,
+  y0: number,
+  fromYearEnd: boolean,
+): number {
+  if (fromYearEnd) return Math.max(0, year - (y0 + 1) + t)
   const stub = (Date.UTC(y0 + 1, 0, 1) - utcMs(today)) / YEAR_MS
   if (year <= y0) return Math.max(0, stub - 1 + t)
   return Math.max(0, stub + (year - (y0 + 1)) + t)
+}
+
+function clockOrigin(input: GoalSpeedSolveInput): {
+  today: Ymd
+  y0: number
+  fromYearEnd: boolean
+  extraFrom: number
+  origin: Ymd
+} {
+  const today = ymdFromDate(input.today)
+  const raw = input.anchorYear
+  if (raw != null && Number.isFinite(raw)) {
+    const y0 = Math.floor(raw)
+    return {
+      today,
+      y0,
+      fromYearEnd: true,
+      extraFrom: y0,
+      origin: { y: y0, m: 12, d: 31 },
+    }
+  }
+  return {
+    today,
+    y0: today.y,
+    fromYearEnd: false,
+    extraFrom: today.y,
+    origin: today,
+  }
 }
 
 function pushPoint(
@@ -262,13 +302,12 @@ function pushPoint(
 }
 
 export function solveGoalSpeedPath(input: GoalSpeedSolveInput): GoalSpeedPathResult {
-  const today = ymdFromDate(input.today)
-  const y0 = today.y
+  const { today, y0, fromYearEnd, extraFrom, origin } = clockOrigin(input)
   const G = input.goal
   const B = input.start
   const maxYears = input.maxYears ?? GOAL_SPEED_MAX_YEARS
   const series: GoalSpeedPoint[] = []
-  const extras = extrasByYear(input.extras, y0)
+  const extras = extrasByYear(input.extras, extraFrom)
   const r = Number.isFinite(input.ratePercent) ? input.ratePercent / 100 : 0
   const grow = r > 0
 
@@ -283,7 +322,7 @@ export function solveGoalSpeedPath(input: GoalSpeedSolveInput): GoalSpeedPathRes
     exactYears: number,
     tie = 0,
   ): GoalSpeedPathResult {
-    const p = pushPoint(series, today, date, wealth, tie, true)
+    const p = pushPoint(series, origin, date, wealth, tie, true)
     const years = Math.max(0, exactYears)
     return {
       hit: {
@@ -299,39 +338,36 @@ export function solveGoalSpeedPath(input: GoalSpeedSolveInput): GoalSpeedPathRes
     }
   }
 
-  pushPoint(series, today, today, B)
-  if (B >= G) return reached(today, B, true, 0)
+  const yu = (year: number, t: number) => yearsUntil(today, year, t, y0, fromYearEnd)
+
+  pushPoint(series, origin, origin, B)
+  if (B >= G) return reached(origin, B, true, 0)
 
   const x0 = extras.get(y0) ?? 0
   const y0end: Ymd = { y: y0, m: 12, d: 31 }
-  if (x0 > 0) pushPoint(series, today, y0end, B)
+  if (x0 > 0) pushPoint(series, origin, y0end, B)
   let wealth = B + x0
   if (wealth >= G) {
-    return reached(y0end, wealth, false, yearsUntil(today, y0, 1), x0 > 0 ? EXTRA_TIE : 0)
+    return reached(y0end, wealth, false, yu(y0, 1), x0 > 0 ? EXTRA_TIE : 0)
   }
-  pushPoint(series, today, y0end, wealth, x0 > 0 ? EXTRA_TIE : 0)
+  pushPoint(series, origin, y0end, wealth, x0 > 0 ? EXTRA_TIE : 0)
 
   const lastYear = y0 + maxYears
   for (let Y = y0 + 1; Y <= lastYear; Y++) {
     const prev = wealth
-    pushPoint(series, today, { y: Y, m: 1, d: 1 }, prev)
+    pushPoint(series, origin, { y: Y, m: 1, d: 1 }, prev)
 
     if (grow && prev > 0) {
       const grown = prev * (1 + r)
       if (grown >= G) {
         const t = Math.log(G / prev) / Math.log(1 + r)
-        if (!(t > 0)) return reached({ y: Y, m: 1, d: 1 }, G, false, yearsUntil(today, Y, 0))
+        if (!(t > 0)) return reached({ y: Y, m: 1, d: 1 }, G, false, yu(Y, 0))
         if (t >= 1 - 1e-12) {
           wealth = grown
           const eoy: Ymd = { y: Y, m: 12, d: 31 }
-          if (wealth >= G) return reached(eoy, wealth, false, yearsUntil(today, Y, 1))
+          if (wealth >= G) return reached(eoy, wealth, false, yu(Y, 1))
         } else {
-          return reached(
-            dateAtYearFraction(Y, t),
-            G,
-            false,
-            yearsUntil(today, Y, t),
-          )
+          return reached(dateAtYearFraction(Y, t), G, false, yu(Y, t))
         }
       } else {
         wealth = grown
@@ -340,20 +376,14 @@ export function solveGoalSpeedPath(input: GoalSpeedSolveInput): GoalSpeedPathRes
 
     const eoy: Ymd = { y: Y, m: 12, d: 31 }
     const x = extras.get(Y) ?? 0
-    if (x > 0) pushPoint(series, today, eoy, wealth)
+    if (x > 0) pushPoint(series, origin, eoy, wealth)
     if (wealth < G && wealth + x >= G) {
-      return reached(
-        eoy,
-        wealth + x,
-        false,
-        yearsUntil(today, Y, 1),
-        x > 0 ? EXTRA_TIE : 0,
-      )
+      return reached(eoy, wealth + x, false, yu(Y, 1), x > 0 ? EXTRA_TIE : 0)
     }
     wealth += x
-    pushPoint(series, today, eoy, wealth, x > 0 ? EXTRA_TIE : 0)
+    pushPoint(series, origin, eoy, wealth, x > 0 ? EXTRA_TIE : 0)
     if (wealth >= G) {
-      return reached(eoy, wealth, false, yearsUntil(today, Y, 1), x > 0 ? EXTRA_TIE : 0)
+      return reached(eoy, wealth, false, yu(Y, 1), x > 0 ? EXTRA_TIE : 0)
     }
   }
 
@@ -375,46 +405,48 @@ export type GoalSpeedBreakdownStep = {
 
 /** Year-by-year walk of the same path as {@link solveGoalSpeedPath}. */
 export function goalSpeedBreakdown(input: GoalSpeedSolveInput): GoalSpeedBreakdownStep[] {
-  const today = ymdFromDate(input.today)
-  const y0 = today.y
+  const { origin, y0, extraFrom, fromYearEnd } = clockOrigin(input)
   const G = input.goal
   const B = input.start
   const maxYears = input.maxYears ?? GOAL_SPEED_MAX_YEARS
-  const extras = extrasByYear(input.extras, y0)
+  const extras = extrasByYear(input.extras, extraFrom)
   const r = Number.isFinite(input.ratePercent) ? input.ratePercent / 100 : 0
   const grow = r > 0
   const steps: GoalSpeedBreakdownStep[] = []
+  const already = Number.isFinite(B) && Number.isFinite(G) && B >= G && G > 0
 
   steps.push({
     year: y0,
-    title: 'Now',
+    title: fromYearEnd ? `${y0} year-end` : 'Now',
     prior: null,
     grown: null,
     contribution: 0,
     wealth: B,
     grew: false,
-    hit: Number.isFinite(B) && Number.isFinite(G) && B >= G && G > 0,
-    hitDate: Number.isFinite(B) && Number.isFinite(G) && B >= G && G > 0 ? iso(today) : null,
-    note: Number.isFinite(B) && Number.isFinite(G) && B >= G && G > 0 ? 'Already at the goal' : null,
+    hit: already,
+    hitDate: already ? iso(origin) : null,
+    note: already ? 'Already at the goal' : null,
   })
   if (!(G > 0) || !Number.isFinite(G) || !Number.isFinite(B) || B >= G) return steps
 
   const x0 = extras.get(y0) ?? 0
   let wealth = B + x0
-  const hitY0 = wealth >= G
-  steps.push({
-    year: y0,
-    title: String(y0),
-    prior: B,
-    grown: B,
-    contribution: x0,
-    wealth,
-    grew: false,
-    hit: hitY0,
-    hitDate: hitY0 ? `${y0}-12-31` : null,
-    note: 'No growth this year',
-  })
-  if (hitY0) return steps
+  if (x0 > 0 || !fromYearEnd) {
+    const hitY0 = wealth >= G
+    steps.push({
+      year: y0,
+      title: String(y0),
+      prior: B,
+      grown: B,
+      contribution: x0,
+      wealth,
+      grew: false,
+      hit: hitY0,
+      hitDate: hitY0 ? `${y0}-12-31` : null,
+      note: 'No growth this year',
+    })
+    if (hitY0) return steps
+  }
 
   const lastYear = y0 + maxYears
   for (let Y = y0 + 1; Y <= lastYear; Y++) {
@@ -493,8 +525,8 @@ function sortedUniqueExtras(
 }
 
 export function buildGoalSpeedTable(input: GoalSpeedSolveInput): GoalSpeedTableRow[] {
-  const y0 = input.today.getFullYear()
-  const unique = sortedUniqueExtras(input.extras, y0)
+  const { extraFrom } = clockOrigin(input)
+  const unique = sortedUniqueExtras(input.extras, extraFrom)
   const slices: { year: number; amount: number }[][] = [[]]
   let acc: { year: number; amount: number }[] = []
   for (const e of unique) {
