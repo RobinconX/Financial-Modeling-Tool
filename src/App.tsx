@@ -134,6 +134,7 @@ export default function App() {
     upsertScenario,
     updateScenario,
     deleteScenario,
+    importScenarios,
   } = useSavedScenarios()
 
   const {
@@ -356,6 +357,7 @@ export default function App() {
               upsertScenario={upsertScenario}
               updateScenario={updateScenario}
               deleteScenario={deleteScenario}
+              importScenarios={importScenarios}
               comparables={comparables}
               comparablesError={comparablesError}
               createComparable={createComparable}

@@ -14,6 +14,7 @@ import { YearOverview } from './YearOverview'
 import { CashflowTable } from './CashflowTable'
 import { YearSankey } from './YearSankey'
 import { MonthlyBudgetView } from './MonthlyBudgetView'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 import { CopyScenarioDialog } from './CopyScenarioDialog'
 
 type WorkspaceTab = 'budget' | 'monthly'
@@ -108,6 +109,9 @@ export function IncomeCostView({
   const [renameDraft, setRenameDraft] = useState('')
   const [dragId, setDragId] = useState<string | null>(null)
   const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  )
   const renameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -313,9 +317,7 @@ export function IncomeCostView({
                     title="Delete scenario"
                     onClick={(e) => {
                       e.stopPropagation()
-                      if (confirm(`Delete scenario “${s.name}” and all its positions?`)) {
-                        removeScenario(s.id)
-                      }
+                      setPendingDelete({ id: s.id, name: s.name })
                     }}
                     onMouseDown={(e) => e.stopPropagation()}
                   >
@@ -420,6 +422,22 @@ export function IncomeCostView({
         onClose={() => setCopyOpen(false)}
         onCreate={handleCopy}
       />
+
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="Delete scenario"
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => {
+            removeScenario(pendingDelete.id)
+            setPendingDelete(null)
+          }}
+        >
+          <p>
+            <span className="font-semibold text-white">{pendingDelete.name}</span>
+          </p>
+          <p>Deletes this scenario and all its positions. This cannot be undone.</p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   )
 }

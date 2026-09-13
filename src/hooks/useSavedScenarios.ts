@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import type { SavedScenario } from '../types'
+import { mergeImportedScenarios } from '../lib/projectionPack'
 import {
   findBySymbolAndName,
   groupScenariosByTicker,
@@ -128,6 +129,19 @@ export function useSavedScenarios() {
     [persist],
   )
 
+  const importScenarios = useCallback(
+    (
+      incoming: SavedScenario[],
+    ): { imported: SavedScenario[] } | { error: string } => {
+      const { next, imported } = mergeImportedScenarios(scenariosRef.current, incoming)
+      if (imported.length === 0) return { error: 'No projections imported.' }
+      const result = persist(next)
+      if (!result.ok) return { error: result.error }
+      return { imported }
+    },
+    [persist],
+  )
+
   const renameScenario = useCallback(
     (id: string, name: string) => {
       const trimmed = name.trim()
@@ -147,6 +161,7 @@ export function useSavedScenarios() {
     upsertScenario,
     updateScenario,
     deleteScenario,
+    importScenarios,
     renameScenario,
   }
 }

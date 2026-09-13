@@ -66,6 +66,14 @@ export function wrapSnapshotAsCatalog(
 export function parseSaveFile(raw: unknown): ParsedSaveFile | { error: string } {
   if (!isRecord(raw)) return { error: 'Invalid file: not a JSON object' }
 
+  // Projection packs are not full saves — Analyze → Import projections.
+  if (raw.kind === 'grok-lab-projections') {
+    return {
+      error:
+        'This file is stock projections — import it from Analyze → Import projections.',
+    }
+  }
+
   if (raw.version === ACCOUNT_CATALOG_VERSION && Array.isArray(raw.accounts)) {
     const accounts: AccountRecord[] = []
     for (const item of raw.accounts) {

@@ -5,13 +5,20 @@ import type {
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
-import {
-  deleteScenarioConfirmMessage,
-  portfoliosUsingScenario,
-} from '../../lib/scenarioUsage'
+import { portfoliosUsingScenario } from '../../lib/scenarioUsage'
 import { groupScenariosByTicker } from '../../lib/storage'
+import {
+  buildProjectionPack,
+  defaultImportSelection,
+  downloadProjectionPack,
+  formatImportMessage,
+  readProjectionFileFromFile,
+  type ProjectionCandidate,
+} from '../../lib/projectionPack'
 import { ProjectionPanel } from './ProjectionPanel'
 import { ComparablesView } from './ComparablesView'
+import { ProjectionPickDialog } from './ProjectionPickDialog'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -29,6 +36,9 @@ type Props = {
   ) => { scenario: SavedScenario; overwritten: boolean } | { error: string }
   updateScenario: (id: string, patch: Partial<SavedScenario>) => boolean
   deleteScenario: (id: string) => boolean
+  importScenarios: (
+    incoming: SavedScenario[],
+  ) => { imported: SavedScenario[] } | { error: string }
   comparables: SavedComparable[]
   comparablesError: string | null
   createComparable: (name?: string) => SavedComparable | null
@@ -211,6 +221,7 @@ export function ProjectionsView({
   upsertScenario,
   updateScenario,
   deleteScenario,
+  importScenarios,
   comparables,
   comparablesError,
   createComparable,
@@ -233,6 +244,13 @@ export function ProjectionsView({
   const [selA, setSelA] = useState<string>(() => sorted[0]?.id ?? DRAFT)
   const [selB, setSelB] = useState<string>(DRAFT)
   const [openBasis, setOpenBasis] = useState<ComparableBasis | undefined>(undefined)
+  const importInputRef = useRef<HTMLInputElement>(null)
+  const [importPick, setImportPick] = useState<ProjectionCandidate[] | null>(null)
+  const [importChecked, setImportChecked] = useState<string[]>([])
+  const [exportOpen, setExportOpen] = useState(false)
+  const [shareMessage, setShareMessage] = useState<string | null>(null)
+  const [shareError, setShareError] = useState<string | null>(null)
+  const [pendingDeleteId, setPendingDeleteId] = useState<string | null>(null)
 
   // Keep A valid when list changes
   useEffect(() => {
@@ -251,51 +269,140 @@ export function ProjectionsView({
   const scenarioA = selA === DRAFT ? null : (scenarios.find((s) => s.id === selA) ?? null)
   const scenarioB = selB === DRAFT ? null : (scenarios.find((s) => s.id === selB) ?? null)
 
+  function applyImported(incoming: SavedScenario[]) {
+    const result = importScenarios(incoming)
+    if ('error' in result) {
+      setShareMessage(null)
+      setShareError(result.error)
+      return
+    }
+    setShareError(null)
+    setShareMessage(formatImportMessage(result.imported))
+    setImportPick(null)
+    const first = result.imported[0]
+    if (first) setSelA(first.id)
+  }
+
+  async function handleImportFile(file: File) {
+    setShareError(null)
+    setShareMessage(null)
+    const parsed = await readProjectionFileFromFile(file)
+    if ('error' in parsed) {
+      setShareError(parsed.error)
+      return
+    }
+    const openSymbol = scenarioA?.symbol ?? null
+    setImportPick(parsed.candidates)
+    setImportChecked(
+      parsed.candidates.length === 1
+        ? [parsed.candidates[0]!.key]
+        : defaultImportSelection(parsed.candidates, openSymbol),
+    )
+  }
+
+  function exportChecked(): string[] {
+    const ids: string[] = []
+    if (selA !== DRAFT && scenarios.some((s) => s.id === selA)) ids.push(selA)
+    return ids
+  }
+
+  function handleExportChosen(ids: string[]) {
+    const list = sorted.filter((s) => ids.includes(s.id))
+    if (list.length === 0) return
+    downloadProjectionPack(buildProjectionPack(list))
+    setExportOpen(false)
+  }
+
   function handleDelete(id: string) {
-    const sc = scenarios.find((s) => s.id === id)
-    if (!sc) return
-    const usage = portfoliosUsingScenario(id, portfolios)
-    const msg = deleteScenarioConfirmMessage(sc.symbol, sc.name, usage)
-    if (!confirm(msg)) return
+    if (!scenarios.some((s) => s.id === id)) return
+    setPendingDeleteId(id)
+  }
+
+  function confirmPendingDelete() {
+    const id = pendingDeleteId
+    if (!id) return
     deleteScenario(id)
     if (selA === id) setSelA(DRAFT)
     if (selB === id) setSelB(DRAFT)
+    setPendingDeleteId(null)
   }
+
+  const pendingDelete = pendingDeleteId
+    ? (scenarios.find((s) => s.id === pendingDeleteId) ?? null)
+    : null
+  const pendingUsage = pendingDelete
+    ? portfoliosUsingScenario(pendingDelete.id, portfolios)
+    : []
 
   return (
     <div className="space-y-5">
-      <div
-        className="inline-flex gap-1 border-b border-white/10"
-        role="tablist"
-        aria-label="Projections"
-      >
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === 'analyze'}
-          onClick={() => setMode('analyze')}
-          className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
-            mode === 'analyze'
-              ? 'border-emerald-400 text-white'
-              : 'border-transparent text-white/50 hover:text-white/80'
-          }`}
-        >
-          Analyze
-        </button>
-        <button
-          type="button"
-          role="tab"
-          aria-selected={mode === 'comps'}
-          onClick={() => setMode('comps')}
-          className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
-            mode === 'comps'
-              ? 'border-emerald-400 text-white'
-              : 'border-transparent text-white/50 hover:text-white/80'
-          }`}
-        >
-          Comparables
-        </button>
+      <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10">
+        <div className="inline-flex gap-1" role="tablist" aria-label="Projections">
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'analyze'}
+            onClick={() => setMode('analyze')}
+            className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
+              mode === 'analyze'
+                ? 'border-emerald-400 text-white'
+                : 'border-transparent text-white/50 hover:text-white/80'
+            }`}
+          >
+            Analyze
+          </button>
+          <button
+            type="button"
+            role="tab"
+            aria-selected={mode === 'comps'}
+            onClick={() => setMode('comps')}
+            className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
+              mode === 'comps'
+                ? 'border-emerald-400 text-white'
+                : 'border-transparent text-white/50 hover:text-white/80'
+            }`}
+          >
+            Comparables
+          </button>
+        </div>
+        <div className="flex shrink-0 flex-wrap items-center gap-2 pb-1.5">
+          <button
+            type="button"
+            className="btn-ghost !py-1.5 !text-xs"
+            onClick={() => importInputRef.current?.click()}
+          >
+            Import
+          </button>
+          <button
+            type="button"
+            className="btn-ghost !py-1.5 !text-xs"
+            disabled={sorted.length === 0}
+            onClick={() => setExportOpen(true)}
+          >
+            Export
+          </button>
+          <input
+            ref={importInputRef}
+            type="file"
+            accept="application/json,.json,text/json"
+            className="hidden"
+            onChange={(e) => {
+              const f = e.target.files?.[0]
+              e.target.value = ''
+              if (f) void handleImportFile(f)
+            }}
+          />
+        </div>
       </div>
+
+      {shareError ? (
+        <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
+          {shareError}
+        </p>
+      ) : null}
+      {shareMessage ? (
+        <p className="text-sm text-emerald-300">{shareMessage}</p>
+      ) : null}
 
       {mode === 'comps' ? (
         <ComparablesView
@@ -395,6 +502,82 @@ export function ProjectionsView({
       </div>
         </>
       )}
+
+      {exportOpen ? (
+        <ProjectionPickDialog
+          title="Export projections"
+          description="Choose which projections to pack into one file."
+          items={sorted.map((s) => ({
+            key: s.id,
+            label: `${s.symbol} · ${s.name}`,
+          }))}
+          initialChecked={exportChecked()}
+          confirmLabel="Export"
+          onClose={() => setExportOpen(false)}
+          onConfirm={(picked) => handleExportChosen(picked.map((p) => p.key))}
+        />
+      ) : null}
+
+      {importPick ? (
+        <ProjectionPickDialog
+          title="Import projections"
+          description="Name each one as it should appear under that ticker. If you already have that name, we add “ (imported)”."
+          items={importPick.map((c) => ({
+            key: c.key,
+            label: c.scenario.symbol,
+            hint: c.accountName ?? undefined,
+            name: c.scenario.name,
+          }))}
+          initialChecked={importChecked}
+          confirmLabel="Import"
+          rename
+          onClose={() => setImportPick(null)}
+          onConfirm={(picked) => {
+            const byKey = new Map(importPick.map((c) => [c.key, c]))
+            const chosen = picked.flatMap((p) => {
+              const c = byKey.get(p.key)
+              if (!c) return []
+              return [{ ...c.scenario, name: p.name }]
+            })
+            applyImported(chosen)
+          }}
+        />
+      ) : null}
+
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="Delete projection"
+          confirmLabel="Delete"
+          onClose={() => setPendingDeleteId(null)}
+          onConfirm={confirmPendingDelete}
+        >
+          <p>
+            <span className="font-semibold text-white">{pendingDelete.symbol}</span>
+            <span> · {pendingDelete.name}</span>
+          </p>
+          {pendingUsage.length === 0 ? (
+            <p>This cannot be undone.</p>
+          ) : (
+            <>
+              <p>
+                Used in {pendingUsage.length === 1 ? 'this portfolio' : 'these portfolios'}.
+                Holdings will show a missing scenario until you re-link them.
+              </p>
+              <ul className="list-disc space-y-0.5 pl-4 text-white/80">
+                {pendingUsage.map((u) => (
+                  <li key={u.portfolioId}>
+                    {u.portfolioName}
+                    <span className="text-white/45">
+                      {' '}
+                      · {u.holdingCount} holding{u.holdingCount === 1 ? '' : 's'}
+                    </span>
+                  </li>
+                ))}
+              </ul>
+            </>
+          )}
+        </ConfirmDialog>
+      ) : null}
     </div>
   )
 }

@@ -26,6 +26,7 @@ import {
 } from '../../lib/priceHistoryStorage'
 import { groupScenariosByTicker } from '../../lib/storage'
 import { formatPercent, formatPrice } from '../../lib/format'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 import { InfoTip } from '../common/InfoTip'
 import { GoalGapSection, OVERLAY_COLORS } from './GoalGapSection'
 
@@ -73,6 +74,9 @@ export function ComparablesView({
   const [histories, setHistories] = useState<Record<string, CachedPriceHistory>>({})
   const [histLoading, setHistLoading] = useState<Set<string>>(() => new Set())
   const [histErrors, setHistErrors] = useState<Record<string, string>>({})
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  )
 
   useEffect(() => {
     if (selectedId && comparables.some((c) => c.id === selectedId)) return
@@ -340,10 +344,7 @@ export function ComparablesView({
             <button
               type="button"
               className="btn-ghost !py-1 !text-xs text-red-300/80"
-              onClick={() => {
-                if (!confirm(`Delete comparable “${selected.name}”?`)) return
-                deleteComparable(selected.id)
-              }}
+              onClick={() => setPendingDelete({ id: selected.id, name: selected.name })}
             >
               Delete
             </button>
@@ -703,6 +704,22 @@ export function ComparablesView({
             </div>
           )}
         </>
+      ) : null}
+
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="Delete comparable"
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => {
+            deleteComparable(pendingDelete.id)
+            setPendingDelete(null)
+          }}
+        >
+          <p>
+            <span className="font-semibold text-white">{pendingDelete.name}</span>
+          </p>
+          <p>This cannot be undone.</p>
+        </ConfirmDialog>
       ) : null}
     </div>
   )

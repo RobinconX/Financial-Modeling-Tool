@@ -22,7 +22,7 @@ function asNumberOrNull(v: unknown): number | null {
   return Number.isFinite(n) ? n : null
 }
 
-function normalizeScenario(raw: unknown): SavedScenario | null {
+export function normalizeScenario(raw: unknown): SavedScenario | null {
   if (!isRecord(raw)) return null
   const id = typeof raw.id === 'string' ? raw.id : null
   const symbol = typeof raw.symbol === 'string' ? raw.symbol.toUpperCase() : null

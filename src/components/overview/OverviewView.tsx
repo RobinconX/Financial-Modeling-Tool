@@ -24,6 +24,7 @@ import {
   runwayAssetSeries,
 } from '../../lib/runway'
 import { readShowGoals, writeShowGoals } from '../../lib/goals'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 import { ChartGoals } from '../common/ChartGoals'
 import { ChartNotes } from '../common/ChartNotes'
 import { FullscreenChart } from '../common/FullscreenChart'
@@ -140,6 +141,9 @@ export function OverviewView({
   const [fromDraft, setFromDraft] = useState(String(startYear))
   const [toDraft, setToDraft] = useState(String(endYear))
   const [runwayYearKey, setRunwayYearKey] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  )
 
   useEffect(() => {
     setFromDraft(String(startYear))
@@ -379,7 +383,10 @@ export function OverviewView({
               type="button"
               className="btn-ghost !py-1 !text-xs text-red-300/80 disabled:opacity-40"
               disabled={scenarios.length <= 1 || !selectedScenarioId}
-              onClick={() => selectedScenarioId && removeScenario(selectedScenarioId)}
+              onClick={() => {
+                if (!selectedScenarioId || !selectedScenario) return
+                setPendingDelete({ id: selectedScenarioId, name: selectedScenario.name })
+              }}
               title={scenarios.length <= 1 ? 'Keep at least one scenario' : 'Delete scenario'}
             >
               Delete
@@ -817,6 +824,22 @@ export function OverviewView({
           onReorderSavings={reorderSavingsSeries}
         />
       </div>
+      ) : null}
+
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="Delete scenario"
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => {
+            removeScenario(pendingDelete.id)
+            setPendingDelete(null)
+          }}
+        >
+          <p>
+            <span className="font-semibold text-white">{pendingDelete.name}</span>
+          </p>
+          <p>This cannot be undone.</p>
+        </ConfirmDialog>
       ) : null}
     </div>
   )

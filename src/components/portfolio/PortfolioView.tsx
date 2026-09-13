@@ -30,6 +30,7 @@ import { PortfolioChart } from './PortfolioChart'
 import { PortfolioActualsEditor } from './PortfolioActualsEditor'
 import { PortfolioMoneyIn } from './PortfolioMoneyIn'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 import { InfoTip } from '../common/InfoTip'
 
 const CURRENCY_KEY = 'grok-lab-portfolio-currency'
@@ -177,6 +178,9 @@ export function PortfolioView({
   const [manageOpen, setManageOpen] = useState(false)
   const [pickerOpen, setPickerOpen] = useState(false)
   const [dragId, setDragId] = useState<string | null>(null)
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  )
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
   const manageRef = useRef<HTMLDivElement>(null)
@@ -720,9 +724,7 @@ export function PortfolioView({
                             type="button"
                             className="shrink-0 rounded px-1.5 py-0.5 text-[11px] text-white/40 hover:bg-red-500/20 hover:text-red-300"
                             title="Delete"
-                            onClick={() => {
-                              if (confirm(`Delete portfolio “${p.name}”?`)) deletePortfolio(p.id)
-                            }}
+                            onClick={() => setPendingDelete({ id: p.id, name: p.name })}
                           >
                             ✕
                           </button>
@@ -1109,6 +1111,22 @@ export function PortfolioView({
             )}
         </div>
       )}
+
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="Delete portfolio"
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => {
+            deletePortfolio(pendingDelete.id)
+            setPendingDelete(null)
+          }}
+        >
+          <p>
+            <span className="font-semibold text-white">{pendingDelete.name}</span>
+          </p>
+          <p>This cannot be undone.</p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   )
 }

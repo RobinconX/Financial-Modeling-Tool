@@ -36,6 +36,7 @@ import {
   type LinkedFileStatus,
   type LinkedSaveMode,
 } from '../../lib/linkedDataFile'
+import { ConfirmDialog } from '../common/ConfirmDialog'
 import { InfoTip } from '../common/InfoTip'
 
 type Props = {
@@ -552,6 +553,9 @@ function AccountsSection({
   onChanged: () => void
 }) {
   const multi = (catalog?.accounts.length ?? 1) > 1
+  const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  )
 
   function handleNew() {
     onError(null)
@@ -582,9 +586,14 @@ function AccountsSection({
   }
 
   function handleDelete(id: string, name: string) {
-    if (!confirm(`Delete account “${name}”? This cannot be undone.`)) return
+    setPendingDelete({ id, name })
+  }
+
+  function confirmPendingDelete() {
+    if (!pendingDelete) return
     onError(null)
-    const result = deleteAccount(id)
+    const result = deleteAccount(pendingDelete.id)
+    setPendingDelete(null)
     if ('error' in result) {
       onError(result.error)
       return
@@ -664,6 +673,19 @@ function AccountsSection({
       >
         Add account
       </button>
+
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="Delete account"
+          onClose={() => setPendingDelete(null)}
+          onConfirm={confirmPendingDelete}
+        >
+          <p>
+            <span className="font-semibold text-white">{pendingDelete.name}</span>
+          </p>
+          <p>Deletes this whole model. This cannot be undone.</p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   )
 }
