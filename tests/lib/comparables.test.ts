@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildComparableTable,
   defaultBasisForScenario,
+  nextSortYear,
   normalizeFilterYears,
   priceNowForScenario,
   pruneComparableEntries,
@@ -157,6 +158,12 @@ describe('year filters', () => {
     expect(visibleComparableYears(all, [])).toEqual([])
     expect(visibleComparableYears(all, null)).toEqual([])
     expect(visibleComparableYears(all, [1999])).toEqual([])
+  })
+
+  it('moves sort to the closest remaining year', () => {
+    expect(nextSortYear([], 2030)).toBeNull()
+    expect(nextSortYear([2028, 2035], 2030)).toBe(2028)
+    expect(nextSortYear([2028, 2032], 2030)).toBe(2032)
   })
 
   it('keeps an explicit set including all or none', () => {

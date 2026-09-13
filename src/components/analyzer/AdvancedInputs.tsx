@@ -3,15 +3,13 @@ import type { YearProjection } from '../../types'
 import {
   advancedCagrGapYears,
   cumulativeDilutionByYear,
-  equityValueAfterDilution,
   materializeAdvancedCagrYears,
   newYearProjection,
   normalizeDilution,
   sortYearProjections,
 } from '../../lib/valuation'
-import { impliedSharePrice } from '../../lib/sharePrice'
 import { MoneyInput, NumberInput } from '../common/MoneyInput'
-import { formatMoney, formatMultiple, formatPrice } from '../../lib/format'
+import { formatMoney, formatMultiple } from '../../lib/format'
 
 type Props = {
   rows: YearProjection[]
@@ -26,7 +24,6 @@ export function AdvancedInputs({
   rows,
   onChange,
   currency = 'USD',
-  sharesOutstanding = null,
   currentMarketCap = null,
 }: Props) {
   const currentYear = new Date().getFullYear()
@@ -93,28 +90,25 @@ export function AdvancedInputs({
   }
 
   return (
-    <div className="space-y-3">
+    <div className="space-y-2">
       {sorted.length === 0 ? (
-        <p className="py-2 text-center text-xs text-white/40">No advanced years yet.</p>
+        <p className="py-1 text-xs text-white/40">No advanced years yet.</p>
       ) : null}
-      {sorted.map((row, index) => {
+      {sorted.map((row) => {
         const isOpen = expanded[row.id] ?? false
         const yearly = normalizeDilution(row.dilutionFactor)
         const cumulative = cumulativeByYear.get(row.year) ?? yearly
         return (
-          <div
-            key={row.id}
-            className="rounded-lg border border-white/[0.06] bg-white/[0.02] transition-colors"
-          >
-            <div className="flex items-start gap-2 p-3">
+          <div key={row.id} className="border-t border-white/[0.06] pt-2 first:border-t-0 first:pt-0">
+            <div className="flex items-start gap-1.5">
               <button
                 type="button"
                 onClick={() => toggle(row.id)}
-                className="flex min-w-0 flex-1 items-start gap-2 rounded-lg text-left transition hover:bg-white/[0.03] -m-1 p-1"
+                className="flex min-w-0 flex-1 items-start gap-1.5 text-left"
                 aria-expanded={isOpen}
               >
                 <span
-                  className={`mt-0.5 inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md border border-white/10 bg-white/5 text-xs text-white/70 transition-transform ${
+                  className={`mt-0.5 inline-flex h-4 w-4 shrink-0 items-center justify-center text-[10px] text-white/40 transition-transform ${
                     isOpen ? 'rotate-90' : ''
                   }`}
                   aria-hidden
@@ -122,10 +116,7 @@ export function AdvancedInputs({
                   ▸
                 </span>
                 <div className="min-w-0 flex-1">
-                  <div className="flex flex-wrap items-baseline gap-x-2 gap-y-0.5">
-                    <span className="text-sm font-semibold text-white/90">{row.year}</span>
-                    <span className="text-xs text-white/40">Year projection {index + 1}</span>
-                  </div>
+                  <span className="text-sm font-medium tabular-nums text-white/90">{row.year}</span>
                   {!isOpen && (
                     <CollapsedOverview
                       row={row}
@@ -136,20 +127,19 @@ export function AdvancedInputs({
                   )}
                 </div>
               </button>
-
               <button
                 type="button"
-                className="btn-ghost shrink-0 !py-1 !text-xs text-white/45 hover:text-red-300"
+                className="btn-ghost shrink-0 !px-2 !py-1 !text-xs text-white/35 hover:text-red-300"
                 onClick={() => removeRow(row.id)}
                 title="Remove this year"
               >
-                Remove
+                ×
               </button>
             </div>
 
-            {isOpen && (
-              <div className="space-y-3 border-t border-white/5 px-3 pb-3 pt-3">
-                <div className="grid gap-3 sm:grid-cols-2">
+            {isOpen ? (
+              <div className="mt-2 space-y-2 pl-5">
+                <div className="grid items-start gap-2 sm:grid-cols-[5.5rem_minmax(0,1fr)]">
                   <NumberInput
                     label="Year"
                     value={row.year}
@@ -180,14 +170,14 @@ export function AdvancedInputs({
                         })
                       }
                     />
-                    <p className="mt-1 text-[11px] text-white/35">
+                    <p className="mt-0.5 text-[11px] text-white/35">
                       {dilutionHint(yearly, cumulative)}
                     </p>
                   </div>
                 </div>
 
                 <BasisBlock
-                  title="P/S — Price / Sales"
+                  title="P/S"
                   accent="text-sky-300"
                   left={
                     <MoneyInput
@@ -196,11 +186,12 @@ export function AdvancedInputs({
                       onChange={(revenue) => updateRow(row.id, { revenue })}
                       placeholder="e.g. 400B"
                       currency={currency}
+                      hideHint
                     />
                   }
                   right={
                     <NumberInput
-                      label="P/S multiple"
+                      label="Multiple"
                       value={row.psMultiple}
                       onChange={(psMultiple) => updateRow(row.id, { psMultiple })}
                       placeholder="e.g. 8"
@@ -208,18 +199,10 @@ export function AdvancedInputs({
                       commitOnBlur
                     />
                   }
-                  implied={formatImplied(
-                    row.revenue != null && row.psMultiple != null
-                      ? row.revenue * row.psMultiple
-                      : null,
-                    cumulative,
-                    sharesOutstanding,
-                    currency,
-                  )}
                 />
 
                 <BasisBlock
-                  title="P/FCF — Price / Free cash flow"
+                  title="P/FCF"
                   accent="text-violet-300"
                   left={
                     <MoneyInput
@@ -228,11 +211,12 @@ export function AdvancedInputs({
                       onChange={(fcf) => updateRow(row.id, { fcf })}
                       placeholder="e.g. 100B"
                       currency={currency}
+                      hideHint
                     />
                   }
                   right={
                     <NumberInput
-                      label="P/FCF multiple"
+                      label="Multiple"
                       value={row.pfcfMultiple}
                       onChange={(pfcfMultiple) => updateRow(row.id, { pfcfMultiple })}
                       placeholder="e.g. 25"
@@ -240,31 +224,24 @@ export function AdvancedInputs({
                       commitOnBlur
                     />
                   }
-                  implied={formatImplied(
-                    row.fcf != null && row.pfcfMultiple != null
-                      ? row.fcf * row.pfcfMultiple
-                      : null,
-                    cumulative,
-                    sharesOutstanding,
-                    currency,
-                  )}
                 />
 
                 <BasisBlock
-                  title="P/E — Price / Earnings"
+                  title="P/E"
                   accent="text-amber-300"
                   left={
                     <MoneyInput
-                      label="Net profit (earnings)"
+                      label="Earnings"
                       value={row.profit}
                       onChange={(profit) => updateRow(row.id, { profit })}
                       placeholder="e.g. 90B"
                       currency={currency}
+                      hideHint
                     />
                   }
                   right={
                     <NumberInput
-                      label="P/E multiple"
+                      label="Multiple"
                       value={row.peMultiple}
                       onChange={(peMultiple) => updateRow(row.id, { peMultiple })}
                       placeholder="e.g. 30"
@@ -272,39 +249,25 @@ export function AdvancedInputs({
                       commitOnBlur
                     />
                   }
-                  implied={formatImplied(
-                    row.profit != null && row.peMultiple != null
-                      ? row.profit * row.peMultiple
-                      : null,
-                    cumulative,
-                    sharesOutstanding,
-                    currency,
-                  )}
                 />
               </div>
-            )}
+            ) : null}
           </div>
         )
       })}
 
-      <div className="flex flex-col gap-2 sm:flex-row">
-        <button type="button" className="btn-ghost flex-1" onClick={addRow}>
-          + Add year
+      <div className="flex flex-wrap gap-2 pt-0.5">
+        <button type="button" className="btn-ghost !py-1 !text-xs" onClick={addRow}>
+          + Year
         </button>
         <button
           type="button"
-          className="btn-ghost flex-1"
+          className="btn-ghost !py-1 !text-xs"
           onClick={fillIntermediateYears}
           disabled={cagrGaps.length === 0}
-          title={
-            cagrGaps.length === 0
-              ? 'Need a fillable future year (and today’s mcap, or a second year) with a multi-year gap'
-              : `Create ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} via implied CAGR from today / between years`
-          }
+          title="Fills missing years using implied CAGR from today / between stated years"
         >
-          {cagrGaps.length === 0
-            ? 'Fill intermediate years (CAGR)'
-            : `Fill ${cagrGaps.length} intermediate year${cagrGaps.length === 1 ? '' : 's'} (CAGR)`}
+          Fill in years
         </button>
       </div>
     </div>
@@ -322,30 +285,6 @@ function dilutionHint(yearly: number, cumulative: number): string {
     return `No extra this year · still ${cumulative.toFixed(2)}× vs today`
   }
   return `${ySign}${yPct.toFixed(1)}% this year · ${cumulative.toFixed(2)}× vs today`
-}
-
-function formatImplied(
-  mcap: number | null,
-  dilutionFactor: number,
-  sharesOutstanding: number | null,
-  currency: string,
-): string | null {
-  if (mcap == null || mcap <= 0) return null
-  const equity = equityValueAfterDilution(mcap, dilutionFactor)
-  const px = impliedSharePrice(equity, sharesOutstanding)
-  const mcapStr = formatMoney(mcap, currency)
-  const diluted = Math.abs(equity - mcap) >= 1e-6
-  if (diluted) {
-    const eqStr = formatMoney(equity, currency)
-    if (px != null) {
-      return `${mcapStr} mcap · equity ${eqStr} · ${formatPrice(px, currency)} /sh`
-    }
-    return `${mcapStr} mcap · equity ${eqStr}`
-  }
-  if (px != null) {
-    return `${mcapStr} mcap · ${formatPrice(px, currency)} /sh`
-  }
-  return mcapStr
 }
 
 function CollapsedOverview({
@@ -477,26 +416,21 @@ function BasisBlock({
   accent,
   left,
   right,
-  implied,
 }: {
   title: string
   accent: string
   left: ReactNode
   right: ReactNode
-  implied: string | null
 }) {
   return (
-    <div className="rounded-lg border border-white/5 bg-white/[0.02] p-3">
-      <div className={`mb-2 text-xs font-semibold ${accent}`}>{title}</div>
-      <div className="grid gap-3 sm:grid-cols-2">
+    <div>
+      <div className={`mb-1 text-[10px] font-semibold uppercase tracking-wide ${accent}`}>
+        {title}
+      </div>
+      <div className="grid items-end gap-2 sm:grid-cols-2">
         {left}
         {right}
       </div>
-      {implied && (
-        <p className="mt-2 text-xs text-white/45">
-          Implied market cap: <span className="font-medium text-white/80">{implied}</span>
-        </p>
-      )}
     </div>
   )
 }

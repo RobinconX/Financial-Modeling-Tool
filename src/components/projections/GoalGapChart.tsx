@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import {
   CartesianGrid,
   Legend,
@@ -69,6 +69,31 @@ function zoomIndexWindow(
   return { start: nextStart, end: nextEnd }
 }
 
+/** Shift a window by `deltaIndex` points, keeping span, clamped to the series. */
+export function panIndexWindow(
+  length: number,
+  start: number,
+  end: number,
+  deltaIndex: number,
+): { start: number; end: number } {
+  if (length < 2) return { start: 0, end: Math.max(0, length - 1) }
+  const last = length - 1
+  const span = Math.max(1, end - start)
+  let nextStart = start + deltaIndex
+  let nextEnd = nextStart + span
+  if (nextStart < 0) {
+    nextStart = 0
+    nextEnd = span
+  }
+  if (nextEnd > last) {
+    nextEnd = last
+    nextStart = last - span
+  }
+  nextStart = Math.max(0, nextStart)
+  nextEnd = Math.min(last, Math.max(nextStart + 1, nextEnd))
+  return { start: nextStart, end: nextEnd }
+}
+
 function formatTimeTick(date: string, from: string, to: string): string {
   const days = (Date.parse(to) - Date.parse(from)) / 86_400_000
   if (!Number.isFinite(days) || days > 500) return date.slice(0, 4)
@@ -101,7 +126,9 @@ export function GoalGapChart({
   )
   const data = useMemo(() => mergeUpsideSeries(plot), [plot])
   const [win, setWin] = useState<DateWindow | null>(null)
+  const [panning, setPanning] = useState(false)
   const chartRef = useRef<HTMLDivElement>(null)
+  const dragRef = useRef<{ x: number; start: number; end: number } | null>(null)
 
   const last = Math.max(0, data.length - 1)
   let start = 0
@@ -158,6 +185,46 @@ export function GoalGapChart({
     return () => host.removeEventListener('wheel', onWheel)
   }, [data])
 
+  function applyWindow(nextStart: number, nextEnd: number) {
+    const from = data[nextStart]?.date
+    const to = data[nextEnd]?.date
+    if (!from || !to) return
+    if (nextStart <= 0 && nextEnd >= last) {
+      setWin(null)
+      return
+    }
+    setWin({ from, to })
+  }
+
+  function onPointerDown(e: PointerEvent<HTMLDivElement>) {
+    if (e.button !== 0 || data.length < 2 || !zoomed) return
+    e.preventDefault()
+    dragRef.current = { x: e.clientX, start, end }
+    e.currentTarget.setPointerCapture(e.pointerId)
+    setPanning(true)
+  }
+
+  function onPointerMove(e: PointerEvent<HTMLDivElement>) {
+    const drag = dragRef.current
+    if (!drag) return
+    const host = chartRef.current
+    if (!host) return
+    const plotW = Math.max(1, host.getBoundingClientRect().width - Y_AXIS_PX - RIGHT_PX)
+    const span = Math.max(1, drag.end - drag.start)
+    const delta = Math.round((-(e.clientX - drag.x) / plotW) * span)
+    const next = panIndexWindow(data.length, drag.start, drag.end, delta)
+    applyWindow(next.start, next.end)
+  }
+
+  function onPointerUp(e: PointerEvent<HTMLDivElement>) {
+    if (!dragRef.current) return
+    dragRef.current = null
+    setPanning(false)
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
+      e.currentTarget.releasePointerCapture(e.pointerId)
+    }
+  }
+
   if (loading && data.length < 2) {
     return (
       <p className="py-10 text-center text-sm text-white/40">Loading price history…</p>
@@ -194,8 +261,14 @@ export function GoalGapChart({
     >
       <div
         ref={chartRef}
-        className={fillContainer ? 'min-h-0 w-full flex-1' : 'h-full w-full'}
+        className={`${fillContainer ? 'min-h-0 w-full flex-1' : 'h-full w-full'} ${
+          panning ? 'cursor-grabbing select-none' : zoomed ? 'cursor-grab' : ''
+        }`}
         onDoubleClick={() => setWin(null)}
+        onPointerDown={onPointerDown}
+        onPointerMove={onPointerMove}
+        onPointerUp={onPointerUp}
+        onPointerCancel={onPointerUp}
       >
         <ResponsiveContainer width="100%" height="100%" debounce={50}>
           <LineChart data={visible} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
@@ -217,20 +290,22 @@ export function GoalGapChart({
               tickFormatter={tickPct}
               width={56}
             />
-            <Tooltip
-              contentStyle={{
-                background: '#121820',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 12,
-                fontSize: 12,
-              }}
-              labelStyle={{ color: 'rgba(255,255,255,0.6)' }}
-              formatter={(value, name) => {
-                const n = typeof value === 'number' ? value : Number(value)
-                return [formatPercent(n), `${String(name)} · ${valueLabel}`]
-              }}
-              labelFormatter={(label) => String(label)}
-            />
+            {panning ? null : (
+              <Tooltip
+                contentStyle={{
+                  background: '#121820',
+                  border: '1px solid rgba(255,255,255,0.1)',
+                  borderRadius: 12,
+                  fontSize: 12,
+                }}
+                labelStyle={{ color: 'rgba(255,255,255,0.6)' }}
+                formatter={(value, name) => {
+                  const n = typeof value === 'number' ? value : Number(value)
+                  return [formatPercent(n), `${String(name)} · ${valueLabel}`]
+                }}
+                labelFormatter={(label) => String(label)}
+              />
+            )}
             {plot.length > 1 ? (
               <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
             ) : null}
@@ -253,7 +328,7 @@ export function GoalGapChart({
       <p className="mt-1 flex flex-wrap items-center justify-center gap-x-2 text-[10px] text-white/30">
         <span>
           {min} → {max}
-          {zoomed ? '' : ' · scroll to zoom'}
+          {zoomed ? ' · drag to pan · scroll to zoom' : ' · scroll to zoom'}
         </span>
         {zoomed ? (
           <button

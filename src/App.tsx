@@ -80,7 +80,7 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
   projections: {
     title: 'Projections',
     subtitle:
-      'Analyze a ticker or rank saved projections — Easy + Advanced assumptions, ROI, and comparables.',
+      'Analyze a ticker or rank saved projections — Easy + Advanced assumptions, CAGR, and comparables.',
   },
   portfolio: {
     title: 'Portfolio',

@@ -11,10 +11,27 @@ const BASIS_ORDER: Record<ValuationBasis | 'easy', number> = {
   pe: 3,
 }
 
+export type ProjectionBasis = ValuationBasis | 'easy'
+
+const BASIS_SEQUENCE: ProjectionBasis[] = ['easy', 'ps', 'pfcf', 'pe']
+
 export function uniqueProjectionYears(rows: ProjectionRow[]): number[] {
   return [...new Set(rows.map((r) => r.year).filter((y) => Number.isFinite(y)))].sort(
     (a, b) => a - b,
   )
+}
+
+export function uniqueProjectionBases(rows: ProjectionRow[]): ProjectionBasis[] {
+  const have = new Set(rows.map((r) => r.basis))
+  return BASIS_SEQUENCE.filter((b) => have.has(b))
+}
+
+export function normalizeFilterBases(
+  selected: ProjectionBasis[],
+  all: ProjectionBasis[],
+): ProjectionBasis[] {
+  const want = new Set(selected)
+  return all.filter((b) => want.has(b))
 }
 
 /**

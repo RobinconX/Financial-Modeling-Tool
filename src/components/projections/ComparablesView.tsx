@@ -1,14 +1,14 @@
-import { Fragment, useEffect, useMemo, useState } from 'react'
+import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
 import type { ComparableBasis, SavedComparable, SavedScenario } from '../../types'
 import {
   availableBases,
   buildComparableTable,
   defaultBasisForScenario,
+  nextSortYear,
   normalizeFilterYears,
   pruneComparableEntries,
   sortComparableRows,
   visibleComparableYears,
-  yearsInPeriod,
 } from '../../lib/comparables'
 import {
   buildGoalGapTable,
@@ -27,7 +27,6 @@ import {
 import { groupScenariosByTicker } from '../../lib/storage'
 import { formatPercent, formatPrice } from '../../lib/format'
 import { ConfirmDialog } from '../common/ConfirmDialog'
-import { InfoTip } from '../common/InfoTip'
 import { GoalGapSection, OVERLAY_COLORS } from './GoalGapSection'
 
 const SELECTED_KEY = 'grok-lab-selected-comparable'
@@ -77,11 +76,25 @@ export function ComparablesView({
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
     null,
   )
+  const [renaming, setRenaming] = useState(false)
+  const [renameDraft, setRenameDraft] = useState('')
+  const renameRef = useRef<HTMLInputElement>(null)
+  const [yearMenuOpen, setYearMenuOpen] = useState(false)
+  const yearMenuRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
     if (selectedId && comparables.some((c) => c.id === selectedId)) return
     setSelectedId(comparables[0]?.id ?? null)
+    setRenaming(false)
   }, [comparables, selectedId])
+
+  useEffect(() => {
+    if (!renaming) return
+    const el = renameRef.current
+    if (!el) return
+    el.focus()
+    el.select()
+  }, [renaming])
 
   useEffect(() => {
     if (!selectedId) return
@@ -105,15 +118,9 @@ export function ComparablesView({
     [table.years, selected?.filterYears],
   )
   const sortYear =
-    selected?.sortYear != null && table.years.includes(selected.sortYear)
+    selected?.sortYear != null && selectedYears.includes(selected.sortYear)
       ? selected.sortYear
       : null
-  const visibleYears = useMemo(() => {
-    if (sortYear != null && !selectedYears.includes(sortYear)) {
-      return [...selectedYears, sortYear].sort((a, b) => a - b)
-    }
-    return selectedYears
-  }, [selectedYears, sortYear])
   const sortDir = selected?.sortDir ?? 'desc'
   const sortedRows = useMemo(
     () => sortComparableRows(table.rows, sortYear, sortDir),
@@ -136,6 +143,7 @@ export function ComparablesView({
 
   useEffect(() => {
     setOverlayIds([])
+    setYearMenuOpen(false)
   }, [selectedId])
 
   useEffect(() => {
@@ -193,16 +201,6 @@ export function ComparablesView({
     }
   }, [gapSymbols.join(',')])
 
-  const [fromDraft, setFromDraft] = useState('')
-  const [toDraft, setToDraft] = useState('')
-  useEffect(() => {
-    const years = visibleComparableYears(table.years, selected?.filterYears)
-    const lo = years[0]
-    const hi = years[years.length - 1]
-    setFromDraft(lo != null ? String(lo) : '')
-    setToDraft(hi != null ? String(hi) : '')
-  }, [selected?.id, table.years.join(',')])
-
   const grouped = useMemo(() => groupScenariosByTicker(scenarios), [scenarios])
   const q = query.trim().toLowerCase()
   const filteredGroups = useMemo(() => {
@@ -225,9 +223,25 @@ export function ComparablesView({
     updateComparable(selected.id, patch)
   }
 
+  function startRename() {
+    if (!selected) return
+    setRenameDraft(selected.name)
+    setRenaming(true)
+  }
+
+  function commitRename() {
+    const trimmed = renameDraft.trim()
+    if (trimmed && selected) patchSelected({ name: trimmed })
+    setRenaming(false)
+  }
+
   function handleNew() {
     const created = createComparable(`Comparable ${comparables.length + 1}`)
-    if (created) setSelectedId(created.id)
+    if (created) {
+      setSelectedId(created.id)
+      setRenameDraft(created.name)
+      setRenaming(true)
+    }
   }
 
   function toggleScenario(sc: SavedScenario) {
@@ -259,35 +273,49 @@ export function ComparablesView({
     patchSelected({ sortYear: year, sortDir: 'desc' })
   }
 
-  function applyPeriod(fromRaw: string, toRaw: string) {
-    if (!selected || table.years.length === 0) return
-    const from = Number(fromRaw)
-    const to = Number(toRaw)
-    if (!Number.isFinite(from) || !Number.isFinite(to)) return
-    const start = Math.min(from, to)
-    const end = Math.max(from, to)
-    patchSelected({
-      filterYears: normalizeFilterYears(yearsInPeriod(table.years, start, end), table.years),
-    })
+  function toggleOverlay(id: string) {
+    setOverlayIds((prev) =>
+      prev.includes(id) ? prev.filter((x) => x !== id) : [...prev, id],
+    )
   }
 
   function toggleYear(year: number) {
     if (!selected) return
-    const next = selectedYears.includes(year)
+    const removing = selectedYears.includes(year)
+    const next = removing
       ? selectedYears.filter((y) => y !== year)
       : [...selectedYears, year].sort((a, b) => a - b)
-    patchSelected({ filterYears: normalizeFilterYears(next, table.years) })
+    const patch: Partial<SavedComparable> = {
+      filterYears: normalizeFilterYears(next, table.years),
+    }
+    if (removing && selected.sortYear === year) {
+      patch.sortYear = nextSortYear(next, year)
+    }
+    patchSelected(patch)
   }
 
-  function showAllYears() {
-    if (!selected) return
-    patchSelected({ filterYears: [...table.years] })
-  }
+  const addableYears = table.years.filter((y) => !selectedYears.includes(y))
 
-  function clearYears() {
-    if (!selected) return
-    patchSelected({ filterYears: [] })
-  }
+  useEffect(() => {
+    if (addableYears.length === 0) setYearMenuOpen(false)
+  }, [addableYears.length])
+
+  useEffect(() => {
+    if (!yearMenuOpen) return
+    function onDoc(e: MouseEvent) {
+      if (yearMenuRef.current?.contains(e.target as Node)) return
+      setYearMenuOpen(false)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setYearMenuOpen(false)
+    }
+    document.addEventListener('mousedown', onDoc)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [yearMenuOpen])
 
   if (scenarios.length === 0) {
     return (
@@ -308,47 +336,59 @@ export function ComparablesView({
       <div className="flex flex-wrap items-center gap-1.5">
         <label className="flex min-w-0 items-center gap-1.5 text-xs text-white/50">
           Set
-          <select
-            className="input !w-[14rem] !max-w-full !py-1 !text-xs"
-            value={selectedId ?? ''}
-            onChange={(e) => setSelectedId(e.target.value || null)}
-            aria-label="Comparable set"
-          >
-            {comparables.length === 0 ? (
-              <option value="">No sets yet</option>
-            ) : (
-              comparables.map((c) => (
-                <option key={c.id} value={c.id}>
-                  {c.name}
-                </option>
-              ))
-            )}
-          </select>
+          {renaming && selected ? (
+            <input
+              ref={renameRef}
+              className="input !w-[14rem] !max-w-full !py-1 !text-xs"
+              value={renameDraft}
+              aria-label="Rename comparable set"
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') {
+                  setRenameDraft(selected.name)
+                  setRenaming(false)
+                }
+              }}
+            />
+          ) : (
+            <select
+              className="input !w-[14rem] !max-w-full !cursor-text !py-1 !text-xs"
+              value={selectedId ?? ''}
+              onChange={(e) => {
+                setRenaming(false)
+                setSelectedId(e.target.value || null)
+              }}
+              onDoubleClick={(e) => {
+                e.preventDefault()
+                startRename()
+              }}
+              aria-label="Comparable set"
+            >
+              {comparables.length === 0 ? (
+                <option value="">No sets yet</option>
+              ) : (
+                comparables.map((c) => (
+                  <option key={c.id} value={c.id}>
+                    {c.name}
+                  </option>
+                ))
+              )}
+            </select>
+          )}
         </label>
-        <InfoTip label="About comparables">
-          Pick saved projections to compare. Add year columns you want (none are on by default).
-          Year figures are year-end. Sort by a year’s ROI to rank names. Click a row for remaining
-          upside (or CAGR) vs that row’s selected basis; click the name to open the projection.
-        </InfoTip>
         <button type="button" className="btn-ghost !py-1 !text-xs" onClick={handleNew}>
           + New
         </button>
         {selected ? (
-          <>
-            <input
-              className="input !w-[10rem] !py-1 !text-xs"
-              value={selected.name}
-              onChange={(e) => patchSelected({ name: e.target.value })}
-              aria-label="Rename comparable set"
-            />
-            <button
-              type="button"
-              className="btn-ghost !py-1 !text-xs text-red-300/80"
-              onClick={() => setPendingDelete({ id: selected.id, name: selected.name })}
-            >
-              Delete
-            </button>
-          </>
+          <button
+            type="button"
+            className="btn-ghost !py-1 !text-xs text-red-300/80"
+            onClick={() => setPendingDelete({ id: selected.id, name: selected.name })}
+          >
+            Delete
+          </button>
         ) : (
           <span className="text-[11px] text-white/40">Create a comparable to pick scenarios.</span>
         )}
@@ -401,110 +441,55 @@ export function ComparablesView({
             </p>
           ) : (
             <div className="space-y-2">
-              <div className="flex flex-wrap items-end gap-x-4 gap-y-2">
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <span className="text-[10px] font-medium uppercase tracking-wide text-white/40">
-                    Years
-                  </span>
-                  <label className="flex items-center gap-1 text-xs text-white/50">
-                    From
-                    <input
-                      className="input !w-[4.5rem] !py-1 !text-xs tabular-nums"
-                      type="number"
-                      value={fromDraft}
-                      onChange={(e) => setFromDraft(e.target.value)}
-                      onBlur={() => applyPeriod(fromDraft, toDraft)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') applyPeriod(fromDraft, toDraft)
-                      }}
-                    />
-                  </label>
-                  <label className="flex items-center gap-1 text-xs text-white/50">
-                    To
-                    <input
-                      className="input !w-[4.5rem] !py-1 !text-xs tabular-nums"
-                      type="number"
-                      value={toDraft}
-                      onChange={(e) => setToDraft(e.target.value)}
-                      onBlur={() => applyPeriod(fromDraft, toDraft)}
-                      onKeyDown={(e) => {
-                        if (e.key === 'Enter') applyPeriod(fromDraft, toDraft)
-                      }}
-                    />
-                  </label>
-                  {table.years.map((y) => {
-                    const on = selectedYears.includes(y)
-                    return (
-                      <button
-                        key={y}
-                        type="button"
-                        className={`rounded-md px-1.5 py-0.5 text-[11px] tabular-nums transition ${
-                          on
-                            ? 'bg-white/10 text-white/80'
-                            : 'bg-transparent text-white/30 hover:text-white/55'
-                        }`}
-                        onClick={() => toggleYear(y)}
-                        aria-pressed={on}
-                      >
-                        {y}
-                      </button>
-                    )
-                  })}
-                  {selectedYears.length < table.years.length ? (
-                    <button
-                      type="button"
-                      className="btn-ghost !py-0.5 !text-[11px]"
-                      onClick={showAllYears}
-                    >
-                      All
-                    </button>
-                  ) : null}
-                  {selectedYears.length > 0 ? (
-                    <button
-                      type="button"
-                      className="btn-ghost !py-0.5 !text-[11px]"
-                      onClick={clearYears}
-                    >
-                      None
-                    </button>
-                  ) : null}
-                </div>
-                <div className="flex flex-wrap items-center gap-1.5">
-                  <label className="flex items-center gap-1.5 text-xs text-white/50">
-                    Sort by ROI
-                    <select
-                      className="input !w-auto !py-1 !text-xs"
-                      value={sortYear ?? ''}
-                      disabled={table.years.length === 0}
-                      onChange={(e) => {
-                        const raw = e.target.value
-                        if (!raw) {
-                          patchSelected({ sortYear: null })
-                          return
-                        }
-                        const y = Number(raw)
-                        if (!Number.isFinite(y)) return
-                        patchSelected({ sortYear: y, sortDir: 'desc' })
-                      }}
-                    >
-                      <option value="">—</option>
-                      {table.years.map((y) => (
-                        <option key={y} value={y}>
-                          {y}
-                        </option>
-                      ))}
-                    </select>
-                  </label>
+              <div className="flex flex-wrap items-center gap-1.5">
+                <span className="text-[10px] font-medium uppercase tracking-wide text-white/40">
+                  Years
+                </span>
+                {selectedYears.map((y) => (
                   <button
+                    key={y}
                     type="button"
-                    className="btn-ghost !py-1 !text-xs"
-                    disabled={sortYear == null}
-                    onClick={() => sortYear != null && handleSort(sortYear)}
-                    title={sortDir === 'asc' ? 'Lowest first' : 'Highest first'}
+                    className="rounded-md bg-white/10 px-1.5 py-0.5 text-[11px] tabular-nums text-white/80 transition hover:bg-white/15"
+                    onClick={() => toggleYear(y)}
+                    title={`Hide ${y}`}
                   >
-                    {sortDir === 'asc' ? 'Lowest' : 'Highest'}
+                    {y}
+                    <span className="ml-1 text-white/35">×</span>
                   </button>
-                </div>
+                ))}
+                {addableYears.length > 0 ? (
+                  <div className="relative" ref={yearMenuRef}>
+                    <button
+                      type="button"
+                      className="btn-ghost !py-0.5 !text-[11px]"
+                      aria-haspopup="listbox"
+                      aria-expanded={yearMenuOpen}
+                      aria-label="Add year"
+                      onClick={() => setYearMenuOpen((open) => !open)}
+                    >
+                      Add year
+                    </button>
+                    {yearMenuOpen ? (
+                      <ul
+                        className="absolute left-0 z-20 mt-1 max-h-56 min-w-[7rem] overflow-y-auto rounded-lg border border-white/10 bg-[#1a222c] py-1 shadow-xl"
+                        role="listbox"
+                        aria-label="Years to add"
+                      >
+                        {addableYears.map((y) => (
+                          <li key={y} role="option">
+                            <button
+                              type="button"
+                              className="w-full px-3 py-1 text-left text-[11px] tabular-nums text-white/80 hover:bg-white/10"
+                              onClick={() => toggleYear(y)}
+                            >
+                              {y}
+                            </button>
+                          </li>
+                        ))}
+                      </ul>
+                    ) : null}
+                  </div>
+                ) : null}
               </div>
 
               <div className="table-shell overflow-x-auto">
@@ -513,9 +498,12 @@ export function ComparablesView({
                     <tr>
                       <th className="sticky left-0 z-10 bg-[#121820] px-3 py-2 text-left font-medium">
                         Ticker / scenario
+                        <span className="mt-0.5 block text-[10px] font-normal normal-case tracking-normal text-white/40">
+                          Tick to chart remaining upside
+                        </span>
                       </th>
                       <th className="px-3 py-2 text-right font-medium">Price now</th>
-                      {visibleYears.map((y, yi) => {
+                      {selectedYears.map((y, yi) => {
                         const active = sortYear === y
                         return (
                           <th
@@ -542,7 +530,7 @@ export function ComparablesView({
                     <tr className="text-[10px] text-white/35">
                       <th className="sticky left-0 z-10 bg-[#121820]" />
                       <th />
-                      {visibleYears.map((y, yi) => {
+                      {selectedYears.map((y, yi) => {
                         const active = sortYear === y
                         const tone = `${yi % 2 === 1 ? 'bg-white/[0.03]' : ''} ${
                           active ? 'border-emerald-500/25' : 'border-white/12'
@@ -573,7 +561,7 @@ export function ComparablesView({
                               <th
                                 className={`px-3 py-1 text-right font-normal text-emerald-300/80 ${tone}`}
                               >
-                                ROI p.a.
+                                CAGR
                               </th>
                             ) : null}
                           </Fragment>
@@ -593,16 +581,19 @@ export function ComparablesView({
                           className={`group cursor-pointer border-t border-white/5 text-white/85 hover:bg-white/[0.04] ${
                             on ? 'bg-emerald-500/[0.08]' : ''
                           }`}
-                          onClick={() => {
-                            setOverlayIds((prev) =>
-                              prev.includes(row.scenarioId)
-                                ? prev.filter((id) => id !== row.scenarioId)
-                                : [...prev, row.scenarioId],
-                            )
-                          }}
+                          onClick={() => toggleOverlay(row.scenarioId)}
                         >
                           <td className="sticky left-0 z-10 bg-[#121820] px-3 py-2 group-hover:bg-[#141a22]">
                             <div className="flex flex-wrap items-center gap-1.5">
+                              <input
+                                type="checkbox"
+                                className="h-3.5 w-3.5 shrink-0 accent-emerald-500"
+                                checked={on}
+                                title="Chart remaining upside"
+                                aria-label={`Chart remaining upside for ${row.label}`}
+                                onClick={(e) => e.stopPropagation()}
+                                onChange={() => toggleOverlay(row.scenarioId)}
+                              />
                               {on ? (
                                 <span
                                   className="inline-block h-2 w-2 shrink-0 rounded-full"
@@ -647,9 +638,9 @@ export function ComparablesView({
                             </div>
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">
-                            {formatPrice(row.priceNow, row.currency)}
+                            {formatPrice(row.priceNow, row.currency, 2)}
                           </td>
-                          {visibleYears.map((y, yi) => {
+                          {selectedYears.map((y, yi) => {
                             const cell = row.byYear[y]
                             const isSort = sortYear === y
                             const tone = `${yi % 2 === 1 ? 'bg-white/[0.03]' : ''} ${
@@ -660,20 +651,20 @@ export function ComparablesView({
                                 <td
                                   className={`border-l px-3 py-2 text-right tabular-nums text-white/80 ${tone}`}
                                 >
-                                  {formatPrice(cell?.price ?? null, row.currency)}
+                                  {formatPrice(cell?.price ?? null, row.currency, 2)}
                                 </td>
                                 <td
                                   className={`px-3 py-2 text-right tabular-nums ${tone} ${
                                     isSort ? 'text-emerald-300/90' : ''
                                   }`}
                                 >
-                                  {formatPercent(cell?.roi ?? null)}
+                                  {formatPercent(cell?.roi ?? null, 2)}
                                 </td>
                                 {isSort ? (
                                   <td
                                     className={`px-3 py-2 text-right tabular-nums text-emerald-300/90 ${tone}`}
                                   >
-                                    {formatPercent(cell?.cagr ?? null)}
+                                    {formatPercent(cell?.cagr ?? null, 2)}
                                   </td>
                                 ) : null}
                               </Fragment>
@@ -686,8 +677,9 @@ export function ComparablesView({
                 </table>
               </div>
               {overlayIds.length === 0 ? (
-                <p className="text-[11px] text-white/35">
-                  Click a row for remaining upside. Click the name to open the projection.
+                <p className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-3 text-sm text-white/55">
+                  Tick a row to chart remaining upside vs today. Click the name to open the
+                  projection.
                 </p>
               ) : (
                 <GoalGapSection

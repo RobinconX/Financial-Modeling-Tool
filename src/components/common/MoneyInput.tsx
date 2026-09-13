@@ -30,6 +30,8 @@ type Props = {
   commitOnBlur?: boolean
   /** Max decimal places when formatting the committed display value */
   displayDecimals?: number
+  /** Skip the echo line under the field */
+  hideHint?: boolean
 }
 
 export function MoneyInput({
@@ -42,6 +44,7 @@ export function MoneyInput({
   currency = 'USD',
   commitOnBlur = false,
   displayDecimals = 6,
+  hideHint = false,
 }: Props) {
   const [text, setText] = useState(() =>
     value == null ? '' : formatInputNumber(value, displayDecimals),
@@ -109,11 +112,11 @@ export function MoneyInput({
           }
         }}
       />
-      {(hint || value != null) && (
+      {!hideHint && (hint || value != null) ? (
         <p className="mt-1 text-[11px] text-white/35">
           {hint ?? (value != null ? `= ${formatMoney(value, currency)}` : null)}
         </p>
-      )}
+      ) : null}
     </div>
   )
 }

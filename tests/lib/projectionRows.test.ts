@@ -1,8 +1,10 @@
 import { describe, expect, it } from 'vitest'
 import type { ProjectionRow } from '../../src/types'
 import {
+  normalizeFilterBases,
   pruneProjectionFilterYears,
   sortProjectionRows,
+  uniqueProjectionBases,
   uniqueProjectionYears,
   visibleProjectionYears,
 } from '../../src/lib/projectionRows'
@@ -35,6 +37,16 @@ describe('projection table years', () => {
     expect(visibleProjectionYears([2028, 2030], null)).toEqual([2028, 2030])
     expect(visibleProjectionYears([2028, 2030], [])).toEqual([])
     expect(visibleProjectionYears([2028, 2030], [2030, 1999])).toEqual([2030])
+  })
+
+  it('lists unique bases in Easy → P/S → P/FCF → P/E order', () => {
+    expect(
+      uniqueProjectionBases([row(2030, 'pe', 0.1), row(2028, 'easy', 0.2), row(2030, 'ps', 0.3)]),
+    ).toEqual(['easy', 'ps', 'pe'])
+  })
+
+  it('keeps selected bases that still exist', () => {
+    expect(normalizeFilterBases(['pe', 'easy', 'ps'], ['easy', 'ps'])).toEqual(['easy', 'ps'])
   })
 
   it('falls back to all when selected years no longer exist', () => {

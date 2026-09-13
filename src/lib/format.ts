@@ -49,16 +49,21 @@ export function formatMoney(value: number | null | undefined, currency = 'USD'):
   return `${sign}${symbol}${abs.toFixed(2)}`
 }
 
-export function formatPrice(value: number | null | undefined, currency = 'USD'): string {
+export function formatPrice(
+  value: number | null | undefined,
+  currency = 'USD',
+  maxFractionDigits?: number,
+): string {
   if (value == null || !Number.isFinite(value)) return '—'
+  const max = maxFractionDigits ?? (value >= 1000 ? 2 : 4)
   try {
     return new Intl.NumberFormat(undefined, {
       style: 'currency',
       currency,
-      maximumFractionDigits: value >= 1000 ? 2 : 4,
+      maximumFractionDigits: max,
     }).format(value)
   } catch {
-    return `${currency} ${value.toFixed(2)}`
+    return `${currency} ${value.toFixed(Math.min(max, 2))}`
   }
 }
 

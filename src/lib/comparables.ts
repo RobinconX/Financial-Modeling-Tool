@@ -97,6 +97,21 @@ export function normalizeFilterYears(
     .sort((a, b) => a - b)
 }
 
+/** Closest remaining year to `removed`; later year wins a tie. */
+export function nextSortYear(remaining: number[], removed: number): number | null {
+  if (remaining.length === 0) return null
+  let best = remaining[0]!
+  let bestDist = Math.abs(best - removed)
+  for (const y of remaining) {
+    const d = Math.abs(y - removed)
+    if (d < bestDist || (d === bestDist && y > best)) {
+      best = y
+      bestDist = d
+    }
+  }
+  return best
+}
+
 export function currentMcapForScenario(sc: SavedScenario): number | null {
   return effectiveMarketCap(sc.mcapOverride, sc.currentMarketCap)
 }

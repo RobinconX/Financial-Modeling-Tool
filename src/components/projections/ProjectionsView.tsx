@@ -19,6 +19,7 @@ import { ProjectionPanel } from './ProjectionPanel'
 import { ComparablesView } from './ComparablesView'
 import { ProjectionPickDialog } from './ProjectionPickDialog'
 import { ConfirmDialog } from '../common/ConfirmDialog'
+import { InfoTip } from '../common/InfoTip'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -68,18 +69,24 @@ function sortScenariosByTicker(list: SavedScenario[]): SavedScenario[] {
 function ProjectionSelector({
   value,
   onChange,
+  onRename,
   scenarios,
   id,
 }: {
   value: string
   onChange: (v: string) => void
+  onRename: (id: string, name: string) => void
   scenarios: SavedScenario[]
   id: string
 }) {
   const grouped = useMemo(() => groupScenariosByTicker(scenarios), [scenarios])
   const [open, setOpen] = useState(false)
   const [expanded, setExpanded] = useState<Record<string, boolean>>({})
+  const [renaming, setRenaming] = useState(false)
+  const [renameDraft, setRenameDraft] = useState('')
   const rootRef = useRef<HTMLDivElement>(null)
+  const renameRef = useRef<HTMLInputElement>(null)
+  const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isDraft = value === DRAFT
   const selected = isDraft ? null : (scenarios.find((s) => s.id === value) ?? null)
 
@@ -98,9 +105,54 @@ function ProjectionSelector({
     setExpanded((prev) => ({ ...prev, [selected.symbol]: true }))
   }, [open, selected])
 
+  useEffect(() => {
+    setRenaming(false)
+    setOpen(false)
+  }, [value])
+
+  useEffect(() => {
+    if (!renaming) return
+    const el = renameRef.current
+    if (!el) return
+    el.focus()
+    el.select()
+  }, [renaming])
+
+  useEffect(() => {
+    return () => {
+      if (clickTimer.current != null) window.clearTimeout(clickTimer.current)
+    }
+  }, [])
+
   function pick(id: string) {
     onChange(id)
     setOpen(false)
+  }
+
+  function startRename() {
+    if (!selected) return
+    if (clickTimer.current != null) {
+      window.clearTimeout(clickTimer.current)
+      clickTimer.current = null
+    }
+    setOpen(false)
+    setRenameDraft(selected.name)
+    setRenaming(true)
+  }
+
+  function commitRename() {
+    const trimmed = renameDraft.trim()
+    if (trimmed && selected) onRename(selected.id, trimmed)
+    setRenaming(false)
+  }
+
+  function handleClosedClick() {
+    if (renaming) return
+    if (clickTimer.current != null) window.clearTimeout(clickTimer.current)
+    clickTimer.current = window.setTimeout(() => {
+      clickTimer.current = null
+      setOpen((o) => !o)
+    }, 220)
   }
 
   function toggleTicker(symbol: string, cases: SavedScenario[]) {
@@ -117,25 +169,53 @@ function ProjectionSelector({
         <label className="label !mb-1" htmlFor={id}>
           Projection
         </label>
-        <button
-          id={id}
-          type="button"
-          className="input flex w-full items-center gap-2 text-left"
-          onClick={() => setOpen((o) => !o)}
-          aria-expanded={open}
-          aria-haspopup="listbox"
-        >
-          <span className="min-w-0 flex-1 truncate">
-            {isDraft
-              ? 'New draft (unsaved)'
-              : selected
-                ? `${selected.symbol} · ${selected.name}`
-                : 'Choose saved…'}
-          </span>
-          <span className="shrink-0 text-white/40" aria-hidden>
-            ▾
-          </span>
-        </button>
+        {renaming && selected ? (
+          <div className="input flex w-full items-center gap-2">
+            <span className="shrink-0 text-sm text-white/50">{selected.symbol} ·</span>
+            <input
+              id={id}
+              ref={renameRef}
+              className="min-w-0 flex-1 bg-transparent text-sm text-white outline-none"
+              value={renameDraft}
+              aria-label="Rename projection"
+              onChange={(e) => setRenameDraft(e.target.value)}
+              onBlur={commitRename}
+              onKeyDown={(e) => {
+                if (e.key === 'Enter') commitRename()
+                if (e.key === 'Escape') {
+                  setRenameDraft(selected.name)
+                  setRenaming(false)
+                }
+              }}
+            />
+          </div>
+        ) : (
+          <button
+            id={id}
+            type="button"
+            className={`input flex w-full items-center gap-2 text-left ${
+              selected ? '!cursor-text' : ''
+            }`}
+            onClick={handleClosedClick}
+            onDoubleClick={(e) => {
+              e.preventDefault()
+              startRename()
+            }}
+            aria-expanded={open}
+            aria-haspopup="listbox"
+          >
+            <span className="min-w-0 flex-1 truncate">
+              {isDraft
+                ? 'New draft (unsaved)'
+                : selected
+                  ? `${selected.symbol} · ${selected.name}`
+                  : 'Choose saved…'}
+            </span>
+            <span className="shrink-0 text-white/40" aria-hidden>
+              ▾
+            </span>
+          </button>
+        )}
         {open && (
           <ul
             className="absolute left-0 right-0 z-50 mt-1 max-h-80 overflow-y-auto rounded-xl border border-white/15 bg-[#121820] py-1 shadow-xl shadow-black/50"
@@ -337,7 +417,8 @@ export function ProjectionsView({
   return (
     <div className="space-y-5">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10">
-        <div className="inline-flex gap-1" role="tablist" aria-label="Projections">
+        <div className="flex items-end gap-2">
+          <div className="inline-flex gap-1" role="tablist" aria-label="Projections">
           <button
             type="button"
             role="tab"
@@ -364,6 +445,15 @@ export function ProjectionsView({
           >
             Comparables
           </button>
+        </div>
+        {mode === 'comps' ? (
+          <InfoTip label="About comparables" className="mb-1.5">
+            Pick saved projections to compare. Double-click the set to rename it. Add year columns
+            you want (none are on by default). Year figures are year-end. Sort by a year’s ROI in
+            the table header. Tick a row to chart remaining upside (or CAGR) vs that row’s selected
+            basis; click the name to open the projection.
+          </InfoTip>
+        ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 pb-1.5">
           <button
@@ -429,6 +519,7 @@ export function ProjectionsView({
               setOpenBasis(undefined)
               setSelA(id)
             }}
+            onRename={(id, name) => updateScenario(id, { name })}
             scenarios={sorted}
             id="proj-select-a"
           />
@@ -436,6 +527,7 @@ export function ProjectionsView({
             <ProjectionSelector
               value={selB}
               onChange={setSelB}
+              onRename={(id, name) => updateScenario(id, { name })}
               scenarios={sorted}
               id="proj-select-b"
             />
@@ -513,6 +605,7 @@ export function ProjectionsView({
           }))}
           initialChecked={exportChecked()}
           confirmLabel="Export"
+          selectAll
           onClose={() => setExportOpen(false)}
           onConfirm={(picked) => handleExportChosen(picked.map((p) => p.key))}
         />

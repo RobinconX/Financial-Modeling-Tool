@@ -21,6 +21,8 @@ type Props = {
   confirmLabel: string
   /** Show an editable name on each row (import). */
   rename?: boolean
+  /** Header checkbox to check or clear every row (export). */
+  selectAll?: boolean
   onConfirm: (picked: ProjectionPickResult[]) => void
   onClose: () => void
 }
@@ -32,6 +34,7 @@ export function ProjectionPickDialog({
   initialChecked,
   confirmLabel,
   rename = false,
+  selectAll = false,
   onConfirm,
   onClose,
 }: Props) {
@@ -64,6 +67,13 @@ export function ProjectionPickDialog({
       next.add(key)
       return next
     })
+  }
+
+  const allKeys = items.map((it) => it.key)
+  const allOn = allKeys.length > 0 && allKeys.every((k) => checked.has(k))
+
+  function toggleAll() {
+    setChecked(allOn ? new Set() : new Set(allKeys))
   }
 
   const selected = items.filter((it) => checked.has(it.key))
@@ -100,6 +110,18 @@ export function ProjectionPickDialog({
             <p className="mt-1 text-xs text-white/45">{description}</p>
           ) : null}
         </div>
+
+        {selectAll && items.length > 1 ? (
+          <label className="flex cursor-pointer items-center gap-2 px-2 py-1">
+            <input
+              type="checkbox"
+              className="shrink-0"
+              checked={allOn}
+              onChange={toggleAll}
+            />
+            <span className="text-xs text-white/55">Select all</span>
+          </label>
+        ) : null}
 
         <ul className="max-h-80 space-y-1 overflow-y-auto">
           {items.map((it) => {

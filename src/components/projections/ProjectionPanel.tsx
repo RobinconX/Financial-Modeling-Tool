@@ -89,7 +89,7 @@ export function ProjectionPanel({
   const [selectedBasis, setSelectedBasis] = useState<ValuationBasis | 'easy'>(
     initialBasis ?? 'easy',
   )
-  /** Assumptions collapsed by default so ROI / charts lead; expand to edit. */
+  /** Assumptions collapsed by default on saved scenarios; expand to edit. */
   const [easyOpen, setEasyOpen] = useState(isDraft)
   const [advancedOpen, setAdvancedOpen] = useState(false)
 
@@ -107,13 +107,12 @@ export function ProjectionPanel({
     setAdvancedOpen(false)
   }, [isDraft, scenarioId])
 
-  // Prefer easy hero when switching saved scenario; collapse assumptions
   useEffect(() => {
     if (!scenario) return
-    setSelectedBasis(initialBasis ?? 'easy')
     setRefreshError(null)
-    setEasyOpen(false)
-    setAdvancedOpen(false)
+    setSelectedBasis(initialBasis ?? 'easy')
+    setEasyOpen(initialBasis === 'easy')
+    setAdvancedOpen(initialBasis != null && initialBasis !== 'easy')
   }, [scenario?.id, initialBasis]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const quote: Quote | null = isDraft ? draftQuote : scenario ? scenarioToQuote(scenario) : null
@@ -179,7 +178,6 @@ export function ProjectionPanel({
       if (prevSymbol !== q.symbol.toUpperCase()) {
         setDraftEasy([newEasyProjection()])
         setDraftAdvanced([])
-        setSelectedBasis('easy')
       }
     } catch (err) {
       setDraftQuote(null)
@@ -276,9 +274,6 @@ export function ProjectionPanel({
   }, [scenarioId, easyProjections.length, advancedProjections]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const hero = pickHeroRow(allProjections, selectedBasis)
-  const secondary = allProjections.filter(
-    (r) => r.basis === selectedBasis && (!hero || r.year !== hero.year),
-  )
 
   function handleSave(
     input: SaveInput,
@@ -311,12 +306,9 @@ export function ProjectionPanel({
               <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-400/80">
                 {scenario!.symbol}
               </p>
-              <input
-                className="mt-0.5 w-full max-w-md border-0 bg-transparent text-xl font-bold text-white outline-none focus:ring-0"
-                value={scenario!.name}
-                onChange={(e) => onUpdateScenario(scenario!.id, { name: e.target.value })}
-                aria-label="Scenario name"
-              />
+              <h2 className="mt-0.5 text-xl font-bold tracking-tight text-white">
+                {scenario!.name}
+              </h2>
               {scenario!.companyName ? (
                 <p className="text-sm text-white/45">{scenario!.companyName}</p>
               ) : null}
@@ -440,19 +432,14 @@ export function ProjectionPanel({
         </div>
       </div>
 
-      {/* Results first */}
       <RoiHero
         hero={hero}
-        secondary={secondary}
         selectedBasis={selectedBasis}
         onSelectBasis={setSelectedBasis}
-        showBasisTabs
         showEasyTab={easyProjections.length > 0}
         currency={currency}
-        currentMarketCap={currentMarketCap}
       />
 
-      {/* Assumptions — collapsed by default on saved scenarios */}
       <div className="space-y-1 border-t border-white/[0.06] pt-2">
         <AssumptionToggle
           title="Easy assumptions"
@@ -466,7 +453,7 @@ export function ProjectionPanel({
           tip={
             <InfoTip label="About easy assumptions">
               Enter target years and projected market cap or share price. The other is calculated
-              from shares outstanding. ROI uses market cap vs today.
+              from shares outstanding. CAGR uses market cap vs today.
             </InfoTip>
           }
         />
@@ -578,7 +565,7 @@ function AssumptionToggle({
   tip: ReactNode
 }) {
   return (
-    <div className="flex flex-wrap items-center gap-2 py-1.5">
+    <div className="flex flex-wrap items-center gap-1.5 py-1">
       <button
         type="button"
         onClick={onToggle}
@@ -586,16 +573,16 @@ function AssumptionToggle({
         aria-expanded={open}
       >
         <span
-          className={`inline-flex h-5 w-5 items-center justify-center text-[10px] text-white/45 transition-transform ${
+          className={`inline-flex h-4 w-4 items-center justify-center text-[10px] text-white/40 transition-transform ${
             open ? 'rotate-90' : ''
           }`}
           aria-hidden
         >
           ▸
         </span>
-        <span className="section-title">{title}</span>
+        <span className="text-xs font-semibold uppercase tracking-wider text-white/55">{title}</span>
         {!open ? (
-          <span className="text-xs font-normal text-white/40">· {summary}</span>
+          <span className="text-[11px] font-normal text-white/35">· {summary}</span>
         ) : null}
       </button>
       {tip}
