@@ -1,3 +1,4 @@
+import { useEffect, useMemo, useState } from 'react'
 import { Cell, Pie, PieChart, ResponsiveContainer } from 'recharts'
 import { formatMoney, formatPercent } from '../../lib/format'
 import { fromDisplay, toDisplay } from '../../lib/fx'
@@ -63,6 +64,33 @@ function formatSharePrice(value: number | null, currency: string): string {
   }
 }
 
+/** Stocks, then options, then other manuals, then cash. */
+function breakdownRank(
+  row: PortfolioChartBreakdownRow,
+  holdingsById: Map<string, SavedPortfolio['holdings'][number]>,
+): number {
+  if (row.isCash) return 3
+  const h = holdingsById.get(row.key)
+  if (h?.option) return 1
+  if (h?.manualOnly) return 2
+  return 0
+}
+
+function sortBreakdown(
+  rows: PortfolioChartBreakdownRow[],
+  holdings: SavedPortfolio['holdings'],
+  valueDir: 'asc' | 'desc',
+): PortfolioChartBreakdownRow[] {
+  const byId = new Map(holdings.map((h) => [h.id, h]))
+  const sign = valueDir === 'asc' ? 1 : -1
+  return [...rows].sort((a, b) => {
+    const kr = breakdownRank(a, byId) - breakdownRank(b, byId)
+    if (kr !== 0) return kr
+    if (a.value !== b.value) return (a.value - b.value) * sign
+    return a.ticker.localeCompare(b.ticker, undefined, { sensitivity: 'base' })
+  })
+}
+
 export function sliceColor(
   row: PortfolioChartBreakdownRow,
   colorByKey: Map<string, string>,
@@ -84,7 +112,26 @@ export function PortfolioYearDetail({
   yearTotals,
   onClose,
 }: Props) {
-  const rows = (point.breakdown ?? []).filter((r) => r.value !== 0)
+  const [valueDir, setValueDir] = useState<'asc' | 'desc'>('desc')
+  const [selectedKey, setSelectedKey] = useState<string | null>(null)
+  const rows = useMemo(
+    () =>
+      sortBreakdown(
+        (point.breakdown ?? []).filter((r) => r.value !== 0),
+        portfolio.holdings,
+        valueDir,
+      ),
+    [point.breakdown, portfolio.holdings, valueDir],
+  )
+
+  useEffect(() => {
+    setSelectedKey(null)
+  }, [point.xKey])
+
+  function toggleKey(key: string) {
+    setSelectedKey((cur) => (cur === key ? null : key))
+  }
+
   const total = point.total
   const currentYear = new Date().getFullYear()
   const year = point.year ?? currentYear
@@ -177,7 +224,10 @@ export function PortfolioYearDetail({
       : null
 
   return (
-    <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3">
+    <div
+      className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-3"
+      onClick={() => setSelectedKey(null)}
+    >
       <div className="flex flex-wrap items-start justify-between gap-2">
         <div>
           <div className="font-medium text-white/85">{pointTitle(point)}</div>
@@ -322,7 +372,13 @@ export function PortfolioYearDetail({
 
       <div className="mt-3 flex flex-col gap-4 sm:flex-row sm:items-start">
         {rows.length > 0 && total > 0 ? (
-          <div className="mx-auto h-44 w-44 shrink-0 sm:mx-0">
+          <div
+            className="mx-auto h-44 w-44 shrink-0 sm:mx-0"
+            onClick={(e) => {
+              const tag = (e.target as Element).tagName
+              if (tag === 'path') e.stopPropagation()
+            }}
+          >
             <ResponsiveContainer width="100%" height="100%">
               <PieChart>
                 <Pie
@@ -335,10 +391,27 @@ export function PortfolioYearDetail({
                   outerRadius={68}
                   paddingAngle={1}
                   isAnimationActive={false}
+                  cursor="pointer"
+                  onClick={(_, index, e) => {
+                    const ev = e as unknown as { stopPropagation?: () => void }
+                    ev?.stopPropagation?.()
+                    const r = rows[index]
+                    if (r) toggleKey(r.key)
+                  }}
                 >
-                  {rows.map((r) => (
-                    <Cell key={r.key} fill={sliceColor(r, colorByKey)} stroke="rgba(11,15,20,0.6)" />
-                  ))}
+                  {rows.map((r) => {
+                    const on = selectedKey === r.key
+                    const dim = selectedKey != null && !on
+                    return (
+                      <Cell
+                        key={r.key}
+                        fill={sliceColor(r, colorByKey)}
+                        fillOpacity={dim ? 0.28 : 1}
+                        stroke={on ? 'rgba(255,255,255,0.85)' : 'rgba(11,15,20,0.6)'}
+                        strokeWidth={on ? 2 : 1}
+                      />
+                    )
+                  })}
                 </Pie>
               </PieChart>
             </ResponsiveContainer>
@@ -357,13 +430,41 @@ export function PortfolioYearDetail({
                   <th className="py-0.5 pr-3 text-right font-medium">
                     {point.isNow ? 'Price' : 'Projected'}
                   </th>
-                  <th className="py-0.5 pr-3 text-right font-medium">Value</th>
+                  <th className="py-0.5 pr-3 text-right font-medium">
+                    <button
+                      type="button"
+                      className="font-medium text-emerald-300/90 hover:text-emerald-200"
+                      onClick={(e) => {
+                        e.stopPropagation()
+                        setValueDir((d) => (d === 'desc' ? 'asc' : 'desc'))
+                      }}
+                      title={valueDir === 'desc' ? 'Largest first' : 'Smallest first'}
+                    >
+                      Value{valueDir === 'desc' ? ' ↓' : ' ↑'}
+                    </button>
+                  </th>
                   <th className="py-0.5 text-right font-medium">%</th>
                 </tr>
               </thead>
               <tbody>
-                {rows.map((r) => (
-                  <tr key={r.key} className="text-white/70">
+                {rows.map((r) => {
+                  const on = selectedKey === r.key
+                  const dim = selectedKey != null && !on
+                  return (
+                  <tr
+                    key={r.key}
+                    className={`cursor-pointer ${
+                      on
+                        ? 'bg-white/[0.12] text-white'
+                        : dim
+                          ? 'text-white/35 hover:bg-white/[0.04]'
+                          : 'text-white/70 hover:bg-white/[0.04]'
+                    }`}
+                    onClick={(e) => {
+                      e.stopPropagation()
+                      toggleKey(r.key)
+                    }}
+                  >
                     <td className="py-0.5 pr-3">
                       <span className="inline-flex items-center gap-1.5">
                         <span
@@ -386,7 +487,8 @@ export function PortfolioYearDetail({
                       {total > 0 ? formatPercent(r.value / total) : '—'}
                     </td>
                   </tr>
-                ))}
+                  )
+                })}
               </tbody>
             </table>
           )}

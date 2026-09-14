@@ -6,7 +6,7 @@ import {
   listActualYears,
   makeActualKey,
 } from '../../lib/portfolio'
-import { clearActualYear, hasActualMonths, setActualMonth } from '../../lib/portfolioActuals'
+import { hasActualMonths, setActualMonth } from '../../lib/portfolioActuals'
 import { amountToDisplay } from '../../lib/fx'
 import { formatMoney, parseMoney } from '../../lib/format'
 import { handleSheetNavKey, parseClipboardGrid } from '../../lib/sheetGrid'
@@ -60,7 +60,6 @@ export function PortfolioActualsEditor({
   }, [currentYear, yearsWithData])
 
   const [year, setYear] = useState(currentYear)
-  const [addYearText, setAddYearText] = useState('')
 
   const entryCurrency: DisplayCurrency = hasActualMonths(actuals)
     ? storeCurrency
@@ -106,13 +105,6 @@ export function PortfolioActualsEditor({
     return true
   }
 
-  function addYear() {
-    const y = Number(addYearText)
-    if (!Number.isFinite(y) || y < 1970 || y > currentYear + 1) return
-    setYear(Math.floor(y))
-    setAddYearText('')
-  }
-
   const monthsFilled = MONTHS.reduce((n, _, i) => {
     const v = map[makeActualKey(year, i + 1)]
     return n + (v != null && Number.isFinite(v) ? 1 : 0)
@@ -149,38 +141,9 @@ export function PortfolioActualsEditor({
             ))}
           </select>
         </div>
-        <div>
-          <label className="label">Add past year</label>
-          <div className="flex gap-1.5">
-            <input
-              className="input !w-24 tabular-nums"
-              type="number"
-              min={1970}
-              max={currentYear}
-              placeholder="e.g. 2020"
-              value={addYearText}
-              onChange={(e) => setAddYearText(e.target.value)}
-              onKeyDown={(e) => {
-                if (e.key === 'Enter') addYear()
-              }}
-            />
-            <button type="button" className="btn-ghost !py-2 !text-xs" onClick={addYear}>
-              Open
-            </button>
-          </div>
-        </div>
         <div className="pb-0.5 text-xs text-white/40">
           {monthsFilled}/12 months · {entryCurrency}
         </div>
-        {monthsFilled > 0 && (
-          <button
-            type="button"
-            className="btn-ghost !py-1.5 !text-xs text-red-300/80"
-            onClick={() => commit(clearActualYear(actuals, year))}
-          >
-            Clear {year}
-          </button>
-        )}
       </div>
 
       <div className="table-shell">

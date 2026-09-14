@@ -512,7 +512,7 @@ export function PortfolioView({
     <div className="space-y-5">
       <div className="relative z-40 space-y-3">
         <nav
-          className="flex gap-1 overflow-x-auto border-b border-white/10"
+          className="flex flex-wrap gap-1 border-b border-white/10"
           aria-label="Portfolio sections"
           role="tablist"
         >
