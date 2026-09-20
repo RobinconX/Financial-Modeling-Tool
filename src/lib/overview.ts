@@ -35,6 +35,7 @@ import {
   holdingPositionLabel,
   holdingValueAtYear,
   lastExplicitDepositYear,
+  yearHasAnyStatedProjection,
   lastStatedProjectionYear,
   listActualYears,
   portfolioTotalUsdAtYear as portfolioBookTotalUsdAtYear,
@@ -825,7 +826,16 @@ export function portfolioBreakdownChfAtYear(
       const scenario = h.scenarioId
         ? (deps.stockScenarios.find((s) => s.id === h.scenarioId) ?? null)
         : null
-      const usd = holdingValueAtYear(h, scenario, actions, year, currentYear)
+      const usd = holdingValueAtYear(
+        h,
+        scenario,
+        actions,
+        year,
+        currentYear,
+        yearHasAnyStatedProjection(resolved, deps.stockScenarios, year, currentYear)
+          ? rate
+          : 0,
+      )
       if (usd == null || !Number.isFinite(usd) || usd === 0) continue
       lines.push({
         label: holdingPositionLabel(h, scenario),

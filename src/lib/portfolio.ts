@@ -1267,9 +1267,45 @@ export function portfolioNowUsd(
 }
 
 /**
+ * True when this holding has a stated year-end projection (or manual override)
+ * for `year`. Live current-year marks are not projections.
+ */
+export function holdingHasStatedProjection(
+  holding: PortfolioHolding,
+  scenario: SavedScenario | null,
+  year: number,
+  currentYear = new Date().getFullYear(),
+): boolean {
+  if (holding.manualOnly === true || holding.option != null) {
+    return (holding.yearOverrides ?? []).some(
+      (o) => o.year === year && Number.isFinite(o.valueDollars),
+    )
+  }
+  if (!scenario) return false
+  return getHoldingSharePriceByYear(holding, scenario, currentYear).has(year)
+}
+
+/** True when at least one position has a stated projection for `year`. */
+export function yearHasAnyStatedProjection(
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[],
+  year: number,
+  currentYear = new Date().getFullYear(),
+): boolean {
+  const byId = new Map(scenarios.map((s) => [s.id, s]))
+  for (const h of portfolio.holdings) {
+    const scenario =
+      h.scenarioId && !h.manualOnly ? (byId.get(h.scenarioId) ?? null) : null
+    if (holdingHasStatedProjection(h, scenario, year, currentYear)) return true
+  }
+  return false
+}
+
+/**
  * Holding dollar value at calendar year Y.
- * Exact projection when present; otherwise carries forward the latest known
- * value at or before Y (matches portfolio grid intermediate columns).
+ * Exact projection (or live/action mark) when present. If some other positions
+ * have a projection this year, unprojected stocks grow at the terminal rate
+ * from their last known value. Manual/option stay flat. Rate 0 is a flat carry.
  */
 export function holdingValueAtYear(
   holding: PortfolioHolding,
@@ -1277,6 +1313,7 @@ export function holdingValueAtYear(
   actions: PortfolioAction[],
   year: number,
   currentYear = new Date().getFullYear(),
+  growthRatePercent = 0,
 ): number | null {
   const map = computeHoldingValues(holding, scenario, actions, currentYear)
   const exact = map.get(year)
@@ -1290,7 +1327,27 @@ export function holdingValueAtYear(
       best = v
     }
   }
-  return best
+  if (best == null) return null
+
+  const n = year - bestY
+  const r = growthRatePercent / 100
+  if (
+    n <= 0 ||
+    r === 0 ||
+    holding.manualOnly === true ||
+    holding.option != null
+  ) {
+    return best
+  }
+
+  const shLast = sharesAtYear(holding, actions, bestY)
+  const shNow = sharesAtYear(holding, actions, year)
+  const mult = holdingMultiplier(holding)
+  if (shLast > 0 && shNow > 0 && mult > 0) {
+    const px = best / (shLast * mult)
+    return shNow * px * (1 + r) ** n * mult
+  }
+  return best * (1 + r) ** n
 }
 
 /**
@@ -1312,10 +1369,13 @@ export function portfolioTotalUsdAtYear(
   const byId = new Map(scenarios.map((s) => [s.id, s]))
 
   const statedAt = (y: number) => {
+    const grow = yearHasAnyStatedProjection(portfolio, scenarios, y, currentYear)
+      ? rate
+      : 0
     let equity = 0
     for (const h of portfolio.holdings) {
       const scenario = h.scenarioId ? (byId.get(h.scenarioId) ?? null) : null
-      const v = holdingValueAtYear(h, scenario, actions, y, currentYear)
+      const v = holdingValueAtYear(h, scenario, actions, y, currentYear, grow)
       if (v != null) equity += v
     }
     return equity + cashAtYear(portfolio, y, scenarios, currentYear)
@@ -1429,7 +1489,10 @@ export function buildPortfolioGrid(
   const equityRows: PortfolioGridRow[] = built.map(({ holding, scenario, warning }) => {
     const rowValues = years.map((y) => {
       if (y > lastStated) return null
-      return holdingValueAtYear(holding, scenario, actions, y, currentYear)
+      const grow = yearHasAnyStatedProjection(portfolio, scenarios, y, currentYear)
+        ? getPerpetualGrowthRate(portfolio)
+        : 0
+      return holdingValueAtYear(holding, scenario, actions, y, currentYear, grow)
     })
     return {
       key: holding.id,

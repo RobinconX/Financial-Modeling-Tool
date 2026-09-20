@@ -505,6 +505,55 @@ describe('scenario projection share prices on portfolio', () => {
     // holdingValueAtYear matches for intermediate year not in sparse map
     expect(holdingValueAtYear(holding, sc, [], 2028, 2026)).toBeCloseTo(1_000, 6)
   })
+
+  it('grows unprojected stocks at the portfolio terminal rate', () => {
+    const long = scenario({
+      id: 'long',
+      symbol: 'LONG',
+      easyRows: [{ id: 'e1', year: 2030, projectedMarketCap: 2_000_000 }],
+    })
+    const short = scenario({
+      id: 'short',
+      symbol: 'SHORT',
+      easyRows: [],
+      currentPrice: 10,
+      currentMarketCap: 1_000_000,
+      sharesOutstanding: 100_000,
+    })
+    const hLong: PortfolioHolding = {
+      ...newHolding('LONG'),
+      id: 'hl',
+      sharesHeld: 100,
+      scenarioId: long.id,
+      basis: 'easy',
+      manualCurrentPrice: 10,
+    }
+    const hShort: PortfolioHolding = {
+      ...newHolding('SHORT'),
+      id: 'hs',
+      sharesHeld: 50,
+      scenarioId: short.id,
+      basis: 'easy',
+      manualCurrentPrice: 10,
+    }
+    const p = basePortfolio({
+      deposits: [
+        newOpeningDeposit(0, 2026),
+        { id: 'd2', year: 2028, amount: 0 },
+      ],
+      holdings: [hLong, hShort],
+      perpetualGrowthPercent: 10,
+    })
+    const grid = buildPortfolioGrid(p, [long, short], 2026)
+    const shortRow = grid.rows.find((r) => r.holdingId === 'hs')!
+    // 2026 live 50×10 = 500. 2028: nobody has a projection → flat carry.
+    expect(shortRow.values[grid.years.indexOf(2026)]).toBeCloseTo(500, 6)
+    expect(shortRow.values[grid.years.indexOf(2028)]).toBeCloseTo(500, 6)
+    // 2030: LONG has a projection, SHORT does not → SHORT grows at 10%
+    expect(shortRow.values[grid.years.indexOf(2030)]).toBeCloseTo(500 * 1.1 ** 4, 6)
+    const longRow = grid.rows.find((r) => r.holdingId === 'hl')!
+    expect(longRow.values[grid.years.indexOf(2030)]).toBeCloseTo(2_000, 6)
+  })
 })
 
 describe('portfolio vs overview totals match', () => {
@@ -552,10 +601,9 @@ describe('portfolio vs overview totals match', () => {
       expect(grid.totals[i], `grid ${y}`).toBeCloseTo(fromFn, 6)
       expect(fromOverview, `overview ${y}`).toBeCloseTo(fromFn, 6)
     }
-    // Intermediate year 2029 (between 2028 deposit and 2030 proj) must carry equity
+    // Intermediate year 2029 has no stock projection → flat carry from 2027
     const t2029 = portfolioTotalUsdAtYear(p, [sc], 2029, 2026)
     const cash2029 = cashAtYear(p, 2029, [sc], 2026)
-    // equity carried from 2027 (100 * $20 = 2000) until 2030
     expect(t2029).toBeCloseTo(cash2029 + 2_000, 6)
   })
 })
