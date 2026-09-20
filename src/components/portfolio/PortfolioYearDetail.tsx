@@ -29,8 +29,6 @@ type Props = {
   contributions: PortfolioContributionsState | null
   usdToChf: number | null
   portfolio: SavedPortfolio
-  showCashInvested: boolean
-  showTarget?: boolean
   lastStatedYear?: number
   /** Year-end totals in the active display currency (no Now). */
   yearTotals?: Map<number, number>
@@ -106,8 +104,6 @@ export function PortfolioYearDetail({
   contributions,
   usdToChf,
   portfolio,
-  showCashInvested,
-  showTarget = false,
   lastStatedYear,
   yearTotals,
   onClose,
@@ -152,7 +148,7 @@ export function PortfolioYearDetail({
       ? simpleRoi(total, invested)
       : null
 
-  const tc = showTarget ? portfolio.targetCompound : null
+  const tc = portfolio.targetCompound
   const targetStep =
     tc != null && point.year != null && !point.isNow
       ? targetCompoundStep(
@@ -271,8 +267,7 @@ export function PortfolioYearDetail({
         </div>
       ) : null}
 
-      {showCashInvested &&
-      typeof point.cashSharePct === 'number' &&
+      {typeof point.cashSharePct === 'number' &&
       typeof point.investedSharePct === 'number' ? (
         <div className="mt-1 text-[11px] text-white/70">
           <span className="text-emerald-300/90">
@@ -342,9 +337,14 @@ export function PortfolioYearDetail({
               </span>
             </div>
           ) : null}
+        </div>
+      ) : null}
+
+      {yearPerf != null || (cagr != null && tc != null) ? (
+        <div className="mt-2 flex flex-wrap gap-x-5 gap-y-1 text-[11px] text-white/55">
           {yearPerf != null ? (
-            <div className="flex justify-between gap-4">
-              <span>This year</span>
+            <span>
+              This year{' '}
               <span
                 className={`tabular-nums ${
                   yearPerf >= 0 ? 'text-emerald-300/90' : 'text-rose-300/90'
@@ -352,11 +352,11 @@ export function PortfolioYearDetail({
               >
                 {formatPercent(yearPerf)}
               </span>
-            </div>
+            </span>
           ) : null}
           {cagr != null && tc != null ? (
-            <div className="flex justify-between gap-4">
-              <span>CAGR from {tc.year}</span>
+            <span>
+              CAGR from {tc.year}{' '}
               <span
                 className={`tabular-nums ${
                   cagr >= 0 ? 'text-emerald-300/90' : 'text-rose-300/90'
@@ -364,9 +364,8 @@ export function PortfolioYearDetail({
               >
                 {formatPercent(cagr)}
               </span>
-            </div>
+            </span>
           ) : null}
-          <div className="border-b border-white/[0.06] pt-2" />
         </div>
       ) : null}
 

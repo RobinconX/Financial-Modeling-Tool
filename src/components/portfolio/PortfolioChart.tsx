@@ -18,6 +18,8 @@ import {
   Tooltip,
   XAxis,
   YAxis,
+  useXAxisScale,
+  useYAxisScale,
 } from 'recharts'
 import { formatMoney, formatPercent } from '../../lib/format'
 import { fromDisplay, toDisplay } from '../../lib/fx'
@@ -62,9 +64,10 @@ const NOW_CASH_COLOR = '#94a3b8'
 const ROI_LINE_COLOR = '#e879f9'
 
 const PANEL_WIDTH = 280
-const PANEL_GAP = 10
-const PANEL_TOP = 8
+const PANEL_GAP = 14
 const PANEL_EDGE = 8
+/** Keep year bars / x-axis hoverable under the tooltip. */
+const PANEL_BOTTOM_CLEAR = 88
 
 type Props = {
   grid: PortfolioGrid
@@ -91,8 +94,6 @@ type Props = {
 
 type HoverState = {
   point: PortfolioChartPoint
-  /** Bar category X (chart-local, from Recharts activeCoordinate) */
-  barX: number
 }
 
 function convertPoint(
@@ -164,11 +165,14 @@ export function PortfolioChart({
     displayCurrency ?? (currency === 'CHF' ? 'CHF' : 'USD')
 
   const [hover, setHover] = useState<HoverState | null>(null)
+  const [pin, setPin] = useState({ x: 0, y: 0 })
   const [selectedXKey, setSelectedXKey] = useState<string | null>(null)
   const chartAreaRef = useRef<HTMLDivElement>(null)
   const panelRef = useRef<HTMLDivElement>(null)
   const [areaSize, setAreaSize] = useState({ w: 0, h: 0 })
   const hoverKeyRef = useRef<string | null>(null)
+  const cursorRef = useRef({ x: 0, y: 0 })
+  const panelHoverRef = useRef(false)
 
   const equityRows = useMemo(
     () => grid.rows.filter((r) => r.kind === 'equity'),
@@ -383,20 +387,34 @@ export function PortfolioChart({
     const byIndex = idx >= 0 ? data[idx] : undefined
     const point = byLabel ?? byIndex
     if (!point) return null
-
-    const barX =
-      typeof state.activeCoordinate?.x === 'number' ? state.activeCoordinate.x : 0
-    return { point, barX }
+    return { point }
   }
 
-  const panelStyle = hover ? computePanelStyle(hover.barX, areaSize.w, areaSize.h) : null
+  const panelStyle = hover
+    ? computePanelStyle(pin.x, pin.y, areaSize.w, areaSize.h)
+    : null
 
   const handleChartHover = useCallback(
     (state: Parameters<typeof resolvePoint>[0]) => {
       const next = resolvePoint(state)
       const key = next?.point.xKey ?? null
+      if (!next) {
+        if (panelHoverRef.current) return
+        hoverKeyRef.current = null
+        setHover(null)
+        return
+      }
       if (key === hoverKeyRef.current) return
       hoverKeyRef.current = key
+      const c = cursorRef.current
+      setPin(
+        c.x !== 0 || c.y !== 0
+          ? c
+          : {
+              x: state.activeCoordinate?.x ?? 0,
+              y: state.activeCoordinate?.y ?? 0,
+            },
+      )
       setHover(next)
     },
     // resolvePoint closes over latest `data`; skip setState when the year is unchanged.
@@ -457,7 +475,15 @@ export function PortfolioChart({
           if (panelRef.current?.contains(e.target as Node)) return
           e.preventDefault()
         }}
-        onMouseLeave={clearHover}
+        onMouseMove={(e) => {
+          if (panelRef.current?.contains(e.target as Node)) return
+          const r = e.currentTarget.getBoundingClientRect()
+          cursorRef.current = { x: e.clientX - r.left, y: e.clientY - r.top }
+        }}
+        onMouseLeave={(e) => {
+          if (panelRef.current?.contains(e.relatedTarget as Node)) return
+          clearHover()
+        }}
       >
         <PortfolioBarsPlot
           data={data}
@@ -486,7 +512,13 @@ export function PortfolioChart({
             aria-label={`Breakdown for ${hover.point.yearLabel}`}
             className="absolute z-30 overflow-y-auto overscroll-contain rounded-xl border border-white/10 bg-[#121820]/97 shadow-2xl outline-none backdrop-blur-sm focus:ring-1 focus:ring-emerald-500/40"
             style={panelStyle}
-            onMouseLeave={clearHover}
+            onMouseEnter={() => {
+              panelHoverRef.current = true
+            }}
+            onMouseLeave={() => {
+              panelHoverRef.current = false
+            }}
+            onWheel={(e) => e.stopPropagation()}
           >
             <HoverPanel
               point={hover.point}
@@ -536,8 +568,6 @@ export function PortfolioChart({
             contributions={contributions}
             usdToChf={usdToChf}
             portfolio={portfolio}
-            showCashInvested={showCashInvested}
-            showTarget={showTarget}
             lastStatedYear={grid.lastStatedYear}
             yearTotals={yearTotals}
             onClose={() => setSelectedXKey(null)}
@@ -684,16 +714,58 @@ function HoverPanel({
   )
 }
 
-function yearSelectStroke(
+function yearSelectPaint(
   entry: PortfolioChartPoint,
   selectedXKey: string | null,
-  fallback?: string,
-  fallbackW = 0,
-): { stroke?: string; strokeWidth: number } {
-  if (selectedXKey != null && entry.xKey === selectedXKey) {
-    return { stroke: 'rgba(255,255,255,0.85)', strokeWidth: 2 }
+  baseOpacity: number,
+): { fillOpacity: number } {
+  const hidden = baseOpacity <= 0
+  const dim = selectedXKey != null && entry.xKey !== selectedXKey
+  return {
+    fillOpacity: hidden ? 0 : dim ? baseOpacity * 0.28 : baseOpacity,
   }
-  return { stroke: fallback, strokeWidth: fallbackW }
+}
+
+function SelectedBarOutline({
+  selectedXKey,
+  data,
+  maxBarSize,
+}: {
+  selectedXKey: string | null
+  data: PortfolioChartPoint[]
+  maxBarSize: number
+}) {
+  const xScale = useXAxisScale()
+  const yScale = useYAxisScale('usd')
+  if (selectedXKey == null || !xScale || !yScale) return null
+  const point = data.find((d) => d.xKey === selectedXKey)
+  const total = typeof point?.total === 'number' ? point.total : 0
+  if (!point || point.isEmpty || !(total > 0)) return null
+  const xStart = xScale(selectedXKey, { position: 'start' })
+  const xEnd = xScale(selectedXKey, { position: 'end' })
+  const xMid = xScale(selectedXKey, { position: 'middle' })
+  if (xStart == null || xEnd == null || xMid == null) return null
+  const width = Math.max(1, Math.min(Math.abs(xEnd - xStart), maxBarSize))
+  const x = xMid - width / 2
+  const yTop = yScale(total)
+  const yBot = yScale(0)
+  if (yTop == null || yBot == null) return null
+  const y = Math.min(yTop, yBot)
+  const height = Math.abs(yBot - yTop)
+  if (height < 1) return null
+  return (
+    <rect
+      x={x}
+      y={y}
+      width={width}
+      height={height}
+      fill="none"
+      stroke="rgba(255,255,255,0.85)"
+      strokeWidth={2}
+      rx={3}
+      pointerEvents="none"
+    />
+  )
 }
 
 type BarsPlotProps = {
@@ -809,6 +881,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
             stackId="portfolio"
             fill={PORTFOLIO_TOTAL_COLOR}
             isAnimationActive={false}
+            stroke="none"
             maxBarSize={maxBarSize}
             radius={[3, 3, 0, 0]}
           >
@@ -824,12 +897,10 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                         ? PERPETUAL_GROWTH_COLOR
                         : PORTFOLIO_TOTAL_COLOR
                 }
-                fillOpacity={entry.isEmpty ? 0 : entry.isActual ? 0.95 : 0.9}
-                {...yearSelectStroke(
+                {...yearSelectPaint(
                   entry,
                   selectedXKey,
-                  entry.isNow || entry.isActual ? 'rgba(255,255,255,0.4)' : undefined,
-                  entry.isNow || entry.isActual ? 1.5 : 0,
+                  entry.isEmpty ? 0 : entry.isActual ? 0.95 : 0.9,
                 )}
               />
             ))}
@@ -845,6 +916,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                 stackId="portfolio"
                 fill={HOLDING_COLORS[i % HOLDING_COLORS.length]}
                 isAnimationActive={false}
+                stroke="none"
                 maxBarSize={maxBarSize}
               >
                 {data.map((entry) => (
@@ -855,7 +927,9 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                         ? PORTFOLIO_ACTUAL_COLOR
                         : HOLDING_COLORS[i % HOLDING_COLORS.length]
                     }
-                    fillOpacity={
+                    {...yearSelectPaint(
+                      entry,
+                      selectedXKey,
                       entry.isEmpty || entry.isPerpetualGrowth
                         ? 0
                         : entry.isActual
@@ -864,13 +938,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                             ? 1
                             : entry.isCurrentYear
                               ? 0.95
-                              : 0.88
-                    }
-                    {...yearSelectStroke(
-                      entry,
-                      selectedXKey,
-                      entry.isNow ? 'rgba(255,255,255,0.35)' : undefined,
-                      entry.isNow ? 1 : 0,
+                              : 0.88,
                     )}
                   />
                 ))}
@@ -884,6 +952,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                 stackId="portfolio"
                 fill={PORTFOLIO_ACTUAL_COLOR}
                 isAnimationActive={false}
+                stroke="none"
                 maxBarSize={maxBarSize}
                 radius={[3, 3, 0, 0]}
               >
@@ -891,12 +960,10 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                   <Cell
                     key={`act-${entry.xKey}`}
                     fill={PORTFOLIO_ACTUAL_COLOR}
-                    fillOpacity={entry.isActual ? 0.95 : 0}
-                    {...yearSelectStroke(
+                    {...yearSelectPaint(
                       entry,
                       selectedXKey,
-                      entry.isActual ? 'rgba(255,255,255,0.4)' : undefined,
-                      entry.isActual ? 1.5 : 0,
+                      entry.isActual ? 0.95 : 0,
                     )}
                   />
                 ))}
@@ -910,6 +977,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                 stackId="portfolio"
                 fill={CASH_COLOR}
                 isAnimationActive={false}
+                stroke="none"
                 maxBarSize={maxBarSize}
                 radius={hasPerpetualGrowth ? [0, 0, 0, 0] : [3, 3, 0, 0]}
               >
@@ -917,14 +985,10 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                   <Cell
                     key={`cash-${entry.xKey}`}
                     fill={entry.isNow ? NOW_CASH_COLOR : CASH_COLOR}
-                    fillOpacity={
-                      entry.isEmpty || entry.isPerpetualGrowth || entry.isActual ? 0 : 1
-                    }
-                    {...yearSelectStroke(
+                    {...yearSelectPaint(
                       entry,
                       selectedXKey,
-                      entry.isNow ? 'rgba(255,255,255,0.35)' : undefined,
-                      entry.isNow ? 1 : 0,
+                      entry.isEmpty || entry.isPerpetualGrowth || entry.isActual ? 0 : 1,
                     )}
                   />
                 ))}
@@ -938,6 +1002,7 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                 stackId="portfolio"
                 fill={PERPETUAL_GROWTH_COLOR}
                 isAnimationActive={false}
+                stroke="none"
                 maxBarSize={maxBarSize}
                 radius={[3, 3, 0, 0]}
               >
@@ -945,7 +1010,11 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
                   <Cell
                     key={`growth-${entry.xKey}`}
                     fill={PERPETUAL_GROWTH_COLOR}
-                    fillOpacity={entry.isPerpetualGrowth ? 0.92 : 0}
+                    {...yearSelectPaint(
+                      entry,
+                      selectedXKey,
+                      entry.isPerpetualGrowth ? 0.92 : 0,
+                    )}
                   />
                 ))}
               </Bar>
@@ -1005,24 +1074,36 @@ const PortfolioBarsPlot = memo(function PortfolioBarsPlot({
             isAnimationActive={false}
           />
         ) : null}
+        <SelectedBarOutline
+          selectedXKey={selectedXKey}
+          data={data}
+          maxBarSize={maxBarSize}
+        />
       </ComposedChart>
     </ResponsiveContainer>
   )
 })
 
-function computePanelStyle(barX: number, areaW: number, areaH: number): CSSProperties {
-  if (areaW <= 0) return { left: PANEL_EDGE, top: PANEL_TOP, width: PANEL_WIDTH, maxHeight: 200 }
-  const preferRight = barX + PANEL_GAP + PANEL_WIDTH <= areaW - PANEL_EDGE
-  const left = preferRight
-    ? Math.min(barX + PANEL_GAP, areaW - PANEL_WIDTH - PANEL_EDGE)
-    : Math.max(PANEL_EDGE, barX - PANEL_GAP - PANEL_WIDTH)
-  const maxHeight = Math.max(120, areaH - PANEL_TOP - PANEL_EDGE)
-  return {
-    left,
-    top: PANEL_TOP,
-    width: PANEL_WIDTH,
-    maxHeight,
-  }
+/** Fixed size, always at the top; bottom of the chart stays free to pick another year. */
+function computePanelStyle(
+  cx: number,
+  _cy: number,
+  areaW: number,
+  areaH: number,
+): CSSProperties {
+  const w = areaW > 0 ? areaW : 640
+  const h = areaH > 0 ? areaH : 320
+  const panelW = Math.min(PANEL_WIDTH, Math.max(200, w - PANEL_EDGE * 2))
+  const maxHeight = Math.min(
+    220,
+    Math.max(120, h - PANEL_EDGE - PANEL_BOTTOM_CLEAR),
+  )
+  const gap = PANEL_GAP
+
+  let left = cx < w / 2 ? cx + gap : cx - panelW - gap
+  left = Math.max(PANEL_EDGE, Math.min(left, w - panelW - PANEL_EDGE))
+
+  return { left, top: PANEL_EDGE, width: panelW, maxHeight }
 }
 
 

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useState, type ReactNode } from 'react'
 import { ProjectionsView } from './components/projections/ProjectionsView'
 import { PortfolioView } from './components/portfolio/PortfolioView'
 import { useSavedScenarios } from './hooks/useSavedScenarios'
@@ -53,14 +53,73 @@ function readAppTab(): AppTab {
   return 'projections'
 }
 
-const NAV_MARKS: Record<AppTab, string> = {
-  projections: 'P',
-  portfolio: 'F',
-  overview: 'O',
-  history: 'H',
-  'income-cost': 'I',
-  savings: 'V',
-  settings: '⚙',
+function NavGlyph({ children }: { children: ReactNode }) {
+  return (
+    <svg
+      width="16"
+      height="16"
+      viewBox="0 0 24 24"
+      fill="none"
+      stroke="currentColor"
+      strokeWidth="2"
+      strokeLinecap="round"
+      strokeLinejoin="round"
+      aria-hidden
+    >
+      {children}
+    </svg>
+  )
+}
+
+const NAV_ICONS: Record<AppTab, ReactNode> = {
+  overview: (
+    <NavGlyph>
+      <rect x="3" y="3" width="7" height="9" rx="1" />
+      <rect x="14" y="3" width="7" height="5" rx="1" />
+      <rect x="14" y="12" width="7" height="9" rx="1" />
+      <rect x="3" y="16" width="7" height="5" rx="1" />
+    </NavGlyph>
+  ),
+  'income-cost': (
+    <NavGlyph>
+      <path d="M7 4v16" />
+      <path d="M3 8l4-4 4 4" />
+      <path d="M17 20V4" />
+      <path d="M13 16l4 4 4-4" />
+    </NavGlyph>
+  ),
+  savings: (
+    <NavGlyph>
+      <path d="M4 21h16" />
+      <path d="M6 21V10l6-5 6 5v11" />
+      <path d="M10 21v-6h4v6" />
+    </NavGlyph>
+  ),
+  history: (
+    <NavGlyph>
+      <circle cx="12" cy="12" r="9" />
+      <path d="M12 7v5l4 2" />
+    </NavGlyph>
+  ),
+  projections: (
+    <NavGlyph>
+      <path d="M3 17l6-6 4 4 8-8" />
+      <path d="M14 7h7v7" />
+    </NavGlyph>
+  ),
+  portfolio: (
+    <NavGlyph>
+      <rect x="3" y="12" width="5" height="8" rx="0.5" />
+      <rect x="10" y="5" width="5" height="15" rx="0.5" />
+      <rect x="17" y="9" width="5" height="11" rx="0.5" />
+    </NavGlyph>
+  ),
+  settings: (
+    <NavGlyph>
+      <circle cx="12" cy="12" r="3" />
+      <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+    </NavGlyph>
+  ),
 }
 
 type NavItem = {
@@ -243,10 +302,15 @@ export default function App() {
         }`}
       >
         {navCollapsed ? (
-          <span className="text-xs font-bold">{NAV_MARKS[item.id]}</span>
+          <span className="flex h-5 w-5 items-center justify-center">{NAV_ICONS[item.id]}</span>
         ) : (
           <>
-            <span>{item.label}</span>
+            <span className="flex min-w-0 items-center gap-2">
+              <span className="flex h-4 w-4 shrink-0 items-center justify-center opacity-80">
+                {NAV_ICONS[item.id]}
+              </span>
+              <span className="truncate">{item.label}</span>
+            </span>
             {item.count != null && item.count > 0 && (
               <span
                 className={`rounded-full px-1.5 py-0.5 text-[10px] font-semibold ${
