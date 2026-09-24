@@ -267,6 +267,27 @@ export type MergedUpsideRow = {
 }
 
 /** Union of dates; missing series values are null (chart connectNulls). */
+/** Chart key for the shared target-CAGR overlay (not a scenario id). */
+export const TARGET_CAGR_SERIES_KEY = 'targetCagr'
+
+/**
+ * Target path in the chart’s units: constant CAGR, or remaining upside
+ * implied by that CAGR to year-end `goalYear`.
+ */
+export function targetPathValue(
+  rate: number,
+  metric: GoalPathMetric,
+  goalYear: number,
+  date: string,
+): number | null {
+  if (!Number.isFinite(rate)) return null
+  if (metric === 'cagr') return rate
+  const yrs = yearsUntilProjectionEnd(goalYear, parseCloseDate(date))
+  if (!Number.isFinite(yrs)) return null
+  if (yrs <= 0) return 0
+  return (1 + rate) ** yrs - 1
+}
+
 export function mergeUpsideSeries(series: NamedUpsideSeries[]): MergedUpsideRow[] {
   const dates = new Set<string>()
   const maps = series.map((s) => {

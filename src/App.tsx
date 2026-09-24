@@ -116,8 +116,8 @@ const NAV_ICONS: Record<AppTab, ReactNode> = {
   ),
   settings: (
     <NavGlyph>
-      <circle cx="12" cy="12" r="3" />
-      <path d="M12 3v2M12 19v2M3 12h2M19 12h2M5.6 5.6l1.4 1.4M17 17l1.4 1.4M18.4 5.6 17 7M7 17l-1.4 1.4" />
+      <path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z" />
+      <path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 1 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 1 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 1 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 1 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 1 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 1 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 1 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 1 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1Z" />
     </NavGlyph>
   ),
 }
@@ -154,7 +154,7 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
     subtitle: 'Recorded actuals over time — portfolios and savings, monthly or year-end.',
   },
   'income-cost': {
-    title: 'Income / Cost',
+    title: 'Budget',
     subtitle: 'Income streams and cost positions by year (CHF).',
   },
   savings: {
@@ -253,7 +253,7 @@ export default function App() {
       label: 'Life',
       items: [
         { id: 'overview', label: 'Overview' },
-        { id: 'income-cost', label: 'Income / Cost' },
+        { id: 'income-cost', label: 'Budget' },
         { id: 'savings', label: 'Savings' },
         { id: 'history', label: 'History' },
       ],

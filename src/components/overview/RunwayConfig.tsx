@@ -137,9 +137,9 @@ export function RunwayConfig({
         <span className="section-title">Runway periods</span>
         <InfoTip label="About runway periods">
           Each row starts in that year and lasts until the next row. Runway leftover is a separate
-          pile: a copy of Overview leftover, then adjusted by this config (I/C surplus added, draws
+          pile: a copy of Overview leftover, then adjusted by this config (Budget surplus added, draws
           taken from leftover first). Set draw order below. Surplus is not a leftover contribution.
-          “Keep I/C” uses that scenario’s income as in and its costs as the draw.
+          “Keep Budget” uses that scenario’s income as in and its costs as the draw.
         </InfoTip>
       </div>
 
@@ -181,8 +181,8 @@ export function RunwayConfig({
                   }}
                 >
                   <option value="manual">Manual income</option>
-                  <option value="ic-income">I/C income</option>
-                  <option value="ic-keep">Keep I/C as in…</option>
+                  <option value="ic-income">Budget income</option>
+                  <option value="ic-keep">Keep Budget as in…</option>
                 </select>
               </label>
 
@@ -201,7 +201,7 @@ export function RunwayConfig({
                 </label>
               ) : (
                 <label className="space-y-1 text-white/50">
-                  <span className="block text-[10px]">I/C scenario</span>
+                  <span className="block text-[10px]">Budget scenario</span>
                   <select
                     className="input !w-auto min-w-[9rem] !py-1 !text-xs"
                     value={p.incomeCostScenarioId ?? ''}
@@ -264,7 +264,7 @@ export function RunwayConfig({
                   )}
                 </>
               ) : (
-                <span className="pb-1.5 text-[10px] text-white/35">Draw = I/C costs</span>
+                <span className="pb-1.5 text-[10px] text-white/35">Draw = Budget costs</span>
               )}
 
               <span className="pb-1.5 text-[10px] text-white/40 tabular-nums">

@@ -334,7 +334,7 @@ export function IncomeCostView({
       <div
         className="inline-flex gap-1 border-b border-white/10"
         role="group"
-        aria-label="Income/Cost view"
+        aria-label="Budget view"
       >
         <button
           type="button"

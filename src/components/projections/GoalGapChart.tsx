@@ -10,7 +10,15 @@ import {
   YAxis,
 } from 'recharts'
 import { formatPercent } from '../../lib/format'
-import { mergeUpsideSeries, type GoalPathMetric, type UpsidePoint } from '../../lib/goalGap'
+import {
+  mergeUpsideSeries,
+  TARGET_CAGR_SERIES_KEY,
+  targetPathValue,
+  type GoalPathMetric,
+  type UpsidePoint,
+} from '../../lib/goalGap'
+
+const TARGET_CAGR_COLOR = '#ef4444'
 
 export type GoalGapChartSeries = {
   key: string
@@ -22,6 +30,9 @@ export type GoalGapChartSeries = {
 type Props = {
   series: GoalGapChartSeries[]
   metric?: GoalPathMetric
+  /** Decimal CAGR (0.15 = 15%). Null = no overlay. */
+  targetCagr?: number | null
+  goalYear?: number | null
   loading?: boolean
   error?: string | null
   fillContainer?: boolean
@@ -115,6 +126,8 @@ function pickTicks(dates: string[], count = 5): string[] {
 export function GoalGapChart({
   series,
   metric = 'upside',
+  targetCagr = null,
+  goalYear = null,
   loading,
   error,
   fillContainer = false,
@@ -124,7 +137,22 @@ export function GoalGapChart({
     () => series.filter((s) => s.points.length >= 2),
     [series],
   )
-  const data = useMemo(() => mergeUpsideSeries(plot), [plot])
+  const data = useMemo(() => {
+    const merged = mergeUpsideSeries(plot)
+    if (targetCagr == null || !Number.isFinite(targetCagr) || goalYear == null) {
+      return merged
+    }
+    return merged.map((row) => ({
+      ...row,
+      [TARGET_CAGR_SERIES_KEY]: targetPathValue(
+        targetCagr,
+        metric,
+        goalYear,
+        row.date,
+      ),
+    }))
+  }, [plot, targetCagr, metric, goalYear])
+  const showTarget = targetCagr != null && Number.isFinite(targetCagr) && goalYear != null
   const [win, setWin] = useState<DateWindow | null>(null)
   const [panning, setPanning] = useState(false)
   const chartRef = useRef<HTMLDivElement>(null)
@@ -301,12 +329,14 @@ export function GoalGapChart({
                 labelStyle={{ color: 'rgba(255,255,255,0.6)' }}
                 formatter={(value, name) => {
                   const n = typeof value === 'number' ? value : Number(value)
-                  return [formatPercent(n), `${String(name)} · ${valueLabel}`]
+                  const label = String(name)
+                  if (label === 'Target CAGR') return [formatPercent(n), label]
+                  return [formatPercent(n), `${label} · ${valueLabel}`]
                 }}
                 labelFormatter={(label) => String(label)}
               />
             )}
-            {plot.length > 1 ? (
+            {plot.length > 1 || showTarget ? (
               <Legend wrapperStyle={{ fontSize: 12, paddingTop: 8 }} />
             ) : null}
             {plot.map((s) => (
@@ -322,10 +352,31 @@ export function GoalGapChart({
                 isAnimationActive={false}
               />
             ))}
+            {showTarget ? (
+              <Line
+                type="monotone"
+                dataKey={TARGET_CAGR_SERIES_KEY}
+                name="Target CAGR"
+                stroke={TARGET_CAGR_COLOR}
+                strokeWidth={2}
+                strokeDasharray="5 4"
+                dot={false}
+                connectNulls
+                isAnimationActive={false}
+                legendType="line"
+              />
+            ) : null}
           </LineChart>
         </ResponsiveContainer>
       </div>
       <p className="mt-1 flex flex-wrap items-center justify-center gap-x-2 text-[10px] text-white/30">
+        {showTarget ? (
+          <span>
+            <span className="text-red-300/90">Red dotted</span> = target CAGR
+            {metric === 'upside' ? ' as remaining upside' : ''}
+            {' · '}
+          </span>
+        ) : null}
         <span>
           {min} → {max}
           {zoomed ? ' · drag to pan · scroll to zoom' : ' · scroll to zoom'}

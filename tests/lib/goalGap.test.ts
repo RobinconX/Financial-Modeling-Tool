@@ -10,6 +10,7 @@ import {
   resolveGoalYear,
   sortGoalGapRows,
   statedEasyYears,
+  targetPathValue,
   unionEasyYears,
   upsideSeries,
 } from '../../src/lib/goalGap'
@@ -180,6 +181,14 @@ describe('upsideSeries', () => {
       { date: '2025-01-02', upside: 1 },
       { date: '2025-06-01', upside: 0.5 },
     ])
+  })
+
+  it('target path is a constant CAGR or implied remaining upside', () => {
+    expect(targetPathValue(0.15, 'cagr', 2030, '2026-01-01')).toBe(0.15)
+    const yrs = yearsUntilProjectionEnd(2030, new Date(2026, 0, 1))
+    expect(targetPathValue(0.15, 'upside', 2030, '2026-01-01')).toBeCloseTo(
+      (1.15) ** yrs - 1,
+    )
   })
 
   it('CAGR series annualizes to the goal year-end from each close', () => {

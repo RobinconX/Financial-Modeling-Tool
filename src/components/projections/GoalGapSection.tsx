@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { SavedScenario } from '../../types'
 import type { CachedPriceHistory } from '../../lib/priceHistory'
 import {
@@ -11,6 +11,25 @@ import {
 } from '../../lib/goalGap'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { GoalGapChart } from './GoalGapChart'
+
+const TARGET_CAGR_KEY = 'grok-lab-comparables-target-cagr'
+
+function readTargetCagrPct(): string {
+  try {
+    const v = localStorage.getItem(TARGET_CAGR_KEY)
+    return v ?? ''
+  } catch {
+    return ''
+  }
+}
+
+function parseTargetCagrPct(raw: string): number | null {
+  const t = raw.trim()
+  if (t === '') return null
+  const n = Number(t)
+  if (!Number.isFinite(n)) return null
+  return n / 100
+}
 
 export const OVERLAY_COLORS = [
   '#34d399',
@@ -46,6 +65,18 @@ export function GoalGapSection({
 }: Props) {
   const [chartYear, setChartYear] = useState<number | null>(null)
   const [metric, setMetric] = useState<GoalPathMetric>('upside')
+  const [targetDraft, setTargetDraft] = useState(readTargetCagrPct)
+  const targetCagr = parseTargetCagrPct(targetDraft)
+
+  useEffect(() => {
+    try {
+      const t = targetDraft.trim()
+      if (t === '') localStorage.removeItem(TARGET_CAGR_KEY)
+      else if (Number.isFinite(Number(t))) localStorage.setItem(TARGET_CAGR_KEY, t)
+    } catch {
+      /* ignore */
+    }
+  }, [targetDraft])
 
   const overlayRows = overlayIds
     .map((id) => rows.find((r) => r.scenarioId === id))
@@ -149,6 +180,20 @@ export function GoalGapSection({
             ))}
           </select>
         </label>
+        <label className="flex items-center gap-1.5 text-xs text-white/50">
+          Target CAGR
+          <input
+            className="input !w-[4.5rem] !py-1 !text-xs tabular-nums"
+            type="number"
+            step="0.1"
+            inputMode="decimal"
+            placeholder="—"
+            value={targetDraft}
+            onChange={(e) => setTargetDraft(e.target.value)}
+            aria-label="Target CAGR percent"
+          />
+          <span className="text-white/35">%</span>
+        </label>
         {overlayRows.length > 0 ? (
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={onClear}>
             Clear
@@ -162,6 +207,8 @@ export function GoalGapSection({
         <GoalGapChart
           series={chartSeries}
           metric={metric}
+          targetCagr={targetCagr}
+          goalYear={effectiveChartYear}
           loading={loading && chartSeries.every((s) => s.points.length < 2)}
           error={error}
         />
