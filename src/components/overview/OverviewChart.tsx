@@ -21,7 +21,7 @@ import {
 } from 'recharts'
 import { annotationsForXKey } from '../../lib/annotations'
 import { RECORDED_ACTUAL_KEY } from '../../lib/history'
-import { formatMoney } from '../../lib/format'
+import { formatMoney, formatPercent } from '../../lib/format'
 import {
   assignOverviewSeriesColors,
   buildOverviewChartRows,
@@ -38,10 +38,10 @@ import { ChartGoalLines } from '../common/ChartGoals'
 import { chartYearTick } from '../common/ChartNotes'
 import { goalYMax } from '../../lib/goals'
 
-const PANEL_WIDTH = 260
-const PANEL_GAP = 12
-const PANEL_TOP = 8
+const PANEL_WIDTH = 280
+const PANEL_GAP = 14
 const PANEL_EDGE = 8
+const PANEL_BOTTOM_CLEAR = 88
 
 type Props = {
   startYear: number
@@ -91,30 +91,10 @@ function computePanelStyle(barX: number, areaW: number, areaH: number): CSSPrope
   const w = areaW > 0 ? areaW : 640
   const h = areaH > 0 ? areaH : 320
   const panelW = Math.min(PANEL_WIDTH, Math.max(200, w - PANEL_EDGE * 2))
-  const mid = w / 2
-
-  let left: number
-  if (barX < mid) {
-    // Bar on left → open toward center (right of bar)
-    left = barX + PANEL_GAP
-    if (left + panelW > w - PANEL_EDGE) {
-      left = barX - panelW - PANEL_GAP
-    }
-  } else {
-    // Bar on right → open toward center (left of bar)
-    left = barX - panelW - PANEL_GAP
-    if (left < PANEL_EDGE) {
-      left = barX + PANEL_GAP
-    }
-  }
+  const maxHeight = Math.min(200, Math.max(120, h - PANEL_EDGE - PANEL_BOTTOM_CLEAR))
+  let left = barX < w / 2 ? barX + PANEL_GAP : barX - panelW - PANEL_GAP
   left = Math.max(PANEL_EDGE, Math.min(left, w - panelW - PANEL_EDGE))
-
-  return {
-    left,
-    top: PANEL_TOP,
-    width: panelW,
-    maxHeight: Math.max(140, h - PANEL_TOP - PANEL_EDGE),
-  }
+  return { left, top: PANEL_EDGE, width: panelW, maxHeight }
 }
 
 export function OverviewChart({
@@ -465,10 +445,14 @@ export function OverviewChart({
                       <span className="truncate">
                         {st.name.trim() || sourceLabel(st.type)}
                       </span>
-                      <span className="shrink-0 text-white/30">({sourceLabel(st.type)})</span>
                     </span>
                     <span className="shrink-0 tabular-nums text-white/90">
                       {formatMoney(st.value, OVERVIEW_CURRENCY)}
+                      {hover.total > 0 ? (
+                        <span className="ml-1.5 text-white/35">
+                          {formatPercent(st.value / hover.total)}
+                        </span>
+                      ) : null}
                     </span>
                   </div>
                 ))}
@@ -536,53 +520,9 @@ export function OverviewChart({
                 ))}
               </div>
             ) : null}
-
-            {/* Portfolio breakdown in the same floating panel, scrollable */}
-            {hover.portfolios.map((p) => (
-              <div
-                key={p.seriesId}
-                className="mt-2 border-t border-white/10 pt-2"
-              >
-                <div className="mb-1 flex items-center justify-between gap-2 font-medium text-white/80">
-                  <span className="inline-flex items-center gap-1.5">
-                    <span
-                      className="h-2 w-2 rounded-sm"
-                      style={{ background: colorById.get(p.seriesId) ?? '#34d399' }}
-                    />
-                    {p.name.trim() || 'Portfolio'}
-                  </span>
-                  <span className="tabular-nums text-white/70">
-                    {formatMoney(p.total, OVERVIEW_CURRENCY)}
-                  </span>
-                </div>
-                <ul className="max-h-28 space-y-0.5 overflow-y-auto">
-                  {p.lines.map((line, i) => (
-                    <li
-                      key={`${p.seriesId}-${line.label}-${i}`}
-                      className="flex justify-between gap-3 text-[11px]"
-                    >
-                      <span
-                        className={
-                          line.kind === 'cash'
-                            ? 'text-white/40'
-                            : 'min-w-0 truncate text-white/50'
-                        }
-                        title={line.label}
-                      >
-                        {line.label}
-                      </span>
-                      <span
-                        className={`shrink-0 tabular-nums ${
-                          line.valueChf < 0 ? 'text-red-300/80' : 'text-white/65'
-                        }`}
-                      >
-                        {formatMoney(line.valueChf, OVERVIEW_CURRENCY)}
-                      </span>
-                    </li>
-                  ))}
-                </ul>
-              </div>
-            ))}
+            {onSelectYear ? (
+              <p className="mt-1.5 text-[10px] text-white/30">Click the year for the full split.</p>
+            ) : null}
           </div>
         ) : null}
       </div>
@@ -600,6 +540,86 @@ export function OverviewChart({
         ))}
       </div>
     </div>
+  )
+}
+
+type BarSegmentProps = {
+  x?: number
+  y?: number
+  width?: number
+  height?: number
+  fill?: string
+  fillOpacity?: number
+  payload?: OverviewChartRow
+  seriesId: string
+  stackOrder: OverviewSeries[]
+  selectedXKey: string | null
+}
+
+function segmentHasValue(row: OverviewChartRow, id: string): boolean {
+  const v = row[id]
+  return typeof v === 'number' && v > 0
+}
+
+/** Outline only the outside of the stacked bar, using each segment's real box. */
+function BarSegment({
+  x = 0,
+  y = 0,
+  width = 0,
+  height = 0,
+  fill,
+  fillOpacity,
+  payload,
+  seriesId,
+  stackOrder,
+  selectedXKey,
+}: BarSegmentProps) {
+  const selected = payload != null && selectedXKey != null && payload.xKey === selectedXKey
+  const enabled = stackOrder.filter((s) => s.enabled)
+  const idx = enabled.findIndex((s) => s.id === seriesId)
+  const isBottom =
+    payload != null &&
+    idx >= 0 &&
+    enabled.slice(0, idx).every((s) => !segmentHasValue(payload, s.id))
+  const isTop =
+    payload != null &&
+    idx >= 0 &&
+    enabled.slice(idx + 1).every((s) => !segmentHasValue(payload, s.id))
+  const showOutline = selected && width > 0 && height > 0
+  const inset = 1
+  const left = x + inset
+  const right = x + width - inset
+  const top = y + inset
+  const bottom = y + height - inset
+  const d = [
+    `M ${left} ${isTop ? top : y} L ${left} ${isBottom ? bottom : y + height}`,
+    `M ${right} ${isTop ? top : y} L ${right} ${isBottom ? bottom : y + height}`,
+    isTop ? `M ${left} ${top} L ${right} ${top}` : '',
+    isBottom ? `M ${left} ${bottom} L ${right} ${bottom}` : '',
+  ]
+    .filter(Boolean)
+    .join(' ')
+  return (
+    <g>
+      <rect
+        x={x}
+        y={y}
+        width={width}
+        height={height}
+        fill={fill}
+        fillOpacity={fillOpacity}
+        stroke="none"
+      />
+      {showOutline ? (
+        <path
+          d={d}
+          fill="none"
+          stroke="rgba(255,255,255,0.85)"
+          strokeWidth={2}
+          pointerEvents="none"
+        />
+      ) : null}
+    </g>
   )
 }
 
@@ -685,26 +705,34 @@ const OverviewBarsPlot = memo(function OverviewBarsPlot({
             stackId="overview"
             fill={colorById.get(s.id) ?? '#94a3b8'}
             isAnimationActive={false}
+            stroke="none"
             legendType={s.enabled ? 'rect' : 'none'}
+            shape={(props) => (
+              <BarSegment
+                x={typeof props.x === 'number' ? props.x : undefined}
+                y={typeof props.y === 'number' ? props.y : undefined}
+                width={typeof props.width === 'number' ? props.width : undefined}
+                height={typeof props.height === 'number' ? props.height : undefined}
+                fill={typeof props.fill === 'string' ? props.fill : undefined}
+                fillOpacity={typeof props.fillOpacity === 'number' ? props.fillOpacity : undefined}
+                payload={props.payload as OverviewChartRow}
+                seriesId={s.id}
+                stackOrder={stackOrder}
+                selectedXKey={selectedXKey}
+              />
+            )}
           >
             {s.enabled
               ? rows.map((r) => {
-                  const selected = selectedXKey != null && r.xKey === selectedXKey
+                  const base = r.isNow ? 1 : r.kind === 'actual' ? 0.92 : 0.4
+                  const dim = selectedXKey != null && r.xKey !== selectedXKey
                   return (
                     <Cell
                       key={`${s.id}-${r.xKey}`}
                       fill={colorById.get(s.id) ?? '#94a3b8'}
-                      fillOpacity={
-                        selected ? 1 : r.isNow ? 1 : r.kind === 'actual' ? 0.92 : 0.4
-                      }
-                      stroke={
-                        selected
-                          ? 'rgba(255,255,255,0.8)'
-                          : r.isNow
-                            ? 'rgba(255,255,255,0.45)'
-                            : undefined
-                      }
-                      strokeWidth={selected ? 2 : r.isNow ? 1.5 : 0}
+                      fillOpacity={dim ? base * 0.28 : base}
+                      stroke="none"
+                      strokeWidth={0}
                     />
                   )
                 })

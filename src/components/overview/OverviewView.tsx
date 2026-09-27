@@ -14,6 +14,7 @@ import { useOverview } from '../../hooks/useOverview'
 import { fetchFxRateClient } from '../../lib/fx'
 import {
   assignOverviewSeriesColors,
+  buildOverviewChartRows,
   OVERVIEW_CURRENCY,
   recordedOverviewByYear,
   type OverviewBuildDeps,
@@ -34,7 +35,7 @@ import { OverviewChart } from './OverviewChart'
 import { OverviewCompareChart } from './OverviewCompareChart'
 import { OverviewSeriesEditor } from './OverviewSeriesEditor'
 import { RunwayConfig } from './RunwayConfig'
-import { RunwayYearFlowPanel } from './RunwayYearFlow'
+import { OverviewYearDetail } from './OverviewYearDetail'
 
 type Props = {
   portfolios: SavedPortfolio[]
@@ -140,7 +141,7 @@ export function OverviewView({
   // Draft year inputs so typing multi-digit years doesn't clamp mid-edit
   const [fromDraft, setFromDraft] = useState(String(startYear))
   const [toDraft, setToDraft] = useState(String(endYear))
-  const [runwayYearKey, setRunwayYearKey] = useState<string | null>(null)
+  const [yearKey, setYearKey] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
     null,
   )
@@ -197,17 +198,17 @@ export function OverviewView({
   }, [pageTab])
 
   useEffect(() => {
-    setRunwayYearKey(null)
+    setYearKey(null)
   }, [selectedScenarioId, pageTab, startYear, endYear])
 
   useEffect(() => {
-    if (pageTab !== 'runway' || runwayYearKey == null) return
+    if (yearKey == null) return
     function onKey(e: KeyboardEvent) {
-      if (e.key === 'Escape') setRunwayYearKey(null)
+      if (e.key === 'Escape') setYearKey(null)
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [pageTab, runwayYearKey])
+  }, [yearKey])
 
   const asOf = useMemo(() => new Date(), [])
 
@@ -258,12 +259,21 @@ export function OverviewView({
   const runwayRows = runwayModel.rows
   const runwayColors = useMemo(() => assignOverviewSeriesColors(runwaySeries), [runwaySeries])
   const selectedRunwayFlow =
-    runwayYearKey != null && runwayYearKey !== 'now'
-      ? (runwayModel.flows.get(Number(runwayYearKey)) ?? null)
+    pageTab === 'runway' && yearKey != null && yearKey !== 'now'
+      ? (runwayModel.flows.get(Number(yearKey)) ?? null)
       : null
+  const networthRows = useMemo(
+    () => buildOverviewChartRows({ startYear, endYear, series }, deps),
+    [startYear, endYear, series, deps],
+  )
+  const detailRow =
+    yearKey == null
+      ? null
+      : (pageTab === 'runway' ? runwayRows : networthRows).find((r) => r.xKey === yearKey) ??
+        null
 
-  const selectRunwayYear = useCallback((xKey: string) => {
-    setRunwayYearKey((cur) => (cur === xKey ? null : xKey))
+  const selectYear = useCallback((xKey: string) => {
+    setYearKey((cur) => (cur === xKey ? null : xKey))
   }, [])
   const chartSeries = pageTab === 'runway' ? runwaySeries : series
   const effectiveChartMode: ChartMode =
@@ -354,7 +364,7 @@ export function OverviewView({
           <div className="flex items-center gap-1.5">
             <span className="section-title">Scenarios</span>
             <InfoTip label="About overview scenarios">
-              Each scenario is a net-worth stack (portfolios, savings, manuals). Bars or area show
+              Each scenario is a net-worth stack (portfolios, savings, other). Bars or area show
               one scenario; Compare plots totals as lines. Optional notes store assumptions only.
             </InfoTip>
           </div>
@@ -515,7 +525,7 @@ export function OverviewView({
             <InfoTip label="About overview chart">
               {effectiveChartMode === 'compare'
                 ? 'Past years → Now (live) → future. Each line is total net worth for a scenario (enabled series only).'
-                : 'Past years → Now (live) → future. CHF. Bars or stacked area. Portfolio greens, savings blues, manual amber/violet.'}
+                : 'Past years → Now (live) → future. CHF. Bars or stacked area. Portfolio greens, savings blues, other amber/violet.'}
             </InfoTip>
           </div>
           <div className="flex flex-wrap items-center gap-2">
@@ -683,8 +693,8 @@ export function OverviewView({
               annotations={pageTab === 'networth' ? annotations : []}
               goals={pageTab === 'networth' ? overlayGoals : []}
               prebuiltRows={pageTab === 'runway' ? runwayRows : undefined}
-              selectedXKey={pageTab === 'runway' ? runwayYearKey : null}
-              onSelectYear={pageTab === 'runway' ? selectRunwayYear : undefined}
+              selectedXKey={yearKey}
+              onSelectYear={selectYear}
             />
           ) : effectiveChartMode === 'area' ? (
             <OverviewAreaChart
@@ -698,7 +708,7 @@ export function OverviewView({
               annotations={pageTab === 'networth' ? annotations : []}
               goals={pageTab === 'networth' ? overlayGoals : []}
               prebuiltRows={pageTab === 'runway' ? runwayRows : undefined}
-              onSelectYear={pageTab === 'runway' ? selectRunwayYear : undefined}
+              onSelectYear={selectYear}
             />
           ) : (
             <OverviewCompareChart
@@ -715,12 +725,14 @@ export function OverviewView({
           )}
         </FullscreenChart>
 
-        {pageTab === 'runway' ? (
-          <RunwayYearFlowPanel
-            selectedXKey={runwayYearKey}
-            flow={selectedRunwayFlow}
-            colorById={runwayColors}
-            onClear={() => setRunwayYearKey(null)}
+        {yearKey && detailRow && effectiveChartMode !== 'compare' ? (
+          <OverviewYearDetail
+            row={detailRow}
+            series={chartSeries}
+            deps={deps}
+            colorById={pageTab === 'runway' ? runwayColors : assignOverviewSeriesColors(series)}
+            flow={pageTab === 'runway' ? selectedRunwayFlow : null}
+            onClose={() => setYearKey(null)}
           />
         ) : null}
 

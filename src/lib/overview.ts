@@ -838,7 +838,7 @@ export function portfolioBreakdownChfAtYear(
       )
       if (usd == null || !Number.isFinite(usd) || usd === 0) continue
       lines.push({
-        label: holdingPositionLabel(h, scenario),
+        label: holdingPositionLabel(h, scenario, { year, actions }),
         kind: 'equity',
         valueChf: toDisplay(usd, 'CHF', deps.usdToChf),
       })
@@ -1489,5 +1489,5 @@ export function sourceLabel(type: OverviewSeries['type']): string {
   if (type === 'portfolio') return 'Portfolio'
   if (type === 'savings') return 'Savings'
   if (type === 'incomeLeftover') return 'Leftover'
-  return 'Manual'
+  return 'Other'
 }

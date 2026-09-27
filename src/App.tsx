@@ -147,7 +147,7 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
   },
   overview: {
     title: 'Overview',
-    subtitle: 'Stacked net worth by year (CHF) from portfolios, savings, and manual assets.',
+    subtitle: 'Stacked net worth by year (CHF) from portfolios, savings, and other assets.',
   },
   history: {
     title: 'History',

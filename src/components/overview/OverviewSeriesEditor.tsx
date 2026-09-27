@@ -227,7 +227,7 @@ function YearBindingsEditor({
         <p className="text-[11px] text-white/40">
           {withPercent
             ? 'Add year rows to allocate IC cash to this position (unclaimed % → leftover).'
-            : 'Optional: bind years so leftover receives IC residual not claimed by manuals.'}
+            : 'Optional: bind years so leftover receives IC residual not claimed by other series.'}
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -602,7 +602,7 @@ export function OverviewSeriesEditor({
           <h3 className="section-title text-violet-300/90">Asset series</h3>
           <InfoTip label="About asset series">
             Drag groups (⋮⋮) to set stack order; expand (▸) to edit. Checkboxes include series in
-            the chart (Savings group and each account). Leftover is always on; manuals take year →
+            the chart (Savings group and each account). Leftover is always on; other series take year →
             IC → %; remainder goes to leftover.
           </InfoTip>
         </div>
@@ -611,14 +611,14 @@ export function OverviewSeriesEditor({
             + Portfolio
           </button>
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => onAdd('manual')}>
-            + Manual
+            + Other
           </button>
         </div>
       </div>
 
       {displayGroups.length === 0 ? (
         <div className="px-4 py-8 text-center text-sm text-white/40">
-          Add a portfolio or manual series to build the net-worth chart.
+          Add a portfolio or other series to build the net-worth chart.
         </div>
       ) : (
         <div className="space-y-2">
@@ -842,7 +842,7 @@ export function OverviewSeriesEditor({
                       <>
                         <div className="sm:col-span-2 lg:col-span-3">
                           <p className="rounded-md bg-pink-500/10 px-2 py-1.5 text-[11px] text-pink-100/80">
-                            Permanent leftover: receives IC cash not claimed by manual positions
+                            Permanent leftover: receives IC cash not claimed by other series
                             {hasPortfolioSeries
                               ? ' (after portfolio surplus deposits).'
                               : '.'}{' '}

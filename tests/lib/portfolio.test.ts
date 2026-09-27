@@ -14,6 +14,7 @@ import {
   getScenarioSharePriceByYear,
   holdingValueAtYear,
   holdingLiveValue,
+  holdingPositionLabel,
   portfolioNowUsd,
   statedGoalSpeedContributions,
   makeActualKey,
@@ -89,6 +90,15 @@ describe('sharesAtYear', () => {
     expect(sharesAtYear(holding, actions, 2026)).toBe(100)
     expect(sharesAtYear(holding, actions, 2027)).toBe(120)
     expect(sharesAtYear(holding, actions, 2028)).toBe(90)
+  })
+
+  it('labels a year with shares after actions, not shares held today', () => {
+    const actions: PortfolioAction[] = [
+      { id: '1', type: 'buy', holdingId: 'h1', year: 2028, shares: 40 },
+    ]
+    expect(holdingPositionLabel(holding, null)).toMatch(/100 sh/)
+    expect(holdingPositionLabel(holding, null, { year: 2028, actions })).toMatch(/140 sh/)
+    expect(holdingPositionLabel(holding, null, { year: 2027, actions })).toMatch(/100 sh/)
   })
 })
 
@@ -830,6 +840,9 @@ describe('portfolio actuals and chart', () => {
     expect(now?.total).toBeCloseTo(200, 6)
     const eq = now?.breakdown?.find((b) => b.key.startsWith('eq-') || b.ticker)
     expect(eq?.shares).toBe(10)
+    const y2026 = data.find((d) => d.year === 2026 && !d.isNow)
+    const yEq = y2026?.breakdown?.find((b) => b.key === 'h1')
+    expect(yEq?.shares).toBe(110)
   })
 })
 

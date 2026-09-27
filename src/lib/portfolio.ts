@@ -962,24 +962,32 @@ export function holdingDisplayName(holding: PortfolioHolding): string {
   return (holding.symbol || '—').toUpperCase()
 }
 
-function qtyPhrase(holding: PortfolioHolding): string | null {
-  if (holding.sharesHeld === 0) return null
-  const n = holding.sharesHeld.toLocaleString(undefined, { maximumFractionDigits: 4 })
+function qtyPhrase(holding: PortfolioHolding, shares: number): string | null {
+  if (shares === 0) return null
+  const n = shares.toLocaleString(undefined, { maximumFractionDigits: 4 })
   if (holding.option) {
-    return `${n} contract${Math.abs(holding.sharesHeld) === 1 ? '' : 's'}`
+    return `${n} contract${Math.abs(shares) === 1 ? '' : 's'}`
   }
   if (holding.manualOnly) {
-    return `${n} unit${Math.abs(holding.sharesHeld) === 1 ? '' : 's'}`
+    return `${n} unit${Math.abs(shares) === 1 ? '' : 's'}`
   }
   return `${n} sh`
 }
 
-/** Ticker, name, and current quantity (no later-share / action notes). */
+/**
+ * Ticker, name, and quantity.
+ * Pass `atYear` to count shares after buy/sell actions through that year.
+ * Omit it for the position as currently held.
+ */
 export function holdingPositionLabel(
   holding: PortfolioHolding,
   scenario: SavedScenario | null,
+  atYear?: { year: number; actions: PortfolioAction[] },
 ): string {
-  const qty = qtyPhrase(holding)
+  const shares = atYear
+    ? sharesAtYear(holding, atYear.actions, atYear.year)
+    : holding.sharesHeld
+  const qty = qtyPhrase(holding, shares)
   if (holding.option || holding.manualOnly || (!holding.scenarioId && !scenario)) {
     return [holdingDisplayName(holding), qty].filter(Boolean).join(' · ')
   }
