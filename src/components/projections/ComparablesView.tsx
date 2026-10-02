@@ -25,11 +25,63 @@ import {
   saveCachedPriceHistory,
 } from '../../lib/priceHistoryStorage'
 import { groupScenariosByTicker } from '../../lib/storage'
+import {
+  cagrThresholdHints,
+  loadCagrThresholds,
+  saveCagrThresholds,
+  withYearThreshold,
+  type CagrThresholdDraft,
+} from '../../lib/cagrThresholds'
 import { formatPercent, formatPrice } from '../../lib/format'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { GoalGapSection, OVERLAY_COLORS } from './GoalGapSection'
 
 const SELECTED_KEY = 'grok-lab-selected-comparable'
+
+function YearCagrThresholds({
+  year,
+  draft,
+  onChange,
+}: {
+  year: number
+  draft: CagrThresholdDraft
+  onChange: (patch: Partial<CagrThresholdDraft>) => void
+}) {
+  return (
+    <div
+      data-cagr-thresholds=""
+      className="mt-1 flex items-center justify-end gap-2 font-normal normal-case tracking-normal"
+    >
+      <label className="flex items-center gap-1 text-[10px] text-emerald-300/75">
+        Buy
+        <input
+          autoFocus
+          inputMode="decimal"
+          aria-label={`Buy CAGR threshold for ${year}`}
+          className="input !w-12 !px-1 !py-0.5 text-right text-[11px] tabular-nums"
+          value={draft.buy}
+          placeholder="%"
+          onChange={(e) => onChange({ buy: e.target.value })}
+        />
+      </label>
+      <label className="flex items-center gap-1 text-[10px] text-red-300/75">
+        Sell
+        <input
+          inputMode="decimal"
+          aria-label={`Sell CAGR threshold for ${year}`}
+          className="input !w-12 !px-1 !py-0.5 text-right text-[11px] tabular-nums"
+          value={draft.low}
+          placeholder="%"
+          onChange={(e) => onChange({ low: e.target.value })}
+        />
+      </label>
+    </div>
+  )
+}
+
+function adviceTitle(action: 'Buy' | 'Sell', years: number[]): string {
+  return `${action} now, given ${years.join(', ')}`
+}
 
 const BASIS_LABEL: Record<ComparableBasis, string> = {
   easy: 'Easy',
@@ -81,6 +133,8 @@ export function ComparablesView({
   const renameRef = useRef<HTMLInputElement>(null)
   const [yearMenuOpen, setYearMenuOpen] = useState(false)
   const yearMenuRef = useRef<HTMLDivElement>(null)
+  const [thresholds, setThresholds] = useState(loadCagrThresholds)
+  const [thresholdYear, setThresholdYear] = useState<number | null>(null)
 
   useEffect(() => {
     if (selectedId && comparables.some((c) => c.id === selectedId)) return
@@ -144,7 +198,40 @@ export function ComparablesView({
   useEffect(() => {
     setOverlayIds([])
     setYearMenuOpen(false)
+    setThresholdYear(null)
   }, [selectedId])
+
+  useEffect(() => {
+    if (thresholdYear != null && !selectedYears.includes(thresholdYear)) {
+      setThresholdYear(null)
+    }
+  }, [selectedYears, thresholdYear])
+
+  useEffect(() => {
+    if (thresholdYear == null) return
+    function onDoc(e: MouseEvent) {
+      const t = e.target
+      if (t instanceof Element && t.closest('[data-cagr-thresholds]')) return
+      setThresholdYear(null)
+    }
+    function onKey(e: KeyboardEvent) {
+      if (e.key === 'Escape') setThresholdYear(null)
+    }
+    document.addEventListener('mousedown', onDoc)
+    window.addEventListener('keydown', onKey)
+    return () => {
+      document.removeEventListener('mousedown', onDoc)
+      window.removeEventListener('keydown', onKey)
+    }
+  }, [thresholdYear])
+
+  function editThreshold(year: number, patch: Partial<CagrThresholdDraft>) {
+    setThresholds((prev) => {
+      const next = withYearThreshold(prev, year, patch)
+      saveCagrThresholds(next)
+      return next
+    })
+  }
 
   useEffect(() => {
     if (gapSymbols.length === 0) return
@@ -505,10 +592,12 @@ export function ComparablesView({
                       <th className="px-3 py-2 text-right font-medium">Price now</th>
                       {selectedYears.map((y, yi) => {
                         const active = sortYear === y
+                        const draft = thresholds[String(y)]
+                        const open = thresholdYear === y
                         return (
                           <th
                             key={y}
-                            className={`border-l px-3 py-2 text-right font-medium ${
+                            className={`group border-l px-3 py-2 text-right font-medium ${
                               yi % 2 === 1 ? 'bg-white/[0.03]' : ''
                             } ${
                               active
@@ -517,11 +606,44 @@ export function ComparablesView({
                             }`}
                             colSpan={active ? 3 : 2}
                           >
-                            <span className="tabular-nums">{y}</span>
-                            {active ? (
-                              <span className="ml-1 text-[10px] font-normal normal-case tracking-normal text-emerald-300/70">
-                                EOY
-                              </span>
+                            <div className="inline-flex items-center justify-end gap-1.5">
+                              <span className="tabular-nums">{y}</span>
+                              {active ? (
+                                <span className="text-[10px] font-normal normal-case tracking-normal text-emerald-300/70">
+                                  EOY
+                                </span>
+                              ) : null}
+                              {open ? null : (
+                                <button
+                                  type="button"
+                                  data-cagr-thresholds=""
+                                  className={`text-[10px] font-normal normal-case tracking-normal ${
+                                    draft
+                                      ? 'text-white/30 hover:text-white/70'
+                                      : 'text-white/40 opacity-0 group-hover:opacity-100 focus:opacity-100'
+                                  }`}
+                                  title="Set CAGR thresholds"
+                                  aria-label={`Set CAGR thresholds for ${y}`}
+                                  aria-expanded={false}
+                                  onClick={() => setThresholdYear(y)}
+                                >
+                                  {draft?.buy.trim() ? (
+                                    <span className="text-emerald-300/55">&gt;{draft.buy.trim()}</span>
+                                  ) : null}
+                                  {draft?.buy.trim() && draft?.low.trim() ? ' ' : null}
+                                  {draft?.low.trim() ? (
+                                    <span className="text-red-300/55">&lt;{draft.low.trim()}</span>
+                                  ) : null}
+                                  {!draft?.buy.trim() && !draft?.low.trim() ? 'set' : null}
+                                </button>
+                              )}
+                            </div>
+                            {open ? (
+                              <YearCagrThresholds
+                                year={y}
+                                draft={draft ?? { buy: '', low: '' }}
+                                onChange={(patch) => editThreshold(y, patch)}
+                              />
                             ) : null}
                           </th>
                         )
@@ -575,6 +697,17 @@ export function ComparablesView({
                       const bases = sc ? availableBases(sc) : [row.basis]
                       const on = overlayIds.includes(row.scenarioId)
                       const colorIdx = overlayIds.indexOf(row.scenarioId)
+                      const buyYears: number[] = []
+                      const sellYears: number[] = []
+                      for (const y of selectedYears) {
+                        for (const kind of cagrThresholdHints(
+                          row.byYear[y]?.cagr,
+                          thresholds[String(y)],
+                        )) {
+                          if (kind === 'buy') buyYears.push(y)
+                          else sellYears.push(y)
+                        }
+                      }
                       return (
                         <tr
                           key={row.scenarioId}
@@ -635,6 +768,22 @@ export function ComparablesView({
                                   {BASIS_LABEL[row.basis]}
                                 </span>
                               )}
+                              {buyYears.length > 0 ? (
+                                <span
+                                  className="text-[10px] font-medium leading-none text-emerald-400"
+                                  title={adviceTitle('Buy', buyYears)}
+                                >
+                                  buy
+                                </span>
+                              ) : null}
+                              {sellYears.length > 0 ? (
+                                <span
+                                  className="text-[10px] font-medium leading-none text-red-400"
+                                  title={adviceTitle('Sell', sellYears)}
+                                >
+                                  sell
+                                </span>
+                              ) : null}
                             </div>
                           </td>
                           <td className="px-3 py-2 text-right tabular-nums">
@@ -643,9 +792,19 @@ export function ComparablesView({
                           {selectedYears.map((y, yi) => {
                             const cell = row.byYear[y]
                             const isSort = sortYear === y
+                            const buy = buyYears.includes(y)
+                            const sell = sellYears.includes(y)
+                            const signal =
+                              buy && !sell
+                                ? 'text-emerald-400'
+                                : sell && !buy
+                                  ? 'text-red-400'
+                                  : null
                             const tone = `${yi % 2 === 1 ? 'bg-white/[0.03]' : ''} ${
                               isSort ? 'border-emerald-500/20' : 'border-white/10'
                             }`
+                            const colored = (value: number | null | undefined, fallback: string) =>
+                              signal && value != null && Number.isFinite(value) ? signal : fallback
                             return (
                               <Fragment key={`${row.scenarioId}-${y}`}>
                                 <td
@@ -654,15 +813,13 @@ export function ComparablesView({
                                   {formatPrice(cell?.price ?? null, row.currency, 2)}
                                 </td>
                                 <td
-                                  className={`px-3 py-2 text-right tabular-nums ${tone} ${
-                                    isSort ? 'text-emerald-300/90' : ''
-                                  }`}
+                                  className={`px-3 py-2 text-right tabular-nums ${tone} ${colored(cell?.roi, isSort ? 'text-emerald-300/90' : '')}`}
                                 >
                                   {formatPercent(cell?.roi ?? null, 2)}
                                 </td>
                                 {isSort ? (
                                   <td
-                                    className={`px-3 py-2 text-right tabular-nums text-emerald-300/90 ${tone}`}
+                                    className={`px-3 py-2 text-right tabular-nums ${tone} ${colored(cell?.cagr, 'text-emerald-300/90')}`}
                                   >
                                     {formatPercent(cell?.cagr ?? null, 2)}
                                   </td>
