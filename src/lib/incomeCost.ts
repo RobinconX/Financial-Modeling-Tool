@@ -122,6 +122,13 @@ export function isMonthlyPayment(line: CashflowLine): boolean {
   return paymentMonths(line).length === 0
 }
 
+/** Collapsed payment control label, e.g. "Monthly" or "Jan, Apr, Jul, Nov". */
+export function formatPaymentScheduleSummary(months: number[]): string {
+  const sorted = normalizeMonths(months)
+  if (sorted.length === 0) return 'Monthly'
+  return sorted.map((m) => MONTH_LABELS[m - 1]).join(', ')
+}
+
 /**
  * Positive CHF amount this line contributes in calendar month `month` (1–12).
  * Kind is not applied here — caller splits income vs cost.

@@ -4,6 +4,7 @@ import {
   buildMonthlySchedule,
   buildScenarioSankeyData,
   copyScenarioAsNew,
+  formatPaymentScheduleSummary,
   monthlyFromYearly,
   moveScenario,
   newScenario,
@@ -171,6 +172,31 @@ describe('amountInMonth / buildMonthlySchedule', () => {
     const sum =
       amountInMonth(odd, 1) + amountInMonth(odd, 4) + amountInMonth(odd, 7)
     expect(sum).toBeCloseTo(100, 6)
+  })
+
+  it('formatPaymentScheduleSummary', () => {
+    expect(formatPaymentScheduleSummary([])).toBe('Monthly')
+    expect(formatPaymentScheduleSummary([1, 4, 7, 11])).toBe('Jan, Apr, Jul, Nov')
+  })
+
+  it('buildMonthlySchedule places split inflow only on selected months (Jan/Apr/Jul/Nov)', () => {
+    const salary = line({
+      kind: 'income',
+      scenarioId: sid,
+      name: 'Salary',
+      yearlyAmount: 120_000,
+      months: [1, 4, 7, 11],
+    })
+    const sched = buildMonthlySchedule([salary], sid)
+    expect(sched).toHaveLength(12)
+    for (const idx of [0, 3, 6, 10]) {
+      expect(sched[idx]!.label).toMatch(/Jan|Apr|Jul|Nov/)
+      expect(sched[idx]!.income).toBe(30_000)
+    }
+    for (const idx of [1, 2, 4, 5, 7, 8, 9, 11]) {
+      expect(sched[idx]!.income).toBe(0)
+    }
+    expect(sched.reduce((s, r) => s + r.income, 0)).toBe(120_000)
   })
 
   it('draws reduce balanceAfterDraws only; not budget net', () => {

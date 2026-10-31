@@ -1,8 +1,9 @@
-import { useMemo, useRef, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import type { CashflowCadence, CashflowKind, CashflowLine } from '../../types'
 import {
   INCOME_COST_CURRENCY,
   MONTH_LABELS,
+  formatPaymentScheduleSummary,
   lineMonthly,
   normalizeMonths,
   paymentMonths,
@@ -145,7 +146,7 @@ function Section({
         <p className="text-xs text-white/35">None yet.</p>
       ) : (
         <div className="table-shell">
-          <table className="min-w-[420px] text-xs">
+          <table className="min-w-[400px] text-xs">
             <thead className="text-[10px] uppercase tracking-wider text-white/45">
               <tr className="border-b border-white/10">
                 <th className="px-1.5 py-1.5 font-medium">
@@ -205,58 +206,98 @@ function PaymentSchedule({
   line: CashflowLine
   onChange: (line: CashflowLine) => void
 }) {
+  const [open, setOpen] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
   const selected = paymentMonths(line)
   const monthly = selected.length === 0
+  const summary = formatPaymentScheduleSummary(selected)
   const isIncome = line.kind === 'income'
   const verb = isIncome ? 'received' : 'paid'
+
+  useEffect(() => {
+    if (!open) return
+    function onDoc(e: MouseEvent) {
+      if (rootRef.current && !rootRef.current.contains(e.target as Node)) {
+        setOpen(false)
+      }
+    }
+    document.addEventListener('mousedown', onDoc)
+    return () => document.removeEventListener('mousedown', onDoc)
+  }, [open])
 
   function setMonths(months: number[]) {
     onChange({ ...line, months: normalizeMonths(months) })
   }
 
   return (
-    <div className="flex min-w-[13.5rem] flex-col gap-1">
+    <div ref={rootRef} className="relative max-w-[11rem]">
       <button
         type="button"
-        className={`self-start rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition ${
-          monthly
-            ? 'bg-sky-500/25 text-sky-100 ring-1 ring-sky-400/30'
-            : 'bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70'
+        className={`input flex w-full min-w-[5.5rem] items-center justify-between gap-1 !py-1 !pr-1.5 !pl-2 !text-[11px] ${
+          monthly ? '' : 'border-sky-500/25 bg-sky-500/10'
         }`}
-        title="Spread yearly÷12 across all 12 months"
-        onClick={() => setMonths([])}
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        title={PAYMENT_HINT}
+        onClick={() => setOpen((o) => !o)}
       >
-        Monthly
+        <span className="truncate text-left">{summary}</span>
+        <span className="shrink-0 text-[9px] text-white/40" aria-hidden>
+          ▾
+        </span>
       </button>
-      <div className="flex flex-wrap gap-0.5" role="group" aria-label="Selected months">
-        {MONTH_LABELS.map((label, i) => {
-          const m = i + 1
-          const on = selected.includes(m)
-          return (
-            <button
-              key={label}
-              type="button"
-              aria-pressed={on}
-              className={`min-w-[1.65rem] rounded px-0.5 py-0.5 text-[9px] font-medium tabular-nums transition ${
-                on
-                  ? 'bg-sky-500/35 text-sky-50 ring-1 ring-sky-400/35'
-                  : 'bg-white/[0.06] text-white/40 hover:bg-white/12 hover:text-white/65'
-              }`}
-              title={
-                on
-                  ? `${label}: included in split (${verb})`
-                  : `Include ${label} in payment split`
-              }
-              onClick={() => {
-                if (on) setMonths(selected.filter((x) => x !== m))
-                else setMonths([...selected, m])
-              }}
-            >
-              {label}
-            </button>
-          )
-        })}
-      </div>
+      {open && (
+        <div
+          className="absolute top-full left-0 z-40 mt-0.5 w-[13.5rem] rounded-lg border border-white/15 bg-[#121820] p-2 shadow-xl"
+          role="dialog"
+          aria-label="Payment schedule"
+        >
+          <button
+            type="button"
+            className={`mb-2 w-full rounded px-2 py-1 text-left text-[10px] font-semibold uppercase tracking-wide transition ${
+              monthly
+                ? 'bg-sky-500/25 text-sky-100 ring-1 ring-sky-400/30'
+                : 'bg-white/5 text-white/55 hover:bg-white/10'
+            }`}
+            onClick={() => {
+              setMonths([])
+              setOpen(false)
+            }}
+          >
+            Monthly
+          </button>
+          <p className="mb-1 text-[9px] text-white/40">Selected months</p>
+          <div className="flex flex-wrap gap-0.5" role="group" aria-label="Selected months">
+            {MONTH_LABELS.map((label, i) => {
+              const m = i + 1
+              const on = selected.includes(m)
+              return (
+                <button
+                  key={label}
+                  type="button"
+                  aria-pressed={on}
+                  className={`min-w-[1.65rem] rounded px-0.5 py-0.5 text-[9px] font-medium tabular-nums transition ${
+                    on
+                      ? 'bg-sky-500/35 text-sky-50 ring-1 ring-sky-400/35'
+                      : 'bg-white/[0.06] text-white/40 hover:bg-white/12'
+                  }`}
+                  title={
+                    on
+                      ? `${label}: included in split (${verb})`
+                      : `Include ${label} in payment split`
+                  }
+                  onClick={() => {
+                    if (on) setMonths(selected.filter((x) => x !== m))
+                    else setMonths([...selected, m])
+                  }}
+                >
+                  {label}
+                </button>
+              )
+            })}
+          </div>
+        </div>
+      )}
     </div>
   )
 }
@@ -282,7 +323,7 @@ function LineRow({
 
   return (
     <tr className="border-t border-white/5">
-      <td className="relative px-1.5 py-1 align-top">
+      <td className="relative px-1.5 py-1">
         <div className="group relative">
           <input
             className="input w-full min-w-0 !py-1 !pr-8 !text-xs"
@@ -336,10 +377,10 @@ function LineRow({
           </div>
         )}
       </td>
-      <td className="px-1.5 py-1 align-top">
+      <td className="px-1.5 py-1">
         <PaymentSchedule line={line} onChange={onChange} />
       </td>
-      <td className="w-[6.5rem] px-1.5 py-1 align-top">
+      <td className="w-[6.5rem] px-1.5 py-1">
         <input
           className="input !py-1 !text-xs text-right tabular-nums"
           inputMode="decimal"
@@ -359,7 +400,7 @@ function LineRow({
           }}
         />
       </td>
-      <td className="w-[6.5rem] px-1.5 py-1 align-top">
+      <td className="w-[6.5rem] px-1.5 py-1">
         <input
           className="input !py-1 !text-xs text-right tabular-nums"
           inputMode="decimal"
@@ -379,7 +420,7 @@ function LineRow({
           }}
         />
       </td>
-      <td className="w-8 px-1 py-1 text-right align-top">
+      <td className="w-8 px-1 py-1 text-right">
         <button
           type="button"
           className="text-[11px] text-white/35 hover:text-red-300"
