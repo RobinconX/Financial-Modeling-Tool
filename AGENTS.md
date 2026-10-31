@@ -56,3 +56,7 @@ Your project scope is only within C:\Users\robin\Documents\coding\grok-lab
 ### Walkthrough screenshots
 - **Grok Bot requests:** Include screenshots (not videos unless asked) that show the UI change working. Seed/prep test data if needed so the screenshot is readable.
 - **Desktop / Cursor IDE / other non–Grok Bot:** Skip seeding demo data and walkthrough screenshots/videos. The owner checks the forwarded localhost endpoint. Only capture UI artifacts when they explicitly ask.
+
+### Release phrases
+- **push it** — Merge the approved work into `DEV` (and push `DEV`). Do **not** merge to `v1-prod` or otherwise ship/release.
+- **ship it** — Promote `DEV` → `v1-prod` per `.cursor/rules/ship-it.mdc` (after the change is on `DEV`). Never treat “push it” as “ship it”.
