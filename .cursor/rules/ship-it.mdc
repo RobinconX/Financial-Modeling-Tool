@@ -1,0 +1,17 @@
+---
+description: When the user says "ship it", run the release git workflow
+alwaysApply: true
+---
+
+# Ship it
+
+When the user says **ship it** (or clearly means the same), after implementation is verified successful:
+
+1. **Collect changes** — review `git status`; stage and commit anything uncommitted with a message that matches the work (user is explicitly requesting ship, so committing is allowed).
+2. **Push `DEV`** — `git push origin DEV`
+3. **Merge into production branch** — checkout `v1-prod`, merge `DEV` into it, push `v1-prod`
+4. **Return to dev** — checkout `DEV` so further work continues on the dev branch
+
+Use `origin` remote (`github.com/robinconx/financial-modeling-tool`). If push fails, report auth/setup; do not skip merge steps without telling the user.
+
+Prefer verifying tests/build pass before shipping when the change touched code (e.g. `npm test`, `npm run build` as appropriate).

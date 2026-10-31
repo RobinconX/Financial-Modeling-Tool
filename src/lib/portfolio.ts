@@ -1567,6 +1567,54 @@ export function buildPortfolioGrid(
   }
 }
 
+export type PortfolioValueTableSortKey = 'label' | 'value'
+export type PortfolioValueTableSortDir = 'asc' | 'desc'
+
+/** Display-only sort for equity rows on the chart value table. */
+export function sortPortfolioEquityRows(
+  rows: PortfolioGridRow[],
+  sortKey: PortfolioValueTableSortKey,
+  sortDir: PortfolioValueTableSortDir,
+  valueForRow: (row: PortfolioGridRow) => number | null,
+): PortfolioGridRow[] {
+  const equity = rows.filter((r) => r.kind === 'equity')
+  if (equity.length < 2) return equity
+
+  const dir = sortDir === 'asc' ? 1 : -1
+  const labelCmp = (a: PortfolioGridRow, b: PortfolioGridRow) =>
+    a.label.localeCompare(b.label, undefined, { sensitivity: 'base', numeric: true })
+
+  return [...equity].sort((a, b) => {
+    if (sortKey === 'label') {
+      const c = labelCmp(a, b)
+      return c !== 0 ? c * dir : 0
+    }
+    const va = valueForRow(a)
+    const vb = valueForRow(b)
+    if (va == null && vb == null) return labelCmp(a, b)
+    if (va == null) return 1
+    if (vb == null) return -1
+    if (va !== vb) return (va - vb) * dir
+    return labelCmp(a, b)
+  })
+}
+
+/** Equity rows in sort order, then cash, growth (if any), total. */
+export function orderPortfolioGridDisplayRows(
+  grid: PortfolioGrid,
+  sortedEquity: PortfolioGridRow[],
+): PortfolioGridRow[] {
+  const cash = grid.rows.find((r) => r.kind === 'cash')
+  const growth = grid.rows.find((r) => r.kind === 'growth')
+  const total = grid.rows.find((r) => r.kind === 'total')
+  return [
+    ...sortedEquity,
+    ...(cash ? [cash] : []),
+    ...(growth ? [growth] : []),
+    ...(total ? [total] : []),
+  ]
+}
+
 export type PortfolioChartBreakdownRow = {
   key: string
   ticker: string

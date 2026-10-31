@@ -1,4 +1,4 @@
-import { useMemo } from 'react'
+import { useMemo, useState } from 'react'
 import { formatMoney, formatPercent } from '../../lib/format'
 import { InfoTip } from '../common/InfoTip'
 import { toDisplay } from '../../lib/fx'
@@ -9,6 +9,10 @@ import {
   getOpeningCash,
   holdingDisplayName,
   holdingLiveValue,
+  orderPortfolioGridDisplayRows,
+  sortPortfolioEquityRows,
+  type PortfolioValueTableSortDir,
+  type PortfolioValueTableSortKey,
 } from '../../lib/portfolio'
 import { investedForRoiDisplay, simpleRoi } from '../../lib/portfolioContributions'
 import type {
@@ -36,7 +40,7 @@ function buildNowValues(
   grid: PortfolioGrid,
   portfolio: SavedPortfolio,
   scenarios: SavedScenario[],
-): (number | null)[] {
+): Map<string, number | null> {
   const byScenario = new Map(scenarios.map((s) => [s.id, s]))
   const holdingsById = new Map(portfolio.holdings.map((h) => [h.id, h]))
   const opening = getOpeningCash(portfolio)
@@ -66,7 +70,11 @@ function buildNowValues(
     if (row.kind === 'total') byKey.set(row.key, equitySum + opening)
   }
 
-  return grid.rows.map((row) => byKey.get(row.key) ?? null)
+  const out = new Map<string, number | null>()
+  for (const row of grid.rows) {
+    out.set(row.key, byKey.get(row.key) ?? null)
+  }
+  return out
 }
 
 export function PortfolioValueTable({
@@ -79,11 +87,51 @@ export function PortfolioValueTable({
 }: Props) {
   const currentYear = new Date().getFullYear()
   const showNow = portfolio != null
+  const [sortKey, setSortKey] = useState<PortfolioValueTableSortKey>('value')
+  const [sortDir, setSortDir] = useState<PortfolioValueTableSortDir>('desc')
 
-  const nowValues = useMemo(() => {
+  const nowByKey = useMemo(() => {
     if (!portfolio) return null
     return buildNowValues(grid, portfolio, scenarios)
   }, [grid, portfolio, scenarios])
+
+  const currentYearIdx = grid.years.indexOf(currentYear)
+
+  const valueForSort = useMemo(() => {
+    return (row: PortfolioGridRow): number | null => {
+      if (showNow && nowByKey) {
+        return nowByKey.get(row.key) ?? null
+      }
+      if (currentYearIdx >= 0) {
+        return row.values[currentYearIdx] ?? null
+      }
+      return null
+    }
+  }, [showNow, nowByKey, currentYearIdx])
+
+  const displayRows = useMemo(() => {
+    const sortedEquity = sortPortfolioEquityRows(
+      grid.rows,
+      sortKey,
+      sortDir,
+      valueForSort,
+    )
+    return orderPortfolioGridDisplayRows(grid, sortedEquity)
+  }, [grid, sortKey, sortDir, valueForSort])
+
+  function toggleSort(key: PortfolioValueTableSortKey) {
+    if (sortKey === key) {
+      setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
+      return
+    }
+    setSortKey(key)
+    setSortDir(key === 'label' ? 'asc' : 'desc')
+  }
+
+  function sortMark(key: PortfolioValueTableSortKey, label: string) {
+    if (sortKey !== key) return label
+    return `${label}${sortDir === 'asc' ? ' ↑' : ' ↓'}`
+  }
 
   if (grid.years.length === 0 && !showNow) {
     return (
@@ -168,15 +216,35 @@ export function PortfolioValueTable({
         <table className="min-w-[480px] text-sm">
           <thead className="text-[11px] uppercase tracking-wider text-white/45">
             <tr>
-              <th className="sticky left-0 z-10 bg-[#141a22] px-3 py-2 font-medium">Position</th>
+              <th className="sticky left-0 z-10 bg-[#141a22] px-3 py-2 font-medium">
+                <button
+                  type="button"
+                  className={`text-left transition ${
+                    sortKey === 'label' ? 'text-emerald-300' : 'hover:text-white/70'
+                  }`}
+                  onClick={() => toggleSort('label')}
+                  title="Sort by position name"
+                >
+                  {sortMark('label', 'Position')}
+                </button>
+              </th>
               {pastYears.map(({ y }) => (
                 <th key={y} className="px-3 py-2 font-medium tabular-nums">
                   {y}
                 </th>
               ))}
               {showNow && (
-                <th className="bg-white/[0.06] px-3 py-2 font-medium tabular-nums text-white/70">
-                  Now
+                <th className="bg-white/[0.06] px-3 py-2 font-medium tabular-nums">
+                  <button
+                    type="button"
+                    className={`transition ${
+                      sortKey === 'value' ? 'text-emerald-300' : 'text-white/70 hover:text-white'
+                    }`}
+                    onClick={() => toggleSort('value')}
+                    title="Sort by current value (Now)"
+                  >
+                    {sortMark('value', 'Now')}
+                  </button>
                 </th>
               )}
               {futureYears.map(({ y }) => (
@@ -187,7 +255,7 @@ export function PortfolioValueTable({
             </tr>
           </thead>
           <tbody>
-            {grid.rows.map((row, rowIdx) => (
+            {displayRows.map((row) => (
               <tr
                 key={`${row.key}::${row.label}`}
                 className={`border-t border-white/5 ${
@@ -227,9 +295,9 @@ export function PortfolioValueTable({
                     </td>
                   )
                 })}
-                {showNow && nowValues && (
-                  <td className={cellClass(row, nowValues[rowIdx] ?? null, true)}>
-                    {renderValue(nowValues[rowIdx] ?? null)}
+                {showNow && nowByKey && (
+                  <td className={cellClass(row, nowByKey.get(row.key) ?? null, true)}>
+                    {renderValue(nowByKey.get(row.key) ?? null)}
                   </td>
                 )}
                 {futureYears.map(({ y, i }) => {
@@ -255,10 +323,10 @@ export function PortfolioValueTable({
                     </td>
                   )
                 })}
-                {showNow && nowValues ? (
+                {showNow && nowByKey ? (
                   <td className="bg-white/[0.04] px-3 py-2 tabular-nums text-white/80">
                     {roiCell(
-                      nowValues[grid.rows.findIndex((r) => r.kind === 'total')] ?? null,
+                      nowByKey.get('total') ?? null,
                       contributions,
                       currentYear,
                       displayCurrency,

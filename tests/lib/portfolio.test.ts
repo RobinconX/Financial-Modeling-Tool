@@ -25,7 +25,9 @@ import {
   newOpeningDeposit,
   newPortfolio,
   normalizePortfolioCashModel,
+  orderPortfolioGridDisplayRows,
   portfolioTotalUsdAtYear,
+  sortPortfolioEquityRows,
   PORTFOLIO_TOTAL_CHART_KEY,
   resolveDepositAmount,
   sharesAtYear,
@@ -43,6 +45,8 @@ import type {
   CashflowLine,
   PortfolioAction,
   PortfolioActualsState,
+  PortfolioGrid,
+  PortfolioGridRow,
   PortfolioHolding,
   SavedPortfolio,
   SavedScenario,
@@ -1397,5 +1401,65 @@ describe('growthExCash and cagrFrom', () => {
       Math.sqrt(1.2 * 1.1) - 1,
       10,
     )
+  })
+})
+
+describe('sortPortfolioEquityRows', () => {
+  const equity = (key: string, label: string): PortfolioGridRow => ({
+    key,
+    kind: 'equity',
+    label,
+    holdingId: key,
+    values: [],
+  })
+
+  it('sorts by value descending with nulls last', () => {
+    const rows = [equity('a', 'AAA'), equity('b', 'BBB'), equity('c', 'CCC')]
+    const valueFor = (r: PortfolioGridRow) =>
+      r.key === 'a' ? 100 : r.key === 'b' ? null : 500
+    const sorted = sortPortfolioEquityRows(rows, 'value', 'desc', valueFor)
+    expect(sorted.map((r) => r.key)).toEqual(['c', 'a', 'b'])
+  })
+
+  it('sorts by label ascending', () => {
+    const rows = [equity('z', 'ZZZ'), equity('a', 'AAA'), equity('m', 'MMM')]
+    const sorted = sortPortfolioEquityRows(rows, 'label', 'asc', () => null)
+    expect(sorted.map((r) => r.label)).toEqual(['AAA', 'MMM', 'ZZZ'])
+  })
+})
+
+describe('orderPortfolioGridDisplayRows', () => {
+  it('keeps cash and total after sorted equity', () => {
+    const grid: PortfolioGrid = {
+      years: [2026],
+      totals: [1000],
+      lastStatedYear: 2026,
+      rows: [
+        { key: 'h2', kind: 'equity', label: 'B', holdingId: 'h2', values: [200] },
+        { key: 'h1', kind: 'equity', label: 'A', holdingId: 'h1', values: [800] },
+        { key: 'cash', kind: 'cash', label: 'Cash', values: [50] },
+        {
+          key: 'perpetual-growth',
+          kind: 'growth',
+          label: 'Growth 5%/yr',
+          values: [null],
+        },
+        { key: 'total', kind: 'total', label: 'Total', values: [1000] },
+      ],
+    }
+    const sortedEquity = sortPortfolioEquityRows(
+      grid.rows,
+      'value',
+      'desc',
+      (r) => (r.key === 'h1' ? 800 : 200),
+    )
+    const display = orderPortfolioGridDisplayRows(grid, sortedEquity)
+    expect(display.map((r) => r.key)).toEqual([
+      'h1',
+      'h2',
+      'cash',
+      'perpetual-growth',
+      'total',
+    ])
   })
 })
