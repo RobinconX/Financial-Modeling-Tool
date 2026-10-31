@@ -121,6 +121,8 @@ export function ComparablesView({
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() => readSelectedId(comparables))
   const [query, setQuery] = useState('')
+  const [scenarioSearchOpen, setScenarioSearchOpen] = useState(false)
+  const scenarioSearchRef = useRef<HTMLInputElement>(null)
   const [overlayIds, setOverlayIds] = useState<string[]>([])
   const [histories, setHistories] = useState<Record<string, CachedPriceHistory>>({})
   const [histLoading, setHistLoading] = useState<Set<string>>(() => new Set())
@@ -290,6 +292,16 @@ export function ComparablesView({
 
   const grouped = useMemo(() => groupScenariosByTicker(scenarios), [scenarios])
   const q = query.trim().toLowerCase()
+  const scenarioSearchExpanded = scenarioSearchOpen || q.length > 0
+
+  useEffect(() => {
+    if (!scenarioSearchOpen) return
+    scenarioSearchRef.current?.focus()
+  }, [scenarioSearchOpen])
+
+  function closeScenarioSearchIfEmpty() {
+    if (!query.trim()) setScenarioSearchOpen(false)
+  }
   const filteredGroups = useMemo(() => {
     if (!q) return grouped
     return grouped
@@ -484,13 +496,48 @@ export function ComparablesView({
       {selected ? (
         <>
           <div>
-            <label className="label !mb-1">Scenarios</label>
-            <input
-              className="input mb-2 !max-w-xs !py-1.5 !text-xs"
-              placeholder="Filter ticker or name"
-              value={query}
-              onChange={(e) => setQuery(e.target.value)}
-            />
+            <div className="mb-1 flex items-center gap-2">
+              <label className="label !mb-0">Scenarios</label>
+              {!scenarioSearchExpanded ? (
+                <button
+                  type="button"
+                  className="rounded-md p-1 text-white/40 transition hover:bg-white/5 hover:text-white/65 focus:outline-none focus-visible:ring-1 focus-visible:ring-emerald-500/50"
+                  aria-label="Filter scenarios by ticker or name"
+                  onClick={() => setScenarioSearchOpen(true)}
+                >
+                  <svg
+                    xmlns="http://www.w3.org/2000/svg"
+                    viewBox="0 0 20 20"
+                    fill="currentColor"
+                    className="h-4 w-4"
+                    aria-hidden
+                  >
+                    <path
+                      fillRule="evenodd"
+                      d="M9 3.5a5.5 5.5 0 1 0 0 11 5.5 5.5 0 0 0 0-11ZM2 9a7 7 0 1 1 12.452 4.391l3.328 3.329a.75.75 0 1 1-1.06 1.06l-3.329-3.328A7 7 0 0 1 2 9Z"
+                      clipRule="evenodd"
+                    />
+                  </svg>
+                </button>
+              ) : null}
+            </div>
+            {scenarioSearchExpanded ? (
+              <input
+                ref={scenarioSearchRef}
+                className="input mb-2 !max-w-xs !py-1.5 !text-xs"
+                placeholder="Filter ticker or name"
+                value={query}
+                aria-label="Filter ticker or name"
+                onChange={(e) => setQuery(e.target.value)}
+                onBlur={closeScenarioSearchIfEmpty}
+                onKeyDown={(e) => {
+                  if (e.key === 'Escape' && !query.trim()) {
+                    e.preventDefault()
+                    setScenarioSearchOpen(false)
+                  }
+                }}
+              />
+            ) : null}
             <div className="max-h-48 space-y-2 overflow-y-auto rounded-lg border border-white/10 bg-black/20 px-2 py-2">
               {filteredGroups.length === 0 ? (
                 <p className="px-1 py-2 text-[11px] text-white/40">No matching projections.</p>
