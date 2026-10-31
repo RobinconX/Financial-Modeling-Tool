@@ -50,3 +50,9 @@ Strong success criteria let you loop independently. Weak criteria ("make it work
 
 5. Constraints
 Your project scope is only within C:\Users\robin\Documents\coding\grok-lab
+
+## Cursor Cloud specific instructions
+
+### Walkthrough screenshots
+- **Grok Bot requests:** Include screenshots (not videos unless asked) that show the UI change working. Seed/prep test data if needed so the screenshot is readable.
+- **Desktop / Cursor IDE / other non–Grok Bot:** Skip seeding demo data and walkthrough screenshots/videos. The owner checks the forwarded localhost endpoint. Only capture UI artifacts when they explicitly ask.
