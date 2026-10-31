@@ -65,6 +65,11 @@ input[type='number']::-webkit-outer-spin-button {
   @apply overflow-x-auto;
 }
 
+/** Tables with in-cell expanders (e.g. budget payment picker) — grow with content, no vertical clip */
+.table-shell.table-shell-allow-expand {
+  overflow: visible;
+}
+
 .table-shell table {
   @apply w-full text-left;
 }

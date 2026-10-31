@@ -76,7 +76,7 @@ export function newCashflowLine(
     cadence,
     yearlyAmount: 0,
     lastEdited: 'monthly',
-    month: null,
+    months: [],
   }
 }
 
@@ -103,25 +103,56 @@ export const MONTH_LABELS = [
   'Dec',
 ] as const
 
+/** Sorted unique calendar months 1–12 from storage or UI. */
+export function normalizeMonths(v: unknown): number[] {
+  if (!Array.isArray(v)) return []
+  const set = new Set<number>()
+  for (const item of v) {
+    const m = normalizeMonth(item)
+    if (m != null) set.add(m)
+  }
+  return [...set].sort((a, b) => a - b)
+}
+
+export function paymentMonths(line: CashflowLine): number[] {
+  return normalizeMonths(line.months)
+}
+
+export function isMonthlyPayment(line: CashflowLine): boolean {
+  return paymentMonths(line).length === 0
+}
+
+/** Collapsed payment control label, e.g. "Monthly" or "Jan, Apr, Jul, Nov". */
+export function formatPaymentScheduleSummary(months: number[]): string {
+  const sorted = normalizeMonths(months)
+  if (sorted.length === 0) return 'Monthly'
+  return sorted.map((m) => MONTH_LABELS[m - 1]).join(', ')
+}
+
 /**
  * Positive CHF amount this line contributes in calendar month `month` (1–12).
  * Kind is not applied here — caller splits income vs cost.
  *
- * - month set → full yearlyAmount in that month only
- * - recurring + no month → yearly÷12 every month
- * - one-time + no month → 0 on monthly path
+ * - no selected months → yearly÷12 every month
+ * - selected months → equal split yearly/N; remainder on last selected month
  */
 export function amountInMonth(line: CashflowLine, month: number): number {
   if (!(month >= 1 && month <= 12)) return 0
   const amt = line.yearlyAmount > 0 && Number.isFinite(line.yearlyAmount) ? line.yearlyAmount : 0
   if (!(amt > 0)) return 0
 
-  const due = normalizeMonth(line.month)
-  if (due != null) {
-    return due === month ? amt : 0
-  }
-  if (line.cadence === 'one-time') return 0
-  return monthlyFromYearly(amt)
+  const selected = paymentMonths(line)
+  if (selected.length === 0) return monthlyFromYearly(amt)
+
+  const idx = selected.indexOf(month)
+  if (idx < 0) return 0
+
+  const n = selected.length
+  const totalCents = Math.round(amt * 100)
+  const baseCents = Math.floor(totalCents / n)
+  const remainderCents = totalCents - baseCents * n
+  const cents = idx === n - 1 ? baseCents + remainderCents : baseCents
+  return cents / 100
 }
 
 export type MonthlyCashflowPoint = {
@@ -228,16 +259,6 @@ export function buildMonthlySchedule(
   return points
 }
 
-/** One-time lines with amount but no month (missing from monthly path). */
-export function oneTimeMissingMonthCount(lines: CashflowLine[], scenarioId: string): number {
-  return linesForScenario(lines, scenarioId).filter(
-    (l) =>
-      l.cadence === 'one-time' &&
-      l.yearlyAmount > 0 &&
-      normalizeMonth(l.month) == null,
-  ).length
-}
-
 export function emptyIncomeCostState(): IncomeCostState {
   const base = newScenario(DEFAULT_SCENARIO_NAME, 0)
   return { version: 3, scenarios: [base], lines: [], draws: [] }
@@ -254,7 +275,6 @@ export function linesForScenario(lines: CashflowLine[], scenarioId: string): Cas
 }
 
 export function lineMonthly(line: CashflowLine): number {
-  if (line.cadence === 'one-time') return 0
   return monthlyFromYearly(line.yearlyAmount)
 }
 

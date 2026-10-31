@@ -178,13 +178,11 @@ export type CashflowLine = {
   yearlyAmount: number
   lastEdited?: MoneyEditField
   /**
-   * Calendar month in the scenario year (1 = Jan … 12 = Dec).
-   * When set, the full yearlyAmount is paid/received in that month only
-   * (other months get none of this line). When null:
-   * - recurring: spread yearly÷12 across all months
-   * - one-time: omitted from monthly schedule (still in annual totals)
+   * Payment months (1 = Jan … 12 = Dec), sorted unique.
+   * Empty or omitted = Monthly (yearly÷12 every month).
+   * Non-empty = yearly split equally across selected months; rounding remainder on the last month.
    */
-  month?: number | null
+  months?: number[]
 }
 
 /**

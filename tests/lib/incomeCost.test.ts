@@ -4,10 +4,10 @@ import {
   buildMonthlySchedule,
   buildScenarioSankeyData,
   copyScenarioAsNew,
+  formatPaymentScheduleSummary,
   monthlyFromYearly,
   moveScenario,
   newScenario,
-  oneTimeMissingMonthCount,
   scenarioTotals,
   setAmountFromMonthly,
   setAmountFromYearly,
@@ -28,7 +28,7 @@ function line(
     lastEdited: partial.lastEdited,
     kind: partial.kind,
     scenarioId: partial.scenarioId,
-    month: partial.month ?? null,
+    months: partial.months ?? [],
   }
 }
 
@@ -112,13 +112,13 @@ describe('amountInMonth / buildMonthlySchedule', () => {
       scenarioId: sid,
       yearlyAmount: 3_000,
       cadence: 'one-time',
-      month: 6,
+      months: [6],
     })
     expect(amountInMonth(salary, 1)).toBeCloseTo(10_000, 6)
     expect(amountInMonth(salary, 12)).toBeCloseTo(10_000, 6)
     expect(amountInMonth(trip, 6)).toBe(3_000)
     expect(amountInMonth(trip, 5)).toBe(0)
-    expect(amountInMonth({ ...trip, month: null }, 6)).toBe(0)
+    expect(amountInMonth({ ...trip, months: [] }, 6)).toBeCloseTo(250, 6)
 
     const sched = buildMonthlySchedule([salary, trip], sid)
     expect(sched).toHaveLength(12)
@@ -130,13 +130,13 @@ describe('amountInMonth / buildMonthlySchedule', () => {
     expect(sched[11]!.balance).toBeCloseTo(120_000 - 3_000, 4)
   })
 
-  it('recurring with Paid-in month charges full yearly amount that month only', () => {
+  it('single selected month gets full yearly amount', () => {
     const insurance = line({
       kind: 'cost',
       scenarioId: sid,
       yearlyAmount: 12_000,
       cadence: 'recurring',
-      month: 3, // full lump in March
+      months: [3],
     })
     expect(amountInMonth(insurance, 2)).toBe(0)
     expect(amountInMonth(insurance, 3)).toBe(12_000)
@@ -146,24 +146,57 @@ describe('amountInMonth / buildMonthlySchedule', () => {
     expect(sched[11]!.balance).toBeCloseTo(-12_000, 4)
   })
 
-  it('counts one-time lines missing month', () => {
-    const lines = [
-      line({
-        kind: 'cost',
-        scenarioId: sid,
-        yearlyAmount: 100,
-        cadence: 'one-time',
-        month: null,
-      }),
-      line({
-        kind: 'cost',
-        scenarioId: sid,
-        yearlyAmount: 50,
-        cadence: 'one-time',
-        month: 3,
-      }),
-    ]
-    expect(oneTimeMissingMonthCount(lines, sid)).toBe(1)
+  it('splits yearly across selected months; remainder on last month', () => {
+    const quarterly = line({
+      kind: 'cost',
+      scenarioId: sid,
+      yearlyAmount: 10_000,
+      cadence: 'recurring',
+      months: [1, 4, 7, 11],
+    })
+    expect(amountInMonth(quarterly, 1)).toBe(2500)
+    expect(amountInMonth(quarterly, 4)).toBe(2500)
+    expect(amountInMonth(quarterly, 7)).toBe(2500)
+    expect(amountInMonth(quarterly, 11)).toBe(2500)
+    expect(amountInMonth(quarterly, 2)).toBe(0)
+
+    const odd = line({
+      kind: 'income',
+      scenarioId: sid,
+      yearlyAmount: 100,
+      months: [1, 4, 7],
+    })
+    expect(amountInMonth(odd, 1)).toBe(33.33)
+    expect(amountInMonth(odd, 4)).toBe(33.33)
+    expect(amountInMonth(odd, 7)).toBe(33.34)
+    const sum =
+      amountInMonth(odd, 1) + amountInMonth(odd, 4) + amountInMonth(odd, 7)
+    expect(sum).toBeCloseTo(100, 6)
+  })
+
+  it('formatPaymentScheduleSummary', () => {
+    expect(formatPaymentScheduleSummary([])).toBe('Monthly')
+    expect(formatPaymentScheduleSummary([1, 4, 7, 11])).toBe('Jan, Apr, Jul, Nov')
+  })
+
+  it('buildMonthlySchedule places split inflow only on selected months (Jan/Apr/Jul/Nov)', () => {
+    const salary = line({
+      kind: 'income',
+      scenarioId: sid,
+      name: 'Salary',
+      yearlyAmount: 120_000,
+      months: [1, 4, 7, 11],
+    })
+    const sched = buildMonthlySchedule([salary], sid)
+    expect(sched).toHaveLength(12)
+    for (const idx of [0, 3, 6, 10]) {
+      expect(sched[idx]!.label).toMatch(/Jan|Apr|Jul|Nov/)
+      expect(sched[idx]!.income).toBe(30_000)
+    }
+    for (const idx of [1, 2, 4, 5, 7, 8, 9, 11]) {
+      expect(sched[idx]!.income).toBe(0)
+    }
+    expect(sched.reduce((s, r) => s + r.income, 0)).toBe(120_000)
   })
 
   it('draws reduce balanceAfterDraws only; not budget net', () => {

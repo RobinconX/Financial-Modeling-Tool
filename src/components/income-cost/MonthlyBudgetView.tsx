@@ -21,7 +21,6 @@ import {
   buildMonthlySchedule,
   drawsForScenario,
   normalizeAmounts12,
-  oneTimeMissingMonthCount,
   scenarioTotals,
 } from '../../lib/incomeCost'
 import {
@@ -506,10 +505,6 @@ export function MonthlyBudgetView({
     () => scenarioTotals(lines, scenario.id),
     [lines, scenario.id],
   )
-  const missingMonths = useMemo(
-    () => oneTimeMissingMonthCount(lines, scenario.id),
-    [lines, scenario.id],
-  )
   const yearEndWorking = schedule[11]?.balance ?? 0
   const yearEndAfterDraws = schedule[11]?.balanceAfterDraws ?? 0
   const drawsYearTotal = schedule.reduce((s, r) => s + r.draw, 0)
@@ -564,14 +559,6 @@ export function MonthlyBudgetView({
           />
         </div>
       </div>
-
-      {missingMonths > 0 && (
-        <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/90">
-          {missingMonths} one-time position{missingMonths === 1 ? '' : 's'} have no month set —
-          they still count in the annual budget but not here. Set Paid in / Received in on the
-          Budget tab.
-        </p>
-      )}
 
       <div className="panel space-y-3">
         <div>

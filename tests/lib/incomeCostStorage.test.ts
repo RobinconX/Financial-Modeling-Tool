@@ -29,6 +29,27 @@ describe('parseIncomeCostState empty scenario name', () => {
     expect(state.lines).toHaveLength(1)
     expect(state.lines[0]?.scenarioId).toBe('s-blank')
     expect(state.lines[0]?.yearlyAmount).toBe(120000)
+    expect(state.lines[0]?.months).toEqual([])
+  })
+
+  it('migrates legacy month field to months array', () => {
+    const state = parseIncomeCostState({
+      version: 3,
+      scenarios: [{ id: 's1', name: 'Base', sortOrder: 0, year: 2026 }],
+      lines: [
+        {
+          id: 'l1',
+          scenarioId: 's1',
+          kind: 'cost',
+          name: 'Insurance',
+          cadence: 'recurring',
+          yearlyAmount: 1200,
+          month: 3,
+        },
+      ],
+      draws: [],
+    })
+    expect(state.lines[0]?.months).toEqual([3])
   })
 
   it('treats whitespace-only names the same as empty', () => {
