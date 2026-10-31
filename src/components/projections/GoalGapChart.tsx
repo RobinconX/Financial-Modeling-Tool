@@ -6,6 +6,8 @@ import {
   LineChart,
   ResponsiveContainer,
   Tooltip,
+  useActiveTooltipCoordinate,
+  useYAxisScale,
   XAxis,
   YAxis,
 } from 'recharts'
@@ -121,6 +123,83 @@ function pickTicks(dates: string[], count = 5): string[] {
     if (d && out[out.length - 1] !== d) out.push(d)
   }
   return out
+}
+
+function finiteNumber(value: unknown): number | null {
+  const n = typeof value === 'number' ? value : Number(value)
+  return Number.isFinite(n) ? n : null
+}
+
+type GuideItem = { value?: unknown; color?: string; stroke?: string }
+
+/** Pixel y and stroke of the series value closest to the pointer. */
+export function pickValueGuide(
+  payload: ReadonlyArray<GuideItem> | undefined,
+  yOf: (value: number) => number | undefined,
+  pointerY: number | undefined,
+): { y: number; color: string } | null {
+  let guideY: number | null = null
+  let guideColor = 'rgba(255,255,255,0.55)'
+  let best = Infinity
+  for (const item of payload ?? []) {
+    const v = finiteNumber(item.value)
+    if (v == null) continue
+    const y = yOf(v)
+    if (y == null || !Number.isFinite(y)) continue
+    const dist = pointerY == null ? 0 : Math.abs(y - pointerY)
+    if (dist < best) {
+      best = dist
+      guideY = y
+      const color = item.color || item.stroke
+      if (color) guideColor = color
+    }
+  }
+  return guideY == null ? null : { y: guideY, color: guideColor }
+}
+
+/** Vertical date cursor plus a light horizontal line through the nearest series value. */
+function HoverCrosshair({
+  points,
+  payload,
+  left = 0,
+  width = 0,
+  className,
+}: {
+  points?: ReadonlyArray<{ x?: number; y?: number }>
+  payload?: ReadonlyArray<GuideItem>
+  left?: number
+  width?: number
+  className?: string
+}) {
+  const yScale = useYAxisScale()
+  const pointer = useActiveTooltipCoordinate()
+  const x1 = points?.[0]?.x
+  const y1 = points?.[0]?.y
+  const x2 = points?.[1]?.x
+  const y2 = points?.[1]?.y
+  if (x1 == null || y1 == null || x2 == null || y2 == null) return null
+
+  const guide = yScale
+    ? pickValueGuide(payload, (v) => yScale(v), pointer?.y)
+    : null
+
+  return (
+    <g className={className} pointerEvents="none">
+      <line x1={x1} y1={y1} x2={x2} y2={y2} stroke="rgba(255,255,255,0.35)" strokeWidth={1} />
+      {guide != null && width > 0 ? (
+        <line
+          x1={left}
+          y1={guide.y}
+          x2={left + width}
+          y2={guide.y}
+          stroke={guide.color}
+          strokeOpacity={0.65}
+          strokeWidth={1}
+          strokeDasharray="3 3"
+        />
+      ) : null}
+    </g>
+  )
 }
 
 export function GoalGapChart({
@@ -320,6 +399,7 @@ export function GoalGapChart({
             />
             {panning ? null : (
               <Tooltip
+                cursor={<HoverCrosshair />}
                 contentStyle={{
                   background: '#121820',
                   border: '1px solid rgba(255,255,255,0.1)',
