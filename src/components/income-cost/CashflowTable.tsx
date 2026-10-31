@@ -78,7 +78,7 @@ export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onA
       : 'border-l-2 border-l-emerald-400/50'
 
   return (
-    <div className={`panel space-y-4 ${edge}`}>
+    <div className={`panel space-y-4 overflow-visible ${edge}`}>
       <div className="section-header">
         <h3 className={`text-sm font-semibold tracking-wide ${accent}`}>{title}</h3>
         <div className="flex flex-wrap gap-1.5">
@@ -137,7 +137,7 @@ function Section({
   onRemove: (id: string) => void
 }) {
   return (
-    <div className="space-y-1.5">
+    <div className="space-y-1.5 overflow-visible">
       <div className="flex items-center gap-1.5">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</p>
         <InfoTip label={`About ${label}`}>{PAYMENT_HINT}</InfoTip>
@@ -145,7 +145,7 @@ function Section({
       {rows.length === 0 ? (
         <p className="text-xs text-white/35">None yet.</p>
       ) : (
-        <div className="table-shell">
+        <div className="table-shell table-shell-allow-expand">
           <table className="min-w-[400px] text-xs">
             <thead className="text-[10px] uppercase tracking-wider text-white/45">
               <tr className="border-b border-white/10">
@@ -230,10 +230,10 @@ function PaymentSchedule({
   }
 
   return (
-    <div ref={rootRef} className="relative max-w-[11rem]">
+    <div ref={rootRef} className="max-w-[11rem] min-w-[5.5rem]">
       <button
         type="button"
-        className={`input flex w-full min-w-[5.5rem] items-center justify-between gap-1 !py-1 !pr-1.5 !pl-2 !text-[11px] ${
+        className={`input flex w-full items-center justify-between gap-1 !py-1 !pr-1.5 !pl-2 !text-[11px] ${
           monthly ? '' : 'border-sky-500/25 bg-sky-500/10'
         }`}
         aria-expanded={open}
@@ -248,7 +248,7 @@ function PaymentSchedule({
       </button>
       {open && (
         <div
-          className="absolute top-full left-0 z-40 mt-0.5 w-[13.5rem] rounded-lg border border-white/15 bg-[#121820] p-2 shadow-xl"
+          className="mt-1 w-[13.5rem] max-w-[min(13.5rem,100vw)] rounded-lg border border-white/15 bg-[#121820] p-2 shadow-xl"
           role="dialog"
           aria-label="Payment schedule"
         >
@@ -377,7 +377,7 @@ function LineRow({
           </div>
         )}
       </td>
-      <td className="px-1.5 py-1">
+      <td className="px-1.5 py-1 align-top">
         <PaymentSchedule line={line} onChange={onChange} />
       </td>
       <td className="w-[6.5rem] px-1.5 py-1">
