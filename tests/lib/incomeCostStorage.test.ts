@@ -1,6 +1,11 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_SCENARIO_NAME } from '../../src/lib/incomeCost'
-import { parseIncomeCostState } from '../../src/lib/incomeCostStorage'
+import {
+  cashflowTableSortStorageKey,
+  loadCashflowTableSort,
+  parseIncomeCostState,
+  saveCashflowTableSort,
+} from '../../src/lib/incomeCostStorage'
 
 describe('parseIncomeCostState empty scenario name', () => {
   it('keeps a blank-named scenario and its lines, using the create fallback name', () => {
@@ -75,5 +80,38 @@ describe('parseIncomeCostState empty scenario name', () => {
     })
 
     expect(state.scenarios[0]?.name).toBe('Lean')
+  })
+})
+
+describe('cashflow table sort prefs', () => {
+  const store = new Map<string, string>()
+
+  beforeEach(() => {
+    store.clear()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          store.set(k, String(v))
+        },
+        removeItem: (k: string) => {
+          store.delete(k)
+        },
+      },
+    })
+  })
+
+  it('defaults to yearly desc when unset', () => {
+    expect(loadCashflowTableSort('income')).toEqual({ key: 'yearly', dir: 'desc' })
+    expect(loadCashflowTableSort('cost')).toEqual({ key: 'yearly', dir: 'desc' })
+  })
+
+  it('persists per kind independently', () => {
+    saveCashflowTableSort('income', { key: 'name', dir: 'asc' })
+    saveCashflowTableSort('cost', { key: 'monthly', dir: 'asc' })
+    expect(loadCashflowTableSort('income')).toEqual({ key: 'name', dir: 'asc' })
+    expect(loadCashflowTableSort('cost')).toEqual({ key: 'monthly', dir: 'asc' })
+    expect(store.has(cashflowTableSortStorageKey('income'))).toBe(true)
   })
 })

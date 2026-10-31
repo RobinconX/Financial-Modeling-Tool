@@ -1,4 +1,5 @@
 import type {
+  CashflowKind,
   CashflowLine,
   CashflowScenario,
   IncomeCostState,
@@ -11,10 +12,34 @@ import {
   normalizeAmounts12,
   normalizeMonth,
   normalizeMonths,
+  parseCashflowTableSort,
+  type CashflowTableSort,
 } from './incomeCost'
 import { queueAppDataChanged } from './linkedMirrorGate'
 
 export const INCOME_COST_STORAGE_KEY = 'grok-lab.income-cost.v1'
+
+export function cashflowTableSortStorageKey(kind: CashflowKind): string {
+  return `grok-lab.income-cost.table-sort.${kind}`
+}
+
+export function loadCashflowTableSort(kind: CashflowKind): CashflowTableSort {
+  try {
+    const raw = localStorage.getItem(cashflowTableSortStorageKey(kind))
+    if (!raw) return parseCashflowTableSort(null)
+    return parseCashflowTableSort(JSON.parse(raw))
+  } catch {
+    return parseCashflowTableSort(null)
+  }
+}
+
+export function saveCashflowTableSort(kind: CashflowKind, sort: CashflowTableSort): void {
+  try {
+    localStorage.setItem(cashflowTableSortStorageKey(kind), JSON.stringify(sort))
+  } catch {
+    /* ignore quota / private mode */
+  }
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null

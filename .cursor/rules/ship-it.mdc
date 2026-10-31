@@ -5,6 +5,8 @@ alwaysApply: true
 
 # Ship it
 
+**Not the same as “push it”.** If the user says **push it**, only land the work on `DEV` — do not merge to `v1-prod`. See `AGENTS.md` → Release phrases.
+
 When the user says **ship it** (or clearly means the same), after implementation is verified successful:
 
 1. **Collect changes** — review `git status`; stage and commit anything uncommitted with a message that matches the work (user is explicitly requesting ship, so committing is allowed).

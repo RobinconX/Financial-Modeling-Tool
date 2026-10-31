@@ -14,6 +14,25 @@ export const DEFAULT_SCENARIO_NAME = 'Base'
 export type SortKey = 'name' | 'monthly' | 'yearly'
 export type SortDir = 'asc' | 'desc'
 
+/** Default Budget position table order: largest amount first. */
+export type CashflowTableSort = { key: SortKey; dir: SortDir }
+
+export const DEFAULT_CASHFLOW_TABLE_SORT: CashflowTableSort = {
+  key: 'yearly',
+  dir: 'desc',
+}
+
+export function parseCashflowTableSort(raw: unknown): CashflowTableSort {
+  if (raw == null || typeof raw !== 'object') return { ...DEFAULT_CASHFLOW_TABLE_SORT }
+  const o = raw as Record<string, unknown>
+  const key: SortKey =
+    o.key === 'name' || o.key === 'monthly' || o.key === 'yearly'
+      ? o.key
+      : DEFAULT_CASHFLOW_TABLE_SORT.key
+  const dir: SortDir = o.dir === 'asc' || o.dir === 'desc' ? o.dir : DEFAULT_CASHFLOW_TABLE_SORT.dir
+  return { key, dir }
+}
+
 export type ScenarioTotals = {
   scenarioId: string
   costRecurringYearly: number
