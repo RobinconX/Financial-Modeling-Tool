@@ -4,10 +4,12 @@ import {
   buildMonthlySchedule,
   buildScenarioSankeyData,
   copyScenarioAsNew,
+  DEFAULT_CASHFLOW_TABLE_SORT,
   formatPaymentScheduleSummary,
   monthlyFromYearly,
   moveScenario,
   newScenario,
+  parseCashflowTableSort,
   scenarioTotals,
   setAmountFromMonthly,
   setAmountFromYearly,
@@ -257,6 +259,27 @@ describe('sortLines', () => {
   it('sorts by yearly desc', () => {
     const s = sortLines(lines, 'yearly', 'desc')
     expect(s[0].name).toBe('Apple')
+  })
+})
+
+describe('parseCashflowTableSort', () => {
+  it('defaults to yearly desc', () => {
+    expect(parseCashflowTableSort(null)).toEqual(DEFAULT_CASHFLOW_TABLE_SORT)
+    expect(DEFAULT_CASHFLOW_TABLE_SORT).toEqual({ key: 'yearly', dir: 'desc' })
+  })
+
+  it('accepts valid prefs and rejects junk', () => {
+    expect(parseCashflowTableSort({ key: 'name', dir: 'asc' })).toEqual({
+      key: 'name',
+      dir: 'asc',
+    })
+    expect(parseCashflowTableSort({ key: 'monthly', dir: 'asc' })).toEqual({
+      key: 'monthly',
+      dir: 'asc',
+    })
+    expect(parseCashflowTableSort({ key: 'nope', dir: 'sideways' })).toEqual(
+      DEFAULT_CASHFLOW_TABLE_SORT,
+    )
   })
 })
 

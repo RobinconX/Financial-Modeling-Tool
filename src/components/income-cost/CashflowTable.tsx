@@ -10,9 +10,12 @@ import {
   setAmountFromMonthly,
   setAmountFromYearly,
   sortLines,
-  type SortDir,
   type SortKey,
 } from '../../lib/incomeCost'
+import {
+  loadCashflowTableSort,
+  saveCashflowTableSort,
+} from '../../lib/incomeCostStorage'
 import { formatMoney, parseMoney } from '../../lib/format'
 import { formatInputNumber } from '../common/MoneyInput'
 import { InfoTip } from '../common/InfoTip'
@@ -30,8 +33,12 @@ type Props = {
 }
 
 export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onAdd }: Props) {
-  const [sortKey, setSortKey] = useState<SortKey>('name')
-  const [sortDir, setSortDir] = useState<SortDir>('asc')
+  const [sort, setSort] = useState(() => loadCashflowTableSort(kind))
+  const { key: sortKey, dir: sortDir } = sort
+
+  useEffect(() => {
+    saveCashflowTableSort(kind, sort)
+  }, [kind, sort])
 
   const kindLines = useMemo(
     () => lines.filter((l) => l.kind === kind && l.scenarioId === scenarioId),
@@ -60,11 +67,12 @@ export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onA
   const accent = kind === 'cost' ? 'text-amber-300/90' : 'text-emerald-400/90'
 
   function toggleSort(key: SortKey) {
-    if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
-    else {
-      setSortKey(key)
-      setSortDir(key === 'name' ? 'asc' : 'desc')
-    }
+    setSort((prev) => {
+      if (prev.key === key) {
+        return { key, dir: prev.dir === 'asc' ? 'desc' : 'asc' }
+      }
+      return { key, dir: key === 'name' ? 'asc' : 'desc' }
+    })
   }
 
   function sortMark(key: SortKey) {
