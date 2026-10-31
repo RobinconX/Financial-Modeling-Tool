@@ -171,7 +171,7 @@ export function buildTableExportSheets(data: AppDataSnapshot): TableExportSheet[
     },
     {
       name: 'I-C lines',
-      headers: ['scenario', 'kind', 'name', 'cadence', 'yearlyAmount', 'month', 'detail'],
+      headers: ['scenario', 'kind', 'name', 'cadence', 'yearlyAmount', 'months', 'detail'],
       rows: [...data.incomeCost.lines]
         .sort((a, b) => {
           const ay = icById.get(a.scenarioId)?.year ?? 0
@@ -184,7 +184,7 @@ export function buildTableExportSheets(data: AppDataSnapshot): TableExportSheet[
           l.name,
           l.cadence,
           l.yearlyAmount,
-          l.month ?? '',
+          (l.months ?? []).join(','),
           l.detail ?? '',
         ]),
     },

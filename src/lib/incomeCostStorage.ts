@@ -9,6 +9,8 @@ import {
   emptyIncomeCostState,
   newScenario,
   normalizeAmounts12,
+  normalizeMonth,
+  normalizeMonths,
 } from './incomeCost'
 import { queueAppDataChanged } from './linkedMirrorGate'
 
@@ -66,11 +68,12 @@ function normalizeLine(raw: unknown, scenarioIds: Set<string>): CashflowLine | n
   if (raw.lastEdited === 'monthly' || raw.lastEdited === 'yearly') {
     line.lastEdited = raw.lastEdited
   }
-  const month = Math.floor(asNumber(raw.month, NaN))
-  if (Number.isFinite(month) && month >= 1 && month <= 12) {
-    line.month = month
+  const fromArray = normalizeMonths(raw.months)
+  if (fromArray.length > 0) {
+    line.months = fromArray
   } else {
-    line.month = null
+    const legacy = normalizeMonth(raw.month)
+    line.months = legacy != null ? [legacy] : []
   }
   return line
 }

@@ -4,7 +4,8 @@ import {
   INCOME_COST_CURRENCY,
   MONTH_LABELS,
   lineMonthly,
-  normalizeMonth,
+  normalizeMonths,
+  paymentMonths,
   setAmountFromMonthly,
   setAmountFromYearly,
   sortLines,
@@ -14,6 +15,9 @@ import {
 import { formatMoney, parseMoney } from '../../lib/format'
 import { formatInputNumber } from '../common/MoneyInput'
 import { InfoTip } from '../common/InfoTip'
+
+const PAYMENT_HINT =
+  'Monthly spreads the yearly amount ÷12 every month. Select one or more months to split the yearly total equally across those months (rounding remainder on the last month). /mo always shows the yearly÷12 average.'
 
 type Props = {
   kind: CashflowKind
@@ -53,8 +57,6 @@ export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onA
 
   const title = kind === 'cost' ? 'Costs' : 'Income'
   const accent = kind === 'cost' ? 'text-amber-300/90' : 'text-emerald-400/90'
-  const isIncome = kind === 'income'
-  const monthColumnLabel = isIncome ? 'Received in' : 'Paid in'
 
   function toggleSort(key: SortKey) {
     if (sortKey === key) setSortDir((d) => (d === 'asc' ? 'desc' : 'asc'))
@@ -98,14 +100,7 @@ export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onA
 
       <Section
         label="Recurring"
-        monthColumnLabel={monthColumnLabel}
-        monthHint={
-          isIncome
-            ? 'Leave Received in empty to spread yearly÷12 each month. Pick a month to receive the full yearly amount only then.'
-            : 'Leave Paid in empty to spread yearly÷12 each month. Pick a month to pay the full yearly amount only then.'
-        }
         rows={recurring}
-        showMonthly
         sortMark={sortMark}
         onToggleSort={toggleSort}
         onChange={onChange}
@@ -114,14 +109,7 @@ export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onA
       <div className="border-t border-white/[0.06] pt-4">
         <Section
           label="One-time"
-          monthColumnLabel={monthColumnLabel}
-          monthHint={
-            isIncome
-              ? 'Pick the month the full amount is received. Empty = annual total only (not on monthly path).'
-              : 'Pick the month the full amount is paid. Empty = annual total only (not on monthly path).'
-          }
           rows={oneTime}
-          showMonthly={false}
           sortMark={sortMark}
           onToggleSort={toggleSort}
           onChange={onChange}
@@ -134,20 +122,14 @@ export function CashflowTable({ kind, scenarioId, lines, onChange, onRemove, onA
 
 function Section({
   label,
-  monthColumnLabel,
-  monthHint,
   rows,
-  showMonthly,
   sortMark,
   onToggleSort,
   onChange,
   onRemove,
 }: {
   label: string
-  monthColumnLabel: string
-  monthHint: string
   rows: CashflowLine[]
-  showMonthly: boolean
   sortMark: (k: SortKey) => string
   onToggleSort: (k: SortKey) => void
   onChange: (line: CashflowLine) => void
@@ -157,13 +139,13 @@ function Section({
     <div className="space-y-1.5">
       <div className="flex items-center gap-1.5">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</p>
-        <InfoTip label={`About ${label}`}>{monthHint}</InfoTip>
+        <InfoTip label={`About ${label}`}>{PAYMENT_HINT}</InfoTip>
       </div>
       {rows.length === 0 ? (
         <p className="text-xs text-white/35">None yet.</p>
       ) : (
         <div className="table-shell">
-          <table className="min-w-[400px] text-xs">
+          <table className="min-w-[420px] text-xs">
             <thead className="text-[10px] uppercase tracking-wider text-white/45">
               <tr className="border-b border-white/10">
                 <th className="px-1.5 py-1.5 font-medium">
@@ -175,20 +157,18 @@ function Section({
                     Position{sortMark('name')}
                   </button>
                 </th>
-                <th className="px-1.5 py-1.5 font-medium" title={monthHint}>
-                  {monthColumnLabel}
+                <th className="px-1.5 py-1.5 font-medium" title={PAYMENT_HINT}>
+                  Payment
                 </th>
-                {showMonthly && (
-                  <th className="px-1.5 py-1.5 text-right font-medium">
-                    <button
-                      type="button"
-                      className="font-medium hover:text-white"
-                      onClick={() => onToggleSort('monthly')}
-                    >
-                      /mo{sortMark('monthly')}
-                    </button>
-                  </th>
-                )}
+                <th className="px-1.5 py-1.5 text-right font-medium">
+                  <button
+                    type="button"
+                    className="font-medium hover:text-white"
+                    onClick={() => onToggleSort('monthly')}
+                  >
+                    /mo{sortMark('monthly')}
+                  </button>
+                </th>
                 <th className="px-1.5 py-1.5 text-right font-medium">
                   <button
                     type="button"
@@ -206,7 +186,6 @@ function Section({
                 <LineRow
                   key={row.id}
                   line={row}
-                  showMonthly={showMonthly}
                   onChange={onChange}
                   onRemove={() => onRemove(row.id)}
                 />
@@ -219,64 +198,75 @@ function Section({
   )
 }
 
-function MonthSelect({
+function PaymentSchedule({
   line,
   onChange,
 }: {
   line: CashflowLine
   onChange: (line: CashflowLine) => void
 }) {
-  const value = normalizeMonth(line.month)
+  const selected = paymentMonths(line)
+  const monthly = selected.length === 0
   const isIncome = line.kind === 'income'
   const verb = isIncome ? 'received' : 'paid'
-  const needsMonth =
-    line.cadence === 'one-time' && line.yearlyAmount > 0 && value == null
-  const lumpSum = value != null
+
+  function setMonths(months: number[]) {
+    onChange({ ...line, months: normalizeMonths(months) })
+  }
+
   return (
-    <select
-      className={`input !w-[4.25rem] !py-1 !text-[11px] ${
-        needsMonth
-          ? 'border-amber-500/40 bg-amber-500/10'
-          : lumpSum
-            ? 'border-sky-500/25 bg-sky-500/10'
-            : ''
-      }`}
-      value={value ?? ''}
-      title={
-        needsMonth
-          ? `Set month — full amount is ${verb} only in that month`
-          : lumpSum
-            ? `Full yearly amount ${verb} in ${MONTH_LABELS[value - 1]} only (other months: 0 for this line)`
-            : line.cadence === 'recurring'
-              ? `Empty = spread yearly÷12 every month. Pick a month = ${verb} full yearly amount that month only`
-              : `Pick the month the full amount is ${verb}`
-      }
-      onChange={(e) => {
-        const raw = e.target.value
-        onChange({
-          ...line,
-          month: raw === '' ? null : normalizeMonth(raw),
-        })
-      }}
-    >
-      <option value="">{line.cadence === 'one-time' ? '?' : '÷12'}</option>
-      {MONTH_LABELS.map((label, i) => (
-        <option key={label} value={i + 1}>
-          {label}
-        </option>
-      ))}
-    </select>
+    <div className="flex min-w-[13.5rem] flex-col gap-1">
+      <button
+        type="button"
+        className={`self-start rounded px-1.5 py-0.5 text-[10px] font-semibold uppercase tracking-wide transition ${
+          monthly
+            ? 'bg-sky-500/25 text-sky-100 ring-1 ring-sky-400/30'
+            : 'bg-white/5 text-white/45 hover:bg-white/10 hover:text-white/70'
+        }`}
+        title="Spread yearly÷12 across all 12 months"
+        onClick={() => setMonths([])}
+      >
+        Monthly
+      </button>
+      <div className="flex flex-wrap gap-0.5" role="group" aria-label="Selected months">
+        {MONTH_LABELS.map((label, i) => {
+          const m = i + 1
+          const on = selected.includes(m)
+          return (
+            <button
+              key={label}
+              type="button"
+              aria-pressed={on}
+              className={`min-w-[1.65rem] rounded px-0.5 py-0.5 text-[9px] font-medium tabular-nums transition ${
+                on
+                  ? 'bg-sky-500/35 text-sky-50 ring-1 ring-sky-400/35'
+                  : 'bg-white/[0.06] text-white/40 hover:bg-white/12 hover:text-white/65'
+              }`}
+              title={
+                on
+                  ? `${label}: included in split (${verb})`
+                  : `Include ${label} in payment split`
+              }
+              onClick={() => {
+                if (on) setMonths(selected.filter((x) => x !== m))
+                else setMonths([...selected, m])
+              }}
+            >
+              {label}
+            </button>
+          )
+        })}
+      </div>
+    </div>
   )
 }
 
 function LineRow({
   line,
-  showMonthly,
   onChange,
   onRemove,
 }: {
   line: CashflowLine
-  showMonthly: boolean
   onChange: (line: CashflowLine) => void
   onRemove: () => void
 }) {
@@ -292,7 +282,7 @@ function LineRow({
 
   return (
     <tr className="border-t border-white/5">
-      <td className="relative px-1.5 py-1">
+      <td className="relative px-1.5 py-1 align-top">
         <div className="group relative">
           <input
             className="input w-full min-w-0 !py-1 !pr-8 !text-xs"
@@ -300,7 +290,6 @@ function LineRow({
             value={line.name}
             onChange={(e) => onChange({ ...line, name: e.target.value })}
           />
-          {/* + sits inside the input field */}
           <button
             type="button"
             className={`absolute top-1/2 right-1 z-10 flex h-5 w-5 -translate-y-1/2 items-center justify-center rounded text-sm leading-none transition ${
@@ -347,32 +336,30 @@ function LineRow({
           </div>
         )}
       </td>
-      <td className="px-1.5 py-1">
-        <MonthSelect line={line} onChange={onChange} />
+      <td className="px-1.5 py-1 align-top">
+        <PaymentSchedule line={line} onChange={onChange} />
       </td>
-      {showMonthly && (
-        <td className="w-[6.5rem] px-1.5 py-1">
-          <input
-            className="input !py-1 !text-xs text-right tabular-nums"
-            inputMode="decimal"
-            placeholder="0"
-            title={formatMoney(monthly, INCOME_COST_CURRENCY)}
-            defaultValue={monthlyDisplay}
-            key={`m-${line.id}-${line.yearlyAmount}-${line.lastEdited ?? ''}`}
-            onBlur={(e) => {
-              const raw = e.target.value.trim()
-              if (!raw) {
-                onChange(setAmountFromMonthly(line, 0))
-                return
-              }
-              const v = parseMoney(raw)
-              if (v == null || v < 0) return
-              onChange(setAmountFromMonthly(line, v))
-            }}
-          />
-        </td>
-      )}
-      <td className="w-[6.5rem] px-1.5 py-1">
+      <td className="w-[6.5rem] px-1.5 py-1 align-top">
+        <input
+          className="input !py-1 !text-xs text-right tabular-nums"
+          inputMode="decimal"
+          placeholder="0"
+          title={formatMoney(monthly, INCOME_COST_CURRENCY)}
+          defaultValue={monthlyDisplay}
+          key={`m-${line.id}-${line.yearlyAmount}-${line.lastEdited ?? ''}`}
+          onBlur={(e) => {
+            const raw = e.target.value.trim()
+            if (!raw) {
+              onChange(setAmountFromMonthly(line, 0))
+              return
+            }
+            const v = parseMoney(raw)
+            if (v == null || v < 0) return
+            onChange(setAmountFromMonthly(line, v))
+          }}
+        />
+      </td>
+      <td className="w-[6.5rem] px-1.5 py-1 align-top">
         <input
           className="input !py-1 !text-xs text-right tabular-nums"
           inputMode="decimal"
@@ -392,7 +379,7 @@ function LineRow({
           }}
         />
       </td>
-      <td className="w-8 px-1 py-1 text-right">
+      <td className="w-8 px-1 py-1 text-right align-top">
         <button
           type="button"
           className="text-[11px] text-white/35 hover:text-red-300"

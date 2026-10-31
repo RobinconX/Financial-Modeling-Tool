@@ -366,20 +366,20 @@ export function IncomeCostView({
 
           <div className="grid gap-5 xl:grid-cols-2">
             <CashflowTable
-              kind="cost"
-              scenarioId={selected.id}
-              lines={lines}
-              onChange={upsertLine}
-              onRemove={removeLine}
-              onAdd={(cadence) => addLine(selected.id, 'cost', cadence)}
-            />
-            <CashflowTable
               kind="income"
               scenarioId={selected.id}
               lines={lines}
               onChange={upsertLine}
               onRemove={removeLine}
               onAdd={(cadence) => addLine(selected.id, 'income', cadence)}
+            />
+            <CashflowTable
+              kind="cost"
+              scenarioId={selected.id}
+              lines={lines}
+              onChange={upsertLine}
+              onRemove={removeLine}
+              onAdd={(cadence) => addLine(selected.id, 'cost', cadence)}
             />
           </div>
 
