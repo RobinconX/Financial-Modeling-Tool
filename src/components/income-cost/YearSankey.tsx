@@ -160,9 +160,12 @@ function makeNodeShape(byKey: Map<string, SankeyNode>, hover: HoverHandlers) {
     const kind: SankeyNodeKind = payload?.kind ?? 'pool'
     const label: string = payload?.displayName ?? payload?.name ?? ''
     const fill = KIND_FILL[kind] ?? KIND_FILL.pool
+    const isPool = kind === 'pool'
     const isLeft = kind === 'income' || kind === 'gap'
-    const textX = isLeft ? x - 8 : x + width + 8
-    const anchor = isLeft ? 'end' : 'start'
+    const textX = isPool ? x + width / 2 : isLeft ? x - 8 : x + width + 8
+    const anchor = isPool ? 'middle' : isLeft ? 'end' : 'start'
+    const labelY = isPool ? y + height + 6 : y + height / 2
+    const labelBaseline = isPool ? 'hanging' : 'middle'
 
     const tip = resolveFromNodePayload(payload, byKey)
 
@@ -190,9 +193,9 @@ function makeNodeShape(byKey: Map<string, SankeyNode>, hover: HoverHandlers) {
         {/* Labels must not steal hover from bands underneath */}
         <text
           x={textX}
-          y={y + height / 2}
+          y={labelY}
           textAnchor={anchor}
-          dominantBaseline="middle"
+          dominantBaseline={labelBaseline}
           fill="rgba(232,238,245,0.9)"
           fontSize={11}
           fontWeight={kind === 'pool' || kind === 'leftover' ? 600 : 400}
@@ -353,7 +356,7 @@ export function YearSankey({
             nodePadding={nodePadding}
             linkCurvature={0.45}
             iterations={64}
-            margin={{ top: 12, right: 140, bottom: 12, left: 140 }}
+            margin={{ top: 12, right: 140, bottom: 28, left: 140 }}
             sort={false}
             node={nodeShape}
             link={linkShape}
