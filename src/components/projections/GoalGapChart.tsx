@@ -212,6 +212,7 @@ export function GoalGapChart({
   fillContainer = false,
 }: Props) {
   const valueLabel = metric === 'cagr' ? 'CAGR' : 'Remaining upside'
+  const targetSeriesName = metric === 'cagr' ? 'Target CAGR' : 'Target return'
   const plot = useMemo(
     () => series.filter((s) => s.points.length >= 2),
     [series],
@@ -410,7 +411,7 @@ export function GoalGapChart({
                 formatter={(value, name) => {
                   const n = typeof value === 'number' ? value : Number(value)
                   const label = String(name)
-                  if (label === 'Target CAGR') return [formatPercent(n), label]
+                  if (label === targetSeriesName) return [formatPercent(n), label]
                   return [formatPercent(n), `${label} · ${valueLabel}`]
                 }}
                 labelFormatter={(label) => String(label)}
@@ -436,7 +437,7 @@ export function GoalGapChart({
               <Line
                 type="monotone"
                 dataKey={TARGET_CAGR_SERIES_KEY}
-                name="Target CAGR"
+                name={targetSeriesName}
                 stroke={TARGET_CAGR_COLOR}
                 strokeWidth={2}
                 strokeDasharray="5 4"
@@ -452,8 +453,8 @@ export function GoalGapChart({
       <p className="mt-1 flex flex-wrap items-center justify-center gap-x-2 text-[10px] text-white/30">
         {showTarget ? (
           <span>
-            <span className="text-red-300/90">Red dotted</span> = target CAGR
-            {metric === 'upside' ? ' as remaining upside' : ''}
+            <span className="text-red-300/90">Red dotted</span> ={' '}
+            {metric === 'cagr' ? 'target CAGR' : 'target return as remaining upside'}
             {' · '}
           </span>
         ) : null}
