@@ -123,49 +123,56 @@ const GUIDES: Record<string, FeatureGuide> = {
       'Forks a scenario’s asset stack and overlays year-by-year income and living costs so you can rehearse phased work, early retirement, or other cashflow paths — and see when the stack runs dry.',
     body: `## How it works
 
-**Runway** keeps the selected Overview scenario’s portfolios, savings, leftover, and other series growing exactly as configured. What you change here is only the cashflow overlay: how much comes in each year and how much living cost you need to cover.
+**Runway** keeps the selected Overview scenario’s portfolios, savings, leftover, and other series growing as configured. You only change the **cashflow overlay** — yearly income in, living cost out.
 
-Start from **Scenarios**:
+### Start from Scenarios
 
-- **+ New** or **Save as…** to fork a named what-if without touching the base stack
+- **+ New** or **Save as…** — fork a named what-if without touching the base stack
 - Notes hold assumptions only
 - Then open the **Runway** page tab
 
-Under the chart, **Runway periods** are ordered rows. Each row’s **From** year lasts until the next row (or chart **To**). Modes:
+### Runway periods
 
-- **Manual income** — enter CHF / year yourself; set **Draw** as **% of income** or **Fixed CHF**
+Ordered rows under the chart. Each row’s **From** year lasts until the next row (or chart **To**).
+
+- **Manual income** — enter CHF / year; set **Draw** as **% of income** or **Fixed CHF**
 - **Budget income** — pull yearly income from a Budget scenario; still set Draw yourself
-- **Keep Budget as in…** — that Budget scenario’s income is in and its costs are the draw
+- **Keep Budget as in…** — that Budget’s income is in and its costs are the draw
 
-Each row shows resolved **in → out** for its start year. **+ Period** adds the next stage (for example full work, then part-time, then stopped).
+Each row shows resolved **in → out** for its start year. **+ Period** adds the next stage (full work → part-time → stopped).
 
-**Draw order** decides which piles pay a deficit (draw > income). Drag to reorder. **Locked until** skips a series before that year. **Before / After** is when that pile is tapped relative to its own growth.
+### Draw order
 
-Click a future year on the chart for the year math (income, draw needed, growth, and what left each pile).
+Which piles pay a deficit (draw > income). Drag to reorder.
+
+- **Locked until** — skip a series before that year
+- **Before / After** — when that pile is tapped relative to its own growth
+
+Click a future year on the chart for the year math: income, draw needed, growth, and what left each pile.
 
 ## How to interpret
 
-Watch the **stack after Now**, not the past bars. Past years are the modeled net-worth history; Runway grow-and-spend starts at **Now**.
+Watch the **stack after Now**, not the past bars. Past years are modeled net-worth history; grow-and-spend starts at **Now**.
 
-- When income covers the draw, the gap is zero — assets keep compounding (and Budget-linked modes can add surplus onto leftover)
-- When draw exceeds income, the gap is taken from assets in draw order
-- If the stacked height collapses toward zero before your horizon, that cashflow path is not sustainable yet — push the leaner periods later, cut the draw, or grow the stack first
-- If you can phase work or other income down and **asset growth still covers living costs** so the stack holds through the horizon, the model is **sustainable**
-- If the desired living cost is covered with **no earned income** required and the stack still lasts, that is **financial independence** under these assumptions
+- Income covers draw → gap is zero; assets keep compounding (Budget-linked modes can add surplus onto leftover)
+- Draw exceeds income → gap comes from assets in draw order
+- Stack collapses toward zero before your horizon → path is not sustainable yet — push leaner periods later, cut the draw, or grow the stack first
 
-Use this to answer: “If assets keep behaving as configured, when can I phase work down without running out of cash — and when am I financially independent?”
+> **Sustainable** — you can phase work (or other income) down and asset growth still covers living costs through the horizon.
+
+> **Financial independence** — living cost is covered with **no earned income**, and the stack still lasts under these assumptions.
+
+The question to answer: if assets keep behaving as configured, when can I phase work down without running out — and when am I financially independent?
 
 ## Example
 
 Same asset stack. Living cost stays **CHF 80k / year**. Only earned income phases out.
 
-- **2026–2034** — Manual income **CHF 100k**, Draw **Fixed CHF 80k** → surplus years; stack still grows
-- **2035–2039** — Manual income **CHF 40k**, Draw **Fixed CHF 80k** → **CHF 40k / year** from assets (part-time)
+- **2026–2034** — Manual income **CHF 100k**, Draw **Fixed CHF 80k** → surplus; stack still grows
+- **2035–2039** — Manual income **CHF 40k**, Draw **Fixed CHF 80k** → **CHF 40k / year** from assets
 - **2040 onward** — Manual income **CHF 0**, Draw **Fixed CHF 80k** → full **CHF 80k / year** draw
 
-If the chart hits near-empty piles in the early 2040s, start the 40k or 0k period later (or trim the fixed draw) until the stack lasts through the horizon. That start year is the earliest phase-out the current stack can fund under these assumptions.
-
-Once phased-down (or zero) income still leaves a lasting stack — because growth and draw order keep living costs covered — you have a **sustainable** path. When the **CHF 0** income period itself lasts without depleting the stack, earned income is no longer required for that standard of living: **financial independence**.
+If piles near empty in the early 2040s, start the 40k or 0k period later (or trim the fixed draw) until the stack lasts through the horizon. That start year is the earliest phase-out this stack can fund.
 
 ![Phase work down in periods; lasting stack means sustainable path, zero income lasting means FI](ref:runway-phase-out)
 `,
@@ -212,33 +219,36 @@ Once phased-down (or zero) income still leaves a lasting stack — because growt
 
 **Monthly** reads the selected scenario’s income and cost positions from **Budget** and lays them across Jan–Dec.
 
-On **Budget**, each position has a payment schedule:
+### Payment schedule (on Budget)
 
 - **Monthly** (no months selected) — yearly amount ÷12 every month
 - **Selected months** — yearly total split equally across those months (rounding remainder on the last selected month)
 
-Pin annual bills, bonuses, and one-offs to the months they actually hit. That is what makes a model of about monthly accuracy possible; a flat ÷12 average hides timing.
+Pin annual bills, bonuses, and one-offs to the months they actually hit. A flat ÷12 average hides timing.
 
-This view then builds the path:
+### The cash path
 
 - **Opening cash (Dec prior year)** — permanent Cash savings year-end from Savings → Actuals
 - **Inflow / Outflow / Net** — budget lines in that month
 - **Balance** — cumulative working balance from opening + nets (budget only)
-- **Draws** — optional CHF you plan to take from working balance in specific months (vacation, tax, gifts, buffer top-ups, …)
+- **Draws** — optional CHF you plan to take from working balance in specific months
 - **After draws** — same path with draws subtracted
 
-Use **+ Draw** under **Working balance** to name a reason and enter amounts per month. Draws are informative only — they do not change annual Budget net, the Sankey, or portfolio deposits.
+Use **+ Draw** under **Working balance** to name a reason and enter amounts per month.
 
-The chart and table share the same series (**Inflow**, **Outflow**, **Balance**, **Draws**, **After draws**); toggle series under the chart if you want a quieter view.
+> Draws are informative only — they do not change annual Budget net, the Sankey, or portfolio deposits.
+
+The chart and table share the same series (**Inflow**, **Outflow**, **Balance**, **Draws**, **After draws**); toggle series under the chart for a quieter view.
 
 ## How to interpret
 
 Watch **where Balance moves**, not only year-end totals. A healthy **Annual net** can still dip negative mid-year if a large cost lands before the cash that funds it.
 
-- **Balance** answers: “If I only run the budget, does working capital stay solvent month by month?”
-- **After draws** answers: “After the spending I already know is coming out of cash, am I still okay?”
+> **Balance** — “If I only run the budget, does working capital stay solvent month by month?”
 
-Plan the year with draws so **After draws** stays comfortable — that is how you avoid struggling with working capital when known outflows cluster. If a trough looks wrong, fix payment months on **Budget** (or shift draws), then re-read this path.
+> **After draws** — “After the spending I already know is coming out of cash, am I still okay?”
+
+Plan so **After draws** stays comfortable when known outflows cluster. If a trough looks wrong, fix payment months on **Budget** (or shift draws), then re-read this path.
 
 ## Example
 
@@ -325,20 +335,24 @@ Same yearly totals with insurance and bonus left on **Monthly** would smooth Jan
       'Each point is the implied CAGR from that day’s price to a fixed year-end goal if the target is hit. Higher means a better time-weighted path under that assumption. Only names you already ticked on the comparables list appear.',
     body: `## How it works
 
-Each chart point is the **implied CAGR** from that day’s price to your fixed year-end goal price, assuming the target is hit. The goal year and price stay fixed; only the starting price (and time left) change along the series.
+Each chart point is the **implied CAGR** from that day’s price to your fixed year-end goal price, assuming the target is hit.
+
+The goal year and price stay fixed; only the starting price (and time left) change along the series.
 
 Names on the chart are the projections you already ticked on the comparables list — nothing else is added automatically.
 
 ## How to interpret
 
-**Higher is better** under that assumption: a higher implied CAGR means you need a stronger annualized path from that day’s price to still reach the same year-end goal. When price has already risen toward the goal, the required CAGR falls.
+> **Higher is better** under that assumption: a higher implied CAGR means you need a stronger annualized path from that day’s price to still reach the same year-end goal.
+
+When price has already risen toward the goal, the required CAGR falls.
 
 ## Example
 
 Same goal: **$200** at year-end **2028**.
 
-- On **2024-01-02** at **$100**, years left ≈ 5 → implied CAGR ≈ **14.9%** (\`(200/100)^(1/5) − 1\`).
-- On **2026-01-02** at **$150**, years left ≈ 3 → implied CAGR ≈ **10.1%** (\`(200/150)^(1/3) − 1\`).
+- On **2024-01-02** at **$100**, years left ≈ 5 → implied CAGR ≈ **14.9%** (\`(200/100)^(1/5) − 1\`)
+- On **2026-01-02** at **$150**, years left ≈ 3 → implied CAGR ≈ **10.1%** (\`(200/150)^(1/3) − 1\`)
 
 Same finish line; a higher starting price leaves less annualized climb still required.
 
@@ -426,35 +440,44 @@ Same finish line; a higher starting price leaves less annualized climb still req
       'Shows how much sooner extra contributions get you to a wealth goal under a compounding rate. Early dollars shorten time-to-goal disproportionately vs later ones — and the absolute years saved loom larger when assumed CAGR is lower.',
     body: `## How it works
 
-Pick a **goal** amount, a **compounding rate** (CAGR), and a **start** (Now, a projected year-end, or a custom amount). The tool then walks a simple path: wealth compounds at that rate each year; year-end contributions are added with **no growth in the contribution year** (same timing as the portfolio Cash deposits).
+Pick a **goal** amount, a **compounding rate** (CAGR), and a **start** (Now, a projected year-end, or a custom amount).
 
-Each table row is cumulative:
+Wealth compounds at that rate each year. Year-end contributions are added with **no growth in the contribution year** (same timing as portfolio Cash deposits).
+
+### Table rows
+
+Each row is cumulative:
 
 - **Base** — start only, no extras
 - **+YYYY** — base plus every contribution through that year
 
 For each row you get the goal date, time from the clock origin, how much **faster** that year’s extras are than the previous row, and **relative effectiveness**.
 
-**Stated** extras pull deposits from the Cash tab after the start year. **Custom** extras are what-if only — they never write back to Cash.
+### Extra sources
+
+- **Stated** — pull deposits from the Cash tab after the start year
+- **Custom** — what-if only; they never write back to Cash
 
 ## How to interpret
 
-**Earlier contributions count disproportionately more** than later ones of the same size. A dollar that compounds for more years pulls the goal date forward more than a dollar added near the finish. The **Rel. effect.** column makes that concrete: exact time saved per currency unit this year, divided by exact time saved per unit in the **last** contribution year (the last year is always **1.00×**). Values above 1× mean that year’s money bought more calendar time than the final year’s money.
+> **Earlier contributions count disproportionately more** than later ones of the same size. A dollar that compounds for more years pulls the goal date forward more than a dollar added near the finish.
 
-That imbalance is especially visible when **assumed CAGR is lower**. Growth alone closes less of the gap, so shifting the same contribution earlier saves **more absolute years**. At a higher rate, relative multiples can look larger (early dollars still outpace late ones in the \`(1+r)^n\` sense), but the calendar years you claw back from contributing early shrink because compounding is already doing more of the work.
+**Rel. effect.** makes that concrete: exact time saved per currency unit this year, divided by exact time saved per unit in the **last** contribution year (always **1.00×**). Values above 1× mean that year’s money bought more calendar time than the final year’s money.
 
-Use the chart to see the whole path to the goal; click a table row for the year-by-year math.
+That imbalance is especially visible when **assumed CAGR is lower**. Growth alone closes less of the gap, so shifting the same contribution earlier saves **more absolute years**. At a higher rate, relative multiples can look larger, but calendar years clawed back from contributing early shrink because compounding already does more of the work.
+
+Use the chart for the whole path; click a table row for the year-by-year math.
 
 ## Example
 
 Start **$100k**, goal **$300k**, same **$20k** contribution — only the year and rate change.
 
-**At 4% CAGR**
+### At 4% CAGR
 
 - +$20k in **2026** → about **4.65 years** sooner than base (rel. effect. ≈ **1.59×**)
 - +$20k in **2034** → about **2.93 years** sooner than the prior path (rel. effect. **1.00×**)
 
-**At 10% CAGR** (same dollars)
+### At 10% CAGR
 
 - +$20k in **2026** → about **1.91 years** sooner (rel. effect. ≈ **2.43×**)
 - +$20k in **2034** → about **0.79 years** sooner (**1.00×**)

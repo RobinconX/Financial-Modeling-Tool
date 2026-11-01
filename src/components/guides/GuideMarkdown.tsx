@@ -20,12 +20,16 @@ function renderInline(text: string): ReactNode[] {
     if (m.index > last) nodes.push(text.slice(last, m.index))
     const token = m[0]
     if (token.startsWith('**')) {
-      nodes.push(<strong key={key++}>{token.slice(2, -2)}</strong>)
+      nodes.push(
+        <strong key={key++} className="font-semibold text-white">
+          {token.slice(2, -2)}
+        </strong>,
+      )
     } else {
       nodes.push(
         <code
           key={key++}
-          className="rounded bg-white/10 px-1 py-0.5 font-mono text-[11px] text-emerald-200/90"
+          className="rounded bg-emerald-400/10 px-1 py-0.5 font-mono text-[11px] text-emerald-200/90"
         >
           {token.slice(1, -1)}
         </code>,
@@ -59,7 +63,8 @@ function resolveSrc(
 
 /**
  * Minimal markdown for feature-guide bodies: paragraphs, ##/###, **bold**,
- * unordered lists, inline `code`, and images (`![alt](src)` or `![alt](ref:id)`).
+ * unordered lists, blockquotes (`>` callouts), inline `code`, and images
+ * (`![alt](src)` or `![alt](ref:id)`).
  */
 export function GuideMarkdown({ source, className = '', references }: Props) {
   const lines = source.replace(/\r\n/g, '\n').split('\n')
@@ -93,7 +98,10 @@ export function GuideMarkdown({ source, className = '', references }: Props) {
 
     if (line.startsWith('### ')) {
       blocks.push(
-        <h4 key={key++} className="mt-3 text-xs font-semibold tracking-wide text-white/80">
+        <h4
+          key={key++}
+          className="mt-5 mb-1 pl-3 text-[11px] font-semibold uppercase tracking-[0.08em] text-sky-300/85 first:mt-0"
+        >
           {renderInline(line.slice(4))}
         </h4>,
       )
@@ -102,7 +110,10 @@ export function GuideMarkdown({ source, className = '', references }: Props) {
     }
     if (line.startsWith('## ')) {
       blocks.push(
-        <h3 key={key++} className="mt-4 text-sm font-semibold tracking-wide text-white/90 first:mt-0">
+        <h3
+          key={key++}
+          className="mt-6 mb-2 border-l-2 border-emerald-400/90 pl-2.5 text-sm font-semibold tracking-wide text-emerald-400/90 first:mt-0"
+        >
           {renderInline(line.slice(3))}
         </h3>,
       )
@@ -110,18 +121,35 @@ export function GuideMarkdown({ source, className = '', references }: Props) {
       continue
     }
 
+    if (/^>\s?/.test(line)) {
+      const quoteLines: string[] = []
+      while (i < lines.length && /^>\s?/.test(lines[i]!)) {
+        quoteLines.push(lines[i]!.replace(/^>\s?/, ''))
+        i += 1
+      }
+      blocks.push(
+        <aside
+          key={key++}
+          className="mt-3 ml-3 rounded-r-md border-l-2 border-sky-400/55 bg-sky-400/[0.07] px-3 py-2.5 text-[13px] leading-relaxed text-sky-50/85"
+        >
+          {renderInline(quoteLines.join(' '))}
+        </aside>,
+      )
+      continue
+    }
+
     if (/^[-*] /.test(line)) {
       const items: ReactNode[] = []
       while (i < lines.length && /^[-*] /.test(lines[i]!)) {
         items.push(
-          <li key={key++} className="leading-relaxed">
+          <li key={key++} className="leading-relaxed marker:text-emerald-400/55">
             {renderInline(lines[i]!.replace(/^[-*] /, ''))}
           </li>,
         )
         i += 1
       }
       blocks.push(
-        <ul key={key++} className="mt-2 list-disc space-y-1.5 pl-4 text-[13px] text-white/75">
+        <ul key={key++} className="mt-2.5 list-disc space-y-2 pl-8 text-[13px] text-white/70">
           {items}
         </ul>,
       )
@@ -134,17 +162,18 @@ export function GuideMarkdown({ source, className = '', references }: Props) {
       lines[i]!.trim() !== '' &&
       !lines[i]!.startsWith('#') &&
       !/^[-*] /.test(lines[i]!) &&
+      !/^>\s?/.test(lines[i]!) &&
       !/^!\[/.test(lines[i]!.trim())
     ) {
       para.push(lines[i]!)
       i += 1
     }
     blocks.push(
-      <p key={key++} className="mt-2 text-[13px] leading-relaxed text-white/75 first:mt-0">
+      <p key={key++} className="mt-2.5 pl-3 text-[13px] leading-[1.65] text-white/68 first:mt-0">
         {renderInline(para.join(' '))}
       </p>,
     )
   }
 
-  return <div className={className}>{blocks}</div>
+  return <div className={`space-y-0.5 ${className}`}>{blocks}</div>
 }
