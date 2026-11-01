@@ -116,6 +116,76 @@ const GUIDES: Record<string, FeatureGuide> = {
     'overview',
     2,
   ),
+  'overview.runway': {
+    id: 'overview.runway',
+    title: 'Runway',
+    summary:
+      'Forks a scenario’s asset stack and overlays year-by-year income and living costs so you can rehearse phased work, early retirement, or other cashflow paths — and see when the stack runs dry.',
+    body: `## How it works
+
+**Runway** keeps the selected Overview scenario’s portfolios, savings, leftover, and other series growing exactly as configured. What you change here is only the cashflow overlay: how much comes in each year and how much living cost you need to cover.
+
+Start from **Scenarios**:
+
+- **+ New** or **Save as…** to fork a named what-if without touching the base stack
+- Notes hold assumptions only
+- Then open the **Runway** page tab
+
+Under the chart, **Runway periods** are ordered rows. Each row’s **From** year lasts until the next row (or chart **To**). Modes:
+
+- **Manual income** — enter CHF / year yourself; set **Draw** as **% of income** or **Fixed CHF**
+- **Budget income** — pull yearly income from a Budget scenario; still set Draw yourself
+- **Keep Budget as in…** — that Budget scenario’s income is in and its costs are the draw
+
+Each row shows resolved **in → out** for its start year. **+ Period** adds the next stage (for example full work, then part-time, then stopped).
+
+**Draw order** decides which piles pay a deficit (draw > income). Drag to reorder. **Locked until** skips a series before that year. **Before / After** is when that pile is tapped relative to its own growth.
+
+Click a future year on the chart for the year math (income, draw needed, growth, and what left each pile).
+
+## How to interpret
+
+Watch the **stack after Now**, not the past bars. Past years are the modeled net-worth history; Runway grow-and-spend starts at **Now**.
+
+- When income covers the draw, the gap is zero — assets keep compounding (and Budget-linked modes can add surplus onto leftover)
+- When draw exceeds income, the gap is taken from assets in draw order
+- If the stacked height collapses toward zero before your horizon, that cashflow path is not sustainable yet — push the leaner periods later, cut the draw, or grow the stack first
+- If you can phase work or other income down and **asset growth still covers living costs** so the stack holds through the horizon, the model is **sustainable**
+- If the desired living cost is covered with **no earned income** required and the stack still lasts, that is **financial independence** under these assumptions
+
+Use this to answer: “If assets keep behaving as configured, when can I phase work down without running out of cash — and when am I financially independent?”
+
+## Example
+
+Same asset stack. Living cost stays **CHF 80k / year**. Only earned income phases out.
+
+- **2026–2034** — Manual income **CHF 100k**, Draw **Fixed CHF 80k** → surplus years; stack still grows
+- **2035–2039** — Manual income **CHF 40k**, Draw **Fixed CHF 80k** → **CHF 40k / year** from assets (part-time)
+- **2040 onward** — Manual income **CHF 0**, Draw **Fixed CHF 80k** → full **CHF 80k / year** draw
+
+If the chart hits near-empty piles in the early 2040s, start the 40k or 0k period later (or trim the fixed draw) until the stack lasts through the horizon. That start year is the earliest phase-out the current stack can fund under these assumptions.
+
+Once phased-down (or zero) income still leaves a lasting stack — because growth and draw order keep living costs covered — you have a **sustainable** path. When the **CHF 0** income period itself lasts without depleting the stack, earned income is no longer required for that standard of living: **financial independence**.
+
+![Phase work down in periods; lasting stack means sustainable path, zero income lasting means FI](ref:runway-phase-out)
+`,
+    references: [
+      {
+        id: 'runway-phase-out',
+        src: '/guides/overview-runway-phase-out.svg',
+        alt: 'Phase work down in periods; lasting stack means sustainable path, zero income lasting means FI',
+        caption:
+          'Same living cost, stepped-down income: lasting stack = sustainable; lasting at zero earned income = financially independent.',
+      },
+    ],
+    status: 'ready',
+    location: {
+      tab: 'overview',
+      anchor: 'overview.runway',
+    },
+    parentId: 'overview',
+    order: 3,
+  },
 
   'income-cost': draft(
     'income-cost',

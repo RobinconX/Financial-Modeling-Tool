@@ -36,6 +36,7 @@ import { OverviewCompareChart } from './OverviewCompareChart'
 import { OverviewSeriesEditor } from './OverviewSeriesEditor'
 import { RunwayConfig } from './RunwayConfig'
 import { OverviewYearDetail } from './OverviewYearDetail'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 type Props = {
@@ -528,6 +529,7 @@ export function OverviewView({
                 </>
               )}
             </h3>
+            {pageTab === 'runway' ? <FeatureGuideButton id="overview.runway" /> : null}
             <InfoTip label="About overview chart">
               {effectiveChartMode === 'compare'
                 ? 'Past years → Now (live) → future. Each line is total net worth for a scenario (enabled series only).'
@@ -743,20 +745,22 @@ export function OverviewView({
         ) : null}
 
         {pageTab === 'runway' && selectedScenario ? (
-          <RunwayConfig
-            key={selectedScenario.id}
-            config={runwayConfig}
-            incomeCostScenarios={incomeCostScenarios}
-            incomeCostLines={incomeCostLines}
-            series={runwaySeries}
-            savingsAccounts={savingsAccounts}
-            onChange={(patch) =>
-              updateScenario(selectedScenario.id, {
-                runway: { ...runwayConfig, ...patch },
-              })
-            }
-            onUpdateSeries={updateSeries}
-          />
+          <div data-guide-anchor="overview.runway">
+            <RunwayConfig
+              key={selectedScenario.id}
+              config={runwayConfig}
+              incomeCostScenarios={incomeCostScenarios}
+              incomeCostLines={incomeCostLines}
+              series={runwaySeries}
+              savingsAccounts={savingsAccounts}
+              onChange={(patch) =>
+                updateScenario(selectedScenario.id, {
+                  runway: { ...runwayConfig, ...patch },
+                })
+              }
+              onUpdateSeries={updateSeries}
+            />
+          </div>
         ) : null}
         {pageTab === 'networth' ? (
         <div className="flex items-start justify-between gap-3">

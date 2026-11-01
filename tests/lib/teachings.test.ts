@@ -64,6 +64,28 @@ describe('teachings registry', () => {
     expect(g?.body.toLowerCase()).toContain('draw')
   })
 
+  it('exposes a ready Overview Runway guide with a figure', () => {
+    const g = getGuide('overview.runway')
+    expect(g?.status).toBe('ready')
+    expect(g?.location).toEqual({
+      tab: 'overview',
+      anchor: 'overview.runway',
+    })
+    expect(g?.parentId).toBe('overview')
+    expect(isGuideReady('overview.runway')).toBe(true)
+    expect(g?.references).toEqual([
+      expect.objectContaining({
+        id: 'runway-phase-out',
+        src: '/guides/overview-runway-phase-out.svg',
+      }),
+    ])
+    expect(g?.body).toContain('](ref:runway-phase-out)')
+    expect(g?.body.toLowerCase()).toContain('phase')
+    expect(g?.body.toLowerCase()).toContain('scenario')
+    expect(g?.body.toLowerCase()).toContain('sustainable')
+    expect(g?.body.toLowerCase()).toContain('financial independence')
+  })
+
 
   it('keeps upside chart draft (in-app button hidden; registry still opens stub)', () => {
     expect(getGuide('comparables.upsideChart')?.status).toBe('draft')

@@ -1,0 +1,65 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="640" height="920" viewBox="0 0 640 920" role="img" aria-labelledby="title desc">
+  <title id="title">Phase work down in periods; move the leaner years later until the asset stack lasts</title>
+  <desc id="desc">Three runway periods with stepped-down income against a fixed living cost, then two outcomes: phase-out too early empties the stack, later phase-out keeps assets alive.</desc>
+
+  <rect width="640" height="920" fill="#0f1412"/>
+  <rect x="16" y="16" width="608" height="888" rx="16" fill="#18201c" stroke="#5a7468" stroke-width="1.5"/>
+
+  <text x="40" y="62" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="700">Same assets. New cashflow</text>
+  <text x="40" y="92" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="24" font-weight="700">assumptions per period.</text>
+  <text x="40" y="126" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">Living cost stays CHF 80k/year. Only earned income steps down.</text>
+
+  <!-- Periods panel -->
+  <rect x="40" y="150" width="560" height="310" rx="12" fill="#24302a" stroke="#6ee7b7" stroke-width="1.5"/>
+  <text x="60" y="186" fill="#6ee7b7" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="700">Runway periods</text>
+
+  <text x="60" y="228" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700">1. Work</text>
+  <text x="160" y="228" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">2026-</text>
+  <text x="220" y="228" fill="#a7f3d0" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">in 100k</text>
+  <text x="310" y="228" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">/</text>
+  <text x="330" y="228" fill="#fda4af" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">out 80k</text>
+  <text x="430" y="228" fill="#6ee7b7" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">surplus</text>
+
+  <text x="60" y="272" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700">2. Phase-out</text>
+  <text x="190" y="272" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">2035-</text>
+  <text x="250" y="272" fill="#a7f3d0" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">in 40k</text>
+  <text x="330" y="272" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">/</text>
+  <text x="350" y="272" fill="#fda4af" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">out 80k</text>
+  <text x="450" y="272" fill="#fbbf24" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">-40k/y</text>
+
+  <text x="60" y="316" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="17" font-weight="700">3. Stopped</text>
+  <text x="180" y="316" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">2040-</text>
+  <text x="240" y="316" fill="#a7f3d0" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">in 0</text>
+  <text x="300" y="316" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">/</text>
+  <text x="320" y="316" fill="#fda4af" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16">out 80k</text>
+  <text x="420" y="316" fill="#fbbf24" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">-80k/y</text>
+
+  <text x="60" y="362" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">Assets still grow as the scenario series are configured.</text>
+  <text x="60" y="386" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">Only the income / living-cost overlay changes by period.</text>
+  <text x="60" y="426" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Gap = draw - income, taken in Draw order.</text>
+
+  <!-- Too early -->
+  <rect x="40" y="482" width="560" height="168" rx="12" fill="#24302a" stroke="#fb7185" stroke-width="1.5"/>
+  <text x="60" y="520" fill="#fb7185" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="700">Phase-out too early</text>
+  <text x="60" y="550" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">Stack shrinks under the 40k then 80k gaps</text>
+
+  <text x="60" y="598" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Assets</text>
+  <rect x="140" y="574" width="200" height="36" rx="8" fill="#34d399"/>
+  <rect x="340" y="574" width="90" height="36" rx="8" fill="#fbbf24"/>
+  <rect x="430" y="574" width="28" height="36" rx="8" fill="#fb7185"/>
+  <text x="480" y="598" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700">empty</text>
+  <text x="60" y="630" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">Now ------&gt; 2035 ------&gt; 2040 ------&gt; dry</text>
+
+  <!-- Later works -->
+  <rect x="40" y="670" width="560" height="210" rx="12" fill="#143028" stroke="#34d399" stroke-width="2"/>
+  <text x="60" y="710" fill="#6ee7b7" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="20" font-weight="700">Push leaner periods later</text>
+  <text x="60" y="740" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">Keep working (or keep the 40k band) longer so the</text>
+  <text x="60" y="762" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">stack compounds before full drawdown.</text>
+
+  <text x="60" y="810" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="16" font-weight="700">Assets</text>
+  <rect x="140" y="786" width="200" height="36" rx="8" fill="#34d399"/>
+  <rect x="340" y="786" width="150" height="36" rx="8" fill="#6ee7b7"/>
+  <rect x="490" y="786" width="70" height="36" rx="8" fill="#a7f3d0"/>
+  <text x="60" y="842" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">Lasting stack = sustainable. Lasting at 0 income</text>
+  <text x="60" y="864" fill="#ffffff" font-family="Segoe UI, Helvetica, Arial, sans-serif" font-size="15">= financially independent for that living cost.</text>
+</svg>
