@@ -202,7 +202,7 @@ export function PortfolioHoldingsEditor({
       h.scenarioId != null && !h.manualOnly
         ? (scenarios.find((s) => s.id === h.scenarioId) ?? null)
         : null
-    return holdingLiveValue(h, linked, allActions)
+    return holdingLiveValue(h, linked)
   }
 
   const sortedHoldings = useMemo(() => {
