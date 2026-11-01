@@ -680,6 +680,20 @@ export function isGuideReady(id: FeatureGuideId): boolean {
   return getGuide(id)?.status === 'ready'
 }
 
+/** Parent guide from `parentId`, if registered. */
+export function getParentGuide(id: FeatureGuideId): FeatureGuide | undefined {
+  const guide = getGuide(id)
+  if (!guide?.parentId) return undefined
+  return getGuide(guide.parentId)
+}
+
+/** Direct children of this guide, ordered like the sidebar tree. */
+export function listChildGuides(id: FeatureGuideId): FeatureGuide[] {
+  return Object.values(GUIDES)
+    .filter((g) => g.parentId === id)
+    .sort((a, b) => a.order - b.order)
+}
+
 export function listGuides(): FeatureGuide[] {
   return Object.values(GUIDES).sort((a, b) => {
     const ta = TAB_ORDER.indexOf(a.location.tab)

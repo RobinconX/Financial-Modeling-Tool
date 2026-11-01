@@ -1,7 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
   getGuide,
+  getParentGuide,
   isGuideReady,
+  listChildGuides,
   listGuides,
   listGuideSidebarTree,
   listGuideTree,
@@ -185,6 +187,21 @@ describe('teachings registry', () => {
 
   it('listGuides returns every registered entry', () => {
     expect(listGuides().length).toBeGreaterThanOrEqual(20)
+  })
+
+  it('resolves parent and children from parentId for article nav', () => {
+    expect(getParentGuide('savings')).toBeUndefined()
+    expect(listChildGuides('savings').map((g) => g.id)).toEqual([
+      'savings.accounts',
+      'savings.actuals',
+      'savings.progression',
+    ])
+
+    expect(getParentGuide('comparables.cagrChart')?.id).toBe('projections.comps')
+    expect(listChildGuides('projections.comps').map((g) => g.id)).toEqual(
+      expect.arrayContaining(['comparables.cagrChart', 'comparables.upsideChart']),
+    )
+    expect(listChildGuides('comparables.cagrChart')).toEqual([])
   })
 })
 

@@ -44,6 +44,7 @@ Fill everything else: accurate how-to-use coverage of the relevant UI/controls, 
 ```
 
 - Prefer promoting an existing draft id over inventing a new one.
+- Set `parentId` to the page/section guide (or `null` for tab roots). Parent↔child links in the article UI are derived automatically from `parentId` — do not hardcode related-guide lists in the body.
 - `FeatureGuideButton` renders only when `status === 'ready'`.
 - Drafts stay openable from the guide index as stubs; in-feature Guide buttons stay hidden.
 
