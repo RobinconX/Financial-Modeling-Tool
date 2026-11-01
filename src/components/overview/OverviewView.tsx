@@ -36,6 +36,7 @@ import { OverviewCompareChart } from './OverviewCompareChart'
 import { OverviewSeriesEditor } from './OverviewSeriesEditor'
 import { RunwayConfig } from './RunwayConfig'
 import { OverviewYearDetail } from './OverviewYearDetail'
+import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 type Props = {
   portfolios: SavedPortfolio[]
@@ -350,8 +351,10 @@ export function OverviewView({
     })
   }
 
+  useGuideTeleport('overview')
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-guide-anchor="overview">
       {error ? (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {error}
@@ -359,7 +362,7 @@ export function OverviewView({
       ) : null}
 
       {/* Scenario strip — open toolbar */}
-      <div className="section border-b border-white/5 pb-5">
+      <div className="section border-b border-white/5 pb-5" data-guide-anchor="overview.scenarios">
         <div className="section-header">
           <div className="flex items-center gap-1.5">
             <span className="section-title">Scenarios</span>
@@ -493,7 +496,10 @@ export function OverviewView({
       </div>
 
       {/* Chart */}
-      <div className="panel relative z-10 space-y-3 overflow-visible">
+      <div
+        className="panel relative z-10 space-y-3 overflow-visible"
+        data-guide-anchor="overview.chart"
+      >
         <div className="flex flex-wrap items-end justify-between gap-3">
           <div className="flex items-center gap-1.5">
             <h3 className="section-title">

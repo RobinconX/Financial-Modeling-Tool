@@ -19,6 +19,7 @@ import { ChartGoals } from '../common/ChartGoals'
 import { ChartNotes } from '../common/ChartNotes'
 import { InfoTip } from '../common/InfoTip'
 import { HistoryChart, type HistoryChartKind, type HistoryChartSplit } from './HistoryChart'
+import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 const INCLUDED_KEY = 'grok-lab-history-series'
 const RES_KEY = 'grok-lab-history-resolution'
@@ -233,16 +234,18 @@ export function HistoryView({
   const needsFx = allSeries.some((s) => !s.inChf)
   const yoyPositive = snap.yoy != null && snap.yoy >= 0
 
+  useGuideTeleport('history')
+
   if (allSeries.length === 0) {
     return (
-      <p className="px-1 py-10 text-center text-sm text-white/40">
+      <p className="px-1 py-10 text-center text-sm text-white/40" data-guide-anchor="history">
         Add monthly totals on Portfolio → Actuals, or year-end balances on Savings → Actuals.
       </p>
     )
   }
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-guide-anchor="history">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
           <InfoTip label="About history">

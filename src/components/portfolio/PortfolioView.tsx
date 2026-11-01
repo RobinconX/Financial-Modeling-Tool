@@ -32,6 +32,7 @@ import { PortfolioMoneyIn } from './PortfolioMoneyIn'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { InfoTip } from '../common/InfoTip'
+import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 const CURRENCY_KEY = 'grok-lab-portfolio-currency'
 const PANEL_KEY = 'grok-lab-portfolio-panel'
@@ -161,6 +162,19 @@ export function PortfolioView({
     readSelectedPortfolioId(portfolios),
   )
   const [panel, setPanel] = useState<WorkspaceTab>(readPanel)
+
+  useGuideTeleport('portfolio', (view) => {
+    if (
+      view === 'chart' ||
+      view === 'actuals' ||
+      view === 'cash' ||
+      view === 'positions' ||
+      view === 'growth' ||
+      view === 'goal'
+    ) {
+      setPanel(view)
+    }
+  })
   const [actualsKind, setActualsKind] = useState<'value' | 'moneyin'>('value')
   const [chartMode, setChartMode] = useState<PortfolioChartMode>(readChartMode)
   const [showCashInvested, setShowCashInvested] = useState(readCashInvested)
@@ -509,7 +523,7 @@ export function PortfolioView({
     panel === 'cash' || panel === 'positions' || panel === 'growth' ? panel : null
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-guide-anchor="portfolio">
       <div className="relative z-40 space-y-3">
         <nav
           className="flex flex-wrap gap-1 border-b border-white/10"
@@ -787,7 +801,10 @@ export function PortfolioView({
           Create or select a portfolio to get started.
         </div>
       ) : (
-        <div className="panel min-h-0 min-w-0 space-y-5">
+        <div
+          className="panel min-h-0 min-w-0 space-y-5"
+          data-guide-anchor={`portfolio.${panel}`}
+        >
             {panel === 'chart' && grid && (
               <div className="space-y-5">
                 <div className="space-y-2">

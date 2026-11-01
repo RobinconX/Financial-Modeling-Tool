@@ -1,0 +1,96 @@
+import { describe, expect, it } from 'vitest'
+import {
+  getGuide,
+  isGuideReady,
+  listGuides,
+  listGuideSidebarTree,
+  listGuideTree,
+} from '../../src/lib/teachings'
+
+describe('teachings registry', () => {
+  it('exposes a ready CAGR guide with a selective figure reference', () => {
+    const g = getGuide('comparables.cagrChart')
+    expect(g?.status).toBe('ready')
+    expect(g?.bookUrl).toBeUndefined()
+    expect(g?.location).toEqual({
+      tab: 'projections',
+      view: 'comps',
+      anchor: 'comparables.cagrChart',
+    })
+    expect(g?.parentId).toBe('projections.comps')
+    expect(isGuideReady('comparables.cagrChart')).toBe(true)
+    expect(g?.references).toEqual([
+      expect.objectContaining({
+        id: 'cagr-example',
+        src: '/guides/comparables-cagr-implied.jpg',
+      }),
+    ])
+    expect(g?.body).toContain('](ref:cagr-example)')
+  })
+
+
+  it('keeps upside chart draft (in-app button hidden; registry still opens stub)', () => {
+    expect(getGuide('comparables.upsideChart')?.status).toBe('draft')
+    expect(isGuideReady('comparables.upsideChart')).toBe(false)
+  })
+
+  it('treats unknown ids as not ready', () => {
+    expect(getGuide('nope')).toBeUndefined()
+    expect(isGuideReady('nope')).toBe(false)
+  })
+
+  it('pre-registers tab roots with locations', () => {
+    for (const id of [
+      'projections',
+      'portfolio',
+      'overview',
+      'history',
+      'income-cost',
+      'savings',
+      'settings',
+    ] as const) {
+      const g = getGuide(id)
+      expect(g, id).toBeDefined()
+      expect(g!.location.anchor).toBe(id)
+      expect(g!.location.tab).toBeTruthy()
+    }
+  })
+
+  it('builds a nested tree grouped by tab', () => {
+    const tree = listGuideTree()
+    expect(tree.map((t) => t.tab)).toEqual([
+      'overview',
+      'income-cost',
+      'savings',
+      'history',
+      'projections',
+      'portfolio',
+      'settings',
+    ])
+    const projections = tree.find((t) => t.tab === 'projections')!
+    expect(projections.roots.some((r) => r.guide.id === 'projections')).toBe(true)
+    const comps = projections.roots
+      .flatMap((r) => [r, ...r.children])
+      .find((n) => n.guide.id === 'projections.comps')
+    expect(comps?.children.map((c) => c.guide.id)).toEqual(
+      expect.arrayContaining(['comparables.cagrChart', 'comparables.upsideChart']),
+    )
+  })
+
+  it('sidebar tree matches Life → Investing → System', () => {
+    const sections = listGuideSidebarTree()
+    expect(sections.map((s) => s.id)).toEqual(['life', 'investing', 'system'])
+    expect(sections[0]!.tabs.map((t) => t.tab)).toEqual([
+      'overview',
+      'income-cost',
+      'savings',
+      'history',
+    ])
+    expect(sections[1]!.tabs.map((t) => t.tab)).toEqual(['projections', 'portfolio'])
+  })
+
+  it('listGuides returns every registered entry', () => {
+    expect(listGuides().length).toBeGreaterThanOrEqual(20)
+  })
+})
+

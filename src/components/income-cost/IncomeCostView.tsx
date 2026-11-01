@@ -16,6 +16,7 @@ import { YearSankey } from './YearSankey'
 import { MonthlyBudgetView } from './MonthlyBudgetView'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { CopyScenarioDialog } from './CopyScenarioDialog'
+import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 type WorkspaceTab = 'budget' | 'monthly'
 
@@ -104,6 +105,10 @@ export function IncomeCostView({
     () => scenarios[0]?.id ?? null,
   )
   const [workspaceTab, setWorkspaceTab] = useState<WorkspaceTab>('budget')
+
+  useGuideTeleport('income-cost', (view) => {
+    if (view === 'budget' || view === 'monthly') setWorkspaceTab(view)
+  })
   const [copyOpen, setCopyOpen] = useState(false)
   const [renamingId, setRenamingId] = useState<string | null>(null)
   const [renameDraft, setRenameDraft] = useState('')
@@ -181,7 +186,7 @@ export function IncomeCostView({
 
   if (!selected || !totals) {
     return (
-      <div className="py-12 text-center text-sm text-white/40">
+      <div className="py-12 text-center text-sm text-white/40" data-guide-anchor="income-cost">
         No scenarios yet.
         <div className="mt-3">
           <button type="button" className="btn-primary" onClick={handleAddScenario}>
@@ -193,7 +198,7 @@ export function IncomeCostView({
   }
 
   return (
-    <div className="space-y-8">
+    <div className="space-y-8" data-guide-anchor="income-cost">
       {storageError && (
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {storageError}
@@ -361,7 +366,7 @@ export function IncomeCostView({
       </div>
 
       {workspaceTab === 'budget' ? (
-        <div className="space-y-5">
+        <div className="space-y-5" data-guide-anchor="income-cost.budget">
           <YearOverview title={`${selected.year} · ${selected.name}`} totals={totals} />
 
           <div className="grid gap-5 xl:grid-cols-2">
@@ -398,21 +403,23 @@ export function IncomeCostView({
           </div>
         </div>
       ) : (
-        <MonthlyBudgetView
-          scenario={selected}
-          lines={lines}
-          draws={draws}
-          savingsAccounts={savingsAccounts}
-          onUpsertDraw={(d) => {
-            upsertDraw(d)
-          }}
-          onRemoveDraw={(id) => {
-            removeDraw(id)
-          }}
-          onAddDraw={() => {
-            addDraw(selected.id)
-          }}
-        />
+        <div data-guide-anchor="income-cost.monthly">
+          <MonthlyBudgetView
+            scenario={selected}
+            lines={lines}
+            draws={draws}
+            savingsAccounts={savingsAccounts}
+            onUpsertDraw={(d) => {
+              upsertDraw(d)
+            }}
+            onRemoveDraw={(id) => {
+              removeDraw(id)
+            }}
+            onAddDraw={() => {
+              addDraw(selected.id)
+            }}
+          />
+        </div>
       )}
 
       <CopyScenarioDialog

@@ -881,7 +881,10 @@ export function ComparablesView({
                 </table>
               </div>
               {overlayIds.length === 0 ? (
-                <p className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-3 text-sm text-white/55">
+                <p
+                  className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-3 text-sm text-white/55"
+                  data-guide-anchor="comparables.cagrChart"
+                >
                   Tick a row to chart remaining upside vs today. Click the name to open the
                   projection.
                 </p>

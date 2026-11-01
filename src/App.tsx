@@ -15,6 +15,9 @@ import { usePortfolioContributions } from './hooks/usePortfolioContributions'
 import { usePortfolioActuals } from './hooks/usePortfolioActuals'
 import { DataSettingsPanel } from './components/settings/DataSettingsPanel'
 import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
+import { FeatureGuideProvider } from './components/guides/FeatureGuideProvider'
+import { FeatureGuideRail } from './components/guides/FeatureGuideRail'
+import { GuidesHeaderButton } from './components/guides/GuidesHeaderButton'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
 import { getAccountHint } from './lib/accountCatalog'
 import type { AppTab } from './types'
@@ -330,6 +333,7 @@ export default function App() {
   const accountHint = getAccountHint()
 
   return (
+    <FeatureGuideProvider navigateTab={setTab}>
     <div className="flex h-screen overflow-hidden">
       <QuoteLoadingHint loading={quotesLoading} count={quoteCount} />
       {/* App sidebar */}
@@ -401,103 +405,108 @@ export default function App() {
         </button>
       </aside>
 
-      <div className="flex min-h-0 min-w-0 flex-1 flex-col">
-        <header className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-4 border-b border-white/5 bg-[#0b0f14]/90 px-6 py-4 backdrop-blur-sm">
-          <div className="min-w-0">
-            <h2 className="text-xl font-semibold tracking-tight text-white">{meta.title}</h2>
-            <p className="mt-0.5 text-sm text-white/45">{meta.subtitle}</p>
-          </div>
-          <div className="shrink-0 pt-1">
-            <LinkedFileSaveHint />
-          </div>
-        </header>
+      <div className="flex min-h-0 min-w-0 flex-1">
+        <div className="flex min-h-0 min-w-0 flex-1 flex-col">
+          <header className="sticky top-0 z-20 flex shrink-0 items-start justify-between gap-4 border-b border-white/5 bg-[#0b0f14]/90 px-6 py-4 backdrop-blur-sm">
+            <div className="min-w-0">
+              <h2 className="text-xl font-semibold tracking-tight text-white">{meta.title}</h2>
+              <p className="mt-0.5 text-sm text-white/45">{meta.subtitle}</p>
+            </div>
+            <div className="flex shrink-0 items-center gap-2 pt-1">
+              <GuidesHeaderButton />
+              <LinkedFileSaveHint />
+            </div>
+          </header>
 
-        <main className="min-h-0 flex-1 overflow-auto px-6 py-6">
-          {tab === 'projections' && (
-            <ProjectionsView
-              scenarios={scenarios}
-              portfolios={portfolios}
-              storageError={storageError}
-              upsertScenario={upsertScenario}
-              updateScenario={updateScenario}
-              deleteScenario={deleteScenario}
-              importScenarios={importScenarios}
-              comparables={comparables}
-              comparablesError={comparablesError}
-              createComparable={createComparable}
-              updateComparable={updateComparable}
-              deleteComparable={deleteComparable}
-            />
-          )}
+          <main className="min-h-0 flex-1 overflow-auto px-6 py-6">
+            {tab === 'projections' && (
+              <ProjectionsView
+                scenarios={scenarios}
+                portfolios={portfolios}
+                storageError={storageError}
+                upsertScenario={upsertScenario}
+                updateScenario={updateScenario}
+                deleteScenario={deleteScenario}
+                importScenarios={importScenarios}
+                comparables={comparables}
+                comparablesError={comparablesError}
+                createComparable={createComparable}
+                updateComparable={updateComparable}
+                deleteComparable={deleteComparable}
+              />
+            )}
 
-          {tab === 'portfolio' && (
-            <PortfolioView
-              scenarios={scenarios}
-              portfolios={portfolios}
-              storageError={portfolioError}
-              createPortfolio={createPortfolio}
-              updatePortfolio={updatePortfolio}
-              deletePortfolio={deletePortfolio}
-              copyPortfolio={copyPortfolio}
-              reorderPortfolios={reorderPortfolios}
-              incomeCostLines={incomeCostLines}
-              incomeCostScenarios={incomeCostScenarios}
-              contributions={portfolioContributions.contributions}
-              contributionsError={portfolioContributions.error}
-              setContributionYear={portfolioContributions.setYear}
-              setContributionsCurrency={portfolioContributions.setCurrency}
-              portfolioActuals={portfolioActuals.actuals}
-              actualsError={portfolioActuals.error}
-              setPortfolioActuals={portfolioActuals.replace}
-            />
-          )}
+            {tab === 'portfolio' && (
+              <PortfolioView
+                scenarios={scenarios}
+                portfolios={portfolios}
+                storageError={portfolioError}
+                createPortfolio={createPortfolio}
+                updatePortfolio={updatePortfolio}
+                deletePortfolio={deletePortfolio}
+                copyPortfolio={copyPortfolio}
+                reorderPortfolios={reorderPortfolios}
+                incomeCostLines={incomeCostLines}
+                incomeCostScenarios={incomeCostScenarios}
+                contributions={portfolioContributions.contributions}
+                contributionsError={portfolioContributions.error}
+                setContributionYear={portfolioContributions.setYear}
+                setContributionsCurrency={portfolioContributions.setCurrency}
+                portfolioActuals={portfolioActuals.actuals}
+                actualsError={portfolioActuals.error}
+                setPortfolioActuals={portfolioActuals.replace}
+              />
+            )}
 
-          {tab === 'overview' && (
-            <OverviewView
-              portfolios={portfolios}
-              stockScenarios={scenarios}
-              savingsAccounts={savingsAccounts}
-              incomeCostLines={incomeCostLines}
-              incomeCostScenarios={incomeCostScenarios}
-              portfolioActuals={portfolioActuals.actuals}
-            />
-          )}
+            {tab === 'overview' && (
+              <OverviewView
+                portfolios={portfolios}
+                stockScenarios={scenarios}
+                savingsAccounts={savingsAccounts}
+                incomeCostLines={incomeCostLines}
+                incomeCostScenarios={incomeCostScenarios}
+                portfolioActuals={portfolioActuals.actuals}
+              />
+            )}
 
-          {tab === 'history' && (
-            <HistoryView
-              portfolios={portfolios}
-              savingsAccounts={savingsAccounts}
-              portfolioActuals={portfolioActuals.actuals}
-            />
-          )}
+            {tab === 'history' && (
+              <HistoryView
+                portfolios={portfolios}
+                savingsAccounts={savingsAccounts}
+                portfolioActuals={portfolioActuals.actuals}
+              />
+            )}
 
-          {tab === 'income-cost' && (
-            <IncomeCostView
-              scenarios={incomeCostScenarios}
-              lines={incomeCostLines}
-              draws={incomeCostDraws}
-              savingsAccounts={savingsAccounts}
-              storageError={incomeCostError}
-              upsertLine={upsertLine}
-              removeLine={removeLine}
-              addLine={addLine}
-              upsertDraw={upsertDraw}
-              removeDraw={removeDraw}
-              addDraw={addDraw}
-              addScenario={addScenario}
-              renameScenario={renameScenario}
-              setScenarioYear={setScenarioYear}
-              removeScenario={removeScenario}
-              reorderScenariosByIds={reorderScenariosByIds}
-              copyScenario={copyScenario}
-            />
-          )}
+            {tab === 'income-cost' && (
+              <IncomeCostView
+                scenarios={incomeCostScenarios}
+                lines={incomeCostLines}
+                draws={incomeCostDraws}
+                savingsAccounts={savingsAccounts}
+                storageError={incomeCostError}
+                upsertLine={upsertLine}
+                removeLine={removeLine}
+                addLine={addLine}
+                upsertDraw={upsertDraw}
+                removeDraw={removeDraw}
+                addDraw={addDraw}
+                addScenario={addScenario}
+                renameScenario={renameScenario}
+                setScenarioYear={setScenarioYear}
+                removeScenario={removeScenario}
+                reorderScenariosByIds={reorderScenariosByIds}
+                copyScenario={copyScenario}
+              />
+            )}
 
-          {tab === 'savings' && <SavingsView {...savings} />}
+            {tab === 'savings' && <SavingsView {...savings} />}
 
-          {tab === 'settings' && <DataSettingsPanel />}
-        </main>
+            {tab === 'settings' && <DataSettingsPanel />}
+          </main>
+        </div>
+        <FeatureGuideRail />
       </div>
     </div>
+    </FeatureGuideProvider>
   )
 }

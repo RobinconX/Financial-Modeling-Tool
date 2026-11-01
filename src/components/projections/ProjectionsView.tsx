@@ -20,6 +20,7 @@ import { ComparablesView } from './ComparablesView'
 import { ProjectionPickDialog } from './ProjectionPickDialog'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { InfoTip } from '../common/InfoTip'
+import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -319,6 +320,10 @@ export function ProjectionsView({
     }
   }, [mode])
 
+  useGuideTeleport('projections', (view) => {
+    if (view === 'analyze' || view === 'comps') setMode(view)
+  })
+
   const [compare, setCompare] = useState(false)
   /** Selection: DRAFT or scenario id */
   const [selA, setSelA] = useState<string>(() => sorted[0]?.id ?? DRAFT)
@@ -415,7 +420,7 @@ export function ProjectionsView({
     : []
 
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-guide-anchor="projections">
       <div className="flex flex-wrap items-end justify-between gap-3 border-b border-white/10">
         <div className="flex items-end gap-2">
           <div className="inline-flex gap-1" role="tablist" aria-label="Projections">
@@ -495,6 +500,7 @@ export function ProjectionsView({
       ) : null}
 
       {mode === 'comps' ? (
+        <div data-guide-anchor="projections.comps">
         <ComparablesView
           scenarios={scenarios}
           comparables={comparables}
@@ -509,8 +515,9 @@ export function ProjectionsView({
             setMode('analyze')
           }}
         />
+        </div>
       ) : (
-        <>
+        <div data-guide-anchor="projections.analyze">
       <div className="section-header border-b border-white/5 pb-4">
         <div className="flex min-w-0 flex-1 flex-wrap items-end gap-3">
           <ProjectionSelector
@@ -592,7 +599,7 @@ export function ProjectionsView({
           />
         )}
       </div>
-        </>
+        </div>
       )}
 
       {exportOpen ? (

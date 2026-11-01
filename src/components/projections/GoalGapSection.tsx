@@ -10,6 +10,8 @@ import {
   type GoalPathMetric,
 } from '../../lib/goalGap'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
+import { useFeatureGuide } from '../guides/FeatureGuideProvider'
 import { GoalGapChart } from './GoalGapChart'
 
 const TARGET_CAGR_KEY = 'grok-lab-comparables-target-cagr'
@@ -67,6 +69,13 @@ export function GoalGapSection({
   const [metric, setMetric] = useState<GoalPathMetric>('upside')
   const [targetDraft, setTargetDraft] = useState(readTargetCagrPct)
   const targetCagr = parseTargetCagrPct(targetDraft)
+  const { open, pane, activeId } = useFeatureGuide()
+
+  useEffect(() => {
+    if (!open || pane !== 'article') return
+    if (activeId === 'comparables.cagrChart') setMetric('cagr')
+    if (activeId === 'comparables.upsideChart') setMetric('upside')
+  }, [open, pane, activeId])
 
   useEffect(() => {
     try {
@@ -131,12 +140,21 @@ export function GoalGapSection({
 
   if (overlayRows.length === 0) return null
 
+  const guideId =
+    metric === 'cagr' ? 'comparables.cagrChart' : 'comparables.upsideChart'
+
   return (
-    <div className="space-y-2 border-t border-white/[0.06] pt-4">
+    <div
+      className="space-y-2 border-t border-white/[0.06] pt-4"
+      data-guide-anchor={guideId}
+    >
       <div className="flex flex-wrap items-end gap-3">
-        <h3 className="section-title">
-          {metric === 'cagr' ? 'CAGR' : 'Remaining upside'}
-        </h3>
+        <div className="flex items-center gap-1.5">
+          <h3 className="section-title">
+            {metric === 'cagr' ? 'CAGR' : 'Remaining upside'}
+          </h3>
+          <FeatureGuideButton id={guideId} />
+        </div>
         <div
           className="inline-flex gap-1 border-b border-white/10"
           role="group"

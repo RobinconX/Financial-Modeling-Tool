@@ -6,6 +6,7 @@ import { SavingsActualsEditor } from './SavingsActualsEditor'
 import { SavingsChart } from './SavingsChart'
 import { SavingsProjectionTable } from './SavingsProjectionTable'
 import { SavingsTable } from './SavingsTable'
+import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 type SubTab = 'inputs' | 'actuals' | 'projection'
 
@@ -35,8 +36,12 @@ export function SavingsView({
   const [subTab, setSubTab] = useState<SubTab>('inputs')
   const asOf = useMemo(() => new Date(), [])
 
+  useGuideTeleport('savings', (view) => {
+    if (view === 'inputs' || view === 'actuals' || view === 'projection') setSubTab(view)
+  })
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-5" data-guide-anchor="savings">
       {error ? (
         <div className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
           {error}
@@ -68,7 +73,7 @@ export function SavingsView({
       </div>
 
       {subTab === 'inputs' && (
-        <div className="panel space-y-3">
+        <div className="panel space-y-3" data-guide-anchor="savings.accounts">
           <div className="section-header">
             <div className="flex items-center gap-1.5">
               <h3 className="section-title text-sky-300/90">Accounts & compounding</h3>
@@ -103,7 +108,7 @@ export function SavingsView({
       )}
 
       {subTab === 'projection' && (
-        <div className="space-y-5">
+        <div className="space-y-5" data-guide-anchor="savings.progression">
           <div className="panel space-y-3">
             <div className="flex items-center gap-1.5">
               <h3 className="section-title">Balance progression</h3>
