@@ -31,6 +31,7 @@ import {
 } from '../../lib/portfolio'
 import { InfoTip } from '../common/InfoTip'
 import { formatInputNumber } from '../common/MoneyInput'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { GoalSpeedChart } from './GoalSpeedChart'
 
 type GoalSpeedState = NonNullable<SavedPortfolio['goalSpeed']>
@@ -317,6 +318,7 @@ export function GoalSpeedPanel({
     <div className="space-y-5">
       <div className="flex items-center gap-1.5">
         <h3 className="section-title">Contribution effectiveness</h3>
+        <FeatureGuideButton id="portfolio.goal" />
         <InfoTip label="About contribution effectiveness">
           How much sooner extra contributions get you to a wealth goal. Now is
           today&apos;s live book. A projected year-end uses the same total as the

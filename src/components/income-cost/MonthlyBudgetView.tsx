@@ -30,6 +30,7 @@ import {
 import { formatMoney, parseMoney } from '../../lib/format'
 import { formatInputNumber } from '../common/MoneyInput'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { InfoTip } from '../common/InfoTip'
 
 type Props = {
@@ -515,10 +516,13 @@ export function MonthlyBudgetView({
         <div className="section-header">
           <div>
             <p className="section-kicker">Summary</p>
-            <h3 className="section-title mt-0.5">
-              {scenario.year}
-              <span className="ml-2 font-normal text-white/40">· monthly</span>
-            </h3>
+            <div className="mt-0.5 flex items-center gap-1.5">
+              <h3 className="section-title">
+                {scenario.year}
+                <span className="ml-2 font-normal text-white/40">· monthly</span>
+              </h3>
+              <FeatureGuideButton id="income-cost.monthly" />
+            </div>
           </div>
           <InfoTip label="About monthly working balance" align="end">
             Opening working balance is permanent Cash savings, year-end of {priorYear} (Savings →

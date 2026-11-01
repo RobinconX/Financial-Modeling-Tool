@@ -28,6 +28,42 @@ describe('teachings registry', () => {
     expect(g?.body).toContain('](ref:cagr-example)')
   })
 
+  it('exposes a ready contribution-effectiveness guide with a figure', () => {
+    const g = getGuide('portfolio.goal')
+    expect(g?.status).toBe('ready')
+    expect(g?.location).toEqual({
+      tab: 'portfolio',
+      view: 'goal',
+      anchor: 'portfolio.goal',
+    })
+    expect(g?.parentId).toBe('portfolio')
+    expect(isGuideReady('portfolio.goal')).toBe(true)
+    expect(g?.references).toEqual([
+      expect.objectContaining({
+        id: 'contrib-effectiveness',
+        src: '/guides/portfolio-contribution-effectiveness.svg',
+      }),
+    ])
+    expect(g?.body).toContain('](ref:contrib-effectiveness)')
+    expect(g?.body.toLowerCase()).toContain('disproportionately')
+    expect(g?.body.toLowerCase()).toContain('lower')
+  })
+
+  it('exposes a ready Budget Monthly guide', () => {
+    const g = getGuide('income-cost.monthly')
+    expect(g?.status).toBe('ready')
+    expect(g?.location).toEqual({
+      tab: 'income-cost',
+      view: 'monthly',
+      anchor: 'income-cost.monthly',
+    })
+    expect(g?.parentId).toBe('income-cost')
+    expect(isGuideReady('income-cost.monthly')).toBe(true)
+    expect(g?.references).toBeUndefined()
+    expect(g?.body.toLowerCase()).toContain('working')
+    expect(g?.body.toLowerCase()).toContain('draw')
+  })
+
 
   it('keeps upside chart draft (in-app button hidden; registry still opens stub)', () => {
     expect(getGuide('comparables.upsideChart')?.status).toBe('draft')

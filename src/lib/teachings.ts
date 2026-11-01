@@ -133,14 +133,62 @@ const GUIDES: Record<string, FeatureGuide> = {
     'income-cost',
     1,
   ),
-  'income-cost.monthly': draft(
-    'income-cost.monthly',
-    'Monthly',
-    'Spreads the year’s budget across months and tracks a working balance, including draws from savings when you configure them. Use it to see timing of surplus and shortfalls within the year.',
-    { tab: 'income-cost', view: 'monthly', anchor: 'income-cost.monthly' },
-    'income-cost',
-    2,
-  ),
+  'income-cost.monthly': {
+    id: 'income-cost.monthly',
+    title: 'Monthly',
+    summary:
+      'Turns the year’s Budget lines into a Jan–Dec cash path so you can place amounts on the right months, watch working balance move, and plan draws without running short of cash mid-year.',
+    body: `## How it works
+
+**Monthly** reads the selected scenario’s income and cost positions from **Budget** and lays them across Jan–Dec.
+
+On **Budget**, each position has a payment schedule:
+
+- **Monthly** (no months selected) — yearly amount ÷12 every month
+- **Selected months** — yearly total split equally across those months (rounding remainder on the last selected month)
+
+Pin annual bills, bonuses, and one-offs to the months they actually hit. That is what makes a model of about monthly accuracy possible; a flat ÷12 average hides timing.
+
+This view then builds the path:
+
+- **Opening cash (Dec prior year)** — permanent Cash savings year-end from Savings → Actuals
+- **Inflow / Outflow / Net** — budget lines in that month
+- **Balance** — cumulative working balance from opening + nets (budget only)
+- **Draws** — optional CHF you plan to take from working balance in specific months (vacation, tax, gifts, buffer top-ups, …)
+- **After draws** — same path with draws subtracted
+
+Use **+ Draw** under **Working balance** to name a reason and enter amounts per month. Draws are informative only — they do not change annual Budget net, the Sankey, or portfolio deposits.
+
+The chart and table share the same series (**Inflow**, **Outflow**, **Balance**, **Draws**, **After draws**); toggle series under the chart if you want a quieter view.
+
+## How to interpret
+
+Watch **where Balance moves**, not only year-end totals. A healthy **Annual net** can still dip negative mid-year if a large cost lands before the cash that funds it.
+
+- **Balance** answers: “If I only run the budget, does working capital stay solvent month by month?”
+- **After draws** answers: “After the spending I already know is coming out of cash, am I still okay?”
+
+Plan the year with draws so **After draws** stays comfortable — that is how you avoid struggling with working capital when known outflows cluster. If a trough looks wrong, fix payment months on **Budget** (or shift draws), then re-read this path.
+
+## Example
+
+Opening cash **CHF 2,000**. Salary **CHF 72,000** on **Monthly** (CHF 6,000/mo). Bonus **CHF 12,000** on **Dec** only. Rent **CHF 24,000** on **Monthly** (CHF 2,000/mo). Car insurance **CHF 1,800** on **Jan** only. Draw **Vacation** **CHF 4,000** in **Jul**.
+
+- **Jan** — Inflow 6,000, Outflow 3,800 → Net 2,200 → **Balance 4,200** (insurance spike is visible)
+- **Jul** — Balance climbs to **28,200**; after the vacation draw **After draws** is **24,200**
+- **Dec** — bonus lands → year-end **Balance 60,200**, **After draws 56,200**
+
+Same yearly totals with insurance and bonus left on **Monthly** would smooth Jan and Dec and hide those timing bumps — the working-capital story would look safer than it is.
+`,
+    status: 'ready',
+    location: {
+      tab: 'income-cost',
+      view: 'monthly',
+      anchor: 'income-cost.monthly',
+    },
+    parentId: 'income-cost',
+    order: 2,
+  },
 
   savings: draft(
     'savings',
@@ -301,14 +349,68 @@ Same finish line; a higher starting price leaves less annualized climb still req
     'portfolio',
     5,
   ),
-  'portfolio.goal': draft(
-    'portfolio.goal',
-    'Contribution effectiveness',
-    'Asks how extra contributions change the path toward a portfolio goal under your growth assumptions. Compare relative effectiveness of adding money at different times or amounts.',
-    { tab: 'portfolio', view: 'goal', anchor: 'portfolio.goal' },
-    'portfolio',
-    6,
-  ),
+  'portfolio.goal': {
+    id: 'portfolio.goal',
+    title: 'Contribution effectiveness',
+    summary:
+      'Shows how much sooner extra contributions get you to a wealth goal under a compounding rate. Early dollars shorten time-to-goal disproportionately vs later ones — and the absolute years saved loom larger when assumed CAGR is lower.',
+    body: `## How it works
+
+Pick a **goal** amount, a **compounding rate** (CAGR), and a **start** (Now, a projected year-end, or a custom amount). The tool then walks a simple path: wealth compounds at that rate each year; year-end contributions are added with **no growth in the contribution year** (same timing as the portfolio Cash deposits).
+
+Each table row is cumulative:
+
+- **Base** — start only, no extras
+- **+YYYY** — base plus every contribution through that year
+
+For each row you get the goal date, time from the clock origin, how much **faster** that year’s extras are than the previous row, and **relative effectiveness**.
+
+**Stated** extras pull deposits from the Cash tab after the start year. **Custom** extras are what-if only — they never write back to Cash.
+
+## How to interpret
+
+**Earlier contributions count disproportionately more** than later ones of the same size. A dollar that compounds for more years pulls the goal date forward more than a dollar added near the finish. The **Rel. effect.** column makes that concrete: exact time saved per currency unit this year, divided by exact time saved per unit in the **last** contribution year (the last year is always **1.00×**). Values above 1× mean that year’s money bought more calendar time than the final year’s money.
+
+That imbalance is especially visible when **assumed CAGR is lower**. Growth alone closes less of the gap, so shifting the same contribution earlier saves **more absolute years**. At a higher rate, relative multiples can look larger (early dollars still outpace late ones in the \`(1+r)^n\` sense), but the calendar years you claw back from contributing early shrink because compounding is already doing more of the work.
+
+Use the chart to see the whole path to the goal; click a table row for the year-by-year math.
+
+## Example
+
+Start **$100k**, goal **$300k**, same **$20k** contribution — only the year and rate change.
+
+**At 4% CAGR**
+
+- +$20k in **2026** → about **4.65 years** sooner than base (rel. effect. ≈ **1.59×**)
+- +$20k in **2034** → about **2.93 years** sooner than the prior path (rel. effect. **1.00×**)
+
+**At 10% CAGR** (same dollars)
+
+- +$20k in **2026** → about **1.91 years** sooner (rel. effect. ≈ **2.43×**)
+- +$20k in **2034** → about **0.79 years** sooner (**1.00×**)
+
+Same early-vs-late story both times; at the **lower** rate the early contribution saves far more **calendar** time.
+
+![Early contributions shorten time-to-goal more — especially at lower CAGR](ref:contrib-effectiveness)
+`,
+    references: [
+      {
+        id: 'contrib-effectiveness',
+        src: '/guides/portfolio-contribution-effectiveness.svg',
+        alt: 'Early contributions shorten time-to-goal more — especially at lower CAGR',
+        caption:
+          'Same $20k contribution: early money saves more years than later money, and the absolute years saved are larger when assumed CAGR is lower.',
+      },
+    ],
+    status: 'ready',
+    location: {
+      tab: 'portfolio',
+      view: 'goal',
+      anchor: 'portfolio.goal',
+    },
+    parentId: 'portfolio',
+    order: 6,
+  },
 
   settings: draft(
     'settings',
