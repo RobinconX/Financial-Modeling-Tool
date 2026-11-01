@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react'
 import type { GuideReference } from '../../lib/teachings'
+import { publicAssetUrl } from '../../lib/publicAssetUrl'
 import { GuideFigure } from './GuideFigure'
 
 type Props = {
@@ -46,10 +47,14 @@ function resolveSrc(
     const id = t.slice(4)
     const hit = references?.find((r) => r.id === id)
     if (!hit) return null
-    return { src: hit.src, caption: hit.caption, altFallback: hit.alt }
+    return {
+      src: publicAssetUrl(hit.src),
+      caption: hit.caption,
+      altFallback: hit.alt,
+    }
   }
-  // Shipped assets, absolute https, or future API URLs
-  return { src: t }
+  // Shipped assets (base-aware), absolute https, or future API URLs
+  return { src: publicAssetUrl(t) }
 }
 
 /**
