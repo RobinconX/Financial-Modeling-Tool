@@ -6,6 +6,7 @@ import { SavingsActualsEditor } from './SavingsActualsEditor'
 import { SavingsChart } from './SavingsChart'
 import { SavingsProjectionTable } from './SavingsProjectionTable'
 import { SavingsTable } from './SavingsTable'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 type SubTab = 'inputs' | 'actuals' | 'projection'
@@ -48,28 +49,31 @@ export function SavingsView({
         </div>
       ) : null}
 
-      <div
-        className="inline-flex gap-1 border-b border-white/10"
-        role="group"
-        aria-label="Savings view"
-      >
-        {SUB_TABS.map((t) => {
-          const active = subTab === t.id
-          return (
-            <button
-              key={t.id}
-              type="button"
-              onClick={() => setSubTab(t.id)}
-              className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
-                active
-                  ? 'border-emerald-400 text-white'
-                  : 'border-transparent text-white/50 hover:text-white/80'
-              }`}
-            >
-              {t.label}
-            </button>
-          )
-        })}
+      <div className="flex flex-wrap items-end gap-2">
+        <div
+          className="inline-flex gap-1 border-b border-white/10"
+          role="group"
+          aria-label="Savings view"
+        >
+          {SUB_TABS.map((t) => {
+            const active = subTab === t.id
+            return (
+              <button
+                key={t.id}
+                type="button"
+                onClick={() => setSubTab(t.id)}
+                className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
+                  active
+                    ? 'border-emerald-400 text-white'
+                    : 'border-transparent text-white/50 hover:text-white/80'
+                }`}
+              >
+                {t.label}
+              </button>
+            )
+          })}
+        </div>
+        <FeatureGuideButton id="savings" className="mb-1.5" />
       </div>
 
       {subTab === 'inputs' && (
@@ -77,6 +81,7 @@ export function SavingsView({
           <div className="section-header">
             <div className="flex items-center gap-1.5">
               <h3 className="section-title text-sky-300/90">Accounts & compounding</h3>
+              <FeatureGuideButton id="savings.accounts" />
               <InfoTip label="About savings inputs">
                 Current end-of-month balances, contribution cadence, and annual rate (CHF).
                 Compounding is always yearly (December → January). Year-end and optional monthly
@@ -102,7 +107,7 @@ export function SavingsView({
       )}
 
       {subTab === 'actuals' && (
-        <div className="panel space-y-3">
+        <div className="panel space-y-3" data-guide-anchor="savings.actuals">
           <SavingsActualsEditor accounts={accounts} asOf={asOf} onActual={setActual} />
         </div>
       )}
@@ -112,6 +117,7 @@ export function SavingsView({
           <div className="panel space-y-3">
             <div className="flex items-center gap-1.5">
               <h3 className="section-title">Balance progression</h3>
+              <FeatureGuideButton id="savings.progression" />
               <InfoTip label="About balance progression">
                 Past columns are year-end (December) only — monthly detail stays on Actuals and
                 History. Now is the current month; later columns are projected. Compounding

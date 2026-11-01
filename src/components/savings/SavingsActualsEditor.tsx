@@ -11,6 +11,7 @@ import {
 } from '../../lib/savings'
 import type { SavingsAccount } from '../../types'
 import { InfoTip } from '../common/InfoTip'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 
 type Props = {
   accounts: SavingsAccount[]
@@ -209,6 +210,7 @@ export function SavingsActualsEditor({
       <div className="section-header">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-emerald-300/90">Yearly actuals</h3>
+          <FeatureGuideButton id="savings.actuals" />
           <InfoTip label="About yearly actuals">
             Year-end (December) balances plus the current month. These are what Projection uses.
             Monthly detail below is for History. Arrow keys move · Enter down · paste a block from

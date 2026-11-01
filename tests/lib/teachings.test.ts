@@ -64,6 +64,42 @@ describe('teachings registry', () => {
     expect(g?.body.toLowerCase()).toContain('draw')
   })
 
+  it('exposes ready Savings guides for page and sub-tabs', () => {
+    for (const [id, location, parentId] of [
+      ['savings', { tab: 'savings', anchor: 'savings' }, null],
+      [
+        'savings.accounts',
+        { tab: 'savings', view: 'inputs', anchor: 'savings.accounts' },
+        'savings',
+      ],
+      [
+        'savings.actuals',
+        { tab: 'savings', view: 'actuals', anchor: 'savings.actuals' },
+        'savings',
+      ],
+      [
+        'savings.progression',
+        { tab: 'savings', view: 'projection', anchor: 'savings.progression' },
+        'savings',
+      ],
+    ] as const) {
+      const g = getGuide(id)
+      expect(g?.status, id).toBe('ready')
+      expect(g?.location, id).toEqual(location)
+      expect(g?.parentId, id).toBe(parentId)
+      expect(isGuideReady(id), id).toBe(true)
+      expect(g?.references, id).toBeUndefined()
+      expect(g?.body, id).toContain('## Example')
+    }
+    const savingsTab = listGuideTree().find((t) => t.tab === 'savings')!
+    const root = savingsTab.roots.find((r) => r.guide.id === 'savings')!
+    expect(root.children.map((c) => c.guide.id)).toEqual([
+      'savings.accounts',
+      'savings.actuals',
+      'savings.progression',
+    ])
+  })
+
   it('exposes a ready Overview Runway guide with a figure', () => {
     const g = getGuide('overview.runway')
     expect(g?.status).toBe('ready')

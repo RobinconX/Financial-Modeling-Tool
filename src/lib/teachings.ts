@@ -270,30 +270,132 @@ Same yearly totals with insurance and bonus left on **Monthly** would smooth Jan
     order: 2,
   },
 
-  savings: draft(
-    'savings',
-    'Savings',
-    'Models CHF savings accounts with balances, contribution cadence, and annual rates. Compounding is yearly; projections and actuals history live on separate tabs.',
-    { tab: 'savings', anchor: 'savings' },
-    null,
-    0,
-  ),
-  'savings.accounts': draft(
-    'savings.accounts',
-    'Accounts & compounding',
-    'Define each account’s current balance, contribution amount and cadence, annual rate, and how long contributions or compounding run. This is the input sheet the projections build from.',
-    { tab: 'savings', view: 'inputs', anchor: 'savings.accounts' },
-    'savings',
-    1,
-  ),
-  'savings.progression': draft(
-    'savings.progression',
-    'Balance progression',
-    'Shows past year-end balances and the forward compounded path for each account, plus a stacked chart of all accounts. Past months stay on Actuals; here the focus is year-end history and the projection.',
-    { tab: 'savings', view: 'projection', anchor: 'savings.progression' },
-    'savings',
-    2,
-  ),
+  savings: {
+    id: 'savings',
+    title: 'Savings',
+    summary:
+      'Models CHF savings accounts with balances, contribution cadence, and annual rates. Compounding is yearly; projections and actuals history live on separate tabs.',
+    body: `## How it works
+
+Savings holds **CHF** end-of-month balances per account. Three sub-tabs split **assumptions**, **recorded history**, and **forward path**.
+
+### Sub-tabs
+
+- **Inputs** — current balance, contributions, rate, and until-years per account
+- **Actuals** — year-end and monthly recorded balances (feeds **History** and Budget **Monthly** opening cash)
+- **Projection** — year-end past columns plus the compounded forward path and stacked chart
+
+> Compounding is **always yearly** and applies only **December → January** on the prior balance.
+
+## How to interpret
+
+Use **Inputs** for what should happen next; **Actuals** for what you measured; **Projection** to see the combined timeline without editing monthly detail there.
+
+> **Overview** and other tabs read these accounts — they do not duplicate savings math.
+
+## Example
+
+**Cash** at **CHF 10,000** end-Nov, **4%** rate, **CHF 500** monthly contribution. Nov→Dec adds **500** (no interest mid-year). Dec→Jan applies **4%** on the December balance, then January’s **500** — interest hits once at the year turn, not every month.
+`,
+    status: 'ready',
+    location: { tab: 'savings', anchor: 'savings' },
+    parentId: null,
+    order: 0,
+  },
+  'savings.accounts': {
+    id: 'savings.accounts',
+    title: 'Accounts & compounding',
+    summary:
+      'Define each account’s current balance, contribution amount and cadence, annual rate, and how long contributions or compounding run. This is the input sheet the projections build from.',
+    body: `## How it works
+
+Each row is one savings account. Amounts are **CHF**; the **Now** column is the current end-of-month balance.
+
+### Row fields
+
+- **Contribution** + **Cadence** — **Monthly** adds every month; **Yearly** adds in **January** only (after Dec→Jan compound)
+- **Rate %** — annual rate; compounding runs only on **December → January**
+- **Compound until** / **Contribute until** — optional last calendar year for interest or deposits (blank = no limit)
+
+> **Cash** is permanent — it cannot be removed; Budget **Monthly** uses its year-end actual as opening working cash.
+
+## How to interpret
+
+The table total is a snapshot at **Now**. Changing inputs reshapes **Projection** and any Overview series tied to these accounts.
+
+## Example
+
+**CHF 20,000** balance, **CHF 1,200** yearly contribution, **3%** rate, **Contribute until 2028**. Through 2028 each January adds **1,200** after compound; from **2029** onward balance still compounds at **3%** but contributions stop.
+`,
+    status: 'ready',
+    location: { tab: 'savings', view: 'inputs', anchor: 'savings.accounts' },
+    parentId: 'savings',
+    order: 1,
+  },
+  'savings.actuals': {
+    id: 'savings.actuals',
+    title: 'Actuals',
+    summary:
+      'Record year-end balances, the live current month, and optional monthly history. Projection and Budget read these values; detailed charts use History.',
+    body: `## How it works
+
+### Yearly actuals
+
+- **Add past year** — inserts a **December** row for that year
+- **Now** row — highlighted current month; overrides the simulated path from **Inputs**
+- Totals sum accounts for each period
+
+### Monthly detail
+
+Below the yearly grid, enter end-of-month balances per account. These feed **History** when savings series are included.
+
+> Permanent **Cash** year-end **December** is **Opening cash** on Budget → **Monthly** (prior calendar year).
+
+## How to interpret
+
+Actuals win over projection wherever you enter a number. Leave cells empty to let **Inputs** + math fill the gap.
+
+## Example
+
+Enter **CHF 15,000** for **Cash** on **2024-12**. Budget **Monthly** for **2025** opens working balance at **15,000**; the same **2024-12** point appears in **History** on a yearly savings series.
+`,
+    status: 'ready',
+    location: { tab: 'savings', view: 'actuals', anchor: 'savings.actuals' },
+    parentId: 'savings',
+    order: 2,
+  },
+  'savings.progression': {
+    id: 'savings.progression',
+    title: 'Balance progression',
+    summary:
+      'Shows past year-end balances and the forward compounded path for each account, plus a stacked chart of all accounts. Past months stay on Actuals; here the focus is year-end history and the projection.',
+    body: `## How it works
+
+### Balance progression table
+
+- Past columns — **December** year-ends (from **Actuals** or added past years)
+- **Now** — current month
+- Later columns — projected from **Inputs** (dense months, then milestone years)
+
+### All accounts chart
+
+Stacked area of every account on the same timeline as the table — past actuals plus forward projection.
+
+> Monthly detail is not edited here; use **Actuals** or **History** for month-by-month balances.
+
+## How to interpret
+
+**Actual** columns are fixed history; **projected** columns show the path if current inputs hold. The chart total matches the table sum at each point.
+
+## Example
+
+Two accounts: **Cash** **CHF 5,000** actual at last December, **Emergency** projected forward at **2%** with no contributions. The table shows **Cash** flat on past years then both stacks rising in the chart after **Now** only where rates and contributions apply.
+`,
+    status: 'ready',
+    location: { tab: 'savings', view: 'projection', anchor: 'savings.progression' },
+    parentId: 'savings',
+    order: 3,
+  },
 
   history: draft(
     'history',
