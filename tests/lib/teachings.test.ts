@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest'
 import {
   getGuide,
+  getGuideAncestors,
   getParentGuide,
   isGuideReady,
   listChildGuides,
@@ -202,6 +203,15 @@ describe('teachings registry', () => {
       expect.arrayContaining(['comparables.cagrChart', 'comparables.upsideChart']),
     )
     expect(listChildGuides('comparables.cagrChart')).toEqual([])
+  })
+
+  it('getGuideAncestors returns root-to-parent chain for breadcrumbs', () => {
+    expect(getGuideAncestors('savings').map((g) => g.id)).toEqual([])
+    expect(getGuideAncestors('savings.actuals').map((g) => g.id)).toEqual(['savings'])
+    expect(getGuideAncestors('comparables.cagrChart').map((g) => g.id)).toEqual([
+      'projections',
+      'projections.comps',
+    ])
   })
 })
 
