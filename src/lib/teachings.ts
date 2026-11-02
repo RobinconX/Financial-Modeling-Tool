@@ -703,54 +703,217 @@ Same finish line; a higher starting price leaves less annualized climb still req
     4,
   ),
 
-  portfolio: draft(
-    'portfolio',
-    'Portfolio',
-    'Models one or more investing portfolios: cash, holdings, growth links to projections, planned actions, and recorded actuals. Tabs switch between the value chart, actuals, book configuration, and contribution-effectiveness tools.',
-    { tab: 'portfolio', anchor: 'portfolio' },
-    null,
-    0,
-  ),
-  'portfolio.chart': draft(
-    'portfolio.chart',
-    'Chart',
-    'Shows portfolio value over time (past actuals → Now → projected years) and a year grid of values and actions. Toggle stacked-by-position vs other display modes; planned buys/sells and deposits affect future years, not the Now book.',
-    { tab: 'portfolio', view: 'chart', anchor: 'portfolio.chart' },
-    'portfolio',
-    1,
-  ),
-  'portfolio.actuals': draft(
-    'portfolio.actuals',
-    'Actuals',
-    'Shared recorded history used across portfolios: month-end portfolio value and money-in (contributions). Past chart years pull from these actuals; enter totals in the display currency with FX when needed.',
-    { tab: 'portfolio', view: 'actuals', anchor: 'portfolio.actuals' },
-    'portfolio',
-    2,
-  ),
-  'portfolio.cash': draft(
-    'portfolio.cash',
-    'Cash',
-    'Configure cash and deposit balances by year for the selected portfolio. Deposits and sale proceeds land in cash; buys spend cash — this book feeds the value chart and year grid.',
-    { tab: 'portfolio', view: 'cash', anchor: 'portfolio.cash' },
-    'portfolio',
-    3,
-  ),
-  'portfolio.positions': draft(
-    'portfolio.positions',
-    'Positions',
-    'Holdings and share counts for the portfolio, including planned buy/sell actions by year. Positions combine with cash and linked growth assumptions to produce the projected portfolio value.',
-    { tab: 'portfolio', view: 'positions', anchor: 'portfolio.positions' },
-    'portfolio',
-    4,
-  ),
-  'portfolio.growth': draft(
-    'portfolio.growth',
-    'Growth',
-    'Links holdings to saved stock projections (or other growth assumptions) so future years revalue positions along those paths. Without a growth link, forward value stays flat aside from cash flows you enter.',
-    { tab: 'portfolio', view: 'growth', anchor: 'portfolio.growth' },
-    'portfolio',
-    5,
-  ),
+  portfolio: {
+    id: 'portfolio',
+    title: 'Portfolio',
+    summary:
+      'Models one or more investing books in your chosen display currency: chart and year grid, shared Actuals, Cash and Positions configuration, optional perpetual Growth, and Contribution effectiveness.',
+    body: `## How it works
+
+**Portfolio** holds named books you can switch with the **Portfolio** picker (**New**, **Copy**, **Manage…**).
+
+### Workspace tabs
+
+- **Chart** — value timeline and **Value by year** for the selected book
+- **Actuals** — shared month-end **Portfolio value** and **Money in** (all books read the same history)
+- **Cash**, **Positions**, **Growth** — configure the selected book
+- **Contribution effectiveness** — time-to-goal math for extra deposits
+
+### Display currency
+
+**USD** or **CHF** toggles how numbers are shown. Amounts are stored in the currency you enter on deposits; CHF view converts with a live **USD→CHF** rate when needed.
+
+> **Actuals** and **History** investing series are shared — one portfolio-value track for every book.
+
+## How to interpret
+
+Each book is an isolated scenario (cash, holdings, actions). The picker only changes which book you edit; it does not merge books on the chart.
+
+## Example
+
+**New** → rename in **Manage…** → add holdings on **Positions** and deposits on **Cash** → **Chart** shows **Now** from the live book and forward years from plans. A second book via **Copy** starts from the same structure without touching **Actuals**.
+`,
+    status: 'ready',
+    location: { tab: 'portfolio', anchor: 'portfolio' },
+    parentId: null,
+    order: 0,
+  },
+  'portfolio.chart': {
+    id: 'portfolio.chart',
+    title: 'Chart',
+    summary:
+      'Portfolio value over time (past actuals → Now → projected years) plus a year grid. Modes, overlays, and From/To range; planned actions affect future years, not the Now book.',
+    body: `## How it works
+
+Timeline runs **From** / **To** calendar years (custom range or **Inputs only** to snap back to years with data).
+
+### Chart display
+
+- **By position** — stacked bars per holding (+ cash)
+- **Portfolio value** — single total bar
+
+Optional right-axis overlays:
+
+- **Cash / invested** — invested vs cash mix
+- **ROI** — return overlay when actuals exist
+- **Target** — compounding line from **Year**, **Anchor**, and **Rate** (uses **Money in** in past years, planned **Cash** deposits later)
+
+Past years use **Actuals → Portfolio value** (last month in each year). **Now** is the live book; future bars follow projections, deposits, and actions.
+
+### Value by year
+
+Grid of year columns: holdings, cash, totals, and planned **buy/sell** actions. **Now** reflects shares held today; buys/sells from their year onward spend or fill **Cash**.
+
+## How to interpret
+
+> Planned trades in a future year do not change the **Now** column — only forward years.
+
+Extend **To** to see projection-linked growth or perpetual **Growth** % after the last explicit input year.
+
+## Example
+
+**By position**, **From 2022 · To 2030**, one stock linked to a saved projection. Past bars match **Actuals**; **2026** column shows a planned buy spending **Cash** entered on the **Cash** tab — total rises from shares, not from retroactive **Now** changes.
+`,
+    status: 'ready',
+    location: { tab: 'portfolio', view: 'chart', anchor: 'portfolio.chart' },
+    parentId: 'portfolio',
+    order: 1,
+  },
+  'portfolio.actuals': {
+    id: 'portfolio.actuals',
+    title: 'Actuals',
+    summary:
+      'Shared recorded history for every portfolio: month-end total value and yearly money-in. Enter totals in display currency; the Chart past uses portfolio value actuals.',
+    body: `## How it works
+
+Two views of the **same shared record** (not per book):
+
+### Portfolio value
+
+Month-end **total portfolio value** in display currency. Feeds the **Chart** past segment and **History** investing series.
+
+### Money in
+
+Contributions by calendar year — separate from per-book **Cash** deposits but available for **Chart → Target** overlay in past years.
+
+Switch with the **Portfolio value** / **Money in** tabs. Opening this guide lands on **Portfolio value**.
+
+> Label on page: **Same record for every portfolio.**
+
+## How to interpret
+
+Gaps or stale months surface in **History** completeness hints; filling value here fixes past bars on **Chart** for all books.
+
+CHF display with USD-native entries waits on a live rate before converting stored USD actuals.
+
+## Example
+
+Enter **display currency 250k** for **2024-11** under **Portfolio value**. Every book’s **Chart** shows that point in **2024** past bars; **Money in** for **2024** can still record how much you contributed that year for **Target** math.
+`,
+    status: 'ready',
+    location: { tab: 'portfolio', view: 'actuals', anchor: 'portfolio.actuals' },
+    parentId: 'portfolio',
+    order: 2,
+  },
+  'portfolio.cash': {
+    id: 'portfolio.cash',
+    title: 'Cash',
+    summary:
+      'Opening cash and planned deposits for the selected portfolio by year. Fixed or Budget-surplus amounts, optional perpetual yearly deposit; proceeds and buys flow through the cash book.',
+    body: `## How it works
+
+### Cash & deposits
+
+- **Opening row** — current cash (this calendar year); cannot be removed
+- **+ Deposit** — explicit year rows: **Fixed** amount or **% of Income/Cost surplus** from a Budget scenario (needs FX when surplus is CHF and book is USD)
+- **Perpetual yearly** — after the last explicit deposit year, repeat a fixed or surplus-linked amount each year
+- **Copy cash…** — push opening + deposits + perpetual row to other books
+
+Columns show plan vs already deposited vs **Cash after** that year.
+
+> Sale proceeds from **Positions** land in cash; buys spend cash in their action year.
+
+## How to interpret
+
+Deposits are plan lines — they move **Cash** on the **Chart** / grid in future years, not **Actuals Money in** unless you also record contributions there.
+
+Surplus-linked rows resolve when Budget net and FX are available.
+
+## Example
+
+Opening **display currency 10k**, **2026** fixed deposit **5k**, perpetual **+2k/yr** after **2028**. A **2027** sell on **Positions** adds proceeds to **2027** cash before the next buy spends it.
+`,
+    status: 'ready',
+    location: { tab: 'portfolio', view: 'cash', anchor: 'portfolio.cash' },
+    parentId: 'portfolio',
+    order: 3,
+  },
+  'portfolio.positions': {
+    id: 'portfolio.positions',
+    title: 'Positions',
+    summary:
+      'Holdings for the selected portfolio: stocks from saved projections, manual marks, and options; sort order; saved projection links; and year buy/sell actions.',
+    body: `## How it works
+
+### Holdings list
+
+- **+ Add from projections…** — stock rows tied to **Projections → Analyze** saves (symbol, shares, **Saved projection** path)
+- **+ Option**, manual / absolute marks — valued without a projection link
+- **Sort** — as added, A–Z, or by value (display order only)
+
+Expand a row to set shares, projection basis (**Easy mcap**, **P/S**, etc.), and **Actions** by calendar year (buy/sell quantities).
+
+### Copy holdings…
+
+Duplicate positions (optionally with actions) to another book.
+
+> Without a **Saved projection**, forward value follows marks and actions only — not the equity path from **Projections**.
+
+Perpetual **Growth** % on the **Growth** tab applies after the last year with explicit inputs.
+
+## How to interpret
+
+**Now** share counts drive the live **Chart** slice; year columns show simulated holdings after planned trades.
+
+Negative quantity or marks are allowed (shorts / liabilities).
+
+## Example
+
+Link **AAPL** to a saved **2028** projection scenario; **2026** action buy **100** shares spends **Cash** from the **Cash** tab. **Chart → By position** shows AAPL’s stack growing along the projection path after **Now**.
+`,
+    status: 'ready',
+    location: { tab: 'portfolio', view: 'positions', anchor: 'portfolio.positions' },
+    parentId: 'portfolio',
+    order: 4,
+  },
+  'portfolio.growth': {
+    id: 'portfolio.growth',
+    title: 'Growth',
+    summary:
+      'Optional portfolio-level perpetual growth rate applied after the last year with explicit inputs (projections, deposits, actions). Compounds the whole book total forward.',
+    body: `## How it works
+
+**Perpetual growth after last projection** is a single **% per year on whole portfolio total**.
+
+It runs **after** the last calendar year that still has specific inputs (linked projection years, deposits, or actions). Leave empty or **0** to disable.
+
+> Stock-level paths come from **Saved projection** links on **Positions** — this tab is only the fallback compounding on the **total** after explicit years end.
+
+Use **Chart** **To** year (and **Inputs only** range) to see outer-year bars where perpetual growth applies.
+
+## How to interpret
+
+Perpetual growth does not replace projection-linked revaluation inside stated years — it extends the total when the model would otherwise go flat.
+
+## Example
+
+Last explicit inputs in **2030**; set **3%** perpetual. **Chart To 2035** shows the total climbing **3%** annually on the **2030** end total in **2031–2035** if no new deposits or trades are added.
+`,
+    status: 'ready',
+    location: { tab: 'portfolio', view: 'growth', anchor: 'portfolio.growth' },
+    parentId: 'portfolio',
+    order: 5,
+  },
   'portfolio.goal': {
     id: 'portfolio.goal',
     title: 'Contribution effectiveness',

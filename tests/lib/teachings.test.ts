@@ -31,6 +31,49 @@ describe('teachings registry', () => {
     expect(g?.body).toContain('](ref:cagr-example)')
   })
 
+  it('exposes ready Portfolio guides for page and workspace tabs', () => {
+    for (const [id, location, parentId] of [
+      ['portfolio', { tab: 'portfolio', anchor: 'portfolio' }, null],
+      ['portfolio.chart', { tab: 'portfolio', view: 'chart', anchor: 'portfolio.chart' }, 'portfolio'],
+      [
+        'portfolio.actuals',
+        { tab: 'portfolio', view: 'actuals', anchor: 'portfolio.actuals' },
+        'portfolio',
+      ],
+      ['portfolio.cash', { tab: 'portfolio', view: 'cash', anchor: 'portfolio.cash' }, 'portfolio'],
+      [
+        'portfolio.positions',
+        { tab: 'portfolio', view: 'positions', anchor: 'portfolio.positions' },
+        'portfolio',
+      ],
+      [
+        'portfolio.growth',
+        { tab: 'portfolio', view: 'growth', anchor: 'portfolio.growth' },
+        'portfolio',
+      ],
+    ] as const) {
+      const g = getGuide(id)
+      expect(g?.status, id).toBe('ready')
+      expect(g?.location, id).toEqual(location)
+      expect(g?.parentId, id).toBe(parentId)
+      expect(isGuideReady(id), id).toBe(true)
+      expect(g?.references, id).toBeUndefined()
+      expect(g?.body, id).toContain('## Example')
+    }
+    expect(getGuide('portfolio.chart')?.title).toBe('Chart')
+    const portfolioTab = listGuideTree().find((t) => t.tab === 'portfolio')!
+    const root = portfolioTab.roots.find((r) => r.guide.id === 'portfolio')!
+    expect(root.children.map((c) => c.guide.id)).toEqual([
+      'portfolio.chart',
+      'portfolio.actuals',
+      'portfolio.cash',
+      'portfolio.positions',
+      'portfolio.growth',
+      'portfolio.goal',
+    ])
+    expect(getGuideAncestors('portfolio.cash').map((g) => g.id)).toEqual(['portfolio'])
+  })
+
   it('exposes a ready contribution-effectiveness guide with a figure', () => {
     const g = getGuide('portfolio.goal')
     expect(g?.status).toBe('ready')

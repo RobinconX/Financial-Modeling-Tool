@@ -37,6 +37,7 @@ import {
 } from '../../lib/portfolio'
 import { scenarioDisplayName, scenarioTotals } from '../../lib/incomeCost'
 import { InfoTip } from '../common/InfoTip'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
 import { amountToDisplay, fixedAmountToUsd, fromDisplay, toDisplay } from '../../lib/fx'
 import { HoldingActionsEditor } from './PortfolioActionsEditor'
@@ -662,6 +663,7 @@ export function PortfolioHoldingsEditor({
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <h3 className="section-title text-sky-300/90">Cash & deposits</h3>
+            <FeatureGuideButton id="portfolio.cash" />
             <InfoTip label="About cash and deposits">
               First row is current cash (opening). Amounts are stored in the currency you enter (no
               FX drift if you stay in CHF). Deposits can be fixed or % of Income/Cost surplus.
@@ -783,6 +785,7 @@ export function PortfolioHoldingsEditor({
             <h3 className="section-title text-violet-300/90">
               Perpetual growth after last projection
             </h3>
+            <FeatureGuideButton id="portfolio.growth" />
             <InfoTip label="About perpetual growth">
               Compounds the full portfolio after the last year with specific inputs (projections,
               deposits, actions). Leave empty or 0 to turn off. Use the Chart tab period To year to
@@ -827,6 +830,7 @@ export function PortfolioHoldingsEditor({
       <div className="flex flex-wrap items-center justify-between gap-2">
         <div className="flex flex-wrap items-center gap-2">
           <h3 className="section-title text-amber-300/90">Holdings</h3>
+          <FeatureGuideButton id="portfolio.positions" />
           {portfolio.holdings.length > 0 && (
             <div className="flex flex-wrap items-center gap-2">
               <div

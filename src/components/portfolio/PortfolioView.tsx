@@ -32,6 +32,7 @@ import { PortfolioMoneyIn } from './PortfolioMoneyIn'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { InfoTip } from '../common/InfoTip'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 const CURRENCY_KEY = 'grok-lab-portfolio-currency'
@@ -163,16 +164,25 @@ export function PortfolioView({
   )
   const [panel, setPanel] = useState<WorkspaceTab>(readPanel)
 
-  useGuideTeleport('portfolio', (view) => {
+  useGuideTeleport('portfolio', (view, anchor) => {
+    const tabFromAnchor =
+      anchor.startsWith('portfolio.') && anchor !== 'portfolio'
+        ? anchor.slice('portfolio.'.length)
+        : null
+    const tab = view ?? tabFromAnchor
     if (
-      view === 'chart' ||
-      view === 'actuals' ||
-      view === 'cash' ||
-      view === 'positions' ||
-      view === 'growth' ||
-      view === 'goal'
+      tab === 'chart' ||
+      tab === 'actuals' ||
+      tab === 'cash' ||
+      tab === 'positions' ||
+      tab === 'growth' ||
+      tab === 'goal'
     ) {
-      setPanel(view)
+      setPanel(tab)
+    }
+    if (anchor === 'portfolio.actuals' || tab === 'actuals') {
+      setPanel('actuals')
+      setActualsKind('value')
     }
   })
   const [actualsKind, setActualsKind] = useState<'value' | 'moneyin'>('value')
@@ -525,31 +535,34 @@ export function PortfolioView({
   return (
     <div className="space-y-5" data-guide-anchor="portfolio">
       <div className="relative z-40 space-y-3">
-        <nav
-          className="flex flex-wrap gap-1 border-b border-white/10"
-          aria-label="Portfolio sections"
-          role="tablist"
-        >
-          {TABS.map((t) => {
-            const active = panel === t.id
-            return (
-              <button
-                key={t.id}
-                type="button"
-                role="tab"
-                aria-selected={active}
-                onClick={() => setPanel(t.id)}
-                className={`-mb-px shrink-0 border-b-2 px-3 py-1.5 text-sm font-medium transition ${
-                  active
-                    ? 'border-emerald-400 text-white'
-                    : 'border-transparent text-white/50 hover:text-white/80'
-                }`}
-              >
-                {t.label}
-              </button>
-            )
-          })}
-        </nav>
+        <div className="flex flex-wrap items-end gap-2">
+          <nav
+            className="flex flex-wrap gap-1 border-b border-white/10"
+            aria-label="Portfolio sections"
+            role="tablist"
+          >
+            {TABS.map((t) => {
+              const active = panel === t.id
+              return (
+                <button
+                  key={t.id}
+                  type="button"
+                  role="tab"
+                  aria-selected={active}
+                  onClick={() => setPanel(t.id)}
+                  className={`-mb-px shrink-0 border-b-2 px-3 py-1.5 text-sm font-medium transition ${
+                    active
+                      ? 'border-emerald-400 text-white'
+                      : 'border-transparent text-white/50 hover:text-white/80'
+                  }`}
+                >
+                  {t.label}
+                </button>
+              )
+            })}
+          </nav>
+          <FeatureGuideButton id="portfolio" className="mb-1.5" />
+        </div>
 
       {/* Top bar — z-index so portfolio/manage menus paint above the workspace panel */}
       <div className="relative z-40 flex flex-wrap items-center gap-3 pb-3">
@@ -796,21 +809,24 @@ export function PortfolioView({
         </p>
       )}
 
-      {!selected ? (
-        <div className="flex items-center justify-center p-8 text-sm text-white/40">
-          Create or select a portfolio to get started.
-        </div>
-      ) : (
-        <div
-          className="panel min-h-0 min-w-0 space-y-5"
-          data-guide-anchor={`portfolio.${panel}`}
-        >
-            {panel === 'chart' && grid && (
+      <div
+        className="panel min-h-0 min-w-0 space-y-5"
+        data-guide-anchor={`portfolio.${panel}`}
+      >
+            {!selected ? (
+              <div className="flex flex-col items-center justify-center gap-3 p-8 text-center text-sm text-white/40">
+                <FeatureGuideButton id={`portfolio.${panel}`} />
+                <p>Create or select a portfolio to get started.</p>
+              </div>
+            ) : null}
+
+            {selected && panel === 'chart' && grid && (
               <div className="space-y-5">
                 <div className="space-y-2">
                 <div className="flex flex-wrap items-end justify-between gap-3">
                   <div className="flex items-center gap-1.5">
                     <h3 className="section-title">Portfolio value</h3>
+                    <FeatureGuideButton id="portfolio.chart" />
                     <InfoTip label="About portfolio chart">
                       Timeline: past → Now (live) → future. Past years use Actuals (last month of
                       year) in portfolio value mode. Extend To for growth projections.
@@ -1045,17 +1061,21 @@ export function PortfolioView({
               </div>
             )}
 
-            {panel === 'chart' && !grid && (
-              <p className="text-sm text-white/40">Add cash or holdings to see the chart.</p>
+            {selected && panel === 'chart' && !grid && (
+              <div className="flex flex-wrap items-center gap-2 text-sm text-white/40">
+                <FeatureGuideButton id="portfolio.chart" />
+                <p>Add cash or holdings to see the chart.</p>
+              </div>
             )}
 
-            {panel === 'actuals' && (
+            {selected && panel === 'actuals' && (
               <div className="space-y-4">
-                <div
-                  className="inline-flex gap-1 border-b border-white/10"
-                  role="group"
-                  aria-label="Actuals kind"
-                >
+                <div className="flex flex-wrap items-center gap-2">
+                  <div
+                    className="inline-flex gap-1 border-b border-white/10"
+                    role="group"
+                    aria-label="Actuals kind"
+                  >
                   {(
                     [
                       { id: 'value' as const, label: 'Portfolio value' },
@@ -1075,6 +1095,8 @@ export function PortfolioView({
                       {t.label}
                     </button>
                   ))}
+                  </div>
+                  <FeatureGuideButton id="portfolio.actuals" />
                 </div>
                 <p className="text-[11px] text-white/40">
                   Same record for every portfolio.
@@ -1101,7 +1123,7 @@ export function PortfolioView({
               </div>
             )}
 
-            {panel === 'goal' && (
+            {selected && panel === 'goal' && (
               <GoalSpeedPanel
                 portfolio={selected}
                 scenarios={scenarios}
@@ -1112,7 +1134,7 @@ export function PortfolioView({
               />
             )}
 
-            {editorPanel && (
+            {selected && editorPanel && (
               <PortfolioHoldingsEditor
                 panel={editorPanel}
                 portfolio={selected}
@@ -1127,7 +1149,6 @@ export function PortfolioView({
               />
             )}
         </div>
-      )}
 
       {pendingDelete ? (
         <ConfirmDialog
