@@ -687,6 +687,17 @@ export function getParentGuide(id: FeatureGuideId): FeatureGuide | undefined {
   return getGuide(guide.parentId)
 }
 
+/** Root-to-parent chain for breadcrumbs (excludes `id` itself). */
+export function getGuideAncestors(id: FeatureGuideId): FeatureGuide[] {
+  const ancestors: FeatureGuide[] = []
+  let current = getParentGuide(id)
+  while (current) {
+    ancestors.unshift(current)
+    current = getParentGuide(current.id)
+  }
+  return ancestors
+}
+
 /** Direct children of this guide, ordered like the sidebar tree. */
 export function listChildGuides(id: FeatureGuideId): FeatureGuide[] {
   return Object.values(GUIDES)

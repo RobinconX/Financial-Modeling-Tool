@@ -1,6 +1,6 @@
 import {
   getGuide,
-  getParentGuide,
+  getGuideAncestors,
   listChildGuides,
   type FeatureGuide,
   type FeatureGuideId,
@@ -43,29 +43,47 @@ export function FeatureGuideArticle({ id }: Props) {
   if (!guide) return null
 
   const isReady = guide.status === 'ready'
-  const parent = getParentGuide(id)
+  const ancestors = getGuideAncestors(id)
   const children = listChildGuides(id)
 
   return (
     <div className="flex min-h-0 flex-1 flex-col">
       <div className="shrink-0 border-b border-white/10 px-4 py-3">
-        <button
-          type="button"
-          className="mb-2 text-[11px] font-medium text-sky-300/90 transition hover:text-sky-200"
-          onClick={showIndex}
-        >
-          ← All guides
-        </button>
-        {parent ? (
-          <button
-            type="button"
-            className="mb-2 flex items-center gap-1.5 text-[12px] font-semibold text-sky-300 transition hover:text-sky-200"
-            onClick={() => openGuide(parent.id)}
-          >
-            <span aria-hidden>↑</span>
-            {parent.title}
-          </button>
-        ) : null}
+        <nav aria-label="Breadcrumb" className="mb-2 text-[12px] leading-snug text-white/45">
+          <ol className="flex flex-wrap items-baseline gap-x-1 gap-y-0.5">
+            <li className="inline-flex min-w-0 items-baseline gap-x-1">
+              <button
+                type="button"
+                className="font-medium text-sky-300/90 transition hover:text-sky-200"
+                onClick={showIndex}
+              >
+                Guides
+              </button>
+            </li>
+            {ancestors.map((ancestor) => (
+              <li key={ancestor.id} className="inline-flex min-w-0 items-baseline gap-x-1">
+                <span aria-hidden className="shrink-0">
+                  {' / '}
+                </span>
+                <button
+                  type="button"
+                  className="truncate font-medium text-sky-300/90 transition hover:text-sky-200"
+                  onClick={() => openGuide(ancestor.id)}
+                >
+                  {ancestor.title}
+                </button>
+              </li>
+            ))}
+            <li className="inline-flex min-w-0 items-baseline gap-x-1">
+              <span aria-hidden className="shrink-0">
+                {' / '}
+              </span>
+              <span className="truncate font-semibold text-white" aria-current="page">
+                {guide.title}
+              </span>
+            </li>
+          </ol>
+        </nav>
         <h2 className="text-sm font-semibold tracking-wide text-white">{guide.title}</h2>
         <p className="mt-1 text-[12px] leading-relaxed text-white/50">{guide.summary}</p>
         {!isReady ? (
