@@ -18,6 +18,7 @@ import {
   sourceLabel,
 } from '../../lib/overview'
 import { InfoTip } from '../common/InfoTip'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { NumberInput } from '../common/MoneyInput'
 
 type Props = {
@@ -600,6 +601,7 @@ export function OverviewSeriesEditor({
       <div className="section-header">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-violet-300/90">Asset series</h3>
+          <FeatureGuideButton id="overview.series" />
           <InfoTip label="About asset series">
             Drag groups (⋮⋮) to set stack order; expand (▸) to edit. Checkboxes include series in
             the chart (Savings group and each account). Leftover is always on; other series take year →

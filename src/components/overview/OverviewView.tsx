@@ -352,7 +352,14 @@ export function OverviewView({
     })
   }
 
-  useGuideTeleport('overview')
+  useGuideTeleport('overview', (view, anchor) => {
+    if (anchor === 'overview.runway') {
+      setPageTab('runway')
+      return
+    }
+    setPageTab('networth')
+    if (view === 'compare') setChartMode('compare')
+  })
 
   return (
     <div className="space-y-5" data-guide-anchor="overview">
@@ -367,6 +374,7 @@ export function OverviewView({
         <div className="section-header">
           <div className="flex items-center gap-1.5">
             <span className="section-title">Scenarios</span>
+            <FeatureGuideButton id="overview.scenarios" />
             <InfoTip label="About overview scenarios">
               Each scenario is a net-worth stack (portfolios, savings, other). Bars or area show
               one scenario; Compare plots totals as lines. Optional notes store assumptions only.
@@ -470,30 +478,33 @@ export function OverviewView({
         ) : null}
       </div>
 
-      <div
-        className="inline-flex gap-1 border-b border-white/10"
-        role="group"
-        aria-label="Overview page"
-      >
-        {(
-          [
-            { id: 'networth' as const, label: 'Net worth' },
-            { id: 'runway' as const, label: 'Runway' },
-          ] as const
-        ).map((t) => (
-          <button
-            key={t.id}
-            type="button"
-            onClick={() => setPageTab(t.id)}
-            className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
-              pageTab === t.id
-                ? 'border-emerald-400 text-white'
-                : 'border-transparent text-white/50 hover:text-white/80'
-            }`}
-          >
-            {t.label}
-          </button>
-        ))}
+      <div className="flex flex-wrap items-end gap-2">
+        <div
+          className="inline-flex gap-1 border-b border-white/10"
+          role="group"
+          aria-label="Overview page"
+        >
+          {(
+            [
+              { id: 'networth' as const, label: 'Net worth' },
+              { id: 'runway' as const, label: 'Runway' },
+            ] as const
+          ).map((t) => (
+            <button
+              key={t.id}
+              type="button"
+              onClick={() => setPageTab(t.id)}
+              className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
+                pageTab === t.id
+                  ? 'border-emerald-400 text-white'
+                  : 'border-transparent text-white/50 hover:text-white/80'
+              }`}
+            >
+              {t.label}
+            </button>
+          ))}
+        </div>
+        <FeatureGuideButton id="overview" className="mb-0.5" />
       </div>
 
       {/* Chart */}
@@ -529,7 +540,11 @@ export function OverviewView({
                 </>
               )}
             </h3>
-            {pageTab === 'runway' ? <FeatureGuideButton id="overview.runway" /> : null}
+            {pageTab === 'runway' ? (
+              <FeatureGuideButton id="overview.runway" />
+            ) : (
+              <FeatureGuideButton id="overview.chart" />
+            )}
             <InfoTip label="About overview chart">
               {effectiveChartMode === 'compare'
                 ? 'Past years → Now (live) → future. Each line is total net worth for a scenario (enabled series only).'
@@ -814,7 +829,7 @@ export function OverviewView({
       </div>
 
       {pageTab === 'networth' ? (
-      <div className="panel space-y-3">
+      <div className="panel space-y-3" data-guide-anchor="overview.series">
         {effectiveChartMode === 'compare' && selectedScenario ? (
           <p className="text-xs text-white/45">
             Editing series for <span className="text-white/75">{selectedScenario.name}</span>

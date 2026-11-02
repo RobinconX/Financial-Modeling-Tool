@@ -92,30 +92,152 @@ function draft(
 }
 
 const GUIDES: Record<string, FeatureGuide> = {
-  overview: draft(
-    'overview',
-    'Overview',
-    'Builds a year-by-year net-worth picture in CHF by stacking portfolios, savings, and other asset series you define. Use it to compare scenarios, see how the stack evolves, and optionally explore runway drawdowns.',
-    { tab: 'overview', anchor: 'overview' },
-    null,
-    0,
-  ),
-  'overview.scenarios': draft(
-    'overview.scenarios',
-    'Scenarios',
-    'Each scenario is a named net-worth stack: which portfolios, savings accounts, and manual series to include, plus optional notes. Add, rename, or compare scenarios without changing the underlying source data.',
-    { tab: 'overview', anchor: 'overview.scenarios' },
-    'overview',
-    1,
-  ),
-  'overview.chart': draft(
-    'overview.chart',
-    'Net worth chart',
-    'Charts the selected scenario as stacked bars or area (or compares scenario totals as lines). Optional goals and notes sit on the same timeline so you can read the stack against targets.',
-    { tab: 'overview', anchor: 'overview.chart' },
-    'overview',
-    2,
-  ),
+  overview: {
+    id: 'overview',
+    title: 'Overview',
+    summary:
+      'Builds a year-by-year net-worth picture in CHF by stacking portfolios, savings, and other series. Switch scenarios, chart modes, and the Runway tab without changing underlying Portfolio, Savings, or Budget data.',
+    body: `## How it works
+
+**Overview** is the Life tab that rolls your configured assets into one CHF timeline per **scenario**.
+
+### Page tabs
+
+- **Net worth** — stack chart plus **Asset series** editor for the selected scenario
+- **Runway** — same asset stack with a cashflow overlay (see the **Runway** guide)
+
+### What stays shared
+
+Portfolios, savings accounts, and Budget lines live in their own tabs. Overview scenarios only **reference** them (which portfolio, which savings accounts, optional Budget bindings on manual series).
+
+> Changing Portfolio or Savings inputs reshapes every Overview scenario that includes those sources.
+
+## How to interpret
+
+Use Overview to answer: “If these sources behave as configured, how big is the stack over time — and how do named what-ifs differ?”
+
+Past bars can show **recorded actuals** when History data exists; future years are modeled. **Now** is the live as-of point between them.
+
+## Example
+
+One scenario stacks **Portfolio A** and **Cash** savings; another adds a **manual** series with Budget surplus routed in from **2026 · Base**. **Compare** mode plots both scenario totals as lines over the same **From / To** range — same underlying books, different inclusion or bindings.
+`,
+    status: 'ready',
+    location: { tab: 'overview', anchor: 'overview' },
+    parentId: null,
+    order: 0,
+  },
+  'overview.scenarios': {
+    id: 'overview.scenarios',
+    title: 'Scenarios',
+    summary:
+      'Each scenario is a named net-worth stack: enabled asset series, optional notes, and (on Runway) its own cashflow periods. Fork with Save as… without touching Portfolio or Savings source data.',
+    body: `## How it works
+
+A scenario stores **which series** are in the stack, their order, and optional **Notes / assumptions**. It does not duplicate portfolio holdings or savings math.
+
+### Toolbar
+
+- **+ New** — blank scenario; savings accounts sync in automatically (at least **Cash**)
+- **Save as…** — fork the current stack under a new name (compare sets remember the new id when you had an explicit compare list)
+- **Delete** — removed when at least two scenarios exist
+- **Select** + name field — switch and rename the active scenario
+
+Notes are text only — they do not change calculations.
+
+## How to interpret
+
+Treat scenarios as **labeled what-ifs**: same global data, different inclusion, bindings, or Runway overlay.
+
+> **Compare** mode uses scenario totals — create a second scenario (often via **Save as…**) before expecting multiple lines.
+
+## Example
+
+**Base** includes Portfolio + all savings. **Save as…** → **Aggressive**; disable one savings account in **Asset series**. **Compare** with both checked shows two total lines; editing series while **Aggressive** is selected only changes that scenario’s stack.
+`,
+    status: 'ready',
+    location: { tab: 'overview', anchor: 'overview.scenarios' },
+    parentId: 'overview',
+    order: 1,
+  },
+  'overview.chart': {
+    id: 'overview.chart',
+    title: 'Net worth',
+    summary:
+      'Charts the selected scenario as stacked bars or area, or compares scenario totals as lines. Past → Now → future in CHF; optional recorded overlay, goals, and notes on the Net worth tab.',
+    body: `## How it works
+
+Timeline reads **From** and **To** calendar years (stored on the scenario). The X-axis is past years, **Now** (live), then projected years.
+
+### Chart mode (Net worth tab)
+
+- **Bars** — stacked columns by enabled series
+- **Area** — same stack as filled areas
+- **Compare** — one line per scenario total (checkbox **Show** list); portfolio USD series need a USD→CHF rate
+
+### Overlays (Net worth tab only)
+
+- **Show recorded actuals** — amber overlay from History when available
+- **Show Goals** — horizontal targets when goals exist
+- **Chart notes** — pin annotations on the timeline
+
+Click a year (not in Compare) for the year breakdown panel.
+
+> **Runway** reuses this chart panel but hides Compare, goals, notes, and recorded overlay — open the **Runway** guide for cashflow.
+
+## How to interpret
+
+Read **stack height** and **mix**, not just the total. Colors follow origin: portfolio greens, savings blues, manual amber/violet, leftover pink.
+
+> **Now** uses live portfolio/savings values; future years follow each series’ growth, contributions, and Budget bindings.
+
+## Example
+
+**From 2024 · To 2035**, **Area** mode, one portfolio + savings enabled. Recorded actuals sit on past years; **2030** bar height is pure projection. Switch **Compare**, tick two scenarios — lines show totals only (no stack split).
+`,
+    status: 'ready',
+    location: { tab: 'overview', view: 'networth', anchor: 'overview.chart' },
+    parentId: 'overview',
+    order: 2,
+  },
+  'overview.series': {
+    id: 'overview.series',
+    title: 'Asset series',
+    summary:
+      'Configure what goes into the selected scenario’s stack: portfolios, savings accounts, manual “other” piles, and permanent leftover cash. Drag stack order; bind Budget years to route surplus.',
+    body: `## How it works
+
+Each row is one **stack layer** on the Net worth chart. Drag **⋮⋮** on groups to reorder; expand **▸** to edit.
+
+### Series types
+
+- **Savings** group — every savings account appears here; toggle accounts or the whole group. **Cash** is permanent and stays included
+- **Portfolio** — links one portfolio book (USD converted at the Overview FX rate)
+- **Other** (manual) — flat **base CHF**, optional **annual rate**, **Year → Income/Cost → %** rows claiming Budget surplus for that calendar year
+- **Leftover** (permanent) — receives Budget cash not claimed by manual **%** rows; optional **perpetual yearly CHF** after bindings end
+
+### Common fields
+
+- **Compound until** / **Contribute until** — last year growth or additions apply (blank = no limit)
+- **Draw locked until** — Runway cannot tap this pile before that year (Runway tab)
+
+Manual **%** on a Budget year must sum with other claims; unclaimed income-cost net flows to **Leftover**.
+
+## How to interpret
+
+Disabled series drop out of the chart but stay configured. Missing portfolio links show a warning until you pick a valid book.
+
+> Stack order is **bottom-to-top** in bars — the first group in the list is the bottom slice.
+
+## Example
+
+**2026** binding: manual **Invest** at **60%** of **2026 · Base** Budget net, **Leftover** gets the residual. **+ Other** with **CHF 50k** base and **3%** rate adds a layer that compounds after **Now** unless **Compound until** stops it.
+`,
+    status: 'ready',
+    location: { tab: 'overview', view: 'networth', anchor: 'overview.series' },
+    parentId: 'overview',
+    order: 3,
+  },
   'overview.runway': {
     id: 'overview.runway',
     title: 'Runway',
@@ -191,25 +313,85 @@ If piles near empty in the early 2040s, start the 40k or 0k period later (or tri
       anchor: 'overview.runway',
     },
     parentId: 'overview',
-    order: 3,
+    order: 4,
   },
 
-  'income-cost': draft(
-    'income-cost',
-    'Budget',
-    'Plans income and costs for a calendar year in CHF. Named scenarios hold the line items; switch between a year overview and a month-by-month working balance.',
-    { tab: 'income-cost', anchor: 'income-cost' },
-    null,
-    0,
-  ),
-  'income-cost.budget': draft(
-    'income-cost.budget',
-    'Budget year',
-    'Year view for the selected scenario: totals, income and cost tables, and a cash-flow diagram. Edit recurring or one-time lines and see how the year nets out.',
-    { tab: 'income-cost', view: 'budget', anchor: 'income-cost.budget' },
-    'income-cost',
-    1,
-  ),
+  'income-cost': {
+    id: 'income-cost',
+    title: 'Budget',
+    summary:
+      'Plans income and costs per calendar year in CHF. Named scenarios hold line items; the Budget tab is the annual sheet, Monthly spreads it across months with working balance.',
+    body: `## How it works
+
+**Budget** (sidebar label) stores **scenarios** — each has a **Year**, a name, income/cost **positions**, and optional **Monthly** draws.
+
+### Workspace tabs
+
+- **Budget** — annual totals, position tables, and cash-flow Sankey for the selected scenario
+- **Monthly** — Jan–Dec path, opening cash, and informative draws (see the **Monthly** guide)
+
+Amounts are **CHF**. Scenarios are ordered by drag on the chip strip; **Copy…** clones lines and draws into a new scenario.
+
+> Overview **Runway** and manual series bindings read Budget scenarios by **calendar year** — keep scenario **Year** aligned with the year you mean.
+
+## How to interpret
+
+Annual **Net / year** is the headline solvency check; **Monthly** catches timing inside the year.
+
+## Example
+
+**2025 · Base** holds salary and rent; **Copy…** → **2026 · Base** and bump salary for a raise scenario. Overview manual series bind to **2026 · Base** by year without duplicating line items here.
+`,
+    status: 'ready',
+    location: { tab: 'income-cost', anchor: 'income-cost' },
+    parentId: null,
+    order: 0,
+  },
+  'income-cost.budget': {
+    id: 'income-cost.budget',
+    title: 'Budget',
+    summary:
+      'Annual view for the selected scenario: scenario strip and year, summary metrics, Income and Costs tables, and the cash-flow Sankey. Payment months on lines feed the Monthly tab.',
+    body: `## How it works
+
+Everything on this tab belongs to the **selected scenario** (chip strip at top).
+
+### Scenario strip
+
+Drag chips to reorder; double-click to rename; **Year** applies to this scenario’s calendar year; **+ Scenario** / **Copy…** / delete (when more than one).
+
+### Summary
+
+**Costs / month** and **Income / month** use **recurring** positions only (yearly ÷ 12). **Costs / year** and **Income / year** include **one-time** lines. **Net** rows follow the same split.
+
+### Income and Costs tables
+
+Each side has **Recurring** and **One-time** sections. Default sort is **yearly amount descending** (persisted per table). Columns include yearly and monthly display; **Payment** schedule:
+
+- **Monthly** (no months picked) — yearly ÷ 12 every month
+- Selected months — equal split across those months; rounding remainder on the **last** selected month
+
+One-time lines count in yearly totals only.
+
+### Cash flow Sankey
+
+Shows yearly flows for this scenario: income nodes into **Total income**, out to cost lines and **Net** (surplus or **Unfunded** gap). Empty income with costs shows an **Unfunded** bridge.
+
+## How to interpret
+
+> **Net / month** ignores one-time spikes — a bonus-only-in-December story still looks “smooth” here; open **Monthly** for timing.
+
+Sankey is yearly-only; it does not include Monthly **Draws**.
+
+## Example
+
+Recurring salary **CHF 120k**, rent **CHF 24k** → **Net / month CHF 8k**, **Net / year CHF 96k**. Insurance **CHF 1,800** one-time on **Jan** adds to **Net / year** but not **Net / month**. Sankey width matches those yearly totals.
+`,
+    status: 'ready',
+    location: { tab: 'income-cost', view: 'budget', anchor: 'income-cost.budget' },
+    parentId: 'income-cost',
+    order: 1,
+  },
   'income-cost.monthly': {
     id: 'income-cost.monthly',
     title: 'Monthly',
@@ -397,14 +579,48 @@ Two accounts: **Cash** **CHF 5,000** actual at last December, **Emergency** proj
     order: 3,
   },
 
-  history: draft(
-    'history',
-    'History',
-    'Charts and tables of recorded actuals only — portfolio monthly totals and savings year-end (or monthly) balances. Switch monthly vs yearly resolution and choose which series to include; totals are in CHF.',
-    { tab: 'history', anchor: 'history' },
-    null,
-    0,
-  ),
+  history: {
+    id: 'history',
+    title: 'History',
+    summary:
+      'Recorded actuals only — shared portfolio month-end totals and per-account savings balances. Chart controls, series inclusion, and a year-end table; CHF totals with USD portfolio converted when a rate is available.',
+    body: `## How it works
+
+History never projects forward. Data comes from **Portfolio → Actuals** (one shared investing total) and **Savings → Actuals** (per account).
+
+### Chart controls
+
+- **Resolution** — **Monthly** points per month; **Yearly** uses the **last month entered** in each calendar year (December if present)
+- **Chart** — **Line** or **Stacked**; **Series** — **Total** (one combined CHF line/stack) or **By asset** (each included series)
+- **From / To** — filter the chart and table (defaults to your data span)
+
+**Recorded actuals** chart supports the same **Goals** and **notes** widgets as other charts. Below the chart: **Latest** total, as-of label, and **YoY vs prior year-end** (CHF series only).
+
+USD portfolio actuals wait for USD→CHF; until then they are excluded from the CHF total banner.
+
+### Include
+
+Checkboxes under **Portfolios** and **Savings** toggle series on the chart and table. Stale or gap hints (amber) use completeness rules: yearly-style series vs monthly gaps inside the selected range.
+
+### Year-end table
+
+Grid of **December (or year rollup) values** per series for each year in range. Sort **Latest** (default, highest recent value first) or **YoY** (strongest growth first). **YoY** column compares last populated year in range to the prior year.
+
+## How to interpret
+
+> **Yearly** resolution is not “calendar year-end only” — it picks the **latest month you entered** that year.
+
+Use History to audit what you typed; Overview **Show recorded actuals** overlays this data on projections.
+
+## Example
+
+Portfolio **USD 100k** in **2024-11**, **Cash CHF 5k** in **2024-12**, rate **0.9** → Latest total ≈ **CHF 95k + 5k**. Switch **Yearly**, **By asset** — two series; table **YoY** sort surfaces which account moved most year over year.
+`,
+    status: 'ready',
+    location: { tab: 'history', anchor: 'history' },
+    parentId: null,
+    order: 0,
+  },
 
   projections: draft(
     'projections',

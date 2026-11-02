@@ -16,6 +16,7 @@ import { YearSankey } from './YearSankey'
 import { MonthlyBudgetView } from './MonthlyBudgetView'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { CopyScenarioDialog } from './CopyScenarioDialog'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 type WorkspaceTab = 'budget' | 'monthly'
@@ -187,6 +188,9 @@ export function IncomeCostView({
   if (!selected || !totals) {
     return (
       <div className="py-12 text-center text-sm text-white/40" data-guide-anchor="income-cost">
+        <div className="mb-3 flex justify-center">
+          <FeatureGuideButton id="income-cost" />
+        </div>
         No scenarios yet.
         <div className="mt-3">
           <button type="button" className="btn-primary" onClick={handleAddScenario}>
@@ -363,6 +367,7 @@ export function IncomeCostView({
         >
           Monthly
         </button>
+        <FeatureGuideButton id="income-cost" className="mb-1.5" />
       </div>
 
       {workspaceTab === 'budget' ? (
