@@ -1,6 +1,7 @@
 import { formatMoney } from '../../lib/format'
 import { INCOME_COST_CURRENCY, type ScenarioTotals } from '../../lib/incomeCost'
 import { InfoTip } from '../common/InfoTip'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 
 type Props = {
   title: string
@@ -43,6 +44,7 @@ export function YearOverview({ title, totals }: Props) {
           <p className="section-kicker">Summary</p>
           <div className="mt-0.5 flex items-center gap-1.5">
             <h3 className="section-title">{title}</h3>
+            <FeatureGuideButton id="income-cost.budget" />
             <InfoTip label="About overview totals">
               Amounts in CHF. Monthly totals use recurring positions only; one-time items count in
               yearly totals.

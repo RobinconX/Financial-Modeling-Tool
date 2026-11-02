@@ -8,7 +8,7 @@ import { useFeatureGuide } from './FeatureGuideProvider'
  */
 export function useGuideTeleport(
   tab: AppTab,
-  applyView?: (view: string | undefined) => void,
+  applyView?: (view: string | undefined, anchor: string) => void,
 ) {
   const { pendingFocus, clearPendingFocus } = useFeatureGuide()
   const applyRef = useRef(applyView)
@@ -17,9 +17,8 @@ export function useGuideTeleport(
   useEffect(() => {
     if (!pendingFocus || pendingFocus.tab !== tab) return
 
-    applyRef.current?.(pendingFocus.view)
-
     const anchor = pendingFocus.anchor
+    applyRef.current?.(pendingFocus.view, anchor)
     const clear = clearPendingFocus
 
     const t = window.setTimeout(() => {

@@ -103,6 +103,75 @@ describe('teachings registry', () => {
     ])
   })
 
+  it('exposes ready Overview guides for page and sub-features', () => {
+    for (const [id, location, parentId] of [
+      ['overview', { tab: 'overview', anchor: 'overview' }, null],
+      ['overview.scenarios', { tab: 'overview', anchor: 'overview.scenarios' }, 'overview'],
+      [
+        'overview.chart',
+        { tab: 'overview', view: 'networth', anchor: 'overview.chart' },
+        'overview',
+      ],
+      [
+        'overview.series',
+        { tab: 'overview', view: 'networth', anchor: 'overview.series' },
+        'overview',
+      ],
+    ] as const) {
+      const g = getGuide(id)
+      expect(g?.status, id).toBe('ready')
+      expect(g?.location, id).toEqual(location)
+      expect(g?.parentId, id).toBe(parentId)
+      expect(isGuideReady(id), id).toBe(true)
+      expect(g?.references, id).toBeUndefined()
+      expect(g?.body, id).toContain('## Example')
+    }
+    const overviewTab = listGuideTree().find((t) => t.tab === 'overview')!
+    const root = overviewTab.roots.find((r) => r.guide.id === 'overview')!
+    expect(root.children.map((c) => c.guide.id)).toEqual([
+      'overview.scenarios',
+      'overview.chart',
+      'overview.series',
+      'overview.runway',
+    ])
+    expect(getGuideAncestors('overview.series').map((g) => g.id)).toEqual(['overview'])
+  })
+
+  it('exposes ready Budget guides for page and Budget tab', () => {
+    for (const [id, location, parentId] of [
+      ['income-cost', { tab: 'income-cost', anchor: 'income-cost' }, null],
+      [
+        'income-cost.budget',
+        { tab: 'income-cost', view: 'budget', anchor: 'income-cost.budget' },
+        'income-cost',
+      ],
+    ] as const) {
+      const g = getGuide(id)
+      expect(g?.status, id).toBe('ready')
+      expect(g?.location, id).toEqual(location)
+      expect(g?.parentId, id).toBe(parentId)
+      expect(isGuideReady(id), id).toBe(true)
+      expect(g?.body, id).toContain('## Example')
+    }
+    expect(getGuide('income-cost.budget')?.title).toBe('Budget')
+    expect(listChildGuides('income-cost').map((g) => g.id)).toEqual([
+      'income-cost.budget',
+      'income-cost.monthly',
+    ])
+  })
+
+  it('exposes a ready History page guide with no children', () => {
+    const g = getGuide('history')
+    expect(g?.status).toBe('ready')
+    expect(g?.location).toEqual({ tab: 'history', anchor: 'history' })
+    expect(g?.parentId).toBeNull()
+    expect(isGuideReady('history')).toBe(true)
+    expect(g?.body).toContain('## Example')
+    expect(listChildGuides('history')).toEqual([])
+    const historyTab = listGuideTree().find((t) => t.tab === 'history')!
+    expect(historyTab.roots.map((r) => r.guide.id)).toEqual(['history'])
+  })
+
   it('exposes a ready Overview Runway guide with a figure', () => {
     const g = getGuide('overview.runway')
     expect(g?.status).toBe('ready')
@@ -111,6 +180,7 @@ describe('teachings registry', () => {
       anchor: 'overview.runway',
     })
     expect(g?.parentId).toBe('overview')
+    expect(g?.order).toBe(4)
     expect(isGuideReady('overview.runway')).toBe(true)
     expect(g?.references).toEqual([
       expect.objectContaining({

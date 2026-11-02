@@ -19,6 +19,7 @@ import { ChartGoals } from '../common/ChartGoals'
 import { ChartNotes } from '../common/ChartNotes'
 import { InfoTip } from '../common/InfoTip'
 import { HistoryChart, type HistoryChartKind, type HistoryChartSplit } from './HistoryChart'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 const INCLUDED_KEY = 'grok-lab-history-series'
@@ -238,9 +239,12 @@ export function HistoryView({
 
   if (allSeries.length === 0) {
     return (
-      <p className="px-1 py-10 text-center text-sm text-white/40" data-guide-anchor="history">
+      <div className="px-1 py-10 text-center text-sm text-white/40" data-guide-anchor="history">
+        <div className="mb-3 flex justify-center">
+          <FeatureGuideButton id="history" />
+        </div>
         Add monthly totals on Portfolio → Actuals, or year-end balances on Savings → Actuals.
-      </p>
+      </div>
     )
   }
 
@@ -252,6 +256,7 @@ export function HistoryView({
             Recorded end-of-month actuals only — investing (shared) and savings. Yearly uses the last
             month you entered in that year. Totals are CHF; USD actuals join once a rate is available.
           </InfoTip>
+          <FeatureGuideButton id="history" />
           <Seg
             label="Resolution"
             value={resolution}
