@@ -38,6 +38,7 @@ import {
 } from '../../lib/linkedDataFile'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { InfoTip } from '../common/InfoTip'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 type Props = {
@@ -234,6 +235,7 @@ export function DataSettingsPanel({ onClose }: Props) {
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-1.5">
           <h2 className="text-lg font-semibold text-white">Data &amp; backup</h2>
+          <FeatureGuideButton id="settings" />
           <InfoTip label="About data storage">
             Your data stays on this device. On desktop Chrome/Edge you can link a JSON file for
             continuous save. On iPhone/iPad use Export / Import. No multi-user cloud database.
@@ -246,7 +248,7 @@ export function DataSettingsPanel({ onClose }: Props) {
         )}
       </div>
 
-      <section className="panel space-y-3" data-guide-anchor="settings.browser">
+      <section className="panel space-y-3">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title">Browser storage</h3>
           <InfoTip label="About browser storage">
@@ -259,7 +261,7 @@ export function DataSettingsPanel({ onClose }: Props) {
         </p>
       </section>
 
-      <section className="panel space-y-3" data-guide-anchor="settings.linkedFile">
+      <section className="panel space-y-3">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-emerald-300/90">Linked data file</h3>
           <InfoTip label="About linked file">
@@ -407,7 +409,7 @@ export function DataSettingsPanel({ onClose }: Props) {
         />
       </section>
 
-      <section className="panel space-y-3" data-guide-anchor="settings.export">
+      <section className="panel space-y-3">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title">Export / Import</h3>
           <InfoTip label="About export and import">

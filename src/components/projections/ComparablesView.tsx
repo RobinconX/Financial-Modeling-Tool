@@ -34,6 +34,7 @@ import {
 } from '../../lib/cagrThresholds'
 import { formatPercent, formatPrice } from '../../lib/format'
 import { ConfirmDialog } from '../common/ConfirmDialog'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { GoalGapSection, OVERLAY_COLORS } from './GoalGapSection'
 
 const SELECTED_KEY = 'grok-lab-selected-comparable'
@@ -418,9 +419,15 @@ export function ComparablesView({
 
   if (scenarios.length === 0) {
     return (
-      <p className="px-1 py-8 text-center text-sm text-white/40">
+      <div
+        className="px-1 py-8 text-center text-sm text-white/40"
+        data-guide-anchor="projections.comps"
+      >
+        <div className="mb-3 flex justify-center">
+          <FeatureGuideButton id="projections.comps" />
+        </div>
         Save a projection in Analyze first — they appear here to compare.
-      </p>
+      </div>
     )
   }
 
@@ -433,6 +440,7 @@ export function ComparablesView({
       ) : null}
 
       <div className="flex flex-wrap items-center gap-1.5">
+        <FeatureGuideButton id="projections.comps" />
         <label className="flex min-w-0 items-center gap-1.5 text-xs text-white/50">
           Set
           {renaming && selected ? (
@@ -881,13 +889,24 @@ export function ComparablesView({
                 </table>
               </div>
               {overlayIds.length === 0 ? (
-                <p
-                  className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-3 text-sm text-white/55"
-                  data-guide-anchor="comparables.cagrChart"
-                >
+                <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-3 text-sm text-white/55">
+                  <span
+                    className="sr-only"
+                    data-guide-anchor="comparables.cagrChart"
+                    aria-hidden
+                  />
+                  <span
+                    className="sr-only"
+                    data-guide-anchor="comparables.upsideChart"
+                    aria-hidden
+                  />
+                  <div className="mb-2 flex flex-wrap justify-center gap-2">
+                    <FeatureGuideButton id="comparables.cagrChart" />
+                    <FeatureGuideButton id="comparables.upsideChart" />
+                  </div>
                   Tick a row to chart remaining upside vs today. Click the name to open the
                   projection.
-                </p>
+                </div>
               ) : (
                 <GoalGapSection
                   overlayIds={overlayIds}
