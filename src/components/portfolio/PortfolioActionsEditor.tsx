@@ -100,7 +100,7 @@ export function HoldingActionsEditor({
 
       <div className="space-y-1.5">
         {actions.map((a) => (
-          <ActionRow
+          <PortfolioActionRow
             key={a.id}
             action={a}
             minYear={currentYear}
@@ -124,7 +124,7 @@ function roundPriceInput(n: number): number {
   return Math.round(n * 1e6) / 1e6
 }
 
-function ActionRow({
+export function PortfolioActionRow({
   action,
   minYear,
   preview,

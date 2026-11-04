@@ -842,7 +842,7 @@ Each book is an isolated scenario (cash, holdings, actions). The picker only cha
     id: 'portfolio.chart',
     title: 'Chart',
     summary:
-      'Portfolio value over time (past actuals → Now → projected years) plus a year grid. Modes, overlays, and From/To range; planned actions affect future years, not the Now book.',
+      'Portfolio value over time (past actuals → Now → projected years) plus a year grid. Modes, overlays, and From/To range; edit planned trades and opening cash inline in the grid.',
     body: `## How it works
 
 Timeline runs **From** / **To** calendar years (custom range or **Inputs only** to snap back to years with data).
@@ -862,17 +862,33 @@ Past years use **Actuals → Portfolio value** (last month in each year). **Now*
 
 ### Value by year
 
-Grid of year columns: holdings, cash, totals, and planned **buy/sell** actions. **Now** reflects shares held today; buys/sells from their year onward spend or fill **Cash**.
+Grid of year columns for holdings, **Cash**, and totals.
+
+### Planned actions in the grid
+
+On each **position** row, year columns (not **Now**) support inline **buy/sell** editing:
+
+- Blue **▸** when a planned trade exists — click to change type, year, shares, price, or remove it
+- Faint **+** on hover when empty — click to add a trade for that position and year
+
+Same rules as **Positions → Intended actions**; multiple trades can share one year.
+
+### Cash in the grid
+
+- **Cash** row, **Now** only — click the pencil to edit **current cash (opening)** (same as the first row on the **Cash** tab)
+- Other **Cash** year cells stay read-only hints (deposits and how trades affect cash)
+
+**Now** for holdings still reflects shares held today; planned buys/sells apply from their year onward.
 
 ## How to interpret
 
-> Planned trades in a future year do not change the **Now** column — only forward years.
+> Planned trades in a future year do not change the **Now** column for holdings — only forward years.
 
 Extend **To** to see projection-linked growth or perpetual **Growth** % after the last explicit input year.
 
 ## Example
 
-**By position**, **From 2022 · To 2030**, one stock linked to a saved projection. Past bars match **Actuals**; **2026** column shows a planned buy spending **Cash** entered on the **Cash** tab — total rises from shares, not from retroactive **Now** changes.
+**By position**, **From 2022 · To 2030**, one stock linked to a saved projection. Click **▸** on **2027** to set a **Buy**; the chart and **Cash** row update from that year. On **Cash → Now**, set opening cash to **50K** without leaving the **Chart** tab.
 `,
     status: 'ready',
     location: { tab: 'portfolio', view: 'chart', anchor: 'portfolio.chart' },
