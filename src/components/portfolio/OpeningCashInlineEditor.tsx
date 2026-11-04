@@ -88,7 +88,7 @@ export function OpeningCashInlineEditor({
           label="Edit current cash"
           open={open}
           onOpenChange={setOpen}
-          side="top"
+          side="bottom"
           align="end"
           panelClassName="!w-56"
           trigger={
