@@ -1,5 +1,6 @@
 import { useMemo, useState } from 'react'
 import { formatMoney, formatPercent } from '../../lib/format'
+import { AnchorPopover } from '../common/AnchorPopover'
 import { InfoTip } from '../common/InfoTip'
 import { toDisplay } from '../../lib/fx'
 import {
@@ -25,6 +26,8 @@ import type {
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
+import { OpeningCashInlineEditor } from './OpeningCashInlineEditor'
+import { PortfolioYearActionsEditor } from './PortfolioYearActionsEditor'
 
 type Props = {
   grid: PortfolioGrid
@@ -33,6 +36,7 @@ type Props = {
   displayCurrency?: DisplayCurrency
   usdToChf?: number | null
   contributions?: PortfolioContributionsState | null
+  onChange?: (patch: Partial<SavedPortfolio>) => void
 }
 
 /** Live "Now" values: opening cash + live holding values (matches chart Now bar). */
@@ -84,11 +88,14 @@ export function PortfolioValueTable({
   displayCurrency = 'USD',
   usdToChf = null,
   contributions = null,
+  onChange,
 }: Props) {
   const currentYear = new Date().getFullYear()
   const showNow = portfolio != null
+  const canEdit = portfolio != null && onChange != null
   const [sortKey, setSortKey] = useState<PortfolioValueTableSortKey>('value')
   const [sortDir, setSortDir] = useState<PortfolioValueTableSortDir>('desc')
+  const [openActionCell, setOpenActionCell] = useState<string | null>(null)
 
   const nowByKey = useMemo(() => {
     if (!portfolio) return null
@@ -169,17 +176,18 @@ export function PortfolioValueTable({
     }`
   }
 
-  function renderValue(
+  function renderReadOnlyValue(
     v: number | null,
     hint?: string,
     side: 'top' | 'bottom' = 'bottom',
+    hintLabel = 'Planned action this year',
   ) {
     return (
       <span className="inline-flex items-center gap-1">
         {v == null ? <span className="text-white/20">—</span> : fmt(v)}
         {hint ? (
           <InfoTip
-            label="Planned action this year"
+            label={hintLabel}
             align="end"
             side={side}
             trigger="▸"
@@ -194,6 +202,115 @@ export function PortfolioValueTable({
         ) : null}
       </span>
     )
+  }
+
+  function actionCellKey(row: PortfolioGridRow, year: number) {
+    return `${row.key}::${year}`
+  }
+
+  function equityHasPlannedAction(row: PortfolioGridRow, year: number): boolean {
+    if (!portfolio || row.kind !== 'equity' || !row.holdingId) return false
+    return getActions(portfolio).some(
+      (a) =>
+        a.holdingId === row.holdingId && a.year === year && a.shares > 0,
+    )
+  }
+
+  function renderEquityYearCell(
+    row: PortfolioGridRow,
+    year: number,
+    v: number | null,
+    tipSide: 'top' | 'bottom',
+  ) {
+    if (!canEdit || !portfolio || !row.holdingId) {
+      const hint =
+        portfolio && row.holdingId
+          ? valueCellHint(row, year, false, portfolio, scenarios, fmt)
+          : undefined
+      return renderReadOnlyValue(v, hint, tipSide)
+    }
+    const cellKey = actionCellKey(row, year)
+    const hasAction = equityHasPlannedAction(row, year)
+    const open = openActionCell === cellKey
+
+    return (
+      <span className="group/cell inline-flex items-center gap-0.5">
+        {v == null ? <span className="text-white/20">—</span> : fmt(v)}
+        {hasAction ? (
+          <AnchorPopover
+            label="Edit planned action"
+            open={open}
+            onOpenChange={(next) => setOpenActionCell(next ? cellKey : null)}
+            align="end"
+            side={tipSide}
+            panelClassName="!w-[min(20rem,calc(100vw-2rem))]"
+            trigger={
+              <button
+                type="button"
+                className="inline-flex items-center justify-center text-sky-300/80 transition hover:text-sky-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
+                aria-label="Edit planned action"
+              >
+                ▸
+              </button>
+            }
+          >
+            <PortfolioYearActionsEditor
+              portfolio={portfolio}
+              holdingId={row.holdingId}
+              columnYear={year}
+              scenarios={scenarios}
+              displayCurrency={displayCurrency}
+              usdToChf={usdToChf}
+              onChange={onChange!}
+            />
+          </AnchorPopover>
+        ) : (
+          <AnchorPopover
+            label="Add planned action"
+            open={open}
+            onOpenChange={(next) => setOpenActionCell(next ? cellKey : null)}
+            align="end"
+            side={tipSide}
+            panelClassName="!w-[min(20rem,calc(100vw-2rem))]"
+            trigger={
+              <button
+                type="button"
+                className="inline-flex h-4 w-4 items-center justify-center rounded text-[11px] font-light text-white/30 opacity-0 transition hover:text-white/50 focus:opacity-40 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40 group-hover/cell:opacity-35"
+                aria-label="Add planned action"
+              >
+                +
+              </button>
+            }
+          >
+            <PortfolioYearActionsEditor
+              portfolio={portfolio}
+              holdingId={row.holdingId}
+              columnYear={year}
+              scenarios={scenarios}
+              displayCurrency={displayCurrency}
+              usdToChf={usdToChf}
+              onChange={onChange!}
+            />
+          </AnchorPopover>
+        )}
+      </span>
+    )
+  }
+
+  function renderYearCell(
+    row: PortfolioGridRow,
+    year: number,
+    v: number | null,
+    tipSide: 'top' | 'bottom',
+  ) {
+    if (row.kind === 'equity') {
+      return renderEquityYearCell(row, year, v, tipSide)
+    }
+    if (row.kind === 'cash') {
+      const title = cellTitle(row, year, false)
+      return renderReadOnlyValue(v, title, tipSide, 'Cash note this year')
+    }
+    return renderReadOnlyValue(v, undefined, tipSide)
   }
 
   function cellTitle(
@@ -287,26 +404,35 @@ export function PortfolioValueTable({
                 </td>
                 {pastYears.map(({ y, i }) => {
                   const v = row.values[i] ?? null
-                  const title = cellTitle(row, y, false)
                   const tipSide = row.kind === 'equity' ? 'bottom' : 'top'
                   return (
                     <td key={`${row.key}-${y}`} className={cellClass(row, v)}>
-                      {renderValue(v, title, tipSide)}
+                      {renderYearCell(row, y, v, tipSide)}
                     </td>
                   )
                 })}
                 {showNow && nowByKey && (
                   <td className={cellClass(row, nowByKey.get(row.key) ?? null, true)}>
-                    {renderValue(nowByKey.get(row.key) ?? null)}
+                    {row.kind === 'cash' && canEdit && portfolio ? (
+                      <OpeningCashInlineEditor
+                        portfolio={portfolio}
+                        displayCurrency={displayCurrency}
+                        usdToChf={usdToChf}
+                        valueUsdBook={nowByKey.get(row.key) ?? null}
+                        onChange={onChange!}
+                        fmt={fmt}
+                      />
+                    ) : (
+                      renderReadOnlyValue(nowByKey.get(row.key) ?? null)
+                    )}
                   </td>
                 )}
                 {futureYears.map(({ y, i }) => {
                   const v = row.values[i] ?? null
-                  const title = cellTitle(row, y, false)
                   const tipSide = row.kind === 'equity' ? 'bottom' : 'top'
                   return (
                     <td key={`${row.key}-${y}`} className={cellClass(row, v)}>
-                      {renderValue(v, title, tipSide)}
+                      {renderYearCell(row, y, v, tipSide)}
                     </td>
                   )
                 })}

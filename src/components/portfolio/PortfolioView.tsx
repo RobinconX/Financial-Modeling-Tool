@@ -1056,6 +1056,7 @@ export function PortfolioView({
                     displayCurrency={activeCurrency}
                     usdToChf={usdToChf}
                     contributions={contributions}
+                    onChange={(patch) => updatePortfolio(selected.id, patch)}
                   />
                 </div>
               </div>
