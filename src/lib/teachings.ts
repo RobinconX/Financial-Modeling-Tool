@@ -67,30 +67,6 @@ const TAB_LABELS: Record<AppTab, string> = {
   settings: 'Data & backup',
 }
 
-const DRAFT_BODY = `## Guide
-
-The longer how-it-works guide for this feature will be added here later. The short description above is the working summary for now.`
-
-function draft(
-  id: FeatureGuideId,
-  title: string,
-  summary: string,
-  location: GuideLocation,
-  parentId: string | null,
-  order: number,
-): FeatureGuide {
-  return {
-    id,
-    title,
-    summary,
-    body: DRAFT_BODY,
-    status: 'draft',
-    location,
-    parentId,
-    order,
-  }
-}
-
 const GUIDES: Record<string, FeatureGuide> = {
   overview: {
     id: 'overview',
@@ -622,30 +598,123 @@ Portfolio **USD 100k** in **2024-11**, **Cash CHF 5k** in **2024-12**, rate **0.
     order: 0,
   },
 
-  projections: draft(
-    'projections',
-    'Projections',
-    'Two workspaces for equity outlooks: Analyze builds and saves a ticker’s Easy/Advanced paths, and Comparables ranks those saved scenarios side by side with optional charts to a goal price.',
-    { tab: 'projections', anchor: 'projections' },
-    null,
-    0,
-  ),
-  'projections.analyze': draft(
-    'projections.analyze',
-    'Analyze',
-    'Look up a ticker, set Easy and/or Advanced valuation assumptions, and save the scenario. The path chart and projection table show market-cap (or equity) trajectories and implied CAGRs versus today.',
-    { tab: 'projections', view: 'analyze', anchor: 'projections.analyze' },
-    'projections',
-    1,
-  ),
-  'projections.comps': draft(
-    'projections.comps',
-    'Comparables',
-    'Pick a comparable set of saved projections, add year columns, and sort by a year’s ROI. Tick rows to overlay remaining upside or CAGR paths to that row’s year-end goal; click a name to open Analyze.',
-    { tab: 'projections', view: 'comps', anchor: 'projections.comps' },
-    'projections',
-    2,
-  ),
+  projections: {
+    id: 'projections',
+    title: 'Projections',
+    summary:
+      'Two workspaces for equity outlooks: Analyze builds and saves ticker paths; Comparables ranks saved scenarios side by side with optional goal-path charts. Import and Export packs JSON projection files without touching the rest of your account.',
+    body: `## How it works
+
+**Projections** holds saved stock scenarios (market-cap or equity paths) used here, on **Portfolio → Positions**, and in comparables sets.
+
+### Workspace tabs
+
+- **Analyze** — look up a ticker, edit **Easy** and/or **Advanced** assumptions, save scenarios
+- **Comparables** — compare saved scenarios in sets, add year columns, chart paths to a goal price
+
+### Import / Export
+
+Header **Import** / **Export** move projection JSON packs only (pick which saves to include). Import can rename collisions with “ (imported)”.
+
+> Deleting a projection warns when **Portfolio** holdings still link to it — re-link on **Positions** after removal.
+
+## How to interpret
+
+Analyze answers “what path does this assumption set imply?” Comparables answers “which saved names look best on the same yardstick?” Neither tab changes **Actuals** or live brokerage data.
+
+## Example
+
+Save **AAPL · Base case** in **Analyze**, then **Comparables → + New**, add that row, turn on a **2030** column, sort by **2030 ROI**. Tick the row to chart **Remaining upside** or **CAGR** toward that year-end goal price.
+`,
+    status: 'ready',
+    location: { tab: 'projections', anchor: 'projections' },
+    parentId: null,
+    order: 0,
+  },
+  'projections.analyze': {
+    id: 'projections.analyze',
+    title: 'Analyze',
+    summary:
+      'Look up a ticker, set Easy and/or Advanced valuation rows, and save scenarios. Single or Compare layout; chart and table show trajectories, implied ROI, and CAGRs versus today’s quote or overrides.',
+    body: `## How it works
+
+### Getting started
+
+- **New projection** — search a ticker, fetch a quote, then fill assumptions
+- Saved scenario — picker at top; **Refresh quote** updates price/mcap without changing your rows
+
+### Layout
+
+- **Single** — one **ProjectionPanel**
+- **Compare** — **Panel A** and **Panel B** with independent pickers
+
+### Assumptions
+
+- **Easy** — year-by-year **projected market cap** (share price derived from shares outstanding)
+- **Advanced** — **P/S**, **P/FCF**, and **P/E** rows with revenue, FCF, or profit inputs
+
+Toggle basis tabs (**Easy**, **P/S**, etc.) to drive the hero ROI, **Market cap** chart, and **Projection table**.
+
+### Overrides & save
+
+- **Market cap (override)** and **Share price (override)** replace live quote inputs for math
+- **Save** (draft) or **Save as…** (copy) persists under the ticker; auto-save updates an open save
+
+> Opening from **Comparables** (click a name) lands here with that scenario’s basis pre-selected.
+
+## How to interpret
+
+Table **ROI** and **CAGR** columns are versus spot (or override) through each stated year-end. Compare mode is for two paths side by side — not linked to portfolio sizing.
+
+## Example
+
+Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today → table shows multi-year ROI/CAGR to **2030**. Switch **Compare**, pick a second save, and contrast two assumption sets on the same ticker.
+`,
+    status: 'ready',
+    location: { tab: 'projections', view: 'analyze', anchor: 'projections.analyze' },
+    parentId: 'projections',
+    order: 1,
+  },
+  'projections.comps': {
+    id: 'projections.comps',
+    title: 'Comparables',
+    summary:
+      'Build named sets of saved projections, add year-end columns, and sort by a year’s ROI. Tick rows to chart remaining upside or CAGR to that row’s goal year; set Buy/Sell CAGR hints on sort columns.',
+    body: `## How it works
+
+### Comparable sets
+
+- **Set** dropdown — pick a set; double-click to rename
+- **+ New** / **Delete** — manage sets
+- **Scenarios** checklist — which saved projections (and **Easy** / **P/S** / **P/FCF** / **P/E** basis) appear in the table
+
+### Year columns
+
+No years show until you add them (**+ Year**). Figures are **year-end** share prices and **ROI** vs spot; the sorted year also shows **CAGR** to that year-end.
+
+Click a year header to sort; optional **Buy** / **Sell** CAGR thresholds on that column tint cells (hints only).
+
+### Goal year & table
+
+**Goal year** (when available) drives upside/CAGR summary columns toward a shared horizon (defaults toward **2030** when present).
+
+Click a **name** to open **Analyze** for that save. Tick a row to feed the chart section below.
+
+## How to interpret
+
+> **ROI** is total return spot → year-end goal price; **CAGR** annualizes the same move over calendar time left.
+
+Sorting ranks names for one year — not a forecast that all goals happen. Threshold colors are nudges, not trade signals.
+
+## Example
+
+Three saves in one set, add **2028** and **2030**, sort **2030 ROI** descending. Tick the top row — **Remaining upside %** chart shows how much non-annualized gap remains from each past close to the **2030** goal price on that row’s basis.
+`,
+    status: 'ready',
+    location: { tab: 'projections', view: 'comps', anchor: 'projections.comps' },
+    parentId: 'projections',
+    order: 2,
+  },
   'comparables.cagrChart': {
     id: 'comparables.cagrChart',
     title: 'CAGR to goal',
@@ -694,14 +763,45 @@ Same finish line; a higher starting price leaves less annualized climb still req
     parentId: 'projections.comps',
     order: 3,
   },
-  'comparables.upsideChart': draft(
-    'comparables.upsideChart',
-    'Remaining upside',
-    'Each point is how much percentage upside remains from that day’s price to the same fixed year-end goal — not annualized. As price rises toward the goal, remaining upside falls; the series is the raw gap, not a CAGR.',
-    { tab: 'projections', view: 'comps', anchor: 'comparables.upsideChart' },
-    'projections.comps',
-    4,
-  ),
+  'comparables.upsideChart': {
+    id: 'comparables.upsideChart',
+    title: 'Remaining upside',
+    summary:
+      'Each point is percentage upside left from that day’s price to a fixed year-end goal price — not annualized. As price rises toward the goal, remaining upside falls. Only ticked comparables rows appear.',
+    body: `## How it works
+
+Each chart point uses **remaining upside** \`goal / price − 1\` from that day’s close (or today’s spot on the last point) to the **goal price** for the selected chart year and row basis.
+
+The goal year and price stay fixed along the series; only the starting price changes.
+
+Names on the chart are projections you already ticked on the comparables table — switch **Upside %** vs **CAGR %** for the annualized view (**CAGR to goal** guide).
+
+Optional **Target CAGR %** draws a horizontal reference line on the upside chart.
+
+## How to interpret
+
+> **Higher upside** means more non-annualized room to the same finish line from that date.
+
+When price approaches the goal, upside → **0%**. This is **not** CAGR — use **CAGR %** for time-weighted required return.
+
+## Example
+
+Goal price **$200** at year-end **2028**.
+
+- At **$100** today → upside **100%** (\`200/100 − 1\`)
+- At **$160** today → upside **25%** (\`200/160 − 1\`)
+
+Same goal; a higher starting price shrinks the raw gap still required.
+`,
+    status: 'ready',
+    location: {
+      tab: 'projections',
+      view: 'comps',
+      anchor: 'comparables.upsideChart',
+    },
+    parentId: 'projections.comps',
+    order: 4,
+  },
 
   portfolio: {
     id: 'portfolio',
@@ -986,38 +1086,56 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
     order: 6,
   },
 
-  settings: draft(
-    'settings',
-    'Data & backup',
-    'Everything here is local to this device: browser storage, an optional linked JSON file for continuous save, and export/import for backups or moving accounts. There is no multi-user cloud database.',
-    { tab: 'settings', anchor: 'settings' },
-    null,
-    0,
-  ),
-  'settings.browser': draft(
-    'settings.browser',
-    'Browser storage',
-    'The fast local mirror of your current account while you work. Clearing site data wipes it — use a linked file or export if you need a durable copy.',
-    { tab: 'settings', anchor: 'settings.browser' },
-    'settings',
-    1,
-  ),
-  'settings.linkedFile': draft(
-    'settings.linkedFile',
-    'Linked data file',
-    'On desktop Chrome/Edge, link a JSON file so edits save continuously (after idle, and optionally on a timer). Put the file in cloud sync for multi-PC backup; iPhone/iPad should use Export/Import instead.',
-    { tab: 'settings', anchor: 'settings.linkedFile' },
-    'settings',
-    2,
-  ),
-  'settings.export': draft(
-    'settings.export',
-    'Export / Import',
-    'Download a JSON snapshot of the current account (or all accounts), or import a file to add/replace data. Table export is Excel-only and not for re-import; JSON is the round-trip backup format.',
-    { tab: 'settings', anchor: 'settings.export' },
-    'settings',
-    3,
-  ),
+  settings: {
+    id: 'settings',
+    title: 'Data & backup',
+    summary:
+      'Local-only storage: browser mirror while you work, optional linked JSON for continuous save on desktop Chrome/Edge, and JSON export/import for backups or moving accounts. No shared cloud database.',
+    body: `## How it works
+
+Everything on this page stays on **this device** unless you export or link a file you sync yourself.
+
+### Browser storage
+
+Always active — a fast mirror of the **current account** while you edit.
+
+> Clearing site data or uninstalling the browser profile wipes this copy. Keep a **linked file** or **Export** JSON if you need durability.
+
+### Linked data file
+
+Desktop **Chrome** or **Edge** can link a JSON file (File System Access API):
+
+- **Open / link file…** or **Create new file…**
+- **Allow file access…** after refresh when the browser asks again
+- **Auto-save** — **Edits + periodic** (~4s idle plus at least every 30s while editing) or **Edits only** (~4s idle)
+- **Save now** / **Unlink** when linked
+
+Link or create the JSON in a **cloud-synced folder** (Dropbox, iCloud Drive, Google Drive, OneDrive, etc.) — the app writes to that file on this machine, and your sync client copies updates outward. On another **desktop Chrome/Edge** PC, **Open / link file…** to the same synced file for continuous save there too. **iPhone/iPad** cannot continuous-link — use **Export / Import** below.
+
+**Accounts** (same panel) — switch, rename, add, or remove accounts in the catalog; each account has its own data slice in the JSON snapshot.
+
+### Export / Import
+
+- **Export JSON** — current account (same shape as before)
+- **Export all accounts** — multi-account catalog file
+- **Import JSON** — add as new account or replace current (prompt when ambiguous)
+- **Tables (.xlsx)** — Excel-friendly tables only; **not** re-importable
+
+On devices without linked files, export is the primary backup path.
+
+## How to interpret
+
+Browser storage is convenience; **JSON** is the round-trip backup format. Linked files add continuous save but still need permission after some browser restarts.
+
+## Example
+
+Link **financial-model.json** in synced folder, leave **Edits + periodic** on, edit **Budget** — file updates after idle/periodic saves. Copy the JSON to a phone via **Export**, then **Import** there to restore the same account.
+`,
+    status: 'ready',
+    location: { tab: 'settings', anchor: 'settings' },
+    parentId: null,
+    order: 0,
+  },
 }
 
 /** Matches App sidebar top-to-bottom (Life → Investing → System). */

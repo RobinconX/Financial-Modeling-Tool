@@ -239,9 +239,59 @@ describe('teachings registry', () => {
   })
 
 
-  it('keeps upside chart draft (in-app button hidden; registry still opens stub)', () => {
-    expect(getGuide('comparables.upsideChart')?.status).toBe('draft')
-    expect(isGuideReady('comparables.upsideChart')).toBe(false)
+  it('exposes ready Projections guides for page, tabs, and chart children', () => {
+    for (const [id, location, parentId] of [
+      ['projections', { tab: 'projections', anchor: 'projections' }, null],
+      [
+        'projections.analyze',
+        { tab: 'projections', view: 'analyze', anchor: 'projections.analyze' },
+        'projections',
+      ],
+      [
+        'projections.comps',
+        { tab: 'projections', view: 'comps', anchor: 'projections.comps' },
+        'projections',
+      ],
+    ] as const) {
+      const g = getGuide(id)
+      expect(g?.status, id).toBe('ready')
+      expect(g?.location, id).toEqual(location)
+      expect(g?.parentId, id).toBe(parentId)
+      expect(isGuideReady(id), id).toBe(true)
+      expect(g?.body, id).toContain('## Example')
+    }
+    expect(getGuide('comparables.upsideChart')?.status).toBe('ready')
+    expect(isGuideReady('comparables.upsideChart')).toBe(true)
+    expect(getGuide('comparables.upsideChart')?.body.toLowerCase()).toContain('upside')
+    const projectionsTab = listGuideTree().find((t) => t.tab === 'projections')!
+    const root = projectionsTab.roots.find((r) => r.guide.id === 'projections')!
+    expect(root.children.map((c) => c.guide.id)).toEqual([
+      'projections.analyze',
+      'projections.comps',
+    ])
+    const comps = root.children.find((c) => c.guide.id === 'projections.comps')!
+    expect(comps.children.map((c) => c.guide.id)).toEqual([
+      'comparables.cagrChart',
+      'comparables.upsideChart',
+    ])
+  })
+
+  it('exposes a ready Data & backup page guide with no children', () => {
+    const g = getGuide('settings')
+    expect(g?.status).toBe('ready')
+    expect(g?.title).toBe('Data & backup')
+    expect(g?.location).toEqual({ tab: 'settings', anchor: 'settings' })
+    expect(g?.parentId).toBeNull()
+    expect(isGuideReady('settings')).toBe(true)
+    expect(g?.body).toContain('## Example')
+    expect(g?.body.toLowerCase()).toContain('browser storage')
+    expect(g?.body.toLowerCase()).toContain('export')
+    expect(getGuide('settings.browser')).toBeUndefined()
+    expect(getGuide('settings.linkedFile')).toBeUndefined()
+    expect(getGuide('settings.export')).toBeUndefined()
+    expect(listChildGuides('settings')).toEqual([])
+    const settingsTab = listGuideTree().find((t) => t.tab === 'settings')!
+    expect(settingsTab.roots.map((r) => r.guide.id)).toEqual(['settings'])
   })
 
   it('treats unknown ids as not ready', () => {
