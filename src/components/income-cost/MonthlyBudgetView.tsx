@@ -31,7 +31,6 @@ import { formatMoney, parseMoney } from '../../lib/format'
 import { formatInputNumber } from '../common/MoneyInput'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
-import { InfoTip } from '../common/InfoTip'
 
 type Props = {
   scenario: CashflowScenario
@@ -366,11 +365,7 @@ function DrawsEditor({
           <p className="section-kicker">Draws</p>
           <div className="mt-0.5 flex items-center gap-1.5">
             <h3 className="section-title">Working balance</h3>
-            <InfoTip label="About draws">
-              Informative only — does not change Income/Cost budget, Sankey, or portfolio deposits.
-              Enter CHF to take from working balance each month.
-            </InfoTip>
-          </div>
+</div>
         </div>
         <button type="button" className="btn-ghost !py-1 !text-xs" onClick={onAddDraw}>
           + Draw
@@ -524,12 +519,7 @@ export function MonthlyBudgetView({
               <FeatureGuideButton id="income-cost.monthly" />
             </div>
           </div>
-          <InfoTip label="About monthly working balance" align="end">
-            Opening working balance is permanent Cash savings, year-end of {priorYear} (Savings →
-            Actuals as {priorYear}-12). Budget inflows/outflows come from Income/Cost positions.
-            Draws reduce “After draws” only and never change annual budget net or deposits.
-          </InfoTip>
-        </div>
+</div>
         <div className="grid grid-cols-2 gap-x-4 gap-y-3 sm:grid-cols-3 lg:grid-cols-6">
           <Meta
             label={`Opening cash (Dec ${priorYear})`}

@@ -20,7 +20,6 @@ import { ProjectionPanel } from './ProjectionPanel'
 import { ComparablesView } from './ComparablesView'
 import { ProjectionPickDialog } from './ProjectionPickDialog'
 import { ConfirmDialog } from '../common/ConfirmDialog'
-import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
@@ -462,14 +461,6 @@ export function ProjectionsView({
             Comparables
           </button>
         </div>
-        {mode === 'comps' ? (
-          <InfoTip label="About comparables" className="mb-1.5">
-            Pick saved projections to compare. Double-click the set to rename it. Add year columns
-            you want (none are on by default). Year figures are year-end. Sort by a year’s ROI in
-            the table header. Tick a row to chart remaining upside (or CAGR) vs that row’s selected
-            basis; click the name to open the projection.
-          </InfoTip>
-        ) : null}
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 pb-1.5">
           <button

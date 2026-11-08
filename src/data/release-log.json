@@ -1,6 +1,16 @@
 [
   {
     "releasedAt": "2026-11-08",
+    "headline": "Guides, feedback privacy & Question type",
+    "pending": true,
+    "notes": [
+      "Feature guides open above header modals without changing the current tab.",
+      "Removed section ⓘ hints in favor of Guides; feedback adds Question and clearer privacy copy.",
+      "Send bug reports, ideas, and questions from the header — no name, email, or account data."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-08",
     "prodSha": "b0c7c89d3de672f7a2f792a173951ad80285edb3",
     "headline": "In-app feedback & release log",
     "notes": [

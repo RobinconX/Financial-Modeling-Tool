@@ -9,7 +9,6 @@ import type {
 import { actionTradePrice, getActions, newAction } from '../../lib/portfolio'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
 import { fromDisplay, toDisplay } from '../../lib/fx'
-import { InfoTip } from '../common/InfoTip'
 
 type Props = {
   portfolio: SavedPortfolio
@@ -71,11 +70,7 @@ export function HoldingActionsEditor({
           <h4 className="text-[11px] font-semibold tracking-wide text-white/60">
             Intended actions
           </h4>
-          <InfoTip label="About intended actions">
-            Buy / sell from a year on — optional trade price, or blank to use scenario/live price.
-            Adjusts shares and cash on the chart.
-          </InfoTip>
-        </div>
+</div>
         <div className="flex flex-wrap gap-1.5">
           <button
             type="button"

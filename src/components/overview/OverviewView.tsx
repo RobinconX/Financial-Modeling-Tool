@@ -34,7 +34,6 @@ import { ConfirmDialog } from '../common/ConfirmDialog'
 import { ChartGoals } from '../common/ChartGoals'
 import { ChartNotes } from '../common/ChartNotes'
 import { FullscreenChart } from '../common/FullscreenChart'
-import { InfoTip } from '../common/InfoTip'
 import { OverviewAreaChart } from './OverviewAreaChart'
 import { OverviewChart } from './OverviewChart'
 import { OverviewCompareChart } from './OverviewCompareChart'
@@ -423,11 +422,7 @@ export function OverviewView({
           <div className="flex items-center gap-1.5">
             <span className="section-title">Scenarios</span>
             <FeatureGuideButton id="overview.scenarios" />
-            <InfoTip label="About overview scenarios">
-              Each scenario is a net-worth stack (portfolios, savings, other). Bars or area show
-              one scenario; Compare plots totals as lines. Optional notes store assumptions only.
-            </InfoTip>
-          </div>
+</div>
           <div className="flex flex-wrap items-center gap-1.5">
             <button
               type="button"
@@ -593,12 +588,7 @@ export function OverviewView({
             ) : (
               <FeatureGuideButton id="overview.chart" />
             )}
-            <InfoTip label="About overview chart">
-              {effectiveChartMode === 'compare'
-                ? 'Past years → Now (live) → future. Each line is total net worth for a scenario (enabled series only).'
-                : 'Past years → Now (live) → future. CHF. Bars or stacked area. Portfolio greens, savings blues, other amber/violet.'}
-            </InfoTip>
-          </div>
+</div>
           <div className="flex flex-wrap items-center gap-2">
             <div
               className="inline-flex gap-1 border-b border-white/10"

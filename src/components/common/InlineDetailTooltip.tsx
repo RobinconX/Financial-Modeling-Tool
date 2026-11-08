@@ -4,21 +4,19 @@ type Props = {
   /** Accessible name for the trigger (screen readers). */
   label: string
   children: ReactNode
-  /** Anchor tooltip relative to the icon */
+  /** Anchor tooltip relative to the trigger */
   align?: 'start' | 'center' | 'end'
   /** Default below the trigger; `top` opens above (tables). */
   side?: 'bottom' | 'top'
   className?: string
   /** Extra classes on the tooltip panel */
   panelClassName?: string
-  /** Replaces the default i-in-circle trigger */
-  trigger?: ReactNode
+  /** Visible trigger (e.g. planned-trade ▸ in the year grid). */
+  trigger: ReactNode
 }
 
-/**
- * Progressive disclosure for UI hints: small ⓘ, content on hover/focus.
- */
-export function InfoTip({
+/** Hover/focus tooltip anchored on a custom inline trigger (not feature-description hints). */
+export function InlineDetailTooltip({
   label,
   children,
   align = 'start',
@@ -40,14 +38,10 @@ export function InfoTip({
     <span className={`group/info relative inline-flex shrink-0 align-middle ${className}`}>
       <button
         type="button"
-        className={
-          trigger
-            ? 'inline-flex items-center justify-center text-sky-300/80 transition hover:text-sky-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40'
-            : 'inline-flex h-5 w-5 shrink-0 items-center justify-center rounded-full border border-white/10 text-[10px] font-semibold leading-none text-white/45 transition hover:border-white/20 hover:bg-white/10 hover:text-white/80 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40'
-        }
+        className="inline-flex items-center justify-center text-sky-300/80 transition hover:text-sky-200 focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/40"
         aria-label={label}
       >
-        {trigger ?? 'i'}
+        {trigger}
       </button>
       <span
         role="tooltip"

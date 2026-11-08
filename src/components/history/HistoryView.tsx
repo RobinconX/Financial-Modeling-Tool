@@ -20,7 +20,6 @@ import { readShowGoals, writeShowGoals } from '../../lib/goals'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { ChartGoals } from '../common/ChartGoals'
 import { ChartNotes } from '../common/ChartNotes'
-import { InfoTip } from '../common/InfoTip'
 import { HistoryChart, type HistoryChartKind, type HistoryChartSplit } from './HistoryChart'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
@@ -296,11 +295,7 @@ export function HistoryView({
     <div className="space-y-5" data-guide-anchor="history">
       <div className="flex flex-wrap items-end justify-between gap-3">
         <div className="flex flex-wrap items-center gap-3">
-          <InfoTip label="About history">
-            Recorded end-of-month actuals only — investing (shared) and savings. Yearly uses the last
-            month you entered in that year. Totals are CHF; USD actuals join once a rate is available.
-          </InfoTip>
-          <FeatureGuideButton id="history" />
+<FeatureGuideButton id="history" />
           <Seg
             label="Resolution"
             value={resolution}

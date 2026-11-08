@@ -3,7 +3,6 @@ import type { DisplayCurrency, PortfolioContributionsState } from '../../types'
 import { parseMoney } from '../../lib/format'
 import { amountToDisplay } from '../../lib/fx'
 import { contributionYears } from '../../lib/portfolioContributions'
-import { InfoTip } from '../common/InfoTip'
 
 type Props = {
   contributions: PortfolioContributionsState
@@ -88,12 +87,7 @@ export function PortfolioMoneyIn({
       <div className="section-header">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-emerald-300/90">Money in</h3>
-          <InfoTip label="About money in">
-            Actual contributions you added. One list for every portfolio scenario. Used only
-            to compute ROI (chart hover and value table). Does not change cash or planned
-            deposits. Future-year ROI also includes that portfolio’s planned deposits.
-          </InfoTip>
-        </div>
+</div>
         <span className="text-[11px] text-white/35">All scenarios · {editCurrency}</span>
       </div>
 

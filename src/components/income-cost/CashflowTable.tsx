@@ -18,7 +18,6 @@ import {
 } from '../../lib/incomeCostStorage'
 import { formatMoney, parseMoney } from '../../lib/format'
 import { formatInputNumber } from '../common/MoneyInput'
-import { InfoTip } from '../common/InfoTip'
 
 const PAYMENT_HINT =
   'Monthly spreads the yearly amount ÷12 every month. Select one or more months to split the yearly total equally across those months (rounding remainder on the last month). /mo always shows the yearly÷12 average.'
@@ -148,8 +147,7 @@ function Section({
     <div className="space-y-1.5 overflow-visible">
       <div className="flex items-center gap-1.5">
         <p className="text-[11px] font-semibold uppercase tracking-wider text-white/50">{label}</p>
-        <InfoTip label={`About ${label}`}>{PAYMENT_HINT}</InfoTip>
-      </div>
+</div>
       {rows.length === 0 ? (
         <p className="text-xs text-white/35">None yet.</p>
       ) : (

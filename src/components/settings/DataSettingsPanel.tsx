@@ -37,7 +37,6 @@ import {
   type LinkedSaveMode,
 } from '../../lib/linkedDataFile'
 import { ConfirmDialog } from '../common/ConfirmDialog'
-import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
@@ -236,11 +235,7 @@ export function DataSettingsPanel({ onClose }: Props) {
         <div className="flex items-center gap-1.5">
           <h2 className="text-lg font-semibold text-white">Data &amp; backup</h2>
           <FeatureGuideButton id="settings" />
-          <InfoTip label="About data storage">
-            Your data stays on this device. On desktop Chrome/Edge you can link a JSON file for
-            continuous save. On iPhone/iPad use Export / Import. No multi-user cloud database.
-          </InfoTip>
-        </div>
+</div>
         {onClose && (
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={onClose}>
             Close
@@ -251,11 +246,7 @@ export function DataSettingsPanel({ onClose }: Props) {
       <section className="panel space-y-3">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title">Browser storage</h3>
-          <InfoTip label="About browser storage">
-            Always used as a fast local mirror. Cleared if you wipe site data — use a linked file or
-            export for safety.
-          </InfoTip>
-        </div>
+</div>
         <p className="text-sm text-white/50">
           Active. Data is mirrored here while you work.
         </p>
@@ -264,13 +255,7 @@ export function DataSettingsPanel({ onClose }: Props) {
       <section className="panel space-y-3">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-emerald-300/90">Linked data file</h3>
-          <InfoTip label="About linked file">
-            Continuous link needs the File System Access API (desktop Chrome or Edge). After
-            linking, edits wait ~4s of idle, then save. Periodic mode also writes every 30s while
-            you keep editing. Put the file in OneDrive/Dropbox for multi-PC backup. iPhone/iPad
-            cannot do continuous linking — use Export / Import.
-          </InfoTip>
-        </div>
+</div>
         {!fsa ? (
           <div className="space-y-2 text-sm text-amber-200/85">
             <p>{linking.unsupportedReason}</p>
@@ -412,12 +397,7 @@ export function DataSettingsPanel({ onClose }: Props) {
       <section className="panel space-y-3">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title">Export / Import</h3>
-          <InfoTip label="About export and import">
-            Export JSON is the current account in the same format as before — send that file back
-            to someone. Import a one-account file to add it or replace this account. A multi-account
-            save file restores the whole list. Tables (.xlsx) is Excel-only, not for import.
-          </InfoTip>
-        </div>
+</div>
         {exportPrimary ? (
           <p className="text-sm text-white/50">
             Primary backup on this device: export a JSON, store it in Files, import when you need
@@ -634,11 +614,7 @@ function AccountsSection({
     <div className="space-y-2 border-t border-white/10 pt-4">
       <div className="flex items-center gap-1.5">
         <h4 className="text-[11px] font-semibold tracking-wide text-white/55">Accounts</h4>
-        <InfoTip label="About accounts">
-          Accounts live in this save file. Each is a full model (Income/Cost, savings, overview,
-          portfolios, projections). Not the same as Savings accounts.
-        </InfoTip>
-      </div>
+</div>
       {!multi ? (
         <p className="text-[11px] leading-snug text-white/40">
           This save file has only this account — the model you are in.

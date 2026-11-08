@@ -11,7 +11,6 @@ import {
 } from '../../lib/savings'
 import type { SavingsAccount } from '../../types'
 import type { ActualsFocusRequest } from '../../lib/actualsFocus'
-import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 
 type Props = {
@@ -251,12 +250,7 @@ export function SavingsActualsEditor({
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-emerald-300/90">Yearly actuals</h3>
           <FeatureGuideButton id="savings.actuals" />
-          <InfoTip label="About yearly actuals">
-            Year-end (December) balances plus the current month. These are what Projection uses.
-            Monthly detail below is for History. Arrow keys move · Enter down · paste a block from
-            Excel.
-          </InfoTip>
-        </div>
+</div>
         <div className="text-xs text-white/40">
           {pastYears.length} past year{pastYears.length === 1 ? '' : 's'} · {SAVINGS_CURRENCY}
         </div>
@@ -402,11 +396,7 @@ export function SavingsActualsEditor({
       <div className="section-header border-t border-white/5 pt-4">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-sky-300/90">Monthly actuals</h3>
-          <InfoTip label="About monthly savings actuals">
-            Optional end-of-month balances for a past year. December is the same year-end value as
-            above. These months show on History; Projection still only plots year-end + Now.
-          </InfoTip>
-        </div>
+</div>
       </div>
 
       <div className="flex flex-wrap items-end gap-3">

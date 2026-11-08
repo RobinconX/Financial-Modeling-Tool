@@ -9,10 +9,11 @@ import {
 describe('releaseLog', () => {
   it('lists merged-PR history newest-first', () => {
     const entries = listReleaseLogEntries()
-    expect(entries.length).toBe(19)
-    expect(entries[0]?.pending).toBeFalsy()
-    expect(entries[0]?.prodSha).toBe('b0c7c89d3de672f7a2f792a173951ad80285edb3')
-    expect(entries[1]?.prodSha).toBe('b99d3c3')
+    expect(entries.length).toBe(20)
+    expect(entries[0]?.pending).toBe(true)
+    expect(entries[0]?.headline).toMatch(/Question/i)
+    expect(entries[1]?.prodSha).toBe('b0c7c89d3de672f7a2f792a173951ad80285edb3')
+    expect(entries[2]?.prodSha).toBe('b99d3c3')
     expect(entries.at(-1)?.headline).toMatch(/Budget/i)
   })
 
