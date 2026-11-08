@@ -80,6 +80,22 @@ The built app will call `${VITE_API_BASE}/api/quote?...` instead of same-origin 
 
 No API keys are required (Yahoo chart + Nasdaq public endpoints + Frankfurter).
 
+### 3c. In-app feedback (Web3Forms, optional)
+
+Users can send anonymous bug reports and ideas from **Feedback** in the header. No backend on Pages — submissions use [Web3Forms](https://web3forms.com).
+
+1. Create a free Web3Forms account and generate an **access key**.
+2. Add **linked email** `bobin@mail.grokbot.com` and set it as the form recipient (verify the address if Web3Forms asks).
+3. GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **Variables**.
+4. **New repository variable**
+   - Name: `VITE_FEEDBACK_FORM_ACCESS_KEY`
+   - Value: your Web3Forms access key
+5. Redeploy Pages.
+
+Until this variable is set, **Feedback** stays disabled in the built app (local `npm run dev` too, unless you set the key in `.env.local`).
+
+**Free tier (Web3Forms):** about **250 submissions/month** per account; honeypot spam filtering included. hCaptcha optional in the Web3Forms dashboard if volume grows.
+
 ---
 
 ## 4. Deploy

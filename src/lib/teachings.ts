@@ -1156,6 +1156,74 @@ Link **financial-model.json** in synced folder, leave **Edits + periodic** on, e
     parentId: null,
     order: 0,
   },
+
+  'settings.feedback': {
+    id: 'settings.feedback',
+    title: 'Send feedback',
+    summary:
+      'Anonymous bug reports and ideas from the header. Only type, your words, and automatic app context — no name, email, or tracking IDs.',
+    body: `## How it works
+
+Open **Feedback** in the page header.
+
+### What you send
+
+- **Type** — **Bug** or **Idea**
+- **Description** — your words in the text box
+- **Automatic context** — app version, build id, current page, browser/OS (read-only; not edited)
+
+### What is never collected
+
+> No name, no email, and nothing from your own mail account. Submissions go through a form relay (Web3Forms), not a mailto link.
+
+### Limits
+
+- About **60 seconds** between sends on this browser
+- Up to **10 sends per day** per browser (best-effort spam guard)
+
+## How to interpret
+
+Maintainers read the inbox about once a week. Not every note becomes a backlog item.
+
+## Example
+
+On **Portfolio**, open **Feedback**, choose **Bug**, describe a chart label clipped on mobile, and send — the note includes **Portfolio** and your browser/OS automatically.
+`,
+    status: 'ready',
+    location: { tab: 'settings', anchor: 'settings.feedback' },
+    parentId: 'settings',
+    order: 1,
+  },
+
+  'system.releaseLog': {
+    id: 'system.releaseLog',
+    title: 'Release log',
+    summary:
+      'A short, user-facing history of production updates — version, build id, and what changed when **v1-prod** ships.',
+    body: `## How it works
+
+Use the small **Release log** link at the bottom of the sidebar.
+
+### What you see
+
+- **This build** — package version and git build id baked in at deploy time
+- **Entries** — date, optional prod commit id, and plain-language notes for each production promotion
+
+> Entries are maintained in the repository when **DEV** is promoted to **v1-prod** (see ship workflow). Upcoming work may show as **upcoming** before it ships.
+
+## How to interpret
+
+This is a devlog for curious users, not release notes for every local edit. Production deploys must have a matching top entry.
+
+## Example
+
+After a prod deploy, open **Release log** — the first entry headline matches what shipped; the header shows the same build id you are running now.
+`,
+    status: 'ready',
+    location: { tab: 'settings', anchor: 'release-log' },
+    parentId: null,
+    order: 2,
+  },
 }
 
 /** Matches App sidebar top-to-bottom (Life → Investing → System). */

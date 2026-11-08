@@ -32,6 +32,10 @@ jobs:
       - name: Install
         run: npm ci
 
+      - name: Verify release log entry for prod deploy
+        if: github.ref == 'refs/heads/v1-prod'
+        run: RELEASE_LOG_PROD_BUILD=1 GITHUB_SHA=${{ github.sha }} npm test -- tests/lib/releaseLog.test.ts
+
       - name: Build
         run: npm run build
         env:
@@ -41,6 +45,8 @@ jobs:
           # Quote/FX proxy for static Pages (Cloudflare Worker URL, no trailing slash).
           # Example: https://fmt-market-api.<account>.workers.dev
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
+          VITE_GIT_SHA: ${{ github.sha }}
+          VITE_FEEDBACK_FORM_ACCESS_KEY: ${{ vars.VITE_FEEDBACK_FORM_ACCESS_KEY }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3

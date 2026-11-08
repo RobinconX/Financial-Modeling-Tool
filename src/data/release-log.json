@@ -1,0 +1,158 @@
+[
+  {
+    "releasedAt": "2026-11-08",
+    "prodSha": null,
+    "pending": true,
+    "headline": "In-app feedback & release log",
+    "notes": [
+      "Send anonymous bug reports and ideas from the header — no name or email.",
+      "Browse past production changes from Release log at the bottom of the sidebar."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-08",
+    "prodSha": "b99d3c3",
+    "headline": "Overview: jump from hints to Actuals",
+    "notes": [
+      "Click amber stale or gap hints on Overview to open Portfolio or Savings Actuals for that series and period."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-08",
+    "prodSha": "2e32215",
+    "headline": "Ticker quotes validated before use",
+    "notes": [
+      "Symbols with missing or bad quotes show a clear warning, including common Yahoo-style fixes.",
+      "Projections and portfolios avoid math that depends on unusable quotes until the symbol resolves."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-08",
+    "prodSha": "5cbaa3c",
+    "headline": "Smarter delete confirmations",
+    "notes": [
+      "Deleting budget lines, portfolios, scenarios, and related items warns when something else still depends on them."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-08",
+    "prodSha": "5deb57a",
+    "headline": "Overview shows History gaps on the chart",
+    "notes": [
+      "With recorded actuals on, Overview lists stale months and gaps so you see what History still needs."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-08",
+    "prodSha": "219d471",
+    "headline": "More reliable linked-file saves",
+    "notes": [
+      "Extra tests and a small fix for linked JSON auto-save so periodic writes are less likely to race on unlink."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-08",
+    "prodSha": "def09df",
+    "headline": "Quotes refresh for more ticker formats",
+    "notes": [
+      "Auto quote refresh handles class shares and exchange suffixes beyond plain US symbols."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-04",
+    "prodSha": "bf45e10",
+    "headline": "Portfolio chart: edit actions in the table",
+    "notes": [
+      "Edit planned buy/sell actions and opening cash inline on the Portfolio year table.",
+      "Year-table popovers stay on screen near viewport edges."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-04",
+    "prodSha": "9f3289a",
+    "headline": "Guides for Projections and Data & backup",
+    "notes": [
+      "In-app Guides now cover the Projections workspace and the Data & backup settings page."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-02",
+    "prodSha": "3c28f0d",
+    "headline": "Guides for Portfolio",
+    "notes": [
+      "Feature guides for the Portfolio tab and its chart, actuals, cash, positions, and growth panels."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-02",
+    "prodSha": "977f21a",
+    "headline": "Guides for Overview, Budget, and History",
+    "notes": [
+      "Feature guides for Overview runway and charts, Budget views, and History completeness."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-02",
+    "prodSha": "331d3be",
+    "headline": "Guide breadcrumbs",
+    "notes": [
+      "Guide articles use a breadcrumb trail instead of a single back link, so nested topics are easier to follow."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-01",
+    "prodSha": "768f080",
+    "headline": "Guides for Savings",
+    "notes": [
+      "Feature guides for the Savings page and its chart, actuals, and projection panels."
+    ]
+  },
+  {
+    "releasedAt": "2026-10-31",
+    "prodSha": "6cdb63f",
+    "headline": "Comparables chart hover guide",
+    "notes": [
+      "A horizontal guide line on the comparables path chart makes it easier to read values along a year."
+    ]
+  },
+  {
+    "releasedAt": "2026-10-31",
+    "prodSha": "6da5657",
+    "headline": "Budget positions sorted by amount",
+    "notes": [
+      "Position tables default to largest amounts first, and the sort choice is remembered."
+    ]
+  },
+  {
+    "releasedAt": "2026-10-31",
+    "prodSha": "4314aa9",
+    "headline": "Budget Sankey label fix",
+    "notes": [
+      "The Total income label on the year Sankey sits centered below the pool bar."
+    ]
+  },
+  {
+    "releasedAt": "2026-10-31",
+    "prodSha": "0480908",
+    "headline": "Budget payment months",
+    "notes": [
+      "Income stays on the left; cost lines support Monthly vs selected months for when payments fall."
+    ]
+  },
+  {
+    "releasedAt": "2026-10-31",
+    "prodSha": "79aa21d",
+    "headline": "Comparables search",
+    "notes": [
+      "Scenario search on Comparables tucks behind a search icon so the panel stays uncluttered."
+    ]
+  },
+  {
+    "releasedAt": "2026-07-26",
+    "prodSha": "12b5d91",
+    "headline": "Budget tab (Income / Cost)",
+    "notes": [
+      "The Income / Cost workspace became the Budget tab — income streams and cost positions by year in CHF."
+    ]
+  }
+]
