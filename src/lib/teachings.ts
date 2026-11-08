@@ -1183,7 +1183,7 @@ Open **Feedback** in the page header.
 
 ## How to interpret
 
-Maintainers read the inbox about once a week. Not every note becomes a backlog item.
+Submissions are handled by the maintainers; not every note becomes a backlog item.
 
 ## Example
 

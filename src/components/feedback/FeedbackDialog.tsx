@@ -106,12 +106,8 @@ export function FeedbackDialog({ tab, onClose }: Props) {
         {phase === 'success' ? (
           <div className="space-y-4 py-2">
             <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-              Your {type === 'bug' ? 'bug report' : 'idea'} was received. Someone reviews these notes
-              about once a week — not every item becomes a backlog task.
+              Thank you — your {type === 'bug' ? 'report' : 'idea'} is in. We will take it from here.
             </div>
-            <p className="text-sm text-white/55">
-              Only your description and automatic context were sent (app version, current page, browser/OS).
-            </p>
             <div className="flex justify-end">
               <button type="button" className="btn-primary !py-1.5 !text-xs" onClick={onClose}>
                 Close
