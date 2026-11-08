@@ -1176,10 +1176,10 @@ Open **Feedback** in the page header.
 
 > No name, no email, and nothing from your own mail account. Submissions go through a form relay (Web3Forms), not a mailto link.
 
-### Limits
+### Spam checks
 
-- About **60 seconds** between sends on this browser
-- Up to **10 sends per day** per browser (best-effort spam guard)
+- Complete the **hCaptcha** checkbox before **Send** unlocks (Web3Forms free integration).
+- Hidden honeypot plus about **60 seconds** between sends and **10 per day** on this browser.
 
 ## How to interpret
 

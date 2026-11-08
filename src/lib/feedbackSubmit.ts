@@ -26,6 +26,7 @@ export async function submitFeedbackReport(
     description: string
     context: FeedbackContextPayload
     honeypot: string
+    hCaptchaResponse: string
   },
   fetchFn: typeof fetch = fetch,
 ): Promise<FeedbackSubmitResult> {
@@ -47,6 +48,11 @@ export async function submitFeedbackReport(
     return { ok: false, kind: 'rejected', message: 'Please describe the bug or idea.' }
   }
 
+  const captcha = input.hCaptchaResponse.trim()
+  if (!captcha) {
+    return { ok: false, kind: 'rejected', message: 'Please complete the captcha.' }
+  }
+
   const contextBlock = formatFeedbackContextBlock(input.context)
   const bodyMessage = `${description}\n\n---\nAutomatic context (not personal):\n${contextBlock}`
 
@@ -62,6 +68,7 @@ export async function submitFeedbackReport(
         type: input.type,
         message: bodyMessage,
         botcheck: '',
+        'h-captcha-response': captcha,
       }),
     })
   } catch {

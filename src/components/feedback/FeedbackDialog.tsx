@@ -1,4 +1,5 @@
-import { useEffect, useId, useState, type FormEvent } from 'react'
+import HCaptcha from '@hcaptcha/react-hcaptcha'
+import { useEffect, useId, useRef, useState, type FormEvent } from 'react'
 import type { AppTab } from '../../types'
 import { buildFeedbackContext } from '../../lib/feedbackContext'
 import { isFeedbackFormConfigured, submitFeedbackReport } from '../../lib/feedbackSubmit'
@@ -9,6 +10,7 @@ import {
   recordFeedbackSent,
   type FeedbackRateStatus,
 } from '../../lib/feedbackRateLimit'
+import { WEB3FORMS_HCAPTCHA_SITE_KEY } from '../../lib/feedbackCaptcha'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 
 type Props = {
@@ -27,8 +29,15 @@ export function FeedbackDialog({ tab, onClose }: Props) {
   const [busy, setBusy] = useState(false)
   const [errorMessage, setErrorMessage] = useState<string | null>(null)
   const [rateStatus, setRateStatus] = useState<FeedbackRateStatus>(() => readFeedbackRateStatus())
+  const [captchaToken, setCaptchaToken] = useState<string | null>(null)
+  const captchaRef = useRef<HCaptcha>(null)
 
   const configured = isFeedbackFormConfigured()
+
+  function resetCaptcha() {
+    setCaptchaToken(null)
+    captchaRef.current?.resetCaptcha()
+  }
 
   useEffect(() => {
     function onKey(e: KeyboardEvent) {
@@ -61,6 +70,7 @@ export function FeedbackDialog({ tab, onClose }: Props) {
       description,
       context,
       honeypot,
+      hCaptchaResponse: captchaToken ?? '',
     })
     setBusy(false)
 
@@ -72,11 +82,14 @@ export function FeedbackDialog({ tab, onClose }: Props) {
     }
 
     setErrorMessage(result.message)
+    resetCaptcha()
     setPhase('error')
   }
 
   const rateBlocked = !rateStatus.allowed
-  const submitDisabled = !configured || busy || rateBlocked
+  const captchaRequired = configured
+  const submitDisabled =
+    !configured || busy || rateBlocked || (captchaRequired && !captchaToken)
 
   return (
     <div
@@ -130,6 +143,7 @@ export function FeedbackDialog({ tab, onClose }: Props) {
                   onClick={() => {
                     setPhase('form')
                     setErrorMessage(null)
+                    resetCaptcha()
                   }}
                 >
                   Try again
@@ -210,6 +224,24 @@ export function FeedbackDialog({ tab, onClose }: Props) {
                 </li>
               </ul>
             </div>
+
+            {configured ? (
+              <div className="feedback-captcha-shell flex justify-center rounded-lg border border-white/10 bg-black/35 px-2 py-2">
+                <HCaptcha
+                  ref={captchaRef}
+                  sitekey={WEB3FORMS_HCAPTCHA_SITE_KEY}
+                  reCaptchaCompat={false}
+                  theme="dark"
+                  size="compact"
+                  onVerify={(token) => setCaptchaToken(token)}
+                  onExpire={() => setCaptchaToken(null)}
+                  onError={() => {
+                    setCaptchaToken(null)
+                    captchaRef.current?.resetCaptcha()
+                  }}
+                />
+              </div>
+            ) : null}
 
             <label className="absolute -left-[9999px] h-px w-px overflow-hidden" aria-hidden>
               <span>Leave blank</span>

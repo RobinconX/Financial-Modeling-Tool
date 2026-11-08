@@ -92,7 +92,7 @@ Users can send anonymous bug reports and ideas from **Feedback** in the header. 
 VITE_FEEDBACK_FORM_ACCESS_KEY=your-web3forms-access-key
 ```
 
-**Free tier (Web3Forms):** about **250 submissions/month** per account; honeypot spam filtering included. hCaptcha optional in the Web3Forms dashboard if volume grows.
+**Free tier (Web3Forms):** about **250 submissions/month** per account. The form uses Web3Forms’ shared **hCaptcha** key plus a honeypot; enable hCaptcha in the Web3Forms form dashboard when prompted.
 
 ---
 
