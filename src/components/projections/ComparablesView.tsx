@@ -35,6 +35,8 @@ import {
 import { formatPercent, formatPrice } from '../../lib/format'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
+import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
+import { symbolMissingQuoteData, useQuoteHealth } from '../../context/QuoteHealthContext'
 import { GoalGapSection, OVERLAY_COLORS } from './GoalGapSection'
 
 const SELECTED_KEY = 'grok-lab-selected-comparable'
@@ -138,6 +140,7 @@ export function ComparablesView({
   const yearMenuRef = useRef<HTMLDivElement>(null)
   const [thresholds, setThresholds] = useState(loadCagrThresholds)
   const [thresholdYear, setThresholdYear] = useState<number | null>(null)
+  const { missingSymbols } = useQuoteHealth()
 
   useEffect(() => {
     if (selectedId && comparables.some((c) => c.id === selectedId)) return
@@ -552,8 +555,11 @@ export function ComparablesView({
               ) : (
                 filteredGroups.map((g) => (
                   <div key={g.symbol}>
-                    <div className="px-1 text-[10px] font-medium uppercase tracking-wide text-white/35">
+                    <div className="flex items-center gap-1.5 px-1 text-[10px] font-medium uppercase tracking-wide text-white/35">
                       {g.symbol}
+                      {symbolMissingQuoteData(missingSymbols, g.symbol) ? (
+                        <QuoteMissingBadge symbol={g.symbol} />
+                      ) : null}
                     </div>
                     <div className="mt-0.5 space-y-0.5">
                       {g.scenarios.map((s) => (

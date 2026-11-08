@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { OptionContract, SavedScenario } from '../../types'
 import { fetchOptionChainClient, type OptionChainContract } from '../../lib/options'
 import { formatPrice } from '../../lib/format'
+import { SymbolQuoteFieldHint } from '../common/SymbolQuoteFieldHint'
 
 type Props = {
   scenarios: SavedScenario[]
@@ -96,6 +97,11 @@ export function PortfolioOptionPicker({ scenarios, onAdd, onClose }: Props) {
         >
           {loading ? 'Loading…' : 'Load chain'}
         </button>
+        {draftUnderlying.trim() ? (
+          <div className="w-full basis-full">
+            <SymbolQuoteFieldHint symbol={draftUnderlying} />
+          </div>
+        ) : null}
         {expirations.length > 0 ? (
           <label className="text-xs text-white/50">
             Expiry

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { EasyProjection, Quote, SavedScenario, YearProjection } from '../../types'
+import { isUsableQuote } from '../../lib/quoteValidation'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -15,6 +16,8 @@ type Props = {
   buttonLabel?: string
   /** Prefill scenario name in the dialog */
   defaultName?: string
+  /** When true, require a live quote or mcap override before enabling save (new draft). */
+  requireBaselineQuote?: boolean
 }
 
 export function SaveScenarioButton({
@@ -25,13 +28,18 @@ export function SaveScenarioButton({
   onSave,
   buttonLabel = 'Save scenario',
   defaultName = 'Base',
+  requireBaselineQuote = false,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(defaultName)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
 
-  const canSave = Boolean(quote?.symbol)
+  const hasBaseline =
+    !requireBaselineQuote ||
+    isUsableQuote(quote) ||
+    (mcapOverride != null && mcapOverride > 0)
+  const canSave = Boolean(quote?.symbol) && hasBaseline
 
   function handleOpen() {
     setName(defaultName)
@@ -79,7 +87,13 @@ export function SaveScenarioButton({
         className="btn-primary"
         disabled={!canSave}
         onClick={handleOpen}
-        title={canSave ? 'Save Easy + Advanced assumptions for this ticker' : 'Fetch a ticker first'}
+        title={
+          canSave
+            ? 'Save Easy + Advanced assumptions for this ticker'
+            : requireBaselineQuote
+              ? 'Fetch a valid quote or set market cap override first'
+              : 'Fetch a ticker first'
+        }
       >
         {buttonLabel}
       </button>
