@@ -6,6 +6,11 @@ import {
   historySnapshot,
   historySeriesId,
   rollupYearly,
+  firstMissingPeriodKey,
+  formatCompletenessHint,
+  historyAttentionPeriodKey,
+  historyIdsForOverviewSeries,
+  listHistoryAttention,
   seriesCompleteness,
   SHARED_PORTFOLIO_SOURCE_ID,
 } from '../../src/lib/history'
@@ -211,5 +216,114 @@ describe('seriesCompleteness', () => {
     const c = seriesCompleteness(s, asOf, 2026, 2026)
     expect(c.yearlyOnly).toBe(false)
     expect(c.gapCount).toBe(4) // Mar + Jun–Aug through current period
+  })
+
+  it('formatCompletenessHint matches stale and gap flags', () => {
+    const staleHint = formatCompletenessHint({
+      lastKey: '2026-05',
+      monthsBehind: 3,
+      stale: true,
+      gapCount: 0,
+      yearlyOnly: false,
+    })
+    expect(staleHint).toBe('stale · 2026-05')
+    const gapHint = formatCompletenessHint({
+      lastKey: '2026-05',
+      monthsBehind: 0,
+      stale: false,
+      gapCount: 2,
+      yearlyOnly: false,
+    })
+    expect(gapHint).toBe('2 gaps')
+  })
+
+  it('firstMissingPeriodKey finds the earliest hole in a monthly window', () => {
+    const s = collectHistorySeries(
+      [],
+      [
+        savings({
+          id: 'c',
+          name: 'Cash',
+          actuals: { '2026-01': 1, '2026-02': 2, '2026-04': 4 },
+        }),
+      ],
+      null,
+    )[0]!
+    expect(firstMissingPeriodKey(s, asOf, 2026, 2026)).toBe('2026-03')
+  })
+
+  it('historyAttentionPeriodKey prefers gaps over stale tail', () => {
+    const s = collectHistorySeries(
+      [],
+      [
+        savings({
+          id: 'c',
+          name: 'Cash',
+          actuals: { '2026-01': 1, '2026-02': 2, '2026-04': 4, '2026-05': 5 },
+        }),
+      ],
+      null,
+    )[0]!
+    expect(historyAttentionPeriodKey(s, asOf, 2026, 2026)).toBe('2026-03')
+  })
+})
+
+describe('overview history attention', () => {
+  const asOf = new Date(2026, 7, 13)
+
+  it('maps enabled overview savings to history ids', () => {
+    const ids = historyIdsForOverviewSeries(
+      [
+        {
+          id: 'os1',
+          name: 'Cash',
+          enabled: true,
+          sortOrder: 0,
+          type: 'savings',
+          savingsAccountId: 'cash-1',
+        },
+      ],
+      [
+        savings({
+          id: 'cash-1',
+          name: 'Cash',
+          actuals: { '2025-12': 1000 },
+        }),
+      ],
+      null,
+    )
+    expect(ids).toEqual([historySeriesId('savings', 'cash-1')])
+  })
+
+  it('listHistoryAttention returns items only for linked overview series', () => {
+    const accounts = [
+      savings({
+        id: 'c',
+        name: 'Cash',
+        actuals: { '2026-01': 1, '2026-02': 2, '2026-04': 4, '2026-05': 5 },
+      }),
+    ]
+    const hist = collectHistorySeries([], accounts, null)
+    const items = listHistoryAttention(
+      hist,
+      [
+        {
+          id: 'os1',
+          name: 'Cash',
+          enabled: true,
+          sortOrder: 0,
+          type: 'savings',
+          savingsAccountId: 'c',
+        },
+      ],
+      accounts,
+      null,
+      asOf,
+      2026,
+      2026,
+    )
+    expect(items).toHaveLength(1)
+    expect(items[0]!.hint).toContain('gap')
+    expect(items[0]!.periodKey).toBe('2026-03')
   })
 })
