@@ -1,15 +1,17 @@
 import { useState, type FormEvent } from 'react'
 import { formatMoney, formatPrice } from '../../lib/format'
 import type { Quote } from '../../types'
+import { QuoteDataWarning } from '../common/QuoteDataWarning'
 
 type Props = {
   quote: Quote | null
   loading: boolean
   error: string | null
+  dataWarning?: string | null
   onFetch: (symbol: string) => void
 }
 
-export function TickerSearch({ quote, loading, error, onFetch }: Props) {
+export function TickerSearch({ quote, loading, error, dataWarning, onFetch }: Props) {
   const [symbol, setSymbol] = useState(quote?.symbol ?? '')
 
   function handleSubmit(e: FormEvent) {
@@ -22,7 +24,7 @@ export function TickerSearch({ quote, loading, error, onFetch }: Props) {
       <form onSubmit={handleSubmit} className="flex gap-2">
         <input
           className="input flex-1 uppercase tracking-wide"
-          placeholder="Ticker (e.g. AAPL)"
+          placeholder="Ticker (e.g. BRK-B, NESN.SW)"
           value={symbol}
           onChange={(e) => setSymbol(e.target.value.toUpperCase())}
           spellCheck={false}
@@ -39,7 +41,9 @@ export function TickerSearch({ quote, loading, error, onFetch }: Props) {
         </p>
       )}
 
-      {quote && !error && (
+      {!error && dataWarning ? <QuoteDataWarning message={dataWarning} /> : null}
+
+      {quote && !error && !dataWarning && (
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 sm:grid-cols-4">
           <Metric label="Name" value={quote.name} wide />
           <Metric label="Price" value={formatPrice(quote.price, quote.currency)} />

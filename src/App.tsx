@@ -15,6 +15,7 @@ import { usePortfolioContributions } from './hooks/usePortfolioContributions'
 import { usePortfolioActuals } from './hooks/usePortfolioActuals'
 import { DataSettingsPanel } from './components/settings/DataSettingsPanel'
 import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
+import { QuoteHealthProvider } from './context/QuoteHealthContext'
 import { FeatureGuideProvider } from './components/guides/FeatureGuideProvider'
 import { FeatureGuideRail } from './components/guides/FeatureGuideRail'
 import { GuidesHeaderButton } from './components/guides/GuidesHeaderButton'
@@ -211,7 +212,7 @@ export default function App() {
   } = useSavedPortfolios()
 
   // Refresh saved scenario/portfolio quotes on every tab (data is global in localStorage).
-  const { quotesLoading, quoteCount } = useAutoQuoteRefresh(
+  const { quotesLoading, quoteCount, missingSymbols } = useAutoQuoteRefresh(
     scenarios,
     portfolios,
     updateScenario,
@@ -340,6 +341,7 @@ export default function App() {
 
   return (
     <FeatureGuideProvider navigateTab={setTab}>
+    <QuoteHealthProvider missingSymbols={missingSymbols}>
     <div className="flex h-screen overflow-hidden">
       <QuoteLoadingHint loading={quotesLoading} count={quoteCount} />
       {/* App sidebar */}
@@ -515,6 +517,7 @@ export default function App() {
         <FeatureGuideRail />
       </div>
     </div>
+    </QuoteHealthProvider>
     </FeatureGuideProvider>
   )
 }

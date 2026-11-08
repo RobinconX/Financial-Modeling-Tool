@@ -46,6 +46,9 @@ import { optionIsExpired, optionLabel } from '../../lib/optionContract'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { DeleteUsageBody } from '../common/DeleteUsageBody'
 import { portfolioHoldingDeleteDetail } from '../../lib/deleteUsage'
+import { SymbolQuoteFieldHint } from '../common/SymbolQuoteFieldHint'
+import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
+import { symbolMissingQuoteData, useQuoteHealth } from '../../context/QuoteHealthContext'
 
 export type PortfolioEditorPanel = 'cash' | 'positions' | 'growth' | 'all'
 
@@ -99,6 +102,7 @@ export function PortfolioHoldingsEditor({
   otherPortfolios = [],
   onUpdateOtherPortfolio,
 }: Props) {
+  const { missingSymbols } = useQuoteHealth()
   const showConfig = panel === 'all'
   const showCash = panel === 'all' || panel === 'cash'
   const showGrowth = panel === 'all' || panel === 'growth'
@@ -1053,6 +1057,11 @@ export function PortfolioHoldingsEditor({
                       <span className="text-sm font-semibold text-white/90">
                         {displayName}
                       </span>
+                      {!h.manualOnly &&
+                      !isOption &&
+                      symbolMissingQuoteData(missingSymbols, h.symbol) ? (
+                        <QuoteMissingBadge symbol={h.symbol} />
+                      ) : null}
                       <span className="text-xs text-white/40">{scenarioName}</span>
                       {h.sharesHeld !== 0 && (
                         <span className="text-xs tabular-nums text-white/50">
@@ -1297,6 +1306,9 @@ export function PortfolioHoldingsEditor({
                               placeholder="AAPL"
                             />
                           )}
+                          {!h.manualOnly && !isOption && h.symbol.trim() ? (
+                            <SymbolQuoteFieldHint symbol={h.symbol} />
+                          ) : null}
                         </div>
                         <div>
                           <label className="label">Shares held</label>

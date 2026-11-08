@@ -5,6 +5,7 @@ import { fetchQuotesClient } from '../lib/quote'
 import { marketCapFromSharePrice } from '../lib/sharePrice'
 import { optionIsExpired } from '../lib/optionContract'
 import { withLinkedMirrorSuppressed } from '../lib/linkedMirrorGate'
+import { symbolsMissingQuotes } from '../lib/quoteValidation'
 
 export const QUOTE_REFRESH_MS = 5 * 60 * 1000
 
@@ -21,7 +22,7 @@ export function useAutoQuoteRefresh(
   updateScenario: UpdateScenario,
   updatePortfolio: UpdatePortfolio,
   enabled = true,
-): { quotesLoading: boolean; quoteCount: number } {
+): { quotesLoading: boolean; quoteCount: number; missingSymbols: ReadonlySet<string> } {
   const scenariosRef = useRef(scenarios)
   const portfoliosRef = useRef(portfolios)
   const updateRef = useRef(updateScenario)
@@ -34,6 +35,9 @@ export function useAutoQuoteRefresh(
   const refreshingRef = useRef(false)
   const [quotesLoading, setQuotesLoading] = useState(false)
   const [quoteCount, setQuoteCount] = useState(0)
+  const [missingSymbols, setMissingSymbols] = useState<ReadonlySet<string>>(
+    () => new Set(),
+  )
 
   const refreshAll = useCallback(async () => {
     if (!enabled) return
@@ -46,6 +50,7 @@ export function useAutoQuoteRefresh(
     )
     setQuoteCount(list.length)
     if (list.length === 0) {
+      setMissingSymbols(new Set())
       refreshingRef.current = false
       setQuotesLoading(false)
       return
@@ -61,6 +66,9 @@ export function useAutoQuoteRefresh(
       }
 
       const quoteBySym = new Map(quotes.map((q) => [q.symbol.toUpperCase(), q]))
+
+      setMissingSymbols(symbolsMissingQuotes(list, quotes))
+
       // Live marks stay in memory / localStorage; they must not write the linked file.
       withLinkedMirrorSuppressed(() => {
         for (const s of scenariosRef.current) {
@@ -150,5 +158,5 @@ export function useAutoQuoteRefresh(
     }
   }, [enabled, refreshAll])
 
-  return { quotesLoading, quoteCount }
+  return { quotesLoading, quoteCount, missingSymbols }
 }

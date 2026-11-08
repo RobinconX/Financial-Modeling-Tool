@@ -640,8 +640,10 @@ Save **AAPL · Base case** in **Analyze**, then **Comparables → + New**, add t
 
 ### Getting started
 
-- **New projection** — search a ticker, fetch a quote, then fill assumptions
+- **New projection** — enter the ticker exactly as your data source lists it (no auto-fix), **Fetch**, then fill assumptions
 - Saved scenario — picker at top; **Refresh quote** updates price/mcap without changing your rows
+
+> If **Fetch** or refresh finds no price, you see a warning (e.g. use **BRK-B** not **BRK.B**, or **NESN.SW** for Swiss listings). Fix the symbol or set **Market cap (override)** before first **Save**.
 
 ### Layout
 
@@ -976,6 +978,8 @@ Opening **display currency 10k**, **2026** fixed deposit **5k**, perpetual **+2k
 - **+ Add from projections…** — stock rows tied to **Projections → Analyze** saves (symbol, shares, **Saved projection** path)
 - **+ Option**, manual / absolute marks — valued without a projection link
 - **Sort** — as added, A–Z, or by value (display order only)
+
+> **Ticker** fields check live quotes. Wrong symbols show a warning and **No quote** on the row; use the provider’s format (e.g. **BRK-B**, **NESN.SW**). Manual marks skip quote checks.
 
 Expand a row to set shares, projection basis (**Easy mcap**, **P/S**, etc.), and **Actions** by calendar year (buy/sell quantities).
 

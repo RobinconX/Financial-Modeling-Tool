@@ -23,6 +23,8 @@ import { ConfirmDialog } from '../common/ConfirmDialog'
 import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
+import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
+import { symbolMissingQuoteData, useQuoteHealth } from '../../context/QuoteHealthContext'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -92,6 +94,7 @@ function ProjectionSelector({
   const clickTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
   const isDraft = value === DRAFT
   const selected = isDraft ? null : (scenarios.find((s) => s.id === value) ?? null)
+  const { missingSymbols } = useQuoteHealth()
 
   useEffect(() => {
     if (!open) return
@@ -252,7 +255,12 @@ function ProjectionSelector({
                         <span className="inline-block w-4 shrink-0" aria-hidden />
                       )}
                       <span className="min-w-0 flex-1">
-                        <span className="block text-sm font-semibold text-white">{g.symbol}</span>
+                        <span className="flex items-center gap-1.5 text-sm font-semibold text-white">
+                          {g.symbol}
+                          {symbolMissingQuoteData(missingSymbols, g.symbol) ? (
+                            <QuoteMissingBadge symbol={g.symbol} />
+                          ) : null}
+                        </span>
                         <span className="block truncate text-[11px] text-white/40">
                           {company ? `${company} · ` : ''}
                           {many

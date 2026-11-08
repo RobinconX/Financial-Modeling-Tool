@@ -8,6 +8,10 @@ import type {
   YearProjection,
 } from '../../types'
 import { fetchQuoteClient } from '../../lib/quote'
+import { lookupSymbolQuote, quoteMissingDataWarning } from '../../lib/quoteValidation'
+import { QuoteDataWarning } from '../common/QuoteDataWarning'
+import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
+import { symbolMissingQuoteData, useQuoteHealth } from '../../context/QuoteHealthContext'
 import {
   buildAdvancedProjections,
   buildChartSeries,
@@ -84,8 +88,11 @@ export function ProjectionPanel({
   const [draftAdvanced, setDraftAdvanced] = useState<YearProjection[]>([])
   const [loading, setLoading] = useState(false)
   const [fetchError, setFetchError] = useState<string | null>(null)
+  const [fetchDataWarning, setFetchDataWarning] = useState<string | null>(null)
   const [refreshing, setRefreshing] = useState(false)
   const [refreshError, setRefreshError] = useState<string | null>(null)
+  const [refreshDataWarning, setRefreshDataWarning] = useState<string | null>(null)
+  const { missingSymbols } = useQuoteHealth()
   const [selectedBasis, setSelectedBasis] = useState<ValuationBasis | 'easy'>(
     initialBasis ?? 'easy',
   )
@@ -101,7 +108,9 @@ export function ProjectionPanel({
     setDraftEasy([newEasyProjection()])
     setDraftAdvanced([])
     setFetchError(null)
+    setFetchDataWarning(null)
     setRefreshError(null)
+    setRefreshDataWarning(null)
     setSelectedBasis('easy')
     setEasyOpen(true)
     setAdvancedOpen(false)
@@ -110,6 +119,7 @@ export function ProjectionPanel({
   useEffect(() => {
     if (!scenario) return
     setRefreshError(null)
+    setRefreshDataWarning(null)
     setSelectedBasis(initialBasis ?? 'easy')
     setEasyOpen(initialBasis === 'easy')
     setAdvancedOpen(initialBasis != null && initialBasis !== 'easy')
@@ -171,17 +181,26 @@ export function ProjectionPanel({
     const prevSymbol = draftQuote?.symbol?.toUpperCase() ?? null
     setLoading(true)
     setFetchError(null)
+    setFetchDataWarning(null)
     try {
-      const q = await fetchQuoteClient(symbol)
+      const result = await lookupSymbolQuote(symbol)
+      if (result.status === 'no_data') {
+        setDraftQuote(null)
+        setFetchDataWarning(quoteMissingDataWarning(symbol))
+        return
+      }
+      if (result.status === 'error') {
+        setDraftQuote(null)
+        setFetchError(result.message)
+        return
+      }
+      const q = result.quote
       setDraftQuote(q)
       setDraftMcapOverride(null)
       if (prevSymbol !== q.symbol.toUpperCase()) {
         setDraftEasy([newEasyProjection()])
         setDraftAdvanced([])
       }
-    } catch (err) {
-      setDraftQuote(null)
-      setFetchError(err instanceof Error ? err.message : 'Failed to fetch quote')
     } finally {
       setLoading(false)
     }
@@ -192,8 +211,18 @@ export function ProjectionPanel({
     if (!symbol) return
     setRefreshing(true)
     setRefreshError(null)
+    setRefreshDataWarning(null)
     try {
-      const q = await fetchQuoteClient(symbol)
+      const result = await lookupSymbolQuote(symbol)
+      if (result.status === 'no_data') {
+        setRefreshDataWarning(quoteMissingDataWarning(symbol))
+        return
+      }
+      if (result.status === 'error') {
+        setRefreshError(result.message)
+        return
+      }
+      const q = result.quote
       if (q.symbol.toUpperCase() !== symbol.toUpperCase()) return
       if (isDraft) {
         setDraftQuote(q)
@@ -212,8 +241,6 @@ export function ProjectionPanel({
           // symbol intentionally not updated — ticker locked
         })
       }
-    } catch (err) {
-      setRefreshError(err instanceof Error ? err.message : 'Refresh failed')
     } finally {
       setRefreshing(false)
     }
@@ -294,6 +321,11 @@ export function ProjectionPanel({
     [r.revenue, r.fcf, r.profit].some((v) => v != null && v > 0),
   ).length
 
+  const savedSymbolMissing =
+    !isDraft &&
+    scenario != null &&
+    symbolMissingQuoteData(missingSymbols, scenario.symbol)
+
   return (
     <section className="panel flex flex-col gap-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
@@ -303,8 +335,9 @@ export function ProjectionPanel({
             <h2 className="text-lg font-semibold tracking-tight text-white">New projection</h2>
           ) : (
             <>
-              <p className="text-xs font-semibold uppercase tracking-[0.14em] text-emerald-400/80">
-                {scenario!.symbol}
+              <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-400/80">
+                <span>{scenario!.symbol}</span>
+                {savedSymbolMissing ? <QuoteMissingBadge symbol={scenario!.symbol} /> : null}
               </p>
               <h2 className="mt-0.5 text-xl font-bold tracking-tight text-white">
                 {scenario!.name}
@@ -333,6 +366,7 @@ export function ProjectionPanel({
               easyRows={draftEasy}
               advancedRows={draftAdvanced}
               onSave={handleSave}
+              requireBaselineQuote
             />
           ) : (
             <>
@@ -369,11 +403,18 @@ export function ProjectionPanel({
           quote={draftQuote}
           loading={loading}
           error={fetchError}
+          dataWarning={fetchDataWarning}
           onFetch={handleFetch}
         />
       ) : null}
 
-      {refreshError && <p className="text-sm text-red-300">{refreshError}</p>}
+      {refreshError ? <p className="text-sm text-red-300">{refreshError}</p> : null}
+      {!isDraft && refreshDataWarning ? (
+        <QuoteDataWarning message={refreshDataWarning} />
+      ) : null}
+      {savedSymbolMissing && !refreshDataWarning ? (
+        <QuoteDataWarning message={quoteMissingDataWarning(scenario!.symbol)} />
+      ) : null}
 
       {/* Quote context — always visible to read ROI */}
       <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">
