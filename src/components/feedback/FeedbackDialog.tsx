@@ -141,9 +141,10 @@ export function FeedbackDialog({ tab, onClose }: Props) {
           <form className="space-y-4" onSubmit={(e) => void handleSubmit(e)}>
             {!configured ? (
               <p className="rounded-lg border border-amber-500/25 bg-amber-500/10 px-3 py-2 text-xs text-amber-100/85">
-                Feedback is not enabled on this build yet. The site owner sets{' '}
-                <code className="text-emerald-300/90">VITE_FEEDBACK_FORM_ACCESS_KEY</code> in GitHub Actions
-                (Web3Forms). See <code className="text-emerald-300/90">docs/GITHUB_PAGES.md</code>.
+                Feedback is not enabled in this build. Set{' '}
+                <code className="text-emerald-300/90">VITE_FEEDBACK_FORM_ACCESS_KEY</code> for local dev (
+                <code className="text-emerald-300/90">.env.local</code>) — Pages builds use the workflow default.
+                See <code className="text-emerald-300/90">docs/GITHUB_PAGES.md</code>.
               </p>
             ) : null}
 

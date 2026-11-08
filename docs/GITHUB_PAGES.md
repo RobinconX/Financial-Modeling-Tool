@@ -80,19 +80,17 @@ The built app will call `${VITE_API_BASE}/api/quote?...` instead of same-origin 
 
 No API keys are required (Yahoo chart + Nasdaq public endpoints + Frankfurter).
 
-### 3c. In-app feedback (Web3Forms, optional)
+### 3c. In-app feedback (Web3Forms)
 
-Users can send anonymous bug reports and ideas from **Feedback** in the header. No backend on Pages — submissions use [Web3Forms](https://web3forms.com).
+Users can send anonymous bug reports and ideas from **Feedback** in the header. No backend on Pages — submissions use [Web3Forms](https://web3forms.com) to **`bobin@mail.grokbot.com`**.
 
-1. Create a free Web3Forms account and generate an **access key**.
-2. Add **linked email** `bobin@mail.grokbot.com` and set it as the form recipient (verify the address if Web3Forms asks).
-3. GitHub repo → **Settings** → **Secrets and variables** → **Actions** → **Variables**.
-4. **New repository variable**
-   - Name: `VITE_FEEDBACK_FORM_ACCESS_KEY`
-   - Value: your Web3Forms access key
-5. Redeploy Pages.
+**GitHub Pages builds** already set `VITE_FEEDBACK_FORM_ACCESS_KEY` in `.github/workflows/deploy-pages.yml` (Web3Forms access keys are public in the client bundle). To rotate the key, add a repository **Actions variable** named `VITE_FEEDBACK_FORM_ACCESS_KEY` — it overrides the workflow default.
 
-Until this variable is set, **Feedback** stays disabled in the built app (local `npm run dev` too, unless you set the key in `.env.local`).
+**Local dev:** Feedback is off until you pass the key, e.g. in `.env.local`:
+
+```bash
+VITE_FEEDBACK_FORM_ACCESS_KEY=your-web3forms-access-key
+```
 
 **Free tier (Web3Forms):** about **250 submissions/month** per account; honeypot spam filtering included. hCaptcha optional in the Web3Forms dashboard if volume grows.
 

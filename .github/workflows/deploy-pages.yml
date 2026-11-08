@@ -46,7 +46,8 @@ jobs:
           # Example: https://fmt-market-api.<account>.workers.dev
           VITE_API_BASE: ${{ vars.VITE_API_BASE }}
           VITE_GIT_SHA: ${{ github.sha }}
-          VITE_FEEDBACK_FORM_ACCESS_KEY: ${{ vars.VITE_FEEDBACK_FORM_ACCESS_KEY }}
+          # Public Web3Forms key (override via repo Actions variable if you rotate it).
+          VITE_FEEDBACK_FORM_ACCESS_KEY: ${{ vars.VITE_FEEDBACK_FORM_ACCESS_KEY || 'ba68b876-5a19-40f8-a5b8-44cef974b98f' }}
 
       - name: Upload Pages artifact
         uses: actions/upload-pages-artifact@v3
