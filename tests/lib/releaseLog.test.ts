@@ -54,9 +54,28 @@ describe('releaseLog', () => {
 
   it.runIf(ciEnv?.RELEASE_LOG_PROD_BUILD === '1')('passes prod gate for current deploy SHA', () => {
       const sha = ciEnv?.GITHUB_SHA?.trim()
+      const parentSha = ciEnv?.RELEASE_LOG_PARENT_SHA?.trim()
       expect(sha, 'GITHUB_SHA required for prod release log check').toBeTruthy()
-      const result = validateReleaseLogForProd(listReleaseLogEntries(), sha!)
+      const result = validateReleaseLogForProd(
+        listReleaseLogEntries(),
+        sha!,
+        parentSha ? { parentSha } : undefined,
+      )
       expect(result.ok, !result.ok ? result.message : undefined).toBe(true)
     },
   )
+
+  it('validateReleaseLogForProd accepts prodSha on deploy parent (release-log finalize)', () => {
+    const log: ReleaseLogEntry[] = [
+      {
+        releasedAt: '2026-11-08',
+        prodSha: 'b0c7c89',
+        headline: 'Feature',
+        notes: ['Note'],
+      },
+    ]
+    expect(validateReleaseLogForProd(log, 'fffffffffff', { parentSha: 'b0c7c89d3de6' })).toEqual({
+      ok: true,
+    })
+  })
 })

@@ -38,11 +38,13 @@ function shaMatches(entrySha: string, deploySha: string): boolean {
 export function validateReleaseLogForProd(
   log: readonly ReleaseLogEntry[],
   deploySha: string,
+  options?: { parentSha?: string },
 ): { ok: true } | { ok: false; message: string } {
   const sha = deploySha.trim()
   if (!sha) {
     return { ok: false, message: 'Missing deploy SHA for release log check.' }
   }
+  const parentSha = options?.parentSha?.trim() ?? ''
   if (log.length === 0) {
     return { ok: false, message: 'Release log is empty — add an entry before deploying.' }
   }
@@ -60,10 +62,14 @@ export function validateReleaseLogForProd(
       message: 'Newest release log entry is missing prodSha — record the v1-prod merge commit before deploy.',
     }
   }
-  if (!shaMatches(newest.prodSha, sha)) {
+  const deployRefs = [sha]
+  if (parentSha) deployRefs.push(parentSha)
+  if (!deployRefs.some((ref) => shaMatches(newest.prodSha, ref))) {
     return {
       ok: false,
-      message: `Newest release log prodSha (${newest.prodSha}) does not match deploy SHA (${sha}).`,
+      message: `Newest release log prodSha (${newest.prodSha}) does not match deploy SHA (${sha})${
+        parentSha ? ` or parent (${parentSha})` : ''
+      }.`,
     }
   }
   return { ok: true }

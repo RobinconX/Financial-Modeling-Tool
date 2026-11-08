@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-08",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "b0c7c89d3de672f7a2f792a173951ad80285edb3",
     "headline": "In-app feedback & release log",
     "notes": [
       "Send anonymous bug reports and ideas from the header — no name or email.",
