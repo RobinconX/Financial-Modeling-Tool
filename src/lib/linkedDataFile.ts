@@ -461,13 +461,14 @@ async function performLinkedWrite(
   if (!cachedHandle) {
     return { ok: false, error: 'No data file linked' }
   }
+  const handleForWrite = cachedHandle
   try {
-    const canWrite = await ensurePermission(cachedHandle, 'readwrite')
+    const canWrite = await ensurePermission(handleForWrite, 'readwrite')
     if (!canWrite) {
       return { ok: false, error: 'Write permission denied — re-link the data file' }
     }
     const data = snapshot ?? payloadForLinkedFile()
-    const writable = await cachedHandle.createWritable()
+    const writable = await handleForWrite.createWritable()
     await writable.write(JSON.stringify(data, null, 2))
     await writable.close()
     lastError = null
@@ -475,7 +476,7 @@ async function performLinkedWrite(
     emitSaveEvent({
       status: 'saved',
       message: 'Saved',
-      fileName: cachedHandle.name,
+      fileName: handleForWrite.name,
       savedAt,
     })
     return { ok: true }
@@ -485,7 +486,7 @@ async function performLinkedWrite(
     emitSaveEvent({
       status: 'error',
       message: msg,
-      fileName: cachedHandle?.name,
+      fileName: handleForWrite.name,
       savedAt: lastSuccessfulSaveAt,
     })
     return { ok: false, error: msg }
@@ -727,3 +728,28 @@ export function notifyAppDataChanged(): void {
 }
 
 if (shouldRunPeriodicTimer()) syncPeriodicLinkedSaves()
+
+function isTestMode(): boolean {
+  try {
+    return import.meta.env?.MODE === 'test'
+  } catch {
+    return false
+  }
+}
+
+/** Vitest-only: inject a file handle and reset debounce / write-queue module state. */
+export function resetLinkedDataFileWriteStateForTests(handle: FsFileHandle | null = null): void {
+  if (!isTestMode()) return
+  cancelPendingLinkedWrite()
+  writeFlushing = false
+  writeChain = Promise.resolve()
+  cachedHandle = handle
+  lastError = null
+  lastSuccessfulSaveAt = null
+  lastSaveEvent = {
+    status: handle ? 'idle' : 'idle',
+    message: handle ? 'Linked' : 'No linked file',
+    fileName: handle?.name ?? null,
+    savedAt: null,
+  }
+}
