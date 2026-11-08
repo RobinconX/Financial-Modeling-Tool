@@ -45,7 +45,7 @@ export async function submitFeedbackReport(
 
   const description = input.description.trim()
   if (!description) {
-    return { ok: false, kind: 'rejected', message: 'Please describe the bug or idea.' }
+    return { ok: false, kind: 'rejected', message: 'Please enter a description.' }
   }
 
   const captcha = input.hCaptchaResponse.trim()

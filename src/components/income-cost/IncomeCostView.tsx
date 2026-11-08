@@ -13,7 +13,6 @@ import { incomeCostScenarioUsage } from '../../lib/deleteUsage'
 import { loadOverview } from '../../lib/overviewStorage'
 import { DeleteUsageBody } from '../common/DeleteUsageBody'
 import { FullscreenChart } from '../common/FullscreenChart'
-import { InfoTip } from '../common/InfoTip'
 import { YearOverview } from './YearOverview'
 import { CashflowTable } from './CashflowTable'
 import { YearSankey } from './YearSankey'
@@ -235,10 +234,7 @@ export function IncomeCostView({
         <div className="section-header">
           <div className="flex items-center gap-1.5">
             <span className="section-title">Scenarios</span>
-            <InfoTip label="Scenario tips" align="start">
-              Drag chips to reorder. Double-click a name to rename. Amounts are in CHF.
-            </InfoTip>
-          </div>
+</div>
           <div className="flex flex-wrap items-center gap-2">
             <div className="flex items-center gap-1.5">
               <label className="text-[10px] uppercase tracking-wider text-white/40" htmlFor="ic-year">

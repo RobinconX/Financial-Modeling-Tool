@@ -20,6 +20,18 @@ type Props = {
 
 type Phase = 'form' | 'success' | 'error'
 
+function feedbackSentLabel(type: FeedbackType): string {
+  if (type === 'bug') return 'report'
+  if (type === 'question') return 'question'
+  return 'idea'
+}
+
+function feedbackPlaceholder(type: FeedbackType): string {
+  if (type === 'bug') return 'What happened? What did you expect?'
+  if (type === 'question') return 'What are you trying to figure out?'
+  return 'What would help, and where in the app?'
+}
+
 export function FeedbackDialog({ tab, onClose }: Props) {
   const titleId = useId()
   const [type, setType] = useState<FeedbackType>('bug')
@@ -109,17 +121,18 @@ export function FeedbackDialog({ tab, onClose }: Props) {
             <h3 id={titleId} className="text-lg font-semibold text-white">
               {phase === 'success' ? 'Thanks — we got it' : 'Send feedback'}
             </h3>
-            <p className="mt-0.5 text-xs text-white/45">
-              Anonymous · no name or email · relayed to the maintainers
+            <p className="mt-0.5 text-xs leading-relaxed text-white/50">
+              Only your message, type, app version, current page, and browser type are sent. We do not
+              collect your IP and we do not send your name, email, or account data.
             </p>
           </div>
-          <FeatureGuideButton id="settings.feedback" />
+          <FeatureGuideButton id="settings.feedback" stayOnTab />
         </div>
 
         {phase === 'success' ? (
           <div className="space-y-4 py-2">
             <div className="rounded-lg border border-emerald-500/25 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-100/90">
-              Thank you — your {type === 'bug' ? 'report' : 'idea'} is in. We will take it from here.
+              Thank you — your {feedbackSentLabel(type)} is in. We will take it from here.
             </div>
             <div className="flex justify-end">
               <button type="button" className="btn-primary !py-1.5 !text-xs" onClick={onClose}>
@@ -177,6 +190,7 @@ export function FeedbackDialog({ tab, onClose }: Props) {
                   [
                     ['bug', 'Bug'],
                     ['idea', 'Idea'],
+                    ['question', 'Question'],
                   ] as const
                 ).map(([value, label]) => (
                   <button
@@ -204,23 +218,19 @@ export function FeedbackDialog({ tab, onClose }: Props) {
                 maxLength={4000}
                 value={description}
                 onChange={(e) => setDescription(e.target.value)}
-                placeholder={
-                  type === 'bug'
-                    ? 'What happened? What did you expect?'
-                    : 'What would help, and where in the app?'
-                }
+                placeholder={feedbackPlaceholder(type)}
               />
             </label>
 
             <div className="rounded-lg border border-white/8 bg-black/25 px-3 py-2 text-[11px] leading-relaxed text-white/40">
-              <p className="mb-1 font-medium text-white/50">Included automatically (not personal)</p>
+              <p className="mb-1 font-medium text-white/50">Attached automatically with your message</p>
               <ul className="list-inside list-disc space-y-0.5">
                 <li>
-                  Version {context.packageVersion} · build {context.gitShaShort}
+                  App version {context.packageVersion} · build {context.gitShaShort}
                 </li>
-                <li>Page: {context.tab}</li>
+                <li>Current page: {context.tab}</li>
                 <li>
-                  {context.browser} on {context.os}
+                  Browser type: {context.browser} ({context.os})
                 </li>
               </ul>
             </div>

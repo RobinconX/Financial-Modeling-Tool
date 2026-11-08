@@ -1,7 +1,7 @@
 import { useMemo, useState } from 'react'
 import { formatMoney, formatPercent } from '../../lib/format'
 import { AnchorPopover } from '../common/AnchorPopover'
-import { InfoTip } from '../common/InfoTip'
+import { InlineDetailTooltip } from '../common/InlineDetailTooltip'
 import { toDisplay } from '../../lib/fx'
 import {
   actionTradePrice,
@@ -186,7 +186,7 @@ export function PortfolioValueTable({
       <span className="inline-flex items-center gap-1">
         {v == null ? <span className="text-white/20">—</span> : fmt(v)}
         {hint ? (
-          <InfoTip
+          <InlineDetailTooltip
             label={hintLabel}
             align="end"
             side={side}
@@ -198,7 +198,7 @@ export function PortfolioValueTable({
                 {line}
               </span>
             ))}
-          </InfoTip>
+          </InlineDetailTooltip>
         ) : null}
       </span>
     )

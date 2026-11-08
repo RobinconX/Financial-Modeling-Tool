@@ -17,7 +17,6 @@ import {
   shadesForType,
   sourceLabel,
 } from '../../lib/overview'
-import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { NumberInput } from '../common/MoneyInput'
 
@@ -602,12 +601,7 @@ export function OverviewSeriesEditor({
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-violet-300/90">Asset series</h3>
           <FeatureGuideButton id="overview.series" />
-          <InfoTip label="About asset series">
-            Drag groups (⋮⋮) to set stack order; expand (▸) to edit. Checkboxes include series in
-            the chart (Savings group and each account). Leftover is always on; other series take year →
-            IC → %; remainder goes to leftover.
-          </InfoTip>
-        </div>
+</div>
         <div className="flex flex-wrap gap-1.5">
           <button type="button" className="btn-ghost !py-1 !text-xs" onClick={() => onAdd('portfolio')}>
             + Portfolio

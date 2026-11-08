@@ -25,7 +25,7 @@ export type GuideReference = {
 export type FeatureGuide = {
   id: FeatureGuideId
   title: string
-  /** Short blurb; may later mirror/replace InfoTip bodies. */
+  /** Short blurb for the guide index and article header. */
   summary: string
   /** Markdown: how it works, how to interpret, one toy numeric example. */
   body: string
@@ -652,8 +652,8 @@ Save **AAPL · Base case** in **Analyze**, then **Comparables → + New**, add t
 
 ### Assumptions
 
-- **Easy** — year-by-year **projected market cap** (share price derived from shares outstanding)
-- **Advanced** — **P/S**, **P/FCF**, and **P/E** rows with revenue, FCF, or profit inputs
+- **Easy** — year-by-year **projected market cap** or share price; the other is derived from shares outstanding. CAGR uses market cap vs today.
+- **Advanced** — per year: fundamentals × multiples for implied mcap. **Dilution** is that year’s extra shares (**1.05** = +5%) and compounds with earlier years; **1.0** = none. Leave unused bases blank.
 
 Toggle basis tabs (**Easy**, **P/S**, etc.) to drive the hero ROI, **Market cap** chart, and **Projection table**.
 
@@ -979,6 +979,11 @@ Opening **display currency 10k**, **2026** fixed deposit **5k**, perpetual **+2k
 - **+ Option**, manual / absolute marks — valued without a projection link
 - **Sort** — as added, A–Z, or by value (display order only)
 
+### Options vs manual marks
+
+- **Listed options** — **Now** = contracts × live premium × 100. Negative contracts = short. Quotes refresh with stocks; after expiry the last mark is kept.
+- **Manual positions** — unit mark × quantity, or absolute $ by year. Negative qty/mark/totals allowed (shorts, liabilities). Not linked to stock projections.
+
 > **Ticker** fields check live quotes. Wrong symbols show a warning and **No quote** on the row; use the provider’s format (e.g. **BRK-B**, **NESN.SW**). Manual marks skip quote checks.
 
 Expand a row to set shares, projection basis (**Easy mcap**, **P/S**, etc.), and **Actions** by calendar year (buy/sell quantities).
@@ -1161,20 +1166,20 @@ Link **financial-model.json** in synced folder, leave **Edits + periodic** on, e
     id: 'settings.feedback',
     title: 'Send feedback',
     summary:
-      'Anonymous bug reports and ideas from the header. Only type, your words, and automatic app context — no name, email, or tracking IDs.',
+      'Anonymous bugs, ideas, and questions from the header. Only type, your words, and automatic app context — no name, email, or account data.',
     body: `## How it works
 
 Open **Feedback** in the page header.
 
 ### What you send
 
-- **Type** — **Bug** or **Idea**
+- **Type** — **Bug**, **Idea**, or **Question**
 - **Description** — your words in the text box
-- **Automatic context** — app version, build id, current page, browser/OS (read-only; not edited)
+- **Automatic context** — app version, build id, current page, browser type (read-only; not edited)
 
-### What is never collected
+### What we do not collect or send
 
-> No name, no email, and nothing from your own mail account. Submissions go through a form relay (Web3Forms), not a mailto link.
+> No **name**, **email**, or **account data** from the app. We do **not** collect your IP address in the submission. Only the fields above go in the message relay (Web3Forms), not a mailto link.
 
 ### Spam checks
 
@@ -1187,7 +1192,7 @@ Submissions are handled by the maintainers; not every note becomes a backlog ite
 
 ## Example
 
-On **Portfolio**, open **Feedback**, choose **Bug**, describe a chart label clipped on mobile, and send — the note includes **Portfolio** and your browser/OS automatically.
+On **Portfolio**, open **Feedback**, choose **Question**, ask how **Contribution effectiveness** picks its start year, and send — the note includes **Portfolio** and your browser type automatically.
 `,
     status: 'ready',
     location: { tab: 'settings', anchor: 'settings.feedback' },
