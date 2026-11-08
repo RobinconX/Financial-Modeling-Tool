@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SavedPortfolio, SavedScenario } from '../types'
+import { gatherAutoRefreshSymbols } from '../lib/quoteSymbol'
 import { fetchQuotesClient } from '../lib/quote'
 import { marketCapFromSharePrice } from '../lib/sharePrice'
 import { optionIsExpired } from '../lib/optionContract'
@@ -39,27 +40,10 @@ export function useAutoQuoteRefresh(
     if (refreshingRef.current) return
     refreshingRef.current = true
 
-    const isEquityTicker = (sym: string) => /^[A-Z]{1,5}$/.test(sym)
-
-    const symbols = new Set<string>()
-    for (const s of scenariosRef.current) {
-      const sym = (s.symbol || '').toUpperCase()
-      if (sym && isEquityTicker(sym)) symbols.add(sym)
-    }
-    for (const p of portfoliosRef.current) {
-      for (const h of p.holdings ?? []) {
-        const occ = h.option?.occSymbol?.toUpperCase()
-        if (occ && h.option && !optionIsExpired(h.option.expiration)) {
-          symbols.add(occ)
-          continue
-        }
-        if (h.manualOnly) continue
-        const sym = (h.symbol || '').toUpperCase()
-        if (sym && isEquityTicker(sym)) symbols.add(sym)
-      }
-    }
-
-    const list = [...symbols]
+    const list = gatherAutoRefreshSymbols(
+      scenariosRef.current,
+      portfoliosRef.current,
+    )
     setQuoteCount(list.length)
     if (list.length === 0) {
       refreshingRef.current = false

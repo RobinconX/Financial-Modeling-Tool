@@ -209,13 +209,13 @@ export default function App() {
     reorderPortfolios,
   } = useSavedPortfolios()
 
-  const quotesEnabled = tab === 'projections' || tab === 'portfolio' || tab === 'overview'
+  // Refresh saved scenario/portfolio quotes on every tab (data is global in localStorage).
   const { quotesLoading, quoteCount } = useAutoQuoteRefresh(
     scenarios,
     portfolios,
     updateScenario,
     updatePortfolio,
-    quotesEnabled,
+    true,
   )
 
   const {
