@@ -21,7 +21,8 @@ import { FeatureGuideRail } from './components/guides/FeatureGuideRail'
 import { GuidesHeaderButton } from './components/guides/GuidesHeaderButton'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
 import { getAccountHint } from './lib/accountCatalog'
-import { writeHistoryFocus, type HistoryFocusRequest } from './lib/historyFocus'
+import { writeActualsFocus } from './lib/actualsFocus'
+import type { ActualsRepairTarget } from './lib/history'
 import type { AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
@@ -334,9 +335,13 @@ export default function App() {
   const meta = TAB_META[tab]
   const accountHint = getAccountHint()
 
-  const openHistory = (focus: HistoryFocusRequest) => {
-    writeHistoryFocus(focus)
-    setTab('history')
+  const openActualsRepair = (repair: ActualsRepairTarget) => {
+    writeActualsFocus({
+      tab: repair.tab,
+      savingsAccountId: repair.savingsAccountId,
+      periodKey: repair.periodKey,
+    })
+    setTab(repair.tab)
   }
 
   return (
@@ -474,7 +479,7 @@ export default function App() {
                 incomeCostLines={incomeCostLines}
                 incomeCostScenarios={incomeCostScenarios}
                 portfolioActuals={portfolioActuals.actuals}
-                onOpenHistory={openHistory}
+                onRepairActuals={openActualsRepair}
               />
             )}
 

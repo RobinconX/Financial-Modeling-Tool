@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { DisplayCurrency, PortfolioActualsState } from '../../types'
 import {
   getActualsCurrency,
@@ -10,6 +10,7 @@ import { hasActualMonths, setActualMonth } from '../../lib/portfolioActuals'
 import { amountToDisplay } from '../../lib/fx'
 import { formatMoney, parseMoney } from '../../lib/format'
 import { handleSheetNavKey, parseClipboardGrid } from '../../lib/sheetGrid'
+import { parsePeriodKey } from '../../lib/savings'
 import { InfoTip } from '../common/InfoTip'
 
 const MONTHS = [
@@ -33,6 +34,7 @@ type Props = {
   displayCurrency: DisplayCurrency
   usdToChf: number | null
   error?: string | null
+  highlightPeriodKey?: string | null
 }
 
 function roundInput(n: number): number {
@@ -46,6 +48,7 @@ export function PortfolioActualsEditor({
   displayCurrency,
   usdToChf,
   error,
+  highlightPeriodKey = null,
 }: Props) {
   const currentYear = new Date().getFullYear()
   const currentMonth = new Date().getMonth() + 1
@@ -60,6 +63,19 @@ export function PortfolioActualsEditor({
   }, [currentYear, yearsWithData])
 
   const [year, setYear] = useState(currentYear)
+
+  useEffect(() => {
+    if (!highlightPeriodKey) return
+    const parsed = parsePeriodKey(highlightPeriodKey)
+    if (!parsed) return
+    setYear(parsed.year)
+    const scrollTimer = window.setTimeout(() => {
+      document
+        .querySelector(`[data-portfolio-actual="${highlightPeriodKey}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 80)
+    return () => window.clearTimeout(scrollTimer)
+  }, [highlightPeriodKey])
 
   const entryCurrency: DisplayCurrency = hasActualMonths(actuals)
     ? storeCurrency
@@ -162,6 +178,7 @@ export function PortfolioActualsEditor({
               const month = i + 1
               const key = makeActualKey(year, month)
               const stored = map[key]
+              const highlighted = highlightPeriodKey === key
               const isFuture =
                 year > currentYear || (year === currentYear && month > currentMonth)
               const display =
@@ -174,9 +191,12 @@ export function PortfolioActualsEditor({
               return (
                 <tr
                   key={key}
+                  data-portfolio-actual={key}
                   className={`border-t border-white/5 ${
                     isFuture ? 'opacity-50' : ''
-                  } ${month === currentMonth && year === currentYear ? 'bg-emerald-500/[0.06]' : ''}`}
+                  } ${month === currentMonth && year === currentYear ? 'bg-emerald-500/[0.06]' : ''} ${
+                    highlighted ? 'bg-amber-500/10 ring-1 ring-amber-400/50' : ''
+                  }`}
                 >
                   <td className="px-3 py-1.5 font-medium text-white/80">
                     {label}

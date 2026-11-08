@@ -428,11 +428,31 @@ export function historyAttentionPeriodKey(
   return null
 }
 
+export type ActualsRepairTarget = {
+  tab: 'portfolio' | 'savings'
+  savingsAccountId?: string
+  periodKey: string
+}
+
 export type HistoryAttentionItem = {
   seriesId: string
   name: string
   hint: string
   periodKey: string
+  repair: ActualsRepairTarget
+}
+
+export function repairTargetForHistorySeries(
+  series: HistorySeries,
+  periodKey: string,
+): ActualsRepairTarget | null {
+  if (series.kind === 'portfolio') {
+    return { tab: 'portfolio', periodKey }
+  }
+  if (series.kind === 'savings') {
+    return { tab: 'savings', savingsAccountId: series.sourceId, periodKey }
+  }
+  return null
 }
 
 /** History series linked to enabled Overview portfolio / savings layers. */
@@ -490,7 +510,9 @@ export function listHistoryAttention(
     if (!hint) continue
     const periodKey = historyAttentionPeriodKey(s, asOf, fromYear, toYear)
     if (!periodKey) continue
-    out.push({ seriesId: s.id, name: s.name, hint, periodKey })
+    const repair = repairTargetForHistorySeries(s, periodKey)
+    if (!repair) continue
+    out.push({ seriesId: s.id, name: s.name, hint, periodKey, repair })
   }
   out.sort((a, b) => a.name.localeCompare(b.name))
   return out
