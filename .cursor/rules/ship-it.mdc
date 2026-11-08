@@ -11,8 +11,10 @@ When the user says **ship it** (or clearly means the same), after implementation
 
 1. **Collect changes** — review `git status`; stage and commit anything uncommitted with a message that matches the work (user is explicitly requesting ship, so committing is allowed).
 2. **Push `DEV`** — `git push origin DEV`
-3. **Merge into production branch** — checkout `v1-prod`, merge `DEV` into it, push `v1-prod`
-4. **Return to dev** — checkout `DEV` so further work continues on the dev branch
+3. **Merge into production branch** — checkout `v1-prod`, merge `DEV` into it
+4. **Finalize release log on `v1-prod`** — edit `src/data/release-log.json`: ensure the **top** entry has user-facing `headline` / `notes`, today's `releasedAt`, `prodSha` = `git rev-parse HEAD`, and no `pending`. Commit on `v1-prod` if the merge did not already include this. The Pages workflow fails if the newest entry's `prodSha` does not match the deploy commit.
+5. **Push `v1-prod`** — triggers the Pages build
+6. **Return to dev** — checkout `DEV` (cherry-pick or merge the release-log finalize commit back to `DEV` if needed)
 
 Use `origin` remote (`github.com/robinconx/financial-modeling-tool`). If push fails, report auth/setup; do not skip merge steps without telling the user.
 

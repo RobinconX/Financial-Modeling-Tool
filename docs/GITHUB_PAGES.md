@@ -80,6 +80,20 @@ The built app will call `${VITE_API_BASE}/api/quote?...` instead of same-origin 
 
 No API keys are required (Yahoo chart + Nasdaq public endpoints + Frankfurter).
 
+### 3c. In-app feedback (Web3Forms)
+
+Users can send anonymous bug reports and ideas from **Feedback** in the header. No backend on Pages — submissions use [Web3Forms](https://web3forms.com) to **`bobin@mail.grokbot.com`**.
+
+**GitHub Pages builds** already set `VITE_FEEDBACK_FORM_ACCESS_KEY` in `.github/workflows/deploy-pages.yml` (Web3Forms access keys are public in the client bundle). To rotate the key, add a repository **Actions variable** named `VITE_FEEDBACK_FORM_ACCESS_KEY` — it overrides the workflow default.
+
+**Local dev:** Feedback is off until you pass the key, e.g. in `.env.local`:
+
+```bash
+VITE_FEEDBACK_FORM_ACCESS_KEY=your-web3forms-access-key
+```
+
+**Free tier (Web3Forms):** about **250 submissions/month** per account. The form uses Web3Forms’ shared **hCaptcha** key plus a honeypot; enable hCaptcha in the Web3Forms form dashboard when prompted.
+
 ---
 
 ## 4. Deploy

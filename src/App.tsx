@@ -19,6 +19,9 @@ import { QuoteHealthProvider } from './context/QuoteHealthContext'
 import { FeatureGuideProvider } from './components/guides/FeatureGuideProvider'
 import { FeatureGuideRail } from './components/guides/FeatureGuideRail'
 import { GuidesHeaderButton } from './components/guides/GuidesHeaderButton'
+import { FeedbackHeaderButton } from './components/feedback/FeedbackHeaderButton'
+import { FeedbackDialog } from './components/feedback/FeedbackDialog'
+import { ReleaseLogDialog } from './components/release-log/ReleaseLogDialog'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
 import { getAccountHint } from './lib/accountCatalog'
 import { writeActualsFocus } from './lib/actualsFocus'
@@ -176,6 +179,8 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
 export default function App() {
   const [tab, setTab] = useState<AppTab>(readAppTab)
   const [navCollapsed, setNavCollapsed] = useState(readNavCollapsed)
+  const [feedbackOpen, setFeedbackOpen] = useState(false)
+  const [releaseLogOpen, setReleaseLogOpen] = useState(false)
 
   useEffect(() => {
     try {
@@ -402,6 +407,19 @@ export default function App() {
           ))}
         </nav>
 
+        <div className={`mt-auto pt-2 ${navCollapsed ? 'flex justify-center' : 'px-1'}`}>
+          <button
+            type="button"
+            title="Release log"
+            className={`text-[10px] text-white/30 transition hover:text-white/55 ${
+              navCollapsed ? 'px-1 py-1' : 'px-2 py-1'
+            }`}
+            onClick={() => setReleaseLogOpen(true)}
+          >
+            {navCollapsed ? 'Log' : 'Release log'}
+          </button>
+        </div>
+
         <button
           type="button"
           onClick={() => setNavCollapsed((c) => !c)}
@@ -426,6 +444,7 @@ export default function App() {
               <p className="mt-0.5 text-sm text-white/45">{meta.subtitle}</p>
             </div>
             <div className="flex shrink-0 items-center gap-2 pt-1">
+              <FeedbackHeaderButton onClick={() => setFeedbackOpen(true)} />
               <GuidesHeaderButton />
               <LinkedFileSaveHint />
             </div>
@@ -521,6 +540,8 @@ export default function App() {
         </div>
         <FeatureGuideRail />
       </div>
+      {feedbackOpen ? <FeedbackDialog tab={tab} onClose={() => setFeedbackOpen(false)} /> : null}
+      {releaseLogOpen ? <ReleaseLogDialog onClose={() => setReleaseLogOpen(false)} /> : null}
     </div>
     </QuoteHealthProvider>
     </FeatureGuideProvider>

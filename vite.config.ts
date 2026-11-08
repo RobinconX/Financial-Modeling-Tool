@@ -1,5 +1,6 @@
 /// <reference types="vitest/config" />
 import { defineConfig, type Connect, type Plugin } from 'vite'
+import packageJson from './package.json'
 import react from '@vitejs/plugin-react'
 import tailwindcss from '@tailwindcss/vite'
 import { fetchQuote, fetchQuotes } from './server/quote'
@@ -135,6 +136,9 @@ const base =
 export default defineConfig({
   base,
   plugins: [react(), tailwindcss(), apiPlugin()],
+  define: {
+    'import.meta.env.VITE_APP_PACKAGE_VERSION': JSON.stringify(packageJson.version),
+  },
   test: {
     environment: 'node',
     include: ['tests/**/*.test.ts'],

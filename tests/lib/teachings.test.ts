@@ -276,7 +276,7 @@ describe('teachings registry', () => {
     ])
   })
 
-  it('exposes a ready Data & backup page guide with no children', () => {
+  it('exposes ready Data & backup, feedback, and release log guides', () => {
     const g = getGuide('settings')
     expect(g?.status).toBe('ready')
     expect(g?.title).toBe('Data & backup')
@@ -289,9 +289,17 @@ describe('teachings registry', () => {
     expect(getGuide('settings.browser')).toBeUndefined()
     expect(getGuide('settings.linkedFile')).toBeUndefined()
     expect(getGuide('settings.export')).toBeUndefined()
-    expect(listChildGuides('settings')).toEqual([])
+    expect(listChildGuides('settings').map((c) => c.id)).toEqual(['settings.feedback'])
+    const feedback = getGuide('settings.feedback')
+    expect(feedback?.status).toBe('ready')
+    expect(feedback?.location).toEqual({ tab: 'settings', anchor: 'settings.feedback' })
+    const releaseLog = getGuide('system.releaseLog')
+    expect(releaseLog?.status).toBe('ready')
+    expect(releaseLog?.location).toEqual({ tab: 'settings', anchor: 'release-log' })
     const settingsTab = listGuideTree().find((t) => t.tab === 'settings')!
-    expect(settingsTab.roots.map((r) => r.guide.id)).toEqual(['settings'])
+    expect(settingsTab.roots.map((r) => r.guide.id)).toEqual(['settings', 'system.releaseLog'])
+    const settingsRoot = settingsTab.roots.find((r) => r.guide.id === 'settings')!
+    expect(settingsRoot.children.map((c) => c.guide.id)).toEqual(['settings.feedback'])
   })
 
   it('treats unknown ids as not ready', () => {
