@@ -13,6 +13,11 @@ import { useGoals } from '../../hooks/useGoals'
 import { useOverview } from '../../hooks/useOverview'
 import { fetchFxRateClient } from '../../lib/fx'
 import {
+  collectHistorySeries,
+  listHistoryAttention,
+} from '../../lib/history'
+import type { HistoryFocusRequest } from '../../lib/historyFocus'
+import {
   assignOverviewSeriesColors,
   buildOverviewChartRows,
   OVERVIEW_CURRENCY,
@@ -46,6 +51,7 @@ type Props = {
   incomeCostLines: CashflowLine[]
   incomeCostScenarios?: CashflowScenario[]
   portfolioActuals?: PortfolioActualsState | null
+  onOpenHistory?: (focus: HistoryFocusRequest) => void
 }
 
 type ChartMode = 'bars' | 'area' | 'compare'
@@ -75,6 +81,7 @@ export function OverviewView({
   incomeCostLines,
   incomeCostScenarios = [],
   portfolioActuals = null,
+  onOpenHistory,
 }: Props) {
   const {
     scenarios,
@@ -250,6 +257,44 @@ export function OverviewView({
   }, [chartMode, compareScenarios, series, deps])
   const hasRecorded = recordedByYear.size > 0
   const overlayGoals = showGoals ? goals : []
+
+  const historyAttention = useMemo(() => {
+    if (!hasRecorded || !showRecorded) return []
+    const overviewSeries =
+      chartMode === 'compare'
+        ? compareScenarios.flatMap((s) => s.series)
+        : series
+    const histSeries = collectHistorySeries(
+      portfolios,
+      savingsAccounts,
+      usdToChf,
+      portfolioActuals,
+    )
+    const currentYear = asOf.getFullYear()
+    const toYear = Math.max(startYear, Math.min(endYear, currentYear))
+    return listHistoryAttention(
+      histSeries,
+      overviewSeries,
+      savingsAccounts,
+      portfolioActuals,
+      asOf,
+      startYear,
+      toYear,
+    )
+  }, [
+    hasRecorded,
+    showRecorded,
+    chartMode,
+    compareScenarios,
+    series,
+    portfolios,
+    savingsAccounts,
+    usdToChf,
+    portfolioActuals,
+    asOf,
+    startYear,
+    endYear,
+  ])
   const runwayConfig = selectedScenario?.runway ?? defaultRunwayConfig()
   const runwaySeries = useMemo(() => runwayAssetSeries(series), [series])
   const runwayModel = useMemo(
@@ -805,6 +850,7 @@ export function OverviewView({
           </div>
           <div className="flex shrink-0 flex-col gap-1.5 text-[11px]">
             {hasRecorded ? (
+              <div className="space-y-1">
               <label className="grid cursor-pointer grid-cols-[1rem_auto] items-center gap-1.5 text-white/55 hover:text-white/80">
                 <input
                   type="checkbox"
@@ -814,6 +860,34 @@ export function OverviewView({
                 />
                 <span>Show recorded actuals</span>
               </label>
+              {showRecorded && historyAttention.length > 0 && onOpenHistory ? (
+                <ul className="ml-5 max-w-[13rem] space-y-0.5 border-l border-amber-500/20 pl-2">
+                  {historyAttention.slice(0, 4).map((item) => (
+                    <li key={item.seriesId}>
+                      <button
+                        type="button"
+                        className="text-left text-[10px] leading-snug text-amber-300/70 transition hover:text-amber-200/90"
+                        title={`Open History · ${item.periodKey}`}
+                        onClick={() =>
+                          onOpenHistory({
+                            seriesId: item.seriesId,
+                            periodKey: item.periodKey,
+                          })
+                        }
+                      >
+                        <span className="text-white/45">{item.name}</span>
+                        <span className="text-amber-300/60"> · {item.hint}</span>
+                      </button>
+                    </li>
+                  ))}
+                  {historyAttention.length > 4 ? (
+                    <li className="text-[10px] text-white/35">
+                      +{historyAttention.length - 4} more in History
+                    </li>
+                  ) : null}
+                </ul>
+              ) : null}
+              </div>
             ) : null}
             {goals.length > 0 ? (
               <label className="grid cursor-pointer grid-cols-[1rem_auto] items-center gap-1.5 text-white/55 hover:text-white/80">

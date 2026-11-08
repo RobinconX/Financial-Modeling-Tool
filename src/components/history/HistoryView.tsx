@@ -6,11 +6,14 @@ import {
   buildHistoryChart,
   buildHistoryTable,
   collectHistorySeries,
+  formatCompletenessHint,
   historySnapshot,
   seriesCompleteness,
   type HistoryCompleteness,
   type HistoryResolution,
 } from '../../lib/history'
+import { clearHistoryFocus, readHistoryFocus } from '../../lib/historyFocus'
+import { parsePeriodKey } from '../../lib/savings'
 import { useChartAnnotations } from '../../hooks/useChartAnnotations'
 import { useGoals } from '../../hooks/useGoals'
 import { readShowGoals, writeShowGoals } from '../../lib/goals'
@@ -89,6 +92,7 @@ export function HistoryView({
   const [fromYear, setFromYear] = useState<number | null>(null)
   const [toYear, setToYear] = useState<number | null>(null)
   const [sort, setSort] = useState<'latest' | 'yoy'>('latest')
+  const [focusSeriesId, setFocusSeriesId] = useState<string | null>(null)
   const {
     annotations,
     error: notesError,
@@ -117,6 +121,46 @@ export function HistoryView({
     () => collectHistorySeries(portfolios, savingsAccounts, usdToChf, portfolioActuals),
     [portfolios, savingsAccounts, usdToChf, portfolioActuals],
   )
+
+  useEffect(() => {
+    const focus = readHistoryFocus()
+    if (!focus) return
+    clearHistoryFocus()
+    const known = allSeries.some((s) => s.id === focus.seriesId)
+    if (!known) return
+
+    setIncludedOverride((prev) => {
+      const base = prev ?? allSeries.map((s) => s.id)
+      if (base.includes(focus.seriesId)) return prev
+      return [...base, focus.seriesId]
+    })
+
+    if (focus.periodKey) {
+      const parsed =
+        parsePeriodKey(focus.periodKey) ??
+        (/^\d{4}$/.test(focus.periodKey)
+          ? { year: Number(focus.periodKey), month: 12 }
+          : null)
+      if (parsed) {
+        if (focus.periodKey.includes('-')) setResolution('monthly')
+        setFromYear((cur) => (cur == null ? parsed.year : Math.min(cur, parsed.year)))
+        setToYear((cur) => (cur == null ? parsed.year : Math.max(cur, parsed.year)))
+        setFromDraft(String(parsed.year))
+        setToDraft(String(parsed.year))
+      }
+    }
+
+    setFocusSeriesId(focus.seriesId)
+    const scrollTimer = window.setTimeout(() => {
+      const el = document.querySelector(`[data-history-series="${focus.seriesId}"]`)
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 80)
+    const clearTimer = window.setTimeout(() => setFocusSeriesId(null), 3200)
+    return () => {
+      window.clearTimeout(scrollTimer)
+      window.clearTimeout(clearTimer)
+    }
+  }, [allSeries])
 
   const includedIds = useMemo(() => {
     const allIds = allSeries.map((s) => s.id)
@@ -390,6 +434,7 @@ export function HistoryView({
             series={portfoliosGroup}
             included={includedIds}
             completeness={completeness}
+            focusSeriesId={focusSeriesId}
             onToggle={toggleSeries}
           />
         ) : null}
@@ -399,6 +444,7 @@ export function HistoryView({
             series={savingsGroup}
             included={includedIds}
             completeness={completeness}
+            focusSeriesId={focusSeriesId}
             onToggle={toggleSeries}
           />
         ) : null}
@@ -523,25 +569,19 @@ function Seg<T extends string>({
   )
 }
 
-function completenessHint(c: HistoryCompleteness | undefined): string | null {
-  if (!c) return null
-  const bits: string[] = []
-  if (c.stale && c.lastKey) bits.push(`stale · ${c.lastKey}`)
-  if (c.gapCount > 0) bits.push(`${c.gapCount} gap${c.gapCount === 1 ? '' : 's'}`)
-  return bits.length ? bits.join(' · ') : null
-}
-
 function Group({
   label,
   series,
   included,
   completeness,
+  focusSeriesId,
   onToggle,
 }: {
   label: string
   series: { id: string; name: string; color: string; inChf: boolean }[]
   included: Set<string>
   completeness: Map<string, HistoryCompleteness>
+  focusSeriesId: string | null
   onToggle: (id: string) => void
 }) {
   return (
@@ -551,11 +591,15 @@ function Group({
       </div>
       <div className="flex flex-wrap gap-x-3 gap-y-1">
         {series.map((s) => {
-          const hint = completenessHint(completeness.get(s.id))
+          const hint = formatCompletenessHint(completeness.get(s.id))
+          const pulsing = focusSeriesId === s.id
           return (
           <label
             key={s.id}
-            className="flex cursor-pointer items-center gap-1.5 text-xs text-white/80"
+            data-history-series={s.id}
+            className={`flex cursor-pointer items-center gap-1.5 rounded px-1 py-0.5 text-xs text-white/80 transition ${
+              pulsing ? 'ring-1 ring-amber-400/70 bg-amber-500/10' : ''
+            }`}
             title={hint ?? undefined}
           >
             <input

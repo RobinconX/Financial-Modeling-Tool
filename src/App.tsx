@@ -20,6 +20,7 @@ import { FeatureGuideRail } from './components/guides/FeatureGuideRail'
 import { GuidesHeaderButton } from './components/guides/GuidesHeaderButton'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
 import { getAccountHint } from './lib/accountCatalog'
+import { writeHistoryFocus, type HistoryFocusRequest } from './lib/historyFocus'
 import type { AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
@@ -209,13 +210,13 @@ export default function App() {
     reorderPortfolios,
   } = useSavedPortfolios()
 
-  const quotesEnabled = tab === 'projections' || tab === 'portfolio' || tab === 'overview'
+  // Refresh saved scenario/portfolio quotes on every tab (data is global in localStorage).
   const { quotesLoading, quoteCount } = useAutoQuoteRefresh(
     scenarios,
     portfolios,
     updateScenario,
     updatePortfolio,
-    quotesEnabled,
+    true,
   )
 
   const {
@@ -331,6 +332,11 @@ export default function App() {
 
   const meta = TAB_META[tab]
   const accountHint = getAccountHint()
+
+  const openHistory = (focus: HistoryFocusRequest) => {
+    writeHistoryFocus(focus)
+    setTab('history')
+  }
 
   return (
     <FeatureGuideProvider navigateTab={setTab}>
@@ -466,6 +472,7 @@ export default function App() {
                 incomeCostLines={incomeCostLines}
                 incomeCostScenarios={incomeCostScenarios}
                 portfolioActuals={portfolioActuals.actuals}
+                onOpenHistory={openHistory}
               />
             )}
 

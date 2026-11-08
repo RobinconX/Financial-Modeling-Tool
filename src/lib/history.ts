@@ -1,4 +1,9 @@
-import type { PortfolioActualsState, SavedPortfolio, SavingsAccount } from '../types'
+import type {
+  OverviewSeries,
+  PortfolioActualsState,
+  SavedPortfolio,
+  SavingsAccount,
+} from '../types'
 import {
   getActualsCurrency,
   getActualsMap,
@@ -346,4 +351,147 @@ export function seriesCompleteness(
   }
 
   return { lastKey: last.key, monthsBehind, stale, gapCount, yearlyOnly }
+}
+
+/** Human-readable stale / gap hint (matches History Include list). */
+export function formatCompletenessHint(c: HistoryCompleteness | undefined): string | null {
+  if (!c) return null
+  const bits: string[] = []
+  if (c.stale && c.lastKey) bits.push(`stale · ${c.lastKey}`)
+  if (c.gapCount > 0) bits.push(`${c.gapCount} gap${c.gapCount === 1 ? '' : 's'}`)
+  return bits.length ? bits.join(' · ') : null
+}
+
+/** First missing calendar period inside the completeness window (month key or year-end month). */
+export function firstMissingPeriodKey(
+  series: HistorySeries,
+  asOf: Date = new Date(),
+  fromYear?: number,
+  toYear?: number,
+): string | null {
+  const nowKey = currentPeriodKey(asOf)
+  const now = parsePeriodKey(nowKey) ?? { year: asOf.getFullYear(), month: asOf.getMonth() + 1 }
+  const y0 = fromYear ?? 1
+  const y1 = toYear ?? 9999
+  const windowStart = `${y0}-01`
+  const windowEnd = [`${y1}-12`, nowKey].sort()[0]!
+
+  const pts = [...series.points]
+    .filter((p) => p.key >= windowStart && p.key <= windowEnd)
+    .sort((a, b) => a.key.localeCompare(b.key))
+  if (pts.length === 0) return null
+
+  const allPts = [...series.points].sort((a, b) => a.key.localeCompare(b.key))
+  const yearlyOnly = seriesLooksYearly(allPts)
+
+  if (yearlyOnly) {
+    const lastExpectedYear =
+      now.month === 12 ? Math.min(y1, now.year) : Math.min(y1, now.year - 1)
+    const have = new Set(pts.map((p) => p.year))
+    for (let y = y0; y <= lastExpectedYear; y++) {
+      if (!have.has(y)) return `${y}-12`
+    }
+    return null
+  }
+
+  const have = new Set(pts.map((p) => p.key))
+  let k = windowStart
+  while (k < windowEnd) {
+    if (!have.has(k)) return k
+    k = addMonthsToKey(k, 1)
+  }
+  if (!have.has(windowEnd)) return windowEnd
+  return null
+}
+
+/** Period to open when repairing stale data or the first gap in range. */
+export function historyAttentionPeriodKey(
+  series: HistorySeries,
+  asOf: Date = new Date(),
+  fromYear?: number,
+  toYear?: number,
+): string | null {
+  const c = seriesCompleteness(series, asOf, fromYear, toYear)
+  if (!c.stale && c.gapCount === 0) return null
+  const gap = firstMissingPeriodKey(series, asOf, fromYear, toYear)
+  if (gap) return gap
+  if (c.stale) {
+    const nowKey = currentPeriodKey(asOf)
+    if (c.yearlyOnly) {
+      const now = parsePeriodKey(nowKey)!
+      const lastCompletedYear = now.month === 12 ? now.year : now.year - 1
+      const needYear = Math.min(toYear ?? 9999, lastCompletedYear)
+      return `${needYear}-12`
+    }
+    return nowKey
+  }
+  return null
+}
+
+export type HistoryAttentionItem = {
+  seriesId: string
+  name: string
+  hint: string
+  periodKey: string
+}
+
+/** History series linked to enabled Overview portfolio / savings layers. */
+export function historyIdsForOverviewSeries(
+  overviewSeries: OverviewSeries[],
+  savingsAccounts: SavingsAccount[],
+  portfolioActuals?: PortfolioActualsState | null,
+): string[] {
+  const ids: string[] = []
+  const seen = new Set<string>()
+  for (const s of overviewSeries) {
+    if (!s.enabled) continue
+    if (s.type === 'portfolio' && hasActualMonths(portfolioActuals)) {
+      const id = historySeriesId('portfolio', SHARED_PORTFOLIO_SOURCE_ID)
+      if (!seen.has(id)) {
+        seen.add(id)
+        ids.push(id)
+      }
+    }
+    if (s.type === 'savings' && s.savingsAccountId) {
+      const acct = savingsAccounts.find((a) => a.id === s.savingsAccountId)
+      const hasActuals = acct && Object.keys(acct.actuals ?? {}).some((k) => {
+        const v = acct.actuals![k]
+        return v != null && Number.isFinite(v)
+      })
+      if (hasActuals) {
+        const id = historySeriesId('savings', s.savingsAccountId)
+        if (!seen.has(id)) {
+          seen.add(id)
+          ids.push(id)
+        }
+      }
+    }
+  }
+  return ids
+}
+
+export function listHistoryAttention(
+  allSeries: HistorySeries[],
+  overviewSeries: OverviewSeries[],
+  savingsAccounts: SavingsAccount[],
+  portfolioActuals: PortfolioActualsState | null | undefined,
+  asOf: Date,
+  fromYear: number,
+  toYear: number,
+): HistoryAttentionItem[] {
+  const want = new Set(
+    historyIdsForOverviewSeries(overviewSeries, savingsAccounts, portfolioActuals),
+  )
+  const out: HistoryAttentionItem[] = []
+  for (const s of allSeries) {
+    if (!want.has(s.id)) continue
+    const c = seriesCompleteness(s, asOf, fromYear, toYear)
+    const hint = formatCompletenessHint(c)
+    if (!hint) continue
+    const periodKey = historyAttentionPeriodKey(s, asOf, fromYear, toYear)
+    if (!periodKey) continue
+    out.push({ seriesId: s.id, name: s.name, hint, periodKey })
+  }
+  out.sort((a, b) => a.name.localeCompare(b.name))
+  return out
 }
