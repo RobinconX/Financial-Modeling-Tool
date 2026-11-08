@@ -58,7 +58,8 @@ export function validateReleaseLogForProd(
         'Newest release log entry is still pending — set prodSha to this deploy commit and clear pending (see .cursor/rules/ship-it.mdc).',
     }
   }
-  if (!newest.prodSha) {
+  const prodSha = newest.prodSha
+  if (!prodSha) {
     return {
       ok: false,
       message: 'Newest release log entry is missing prodSha — record the v1-prod merge commit before deploy.',
@@ -69,10 +70,10 @@ export function validateReleaseLogForProd(
   for (const a of ancestorShas) {
     if (!deployRefs.includes(a)) deployRefs.push(a)
   }
-  if (!deployRefs.some((ref) => shaMatches(newest.prodSha, ref))) {
+  if (!deployRefs.some((ref) => shaMatches(prodSha, ref))) {
     return {
       ok: false,
-      message: `Newest release log prodSha (${newest.prodSha}) does not match deploy SHA (${sha}) or its recent ancestors.`,
+      message: `Newest release log prodSha (${prodSha}) does not match deploy SHA (${sha}) or its recent ancestors.`,
     }
   }
   return { ok: true }
