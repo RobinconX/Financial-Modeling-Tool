@@ -154,6 +154,9 @@ export function OverviewView({
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
     null,
   )
+  const [pendingSeriesDelete, setPendingSeriesDelete] = useState<{ id: string; name: string } | null>(
+    null,
+  )
 
   useEffect(() => {
     setFromDraft(String(startYear))
@@ -930,7 +933,13 @@ export function OverviewView({
           onUpdate={updateSeries}
           onToggle={(id) => toggleSeries(id, savingsAccounts)}
           onSetSavingsEnabled={setSavingsGroupEnabled}
-          onRemove={(id) => removeSeries(id, savingsAccounts)}
+          onRemove={(id) => {
+            const s = series.find((x) => x.id === id)
+            setPendingSeriesDelete({
+              id,
+              name: s?.name.trim() || (s?.type === 'portfolio' ? 'Portfolio series' : 'Series'),
+            })
+          }}
           onReorderGroups={reorderSeriesGroups}
           onReorderSavings={reorderSavingsSeries}
         />
@@ -939,7 +948,7 @@ export function OverviewView({
 
       {pendingDelete ? (
         <ConfirmDialog
-          title="Delete scenario"
+          title="Delete overview scenario"
           onClose={() => setPendingDelete(null)}
           onConfirm={() => {
             removeScenario(pendingDelete.id)
@@ -948,6 +957,23 @@ export function OverviewView({
         >
           <p>
             <span className="font-semibold text-white">{pendingDelete.name}</span>
+          </p>
+          <p>Deletes this scenario and all its asset series. This cannot be undone.</p>
+        </ConfirmDialog>
+      ) : null}
+
+      {pendingSeriesDelete ? (
+        <ConfirmDialog
+          title="Remove asset series"
+          onClose={() => setPendingSeriesDelete(null)}
+          onConfirm={() => {
+            removeSeries(pendingSeriesDelete.id, savingsAccounts)
+            setPendingSeriesDelete(null)
+          }}
+        >
+          <p>
+            Remove <span className="font-semibold text-white">{pendingSeriesDelete.name}</span> from
+            this overview scenario?
           </p>
           <p>This cannot be undone.</p>
         </ConfirmDialog>

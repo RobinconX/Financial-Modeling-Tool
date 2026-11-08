@@ -43,6 +43,9 @@ import { amountToDisplay, fixedAmountToUsd, fromDisplay, toDisplay } from '../..
 import { HoldingActionsEditor } from './PortfolioActionsEditor'
 import { PortfolioOptionPicker } from './PortfolioOptionPicker'
 import { optionIsExpired, optionLabel } from '../../lib/optionContract'
+import { ConfirmDialog } from '../common/ConfirmDialog'
+import { DeleteUsageBody } from '../common/DeleteUsageBody'
+import { portfolioHoldingDeleteDetail } from '../../lib/deleteUsage'
 
 export type PortfolioEditorPanel = 'cash' | 'positions' | 'growth' | 'all'
 
@@ -110,6 +113,15 @@ export function PortfolioHoldingsEditor({
   const [propagateIncludeActions, setPropagateIncludeActions] = useState(false)
   const [propagateIds, setPropagateIds] = useState<Record<string, boolean>>({})
   const [propagateMsg, setPropagateMsg] = useState<string | null>(null)
+  const [pendingHoldingDelete, setPendingHoldingDelete] = useState<{
+    id: string
+    label: string
+    usage: ReturnType<typeof portfolioHoldingDeleteDetail>
+  } | null>(null)
+  const [pendingDepositDelete, setPendingDepositDelete] = useState<{
+    id: string
+    label: string
+  } | null>(null)
   const resolvedPortfolio = withResolvedDepositAmounts(portfolio, depositCtx)
   let deposits = getDeposits(portfolio)
   // Ensure opening row exists in UI state (persisted via normalize on update)
@@ -263,6 +275,22 @@ export function PortfolioHoldingsEditor({
     })
   }
 
+  function confirmRemoveHolding(id: string) {
+    const h = portfolio.holdings.find((x) => x.id === id)
+    if (!h) return
+    const sc = h.scenarioId ? scenarios.find((s) => s.id === h.scenarioId) : undefined
+    const actionCount = allActions.filter((a) => a.holdingId === id).length
+    setPendingHoldingDelete({
+      id,
+      label: holdingDisplayName(h),
+      usage: portfolioHoldingDeleteDetail(
+        { symbol: h.symbol, scenarioId: h.scenarioId },
+        sc,
+        actionCount,
+      ),
+    })
+  }
+
   function removeHolding(id: string) {
     onChange({
       holdings: portfolio.holdings.filter((h) => h.id !== id),
@@ -397,6 +425,16 @@ export function PortfolioHoldingsEditor({
     updateHolding(holding.id, {
       yearOverrides: [...rest, { year, valueDollars: value }].sort((a, b) => a.year - b.year),
     })
+  }
+
+  function requestRemoveDeposit(id: string) {
+    const target = deposits.find((d) => d.id === id)
+    if (target?.isOpening) return
+    const label =
+      target?.source === 'surplus'
+        ? `Surplus deposit (${target.year})`
+        : `Cash deposit (${target?.year ?? '?'})`
+    setPendingDepositDelete({ id, label })
   }
 
   function removeDeposit(id: string) {
@@ -728,7 +766,7 @@ export function PortfolioHoldingsEditor({
               )
               onChange({ deposits: next, currentCash: 0 })
             }}
-            onRemove={() => removeDeposit(d.id)}
+            onRemove={() => requestRemoveDeposit(d.id)}
           />
         ))}
 
@@ -1065,7 +1103,7 @@ export function PortfolioHoldingsEditor({
                 <button
                   type="button"
                   className="shrink-0 px-1.5 py-1 text-xs text-white/35 hover:text-red-300"
-                  onClick={() => removeHolding(h.id)}
+                  onClick={() => confirmRemoveHolding(h.id)}
                 >
                   Remove
                 </button>
@@ -1423,6 +1461,40 @@ export function PortfolioHoldingsEditor({
       </div>
       </>
       )}
+
+      {pendingHoldingDelete ? (
+        <ConfirmDialog
+          title="Remove holding"
+          onClose={() => setPendingHoldingDelete(null)}
+          onConfirm={() => {
+            removeHolding(pendingHoldingDelete.id)
+            setPendingHoldingDelete(null)
+          }}
+        >
+          <DeleteUsageBody usage={pendingHoldingDelete.usage}>
+            <p>
+              Remove <span className="font-semibold text-white">{pendingHoldingDelete.label}</span>{' '}
+              from this portfolio?
+            </p>
+          </DeleteUsageBody>
+        </ConfirmDialog>
+      ) : null}
+
+      {pendingDepositDelete ? (
+        <ConfirmDialog
+          title="Remove deposit"
+          onClose={() => setPendingDepositDelete(null)}
+          onConfirm={() => {
+            removeDeposit(pendingDepositDelete.id)
+            setPendingDepositDelete(null)
+          }}
+        >
+          <p>
+            Remove <span className="font-semibold text-white">{pendingDepositDelete.label}</span>?
+          </p>
+          <p>This cannot be undone.</p>
+        </ConfirmDialog>
+      ) : null}
     </div>
   )
 }

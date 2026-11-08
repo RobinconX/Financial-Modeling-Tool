@@ -5,7 +5,8 @@ import type {
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
-import { portfoliosUsingScenario } from '../../lib/scenarioUsage'
+import { stockProjectionScenarioUsage } from '../../lib/deleteUsage'
+import { DeleteUsageBody } from '../common/DeleteUsageBody'
 import { groupScenariosByTicker } from '../../lib/storage'
 import {
   buildProjectionPack,
@@ -417,8 +418,8 @@ export function ProjectionsView({
     ? (scenarios.find((s) => s.id === pendingDeleteId) ?? null)
     : null
   const pendingUsage = pendingDelete
-    ? portfoliosUsingScenario(pendingDelete.id, portfolios)
-    : []
+    ? stockProjectionScenarioUsage(pendingDelete.id, portfolios, comparables)
+    : { refs: [] }
 
   return (
     <div className="space-y-5" data-guide-anchor="projections">
@@ -654,31 +655,19 @@ export function ProjectionsView({
           onClose={() => setPendingDeleteId(null)}
           onConfirm={confirmPendingDelete}
         >
-          <p>
-            <span className="font-semibold text-white">{pendingDelete.symbol}</span>
-            <span> · {pendingDelete.name}</span>
-          </p>
-          {pendingUsage.length === 0 ? (
-            <p>This cannot be undone.</p>
-          ) : (
-            <>
-              <p>
-                Used in {pendingUsage.length === 1 ? 'this portfolio' : 'these portfolios'}.
-                Holdings will show a missing scenario until you re-link them.
-              </p>
-              <ul className="list-disc space-y-0.5 pl-4 text-white/80">
-                {pendingUsage.map((u) => (
-                  <li key={u.portfolioId}>
-                    {u.portfolioName}
-                    <span className="text-white/45">
-                      {' '}
-                      · {u.holdingCount} holding{u.holdingCount === 1 ? '' : 's'}
-                    </span>
-                  </li>
-                ))}
-              </ul>
-            </>
-          )}
+          <DeleteUsageBody
+            usage={pendingUsage}
+            consequence={
+              pendingUsage.refs.length > 0
+                ? 'Holdings and comparables rows will show a missing projection until you re-link them.'
+                : undefined
+            }
+          >
+            <p>
+              <span className="font-semibold text-white">{pendingDelete.symbol}</span>
+              <span> · {pendingDelete.name}</span>
+            </p>
+          </DeleteUsageBody>
         </ConfirmDialog>
       ) : null}
     </div>

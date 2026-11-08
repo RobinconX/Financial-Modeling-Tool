@@ -4,10 +4,14 @@ import type {
   CashflowKind,
   CashflowLine,
   CashflowScenario,
+  SavedPortfolio,
   SavingsAccount,
   WorkingBalanceDraw,
 } from '../../types'
 import { scenarioTotals } from '../../lib/incomeCost'
+import { incomeCostScenarioUsage } from '../../lib/deleteUsage'
+import { loadOverview } from '../../lib/overviewStorage'
+import { DeleteUsageBody } from '../common/DeleteUsageBody'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { InfoTip } from '../common/InfoTip'
 import { YearOverview } from './YearOverview'
@@ -64,6 +68,7 @@ type Props = {
   lines: CashflowLine[]
   draws: WorkingBalanceDraw[]
   savingsAccounts: SavingsAccount[]
+  portfolios: SavedPortfolio[]
   storageError: string | null
   upsertLine: (line: CashflowLine) => boolean
   removeLine: (id: string) => boolean
@@ -88,6 +93,7 @@ export function IncomeCostView({
   lines,
   draws,
   savingsAccounts,
+  portfolios,
   storageError,
   upsertLine,
   removeLine,
@@ -118,6 +124,21 @@ export function IncomeCostView({
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
     null,
   )
+  const [pendingLineDelete, setPendingLineDelete] = useState<{ id: string; label: string } | null>(
+    null,
+  )
+  const [pendingDrawDelete, setPendingDrawDelete] = useState<{ id: string; label: string } | null>(
+    null,
+  )
+
+  const pendingBudgetUsage = useMemo(() => {
+    if (!pendingDelete) return { refs: [] }
+    return incomeCostScenarioUsage(
+      pendingDelete.id,
+      portfolios,
+      loadOverview().scenarios,
+    )
+  }, [pendingDelete, portfolios])
   const renameRef = useRef<HTMLInputElement>(null)
 
   useEffect(() => {
@@ -380,7 +401,13 @@ export function IncomeCostView({
               scenarioId={selected.id}
               lines={lines}
               onChange={upsertLine}
-              onRemove={removeLine}
+              onRemove={(id) => {
+                const row = lines.find((l) => l.id === id)
+                setPendingLineDelete({
+                  id,
+                  label: row?.name?.trim() || (row?.kind === 'cost' ? 'Cost line' : 'Income line'),
+                })
+              }}
               onAdd={(cadence) => addLine(selected.id, 'income', cadence)}
             />
             <CashflowTable
@@ -388,7 +415,13 @@ export function IncomeCostView({
               scenarioId={selected.id}
               lines={lines}
               onChange={upsertLine}
-              onRemove={removeLine}
+              onRemove={(id) => {
+                const row = lines.find((l) => l.id === id)
+                setPendingLineDelete({
+                  id,
+                  label: row?.name?.trim() || (row?.kind === 'cost' ? 'Cost line' : 'Income line'),
+                })
+              }}
               onAdd={(cadence) => addLine(selected.id, 'cost', cadence)}
             />
           </div>
@@ -418,7 +451,11 @@ export function IncomeCostView({
               upsertDraw(d)
             }}
             onRemoveDraw={(id) => {
-              removeDraw(id)
+              const draw = draws.find((d) => d.id === id)
+              setPendingDrawDelete({
+                id,
+                label: draw?.name?.trim() || 'Monthly draw',
+              })
             }}
             onAddDraw={() => {
               addDraw(selected.id)
@@ -437,17 +474,59 @@ export function IncomeCostView({
 
       {pendingDelete ? (
         <ConfirmDialog
-          title="Delete scenario"
+          title="Delete budget scenario"
           onClose={() => setPendingDelete(null)}
           onConfirm={() => {
             removeScenario(pendingDelete.id)
             setPendingDelete(null)
           }}
         >
+          <DeleteUsageBody
+            usage={pendingBudgetUsage}
+            idleDetail="Deletes this scenario and all its income and cost lines. This cannot be undone."
+            consequence={
+              pendingBudgetUsage.refs.length > 0
+                ? 'Portfolio surplus links and Overview bindings will point at a missing budget scenario until you re-link them.'
+                : undefined
+            }
+          >
+            <p>
+              <span className="font-semibold text-white">{pendingDelete.name}</span>
+            </p>
+          </DeleteUsageBody>
+        </ConfirmDialog>
+      ) : null}
+
+      {pendingLineDelete ? (
+        <ConfirmDialog
+          title="Remove line"
+          onClose={() => setPendingLineDelete(null)}
+          onConfirm={() => {
+            removeLine(pendingLineDelete.id)
+            setPendingLineDelete(null)
+          }}
+        >
           <p>
-            <span className="font-semibold text-white">{pendingDelete.name}</span>
+            Remove <span className="font-semibold text-white">{pendingLineDelete.label}</span> from
+            this scenario?
           </p>
-          <p>Deletes this scenario and all its positions. This cannot be undone.</p>
+          <p>This cannot be undone.</p>
+        </ConfirmDialog>
+      ) : null}
+
+      {pendingDrawDelete ? (
+        <ConfirmDialog
+          title="Remove draw"
+          onClose={() => setPendingDrawDelete(null)}
+          onConfirm={() => {
+            removeDraw(pendingDrawDelete.id)
+            setPendingDrawDelete(null)
+          }}
+        >
+          <p>
+            Remove <span className="font-semibold text-white">{pendingDrawDelete.label}</span>?
+          </p>
+          <p>This cannot be undone.</p>
         </ConfirmDialog>
       ) : null}
     </div>

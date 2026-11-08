@@ -334,7 +334,7 @@ Everything on this tab belongs to the **selected scenario** (chip strip at top).
 
 ### Scenario strip
 
-Drag chips to reorder; double-click to rename; **Year** applies to this scenario’s calendar year; **+ Scenario** / **Copy…** / delete (when more than one).
+Drag chips to reorder; double-click to rename; **Year** applies to this scenario’s calendar year; **+ Scenario** / **Copy…** / delete (when more than one). Delete warns where the scenario is still linked — e.g. Portfolio **surplus** cash or Overview **year bindings**.
 
 ### Summary
 
@@ -475,7 +475,7 @@ Each row is one savings account. Amounts are **CHF**; the **Now** column is the 
 - **Rate %** — annual rate; compounding runs only on **December → January**
 - **Compound until** / **Contribute until** — optional last calendar year for interest or deposits (blank = no limit)
 
-> **Cash** is permanent — it cannot be removed; Budget **Monthly** uses its year-end actual as opening working cash.
+> **Cash** is permanent — it cannot be removed; Budget **Monthly** uses its year-end actual as opening working cash. Removing another account warns when **Overview** savings series still reference it.
 
 ## How to interpret
 
@@ -616,7 +616,7 @@ Portfolio **USD 100k** in **2024-11**, **Cash CHF 5k** in **2024-12**, rate **0.
 
 Header **Import** / **Export** move projection JSON packs only (pick which saves to include). Import can rename collisions with “ (imported)”.
 
-> Deleting a projection warns when **Portfolio** holdings still link to it — re-link on **Positions** after removal.
+> Delete lists every **Portfolio** holding and **Comparables** row still linked — re-link on **Positions** or edit the set after removal.
 
 ## How to interpret
 

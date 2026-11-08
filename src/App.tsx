@@ -490,6 +490,7 @@ export default function App() {
                 lines={incomeCostLines}
                 draws={incomeCostDraws}
                 savingsAccounts={savingsAccounts}
+                portfolios={portfolios}
                 storageError={incomeCostError}
                 upsertLine={upsertLine}
                 removeLine={removeLine}
