@@ -34,6 +34,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog'
 import { DeleteUsageBody } from '../common/DeleteUsageBody'
 import { portfolioScenarioUsage } from '../../lib/deleteUsage'
 import { loadOverview } from '../../lib/overviewStorage'
+import { clearActualsFocus, readActualsFocus } from '../../lib/actualsFocus'
 import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
@@ -189,6 +190,20 @@ export function PortfolioView({
     }
   })
   const [actualsKind, setActualsKind] = useState<'value' | 'moneyin'>('value')
+  const [actualsHighlightKey, setActualsHighlightKey] = useState<string | null>(null)
+
+  useEffect(() => {
+    const focus = readActualsFocus()
+    if (!focus || focus.tab !== 'portfolio') return
+    clearActualsFocus()
+    setPanel('actuals')
+    setActualsKind('value')
+    if (focus.periodKey) {
+      setActualsHighlightKey(focus.periodKey)
+      const clearTimer = window.setTimeout(() => setActualsHighlightKey(null), 3200)
+      return () => window.clearTimeout(clearTimer)
+    }
+  }, [])
   const [chartMode, setChartMode] = useState<PortfolioChartMode>(readChartMode)
   const [showCashInvested, setShowCashInvested] = useState(readCashInvested)
   const [showRoi, setShowRoi] = useState(readShowRoi)
@@ -1116,6 +1131,7 @@ export function PortfolioView({
                     displayCurrency={activeCurrency}
                     usdToChf={usdToChf}
                     error={actualsError}
+                    highlightPeriodKey={actualsHighlightKey}
                   />
                 ) : (
                   <PortfolioMoneyIn

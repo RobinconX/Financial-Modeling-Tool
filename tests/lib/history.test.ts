@@ -11,6 +11,7 @@ import {
   historyAttentionPeriodKey,
   historyIdsForOverviewSeries,
   listHistoryAttention,
+  repairTargetForHistorySeries,
   seriesCompleteness,
   SHARED_PORTFOLIO_SOURCE_ID,
 } from '../../src/lib/history'
@@ -325,5 +326,30 @@ describe('overview history attention', () => {
     expect(items).toHaveLength(1)
     expect(items[0]!.hint).toContain('gap')
     expect(items[0]!.periodKey).toBe('2026-03')
+    expect(items[0]!.repair).toEqual({
+      tab: 'savings',
+      savingsAccountId: 'c',
+      periodKey: '2026-03',
+    })
+  })
+
+  it('repairTargetForHistorySeries maps portfolio and savings', () => {
+    const hist = collectHistorySeries(
+      [],
+      [savings({ id: 'a', name: 'A', actuals: { '2024-12': 1 } })],
+      null,
+      sharedActuals({ '2024-11': 100 }),
+    )
+    const portfolio = hist.find((s) => s.kind === 'portfolio')!
+    const sav = hist.find((s) => s.kind === 'savings')!
+    expect(repairTargetForHistorySeries(portfolio, '2024-11')).toEqual({
+      tab: 'portfolio',
+      periodKey: '2024-11',
+    })
+    expect(repairTargetForHistorySeries(sav, '2025-06')).toEqual({
+      tab: 'savings',
+      savingsAccountId: 'a',
+      periodKey: '2025-06',
+    })
   })
 })

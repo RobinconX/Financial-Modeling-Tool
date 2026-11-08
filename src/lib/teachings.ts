@@ -153,7 +153,7 @@ Timeline reads **From** and **To** calendar years (stored on the scenario). The 
 
 ### Overlays (Net worth tab only)
 
-- **Show recorded actuals** — amber overlay from History when available; when on, small amber hints list stale months or gaps for enabled portfolio / savings series — click one to open **History** on that series and period
+- **Show recorded actuals** — amber overlay from History when available; when on, small amber hints list stale months or gaps for enabled portfolio / savings series in **Asset series** — click one to open **Portfolio → Actuals** or **Savings → Actuals** for that series and period
 - **Show Goals** — horizontal targets when goals exist
 - **Chart notes** — pin annotations on the timeline
 
@@ -576,7 +576,7 @@ USD portfolio actuals wait for USD→CHF; until then they are excluded from the 
 
 ### Include
 
-Checkboxes under **Portfolios** and **Savings** toggle series on the chart and table. Stale or gap hints (amber) use completeness rules: yearly-style series vs monthly gaps inside the selected range. A link from **Overview → Show recorded actuals** lands here with the matching series highlighted and the chart range narrowed to the target period.
+Checkboxes under **Portfolios** and **Savings** toggle series on the chart and table. Stale or gap hints (amber) use completeness rules: yearly-style series vs monthly gaps inside the selected range. Repair missing data on **Portfolio → Actuals** or **Savings → Actuals**; use History here to audit what is already recorded.
 
 ### Year-end table
 

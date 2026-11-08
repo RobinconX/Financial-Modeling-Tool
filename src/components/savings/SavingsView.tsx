@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type { SavingsAccount } from '../../types'
 import type { SavingsApi } from '../../hooks/useSavings'
 import { savingsAccountUsage } from '../../lib/deleteUsage'
@@ -13,6 +13,11 @@ import { SavingsProjectionTable } from './SavingsProjectionTable'
 import { SavingsTable } from './SavingsTable'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
+import {
+  clearActualsFocus,
+  readActualsFocus,
+  type ActualsFocusRequest,
+} from '../../lib/actualsFocus'
 
 type SubTab = 'inputs' | 'actuals' | 'projection'
 
@@ -41,7 +46,18 @@ export function SavingsView({
 
   const [subTab, setSubTab] = useState<SubTab>('inputs')
   const [pendingDelete, setPendingDelete] = useState<SavingsAccount | null>(null)
+  const [actualsFocus, setActualsFocus] = useState<ActualsFocusRequest | null>(null)
   const asOf = useMemo(() => new Date(), [])
+
+  useEffect(() => {
+    const focus = readActualsFocus()
+    if (!focus || focus.tab !== 'savings') return
+    clearActualsFocus()
+    setSubTab('actuals')
+    setActualsFocus(focus)
+    const clearTimer = window.setTimeout(() => setActualsFocus(null), 3200)
+    return () => window.clearTimeout(clearTimer)
+  }, [])
 
   const pendingSavingsUsage = useMemo(() => {
     if (!pendingDelete) return { refs: [] }
@@ -122,7 +138,12 @@ export function SavingsView({
 
       {subTab === 'actuals' && (
         <div className="panel space-y-3" data-guide-anchor="savings.actuals">
-          <SavingsActualsEditor accounts={accounts} asOf={asOf} onActual={setActual} />
+          <SavingsActualsEditor
+            accounts={accounts}
+            asOf={asOf}
+            onActual={setActual}
+            focusRequest={actualsFocus}
+          />
         </div>
       )}
 

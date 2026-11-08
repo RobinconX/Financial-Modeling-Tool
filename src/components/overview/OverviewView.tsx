@@ -15,8 +15,8 @@ import { fetchFxRateClient } from '../../lib/fx'
 import {
   collectHistorySeries,
   listHistoryAttention,
+  type ActualsRepairTarget,
 } from '../../lib/history'
-import type { HistoryFocusRequest } from '../../lib/historyFocus'
 import {
   assignOverviewSeriesColors,
   buildOverviewChartRows,
@@ -51,7 +51,7 @@ type Props = {
   incomeCostLines: CashflowLine[]
   incomeCostScenarios?: CashflowScenario[]
   portfolioActuals?: PortfolioActualsState | null
-  onOpenHistory?: (focus: HistoryFocusRequest) => void
+  onRepairActuals?: (repair: ActualsRepairTarget) => void
 }
 
 type ChartMode = 'bars' | 'area' | 'compare'
@@ -81,7 +81,7 @@ export function OverviewView({
   incomeCostLines,
   incomeCostScenarios = [],
   portfolioActuals = null,
-  onOpenHistory,
+  onRepairActuals,
 }: Props) {
   const {
     scenarios,
@@ -860,20 +860,15 @@ export function OverviewView({
                 />
                 <span>Show recorded actuals</span>
               </label>
-              {showRecorded && historyAttention.length > 0 && onOpenHistory ? (
+              {showRecorded && historyAttention.length > 0 && onRepairActuals ? (
                 <ul className="ml-5 max-w-[13rem] space-y-0.5 border-l border-amber-500/20 pl-2">
                   {historyAttention.slice(0, 4).map((item) => (
                     <li key={item.seriesId}>
                       <button
                         type="button"
                         className="text-left text-[10px] leading-snug text-amber-300/70 transition hover:text-amber-200/90"
-                        title={`Open History · ${item.periodKey}`}
-                        onClick={() =>
-                          onOpenHistory({
-                            seriesId: item.seriesId,
-                            periodKey: item.periodKey,
-                          })
-                        }
+                        title={`Open Actuals · ${item.periodKey}`}
+                        onClick={() => onRepairActuals(item.repair)}
                       >
                         <span className="text-white/45">{item.name}</span>
                         <span className="text-amber-300/60"> · {item.hint}</span>
@@ -882,7 +877,7 @@ export function OverviewView({
                   ))}
                   {historyAttention.length > 4 ? (
                     <li className="text-[10px] text-white/35">
-                      +{historyAttention.length - 4} more in History
+                      +{historyAttention.length - 4} more
                     </li>
                   ) : null}
                 </ul>

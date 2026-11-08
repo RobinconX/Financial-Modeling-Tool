@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import { formatMoney, parseMoney } from '../../lib/format'
 import { handleSheetNavKey, handleSheetPaste } from '../../lib/sheetGrid'
 import {
@@ -10,6 +10,7 @@ import {
   SAVINGS_CURRENCY,
 } from '../../lib/savings'
 import type { SavingsAccount } from '../../types'
+import type { ActualsFocusRequest } from '../../lib/actualsFocus'
 import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 
@@ -17,7 +18,10 @@ type Props = {
   accounts: SavingsAccount[]
   asOf?: Date
   onActual: (id: string, periodKey: string, amount: number | null) => void
+  focusRequest?: ActualsFocusRequest | null
 }
+
+type HighlightCell = { accountId: string; periodKey: string } | null
 
 const MONTHS = [
   'Jan',
@@ -79,6 +83,7 @@ export function SavingsActualsEditor({
   accounts,
   asOf = new Date(),
   onActual,
+  focusRequest = null,
 }: Props) {
   const nowKey = currentPeriodKey(asOf)
   const currentYear = asOf.getFullYear()
@@ -93,6 +98,41 @@ export function SavingsActualsEditor({
   const [extraMonthlyYears, setExtraMonthlyYears] = useState<number[]>([])
   const [collapsedMonthlyYears, setCollapsedMonthlyYears] = useState<number[]>(() => [])
   const [addMonthlyText, setAddMonthlyText] = useState('')
+  const [highlightCell, setHighlightCell] = useState<HighlightCell>(null)
+
+  useEffect(() => {
+    if (!focusRequest?.periodKey) {
+      setHighlightCell(null)
+      return
+    }
+    const periodKey = focusRequest.periodKey
+    const accountId = focusRequest.savingsAccountId
+    if (!accountId) return
+    if (!accounts.some((a) => a.id === accountId)) return
+    const parsed = parsePeriodKey(periodKey)
+    if (!parsed) return
+
+    const useMonthly = parsed.month < 12
+    if (useMonthly) {
+      setExtraMonthlyYears((prev) =>
+        prev.includes(parsed.year) ? prev : [...prev, parsed.year],
+      )
+      setCollapsedMonthlyYears((prev) => prev.filter((y) => y !== parsed.year))
+    } else {
+      const year = parsed.year
+      if (yearEndKey(year) < nowKey) {
+        setExtraYears((prev) => (prev.includes(year) ? prev : [...prev, year]))
+      }
+    }
+
+    setHighlightCell({ accountId, periodKey })
+    const scrollTimer = window.setTimeout(() => {
+      document
+        .querySelector(`[data-savings-actual="${accountId}:${periodKey}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }, 120)
+    return () => window.clearTimeout(scrollTimer)
+  }, [focusRequest, accounts, nowKey])
 
   const dataMonthlyYears = useMemo(
     () => yearsWithMonthlyDetail(accounts, nowKey),
@@ -289,8 +329,13 @@ export function SavingsActualsEditor({
                   {accounts.map((a, ci) => {
                     const stored = getActual(a, row.key)
                     const ri = rows.indexOf(row)
+                    const highlighted =
+                      highlightCell?.accountId === a.id && highlightCell.periodKey === row.key
                     return (
-                      <td key={a.id} className="px-3 py-1.5">
+                      <td
+                        key={a.id}
+                        className={`px-3 py-1.5 ${highlighted ? 'bg-amber-500/10 ring-1 ring-inset ring-amber-400/50' : ''}`}
+                      >
                         <input
                           className={`input tabular-nums !min-w-[6.5rem] !py-1.5 !text-xs ${
                             isNow ? 'border-emerald-500/30' : ''
@@ -298,6 +343,7 @@ export function SavingsActualsEditor({
                           type="text"
                           inputMode="decimal"
                           placeholder="e.g. 25K"
+                          data-savings-actual={`${a.id}:${row.key}`}
                           data-sheet="sav-year"
                           data-sheet-row={ri}
                           data-sheet-col={ci}
@@ -461,13 +507,19 @@ export function SavingsActualsEditor({
                             const stored = getActual(a, key)
                             const ri = months.indexOf(m)
                             const sheet = `sav-m-${year}`
+                            const highlighted =
+                              highlightCell?.accountId === a.id && highlightCell.periodKey === key
                             return (
-                              <td key={a.id} className="px-3 py-1.5">
+                              <td
+                                key={a.id}
+                                className={`px-3 py-1.5 ${highlighted ? 'bg-amber-500/10 ring-1 ring-inset ring-amber-400/50' : ''}`}
+                              >
                                 <input
                                   className="input tabular-nums !min-w-[6.5rem] !py-1.5 !text-xs"
                                   type="text"
                                   inputMode="decimal"
                                   placeholder="—"
+                                  data-savings-actual={`${a.id}:${key}`}
                                   data-sheet={sheet}
                                   data-sheet-row={ri}
                                   data-sheet-col={ci}
