@@ -22,6 +22,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 2
 
       - name: Setup Node
         uses: actions/setup-node@v4
@@ -36,7 +38,7 @@ jobs:
         if: github.ref == 'refs/heads/v1-prod'
         run: |
           PARENT_SHA="$(git rev-parse HEAD^ 2>/dev/null || true)"
-          RELEASE_LOG_PROD_BUILD=1 GITHUB_SHA=${{ github.sha }} RELEASE_LOG_PARENT_SHA="$PARENT_SHA" npm test -- tests/lib/releaseLog.test.ts
+          RELEASE_LOG_PROD_BUILD=1 GITHUB_SHA=${{ github.sha }} RELEASE_LOG_PARENT_SHA="$PARENT_SHA" npm test -- tests/lib/releaseLog.test.ts -t "passes prod gate"
 
       - name: Build
         run: npm run build
