@@ -1,5 +1,10 @@
 import { useMemo, useState } from 'react'
+import type { SavingsAccount } from '../../types'
 import type { SavingsApi } from '../../hooks/useSavings'
+import { savingsAccountUsage } from '../../lib/deleteUsage'
+import { loadOverview } from '../../lib/overviewStorage'
+import { ConfirmDialog } from '../common/ConfirmDialog'
+import { DeleteUsageBody } from '../common/DeleteUsageBody'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { InfoTip } from '../common/InfoTip'
 import { SavingsActualsEditor } from './SavingsActualsEditor'
@@ -35,7 +40,13 @@ export function SavingsView({
 }: SavingsApi) {
 
   const [subTab, setSubTab] = useState<SubTab>('inputs')
+  const [pendingDelete, setPendingDelete] = useState<SavingsAccount | null>(null)
   const asOf = useMemo(() => new Date(), [])
+
+  const pendingSavingsUsage = useMemo(() => {
+    if (!pendingDelete) return { refs: [] }
+    return savingsAccountUsage(pendingDelete.id, loadOverview().scenarios)
+  }, [pendingDelete])
 
   useGuideTeleport('savings', (view) => {
     if (view === 'inputs' || view === 'actuals' || view === 'projection') setSubTab(view)
@@ -101,7 +112,10 @@ export function SavingsView({
             onContributeUntil={setContributeUntilYear}
             onActual={setActual}
             onAdd={addAccount}
-            onRemove={removeAccount}
+            onRemove={(id) => {
+              const acc = accounts.find((a) => a.id === id)
+              if (acc) setPendingDelete(acc)
+            }}
           />
         </div>
       )}
@@ -144,6 +158,31 @@ export function SavingsView({
           </div>
         </div>
       )}
+      {pendingDelete ? (
+        <ConfirmDialog
+          title="Remove savings account"
+          onClose={() => setPendingDelete(null)}
+          onConfirm={() => {
+            removeAccount(pendingDelete.id)
+            setPendingDelete(null)
+          }}
+        >
+          <DeleteUsageBody
+            usage={pendingSavingsUsage}
+            consequence={
+              pendingSavingsUsage.refs.length > 0
+                ? 'Overview will drop this account from the stack until you add it again.'
+                : undefined
+            }
+          >
+            <p>
+              <span className="font-semibold text-white">
+                {pendingDelete.name.trim() || 'Untitled account'}
+              </span>
+            </p>
+          </DeleteUsageBody>
+        </ConfirmDialog>
+      ) : null}
     </div>
   )
 }

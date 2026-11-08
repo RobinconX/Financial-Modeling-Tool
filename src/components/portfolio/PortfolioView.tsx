@@ -31,6 +31,9 @@ import { PortfolioActualsEditor } from './PortfolioActualsEditor'
 import { PortfolioMoneyIn } from './PortfolioMoneyIn'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { ConfirmDialog } from '../common/ConfirmDialog'
+import { DeleteUsageBody } from '../common/DeleteUsageBody'
+import { portfolioScenarioUsage } from '../../lib/deleteUsage'
+import { loadOverview } from '../../lib/overviewStorage'
 import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
@@ -205,6 +208,10 @@ export function PortfolioView({
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
     null,
   )
+  const pendingPortfolioUsage = useMemo(() => {
+    if (!pendingDelete) return { refs: [] }
+    return portfolioScenarioUsage(pendingDelete.id, loadOverview().scenarios)
+  }, [pendingDelete])
   const [dragOverId, setDragOverId] = useState<string | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
   const manageRef = useRef<HTMLDivElement>(null)
@@ -1160,10 +1167,18 @@ export function PortfolioView({
             setPendingDelete(null)
           }}
         >
-          <p>
-            <span className="font-semibold text-white">{pendingDelete.name}</span>
-          </p>
-          <p>This cannot be undone.</p>
+          <DeleteUsageBody
+            usage={pendingPortfolioUsage}
+            consequence={
+              pendingPortfolioUsage.refs.length > 0
+                ? 'Overview asset series will show a missing portfolio until you re-link or remove them.'
+                : undefined
+            }
+          >
+            <p>
+              <span className="font-semibold text-white">{pendingDelete.name}</span>
+            </p>
+          </DeleteUsageBody>
         </ConfirmDialog>
       ) : null}
     </div>
