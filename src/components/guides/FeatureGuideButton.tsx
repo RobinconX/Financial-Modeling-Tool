@@ -4,10 +4,12 @@ import { useFeatureGuide } from './FeatureGuideProvider'
 type Props = {
   id: FeatureGuideId
   className?: string
+  /** Skip tab switch — use from header modals (Feedback, Release log). */
+  stayOnTab?: boolean
 }
 
 /** Compact guide trigger; renders nothing when the id is missing or draft. */
-export function FeatureGuideButton({ id, className = '' }: Props) {
+export function FeatureGuideButton({ id, className = '', stayOnTab = false }: Props) {
   const { openGuide, open, pane, activeId } = useFeatureGuide()
   if (!isGuideReady(id)) return null
 
@@ -21,7 +23,7 @@ export function FeatureGuideButton({ id, className = '' }: Props) {
       } ${className}`}
       aria-label="Open feature guide"
       aria-expanded={active}
-      onClick={() => openGuide(id)}
+      onClick={() => openGuide(id, stayOnTab ? { stayOnTab: true } : undefined)}
     >
       Guide
     </button>

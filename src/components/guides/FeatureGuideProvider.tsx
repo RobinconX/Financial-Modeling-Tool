@@ -22,7 +22,7 @@ type FeatureGuideContextValue = {
   pendingFocus: GuideLocation | null
   openRegistry: () => void
   /** Opens article for ready or draft; teleports via pendingFocus + navigateTab. */
-  openGuide: (id: FeatureGuideId) => void
+  openGuide: (id: FeatureGuideId, options?: { stayOnTab?: boolean }) => void
   showIndex: () => void
   close: () => void
   clearPendingFocus: () => void
@@ -47,14 +47,16 @@ export function FeatureGuideProvider({ children, navigateTab }: ProviderProps) {
   }, [])
 
   const openGuide = useCallback(
-    (id: FeatureGuideId) => {
+    (id: FeatureGuideId, options?: { stayOnTab?: boolean }) => {
       const guide = getGuide(id)
       if (!guide) return
       setOpen(true)
       setPane('article')
       setActiveId(id)
       setPendingFocus(guide.location)
-      navigateTab(guide.location.tab)
+      if (!options?.stayOnTab) {
+        navigateTab(guide.location.tab)
+      }
     },
     [navigateTab],
   )

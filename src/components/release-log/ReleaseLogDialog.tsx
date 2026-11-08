@@ -42,7 +42,7 @@ export function ReleaseLogDialog({ onClose }: Props) {
               This build · v{build.packageVersion} ({build.gitShaShort})
             </p>
           </div>
-          <FeatureGuideButton id="system.releaseLog" />
+          <FeatureGuideButton id="system.releaseLog" stayOnTab />
         </div>
 
         <ul className="min-h-0 flex-1 space-y-4 overflow-auto px-5 py-4">

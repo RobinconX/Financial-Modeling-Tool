@@ -11,7 +11,6 @@ import { amountToDisplay } from '../../lib/fx'
 import { formatMoney, parseMoney } from '../../lib/format'
 import { handleSheetNavKey, parseClipboardGrid } from '../../lib/sheetGrid'
 import { parsePeriodKey } from '../../lib/savings'
-import { InfoTip } from '../common/InfoTip'
 
 const MONTHS = [
   'Jan',
@@ -131,12 +130,7 @@ export function PortfolioActualsEditor({
       <div className="section-header">
         <div className="flex items-center gap-1.5">
           <h3 className="section-title text-emerald-300/90">Monthly actuals</h3>
-          <InfoTip label="About portfolio actuals">
-            End-of-month totals for the whole investing pile — shared by every portfolio scenario.
-            Stored in {entryCurrency}. Arrow keys move · Enter down · paste a column from Excel.
-            Charts use the last actual of each year for past bars.
-          </InfoTip>
-        </div>
+</div>
       </div>
 
       {error ? <p className="text-sm text-red-300">{error}</p> : null}

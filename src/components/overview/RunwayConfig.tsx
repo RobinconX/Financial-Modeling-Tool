@@ -13,7 +13,6 @@ import {
   resolveRunwayDrawOrder,
   runwayIncomeDrawForYear,
 } from '../../lib/runway'
-import { InfoTip } from '../common/InfoTip'
 import { OVERVIEW_CURRENCY } from '../../lib/overview'
 
 /** Controlled number that types freely and commits on blur / Enter. */
@@ -135,13 +134,7 @@ export function RunwayConfig({
     <div className="space-y-3 text-xs">
       <div className="flex items-center gap-1.5">
         <span className="section-title">Runway periods</span>
-        <InfoTip label="About runway periods">
-          Each row starts in that year and lasts until the next row. Runway leftover is a separate
-          pile: a copy of Overview leftover, then adjusted by this config (Budget surplus added, draws
-          taken from leftover first). Set draw order below. Surplus is not a leftover contribution.
-          “Keep Budget” uses that scenario’s income as in and its costs as the draw.
-        </InfoTip>
-      </div>
+</div>
 
       <div className="space-y-2">
         {periods.map((p, i) => {
@@ -303,14 +296,7 @@ export function RunwayConfig({
       <div className="space-y-2 pt-1">
         <div className="flex items-center gap-1.5">
           <span className="section-title">Draw order</span>
-          <InfoTip label="About draw order">
-            Deficit years spend from the top series first. Drag rows to reorder. Locked until:
-            that series is skipped before the stated year. The Before / After slider is when
-            that pile is tapped: after growth (compound first) or before growth (take from last
-            year’s leftover, then compound the rest). This year’s deposits are not used to cover
-            a before-growth draw. Surplus on leftover is not drawn.
-          </InfoTip>
-        </div>
+</div>
         {drawList.map((s, i) => {
           const over = dragOverId === s.id && dragId !== s.id
           return (

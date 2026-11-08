@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState } from 'react'
 import type {
   ComparableBasis,
   EasyProjection,
@@ -33,7 +33,6 @@ import { ProjectionTable } from '../analyzer/ProjectionTable'
 import { SaveScenarioButton } from '../analyzer/SaveScenarioButton'
 import { MarketCapChart } from '../charts/MarketCapChart'
 import { FullscreenChart } from '../common/FullscreenChart'
-import { InfoTip } from '../common/InfoTip'
 import { MoneyInput } from '../common/MoneyInput'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
@@ -491,12 +490,6 @@ export function ProjectionPanel({
               ? `${easyFilled} target${easyFilled === 1 ? '' : 's'}`
               : 'No targets yet'
           }
-          tip={
-            <InfoTip label="About easy assumptions">
-              Enter target years and projected market cap or share price. The other is calculated
-              from shares outstanding. CAGR uses market cap vs today.
-            </InfoTip>
-          }
         />
         {easyOpen ? (
           <div className="pb-3 pt-1">
@@ -521,13 +514,6 @@ export function ProjectionPanel({
               : `${advancedRows.length} year${advancedRows.length === 1 ? '' : 's'}${
                   advFilled > 0 ? ` · ${advFilled} with metrics` : ''
                 }`
-          }
-          tip={
-            <InfoTip label="About advanced assumptions">
-              Per year: fundamentals × multiples for implied mcap. Dilution is that year’s extra
-              shares (1.05 = +5%) and compounds with earlier years. 1.0 = none. Leave unused
-              bases blank.
-            </InfoTip>
           }
         />
         {advancedOpen ? (
@@ -597,13 +583,11 @@ function AssumptionToggle({
   open,
   onToggle,
   summary,
-  tip,
 }: {
   title: string
   open: boolean
   onToggle: () => void
   summary: string
-  tip: ReactNode
 }) {
   return (
     <div className="flex flex-wrap items-center gap-1.5 py-1">
@@ -626,7 +610,6 @@ function AssumptionToggle({
           <span className="text-[11px] font-normal text-white/35">· {summary}</span>
         ) : null}
       </button>
-      {tip}
     </div>
   )
 }

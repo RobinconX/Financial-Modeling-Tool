@@ -36,7 +36,6 @@ import {
   withResolvedDepositAmounts,
 } from '../../lib/portfolio'
 import { scenarioDisplayName, scenarioTotals } from '../../lib/incomeCost'
-import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
 import { amountToDisplay, fixedAmountToUsd, fromDisplay, toDisplay } from '../../lib/fx'
@@ -706,11 +705,6 @@ export function PortfolioHoldingsEditor({
           <div className="flex items-center gap-1.5">
             <h3 className="section-title text-sky-300/90">Cash & deposits</h3>
             <FeatureGuideButton id="portfolio.cash" />
-            <InfoTip label="About cash and deposits">
-              First row is current cash (opening). Amounts are stored in the currency you enter (no
-              FX drift if you stay in CHF). Deposits can be fixed or % of Income/Cost surplus.
-              Optionally repeat a yearly amount after the last explicit deposit year.
-            </InfoTip>
           </div>
           <div className="flex flex-wrap gap-1">
             {otherPortfolios.length > 0 && onUpdateOtherPortfolio && (
@@ -828,12 +822,7 @@ export function PortfolioHoldingsEditor({
               Perpetual growth after last projection
             </h3>
             <FeatureGuideButton id="portfolio.growth" />
-            <InfoTip label="About perpetual growth">
-              Compounds the full portfolio after the last year with specific inputs (projections,
-              deposits, actions). Leave empty or 0 to turn off. Use the Chart tab period To year to
-              see growth bars.
-            </InfoTip>
-          </div>
+</div>
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative w-28">
               <input
@@ -1157,14 +1146,7 @@ export function PortfolioHoldingsEditor({
                             Expired
                           </span>
                         ) : null}
-                        <InfoTip
-                          label={isOption ? 'About listed options' : 'About manual positions'}
-                        >
-                          {isOption
-                            ? 'Now = contracts × live premium × 100. Negative contracts = short (sold). Quotes refresh with stocks. After expiry the last mark is kept.'
-                            : 'Valued with unit mark × quantity, or absolute $ by year. Negative qty/mark/totals allowed (shorts, liabilities). Not linked to stock projections.'}
-                        </InfoTip>
-                      </div>
+</div>
                       <div className="grid flex-1 gap-3 sm:grid-cols-2 lg:grid-cols-3">
                         <div className="sm:col-span-2 lg:col-span-1">
                           <label className="label">Name / label</label>

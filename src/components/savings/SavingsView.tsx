@@ -6,7 +6,6 @@ import { loadOverview } from '../../lib/overviewStorage'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { DeleteUsageBody } from '../common/DeleteUsageBody'
 import { FullscreenChart } from '../common/FullscreenChart'
-import { InfoTip } from '../common/InfoTip'
 import { SavingsActualsEditor } from './SavingsActualsEditor'
 import { SavingsChart } from './SavingsChart'
 import { SavingsProjectionTable } from './SavingsProjectionTable'
@@ -109,12 +108,7 @@ export function SavingsView({
             <div className="flex items-center gap-1.5">
               <h3 className="section-title text-sky-300/90">Accounts & compounding</h3>
               <FeatureGuideButton id="savings.accounts" />
-              <InfoTip label="About savings inputs">
-                Current end-of-month balances, contribution cadence, and annual rate (CHF).
-                Compounding is always yearly (December → January). Year-end and optional monthly
-                history are on Actuals; Projection stays year-end + forward path.
-              </InfoTip>
-            </div>
+</div>
           </div>
           <SavingsTable
             accounts={accounts}
@@ -153,12 +147,7 @@ export function SavingsView({
             <div className="flex items-center gap-1.5">
               <h3 className="section-title">Balance progression</h3>
               <FeatureGuideButton id="savings.progression" />
-              <InfoTip label="About balance progression">
-                Past columns are year-end (December) only — monthly detail stays on Actuals and
-                History. Now is the current month; later columns are projected. Compounding
-                applies only December → January.
-              </InfoTip>
-            </div>
+</div>
             <SavingsProjectionTable
               accounts={accounts}
               asOf={asOf}

@@ -12,7 +12,7 @@ const TAB_LABELS: Record<AppTab, string> = {
   settings: 'Data & backup',
 }
 
-export type FeedbackType = 'bug' | 'idea'
+export type FeedbackType = 'bug' | 'idea' | 'question'
 
 export type FeedbackContextPayload = {
   packageVersion: string
@@ -45,5 +45,7 @@ export function formatFeedbackContextBlock(ctx: FeedbackContextPayload): string 
 }
 
 export function feedbackEmailSubject(type: FeedbackType): string {
-  return type === 'bug' ? '[FMT] Bug report' : '[FMT] Feature idea'
+  if (type === 'bug') return '[FMT] Bug report'
+  if (type === 'question') return '[FMT] Question'
+  return '[FMT] Feature idea'
 }

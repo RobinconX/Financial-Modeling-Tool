@@ -29,7 +29,6 @@ import {
   statedGoalSpeedContributions,
   withResolvedDepositAmounts,
 } from '../../lib/portfolio'
-import { InfoTip } from '../common/InfoTip'
 import { formatInputNumber } from '../common/MoneyInput'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { GoalSpeedChart } from './GoalSpeedChart'
@@ -319,14 +318,6 @@ export function GoalSpeedPanel({
       <div className="flex items-center gap-1.5">
         <h3 className="section-title">Contribution effectiveness</h3>
         <FeatureGuideButton id="portfolio.goal" />
-        <InfoTip label="About contribution effectiveness">
-          How much sooner extra contributions get you to a wealth goal. Now is
-          today&apos;s live book. A projected year-end uses the same total as the
-          Chart for that year; the clock starts 31 Dec of that year. Stated
-          contributions are Cash-tab deposits after the start year. Custom extras
-          never write back to Cash. Relative effectiveness is exact time saved per
-          unit vs the last contribution year (last year is 1.00×).
-        </InfoTip>
       </div>
 
       <div className="grid gap-3 sm:grid-cols-3">
@@ -378,13 +369,7 @@ export function GoalSpeedPanel({
             <label className="label !mb-0" htmlFor="goal-speed-start-year">
               Start from
             </label>
-            <InfoTip label="About the starting point">
-              Now is today&apos;s live book (holdings + opening cash). Chart year-end
-              is the same total as that year on the Portfolio chart; the clock
-              starts 31 Dec and first growth is the next year. Custom is any amount
-              you type. This tab never changes Cash or Chart.
-            </InfoTip>
-          </div>
+</div>
           <div className="mb-1.5 flex flex-wrap items-end gap-x-2 gap-y-1" role="group" aria-label="Start from">
             <button
               type="button"
@@ -634,12 +619,7 @@ export function GoalSpeedPanel({
                   <th className="relative z-20 py-1.5 font-medium">
                     <span className="inline-flex items-center gap-1">
                       Rel. effect.
-                      <InfoTip label="Relative effectiveness" align="end" side="bottom">
-                        Exact time saved per {displayCurrency} this year, divided
-                        by exact time saved per {displayCurrency} in the last
-                        contribution year. The last year is 1.00×.
-                      </InfoTip>
-                    </span>
+</span>
                   </th>
                 </tr>
               </thead>

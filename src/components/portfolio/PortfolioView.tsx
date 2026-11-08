@@ -35,7 +35,6 @@ import { DeleteUsageBody } from '../common/DeleteUsageBody'
 import { portfolioScenarioUsage } from '../../lib/deleteUsage'
 import { loadOverview } from '../../lib/overviewStorage'
 import { clearActualsFocus, readActualsFocus } from '../../lib/actualsFocus'
-import { InfoTip } from '../common/InfoTip'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
@@ -849,11 +848,7 @@ export function PortfolioView({
                   <div className="flex items-center gap-1.5">
                     <h3 className="section-title">Portfolio value</h3>
                     <FeatureGuideButton id="portfolio.chart" />
-                    <InfoTip label="About portfolio chart">
-                      Timeline: past → Now (live) → future. Past years use Actuals (last month of
-                      year) in portfolio value mode. Extend To for growth projections.
-                    </InfoTip>
-                  </div>
+</div>
                   <div className="flex flex-wrap items-center gap-2">
                     <div
                       className="inline-flex gap-1 border-b border-white/10"
@@ -1064,13 +1059,7 @@ export function PortfolioView({
                 <div className="relative z-20 border-t border-white/[0.06] pt-4">
                   <div className="mb-2 flex items-center gap-1.5">
                     <h3 className="section-title">Value by year</h3>
-                    <InfoTip label="About year values and actions">
-                      Now is the book as it sits today (shares held and opening cash). Planned
-                      buys and sells apply from their year in the year columns — they do not
-                      change Now. Selling a position adds proceeds to Cash; buying spends Cash.
-                      Deposits land in Cash in their year.
-                    </InfoTip>
-                  </div>
+</div>
                   <PortfolioValueTable
                     grid={grid}
                     portfolio={resolvedSelected ?? selected}
