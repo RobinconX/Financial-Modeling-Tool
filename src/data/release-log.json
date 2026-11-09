@@ -1,5 +1,16 @@
 [
   {
+    "releasedAt": "2026-11-09",
+    "prodSha": null,
+    "pending": true,
+    "headline": "App version labels and quote refresh hints",
+    "notes": [
+      "Release log and feedback show a real semver from package.json (with build id), not 0.0.0.",
+      "When background price refresh fails, a dismissible hint explains why and when prices last updated.",
+      "The quote warning clears on the next successful refresh instead of repeating toasts every five minutes."
+    ]
+  },
+  {
     "releasedAt": "2026-11-08",
     "prodSha": "5b3063a58131d056bed2028c33a04a6184fddc8e",
     "headline": "Guides, feedback privacy & Question type",
