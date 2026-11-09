@@ -13,8 +13,9 @@ When the user says **ship it** (or clearly means the same), after implementation
 2. **Push `DEV`** — `git push origin DEV`
 3. **Merge into production branch** — checkout `v1-prod`, merge `DEV` into it
 4. **Finalize release log on `v1-prod`** — edit `src/data/release-log.json`: ensure the **top** entry has user-facing `headline` / `notes`, today's `releasedAt`, `prodSha` = `git rev-parse HEAD`, and no `pending`. Commit on `v1-prod` if the merge did not already include this. The Pages workflow fails if the newest entry's `prodSha` does not match the deploy commit.
-5. **Push `v1-prod`** — triggers the Pages build
-6. **Return to dev** — checkout `DEV` (cherry-pick or merge the release-log finalize commit back to `DEV` if needed)
+5. **App version** — prod builds show `package.json` semver (injected at build). On `DEV`, when you add or refresh the **pending** top release-log entry for the ship, bump patch with `npm version patch --no-git-tag-version` (updates `package-lock.json` too). Only change minor/major deliberately; do not bump again on `v1-prod` unless the merge omitted it.
+6. **Push `v1-prod`** — triggers the Pages build
+7. **Return to dev** — checkout `DEV` (cherry-pick or merge the release-log finalize commit back to `DEV` if needed)
 
 Use `origin` remote (`github.com/robinconx/financial-modeling-tool`). If push fails, report auth/setup; do not skip merge steps without telling the user.
 
