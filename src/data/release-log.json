@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-09",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "eec7a555738b8ae90cdf3d28a7ea11c452cafd76",
     "headline": "App version labels and quote refresh hints",
     "notes": [
       "Release log and feedback show a real semver from package.json (with build id), not 0.0.0.",
