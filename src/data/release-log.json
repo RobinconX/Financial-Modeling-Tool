@@ -1,5 +1,15 @@
 [
   {
+    "releasedAt": "2026-11-09",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Meaningful app version labels",
+    "notes": [
+      "Release log and feedback show a real semver from package.json (with build id), not 0.0.0.",
+      "Each prod ship bumps the patch version on DEV with the pending release-log entry."
+    ]
+  },
+  {
     "releasedAt": "2026-11-08",
     "prodSha": "5b3063a58131d056bed2028c33a04a6184fddc8e",
     "headline": "Guides, feedback privacy & Question type",
