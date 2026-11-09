@@ -1,10 +1,14 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SavedPortfolio, SavedScenario } from '../types'
 import { gatherAutoRefreshSymbols } from '../lib/quoteSymbol'
-import { fetchQuotesClient } from '../lib/quote'
+import { fetchQuoteClient, fetchQuotesClient } from '../lib/quote'
 import { marketCapFromSharePrice } from '../lib/sharePrice'
 import { optionIsExpired } from '../lib/optionContract'
 import { withLinkedMirrorSuppressed } from '../lib/linkedMirrorGate'
+import {
+  quoteRefreshErrorMessage,
+  quoteRefreshLooksFailed,
+} from '../lib/quoteRefreshHint'
 import { symbolsMissingQuotes } from '../lib/quoteValidation'
 
 export const QUOTE_REFRESH_MS = 5 * 60 * 1000
@@ -22,7 +26,15 @@ export function useAutoQuoteRefresh(
   updateScenario: UpdateScenario,
   updatePortfolio: UpdatePortfolio,
   enabled = true,
-): { quotesLoading: boolean; quoteCount: number; missingSymbols: ReadonlySet<string> } {
+): {
+  quotesLoading: boolean
+  quoteCount: number
+  missingSymbols: ReadonlySet<string>
+  quoteRefreshError: string | null
+  quoteLastSuccessAt: number | null
+  quoteRefreshFailureDismissed: boolean
+  dismissQuoteRefreshFailure: () => void
+} {
   const scenariosRef = useRef(scenarios)
   const portfoliosRef = useRef(portfolios)
   const updateRef = useRef(updateScenario)
@@ -38,6 +50,13 @@ export function useAutoQuoteRefresh(
   const [missingSymbols, setMissingSymbols] = useState<ReadonlySet<string>>(
     () => new Set(),
   )
+  const [quoteRefreshError, setQuoteRefreshError] = useState<string | null>(null)
+  const [quoteLastSuccessAt, setQuoteLastSuccessAt] = useState<number | null>(null)
+  const [quoteRefreshFailureDismissed, setQuoteRefreshFailureDismissed] = useState(false)
+
+  const dismissQuoteRefreshFailure = useCallback(() => {
+    setQuoteRefreshFailureDismissed(true)
+  }, [])
 
   const refreshAll = useCallback(async () => {
     if (!enabled) return
@@ -61,9 +80,25 @@ export function useAutoQuoteRefresh(
       let quotes
       try {
         quotes = await fetchQuotesClient(list, { pricesOnly: true })
-      } catch {
+      } catch (err) {
+        setQuoteRefreshError(quoteRefreshErrorMessage(err))
         return
       }
+
+      if (quoteRefreshLooksFailed(list.length, quotes.length)) {
+        try {
+          await fetchQuoteClient(list[0]!)
+        } catch (err) {
+          setQuoteRefreshError(quoteRefreshErrorMessage(err))
+          return
+        }
+        setQuoteRefreshError('Quote refresh failed')
+        return
+      }
+
+      setQuoteRefreshError(null)
+      setQuoteRefreshFailureDismissed(false)
+      setQuoteLastSuccessAt(Date.now())
 
       const quoteBySym = new Map(quotes.map((q) => [q.symbol.toUpperCase(), q]))
 
@@ -158,5 +193,13 @@ export function useAutoQuoteRefresh(
     }
   }, [enabled, refreshAll])
 
-  return { quotesLoading, quoteCount, missingSymbols }
+  return {
+    quotesLoading,
+    quoteCount,
+    missingSymbols,
+    quoteRefreshError,
+    quoteLastSuccessAt,
+    quoteRefreshFailureDismissed,
+    dismissQuoteRefreshFailure,
+  }
 }

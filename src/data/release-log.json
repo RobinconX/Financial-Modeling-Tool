@@ -3,10 +3,11 @@
     "releasedAt": "2026-11-09",
     "prodSha": null,
     "pending": true,
-    "headline": "Meaningful app version labels",
+    "headline": "App version labels and quote refresh hints",
     "notes": [
       "Release log and feedback show a real semver from package.json (with build id), not 0.0.0.",
-      "Each prod ship bumps the patch version on DEV with the pending release-log entry."
+      "When background price refresh fails, a dismissible hint explains why and when prices last updated.",
+      "The quote warning clears on the next successful refresh instead of repeating toasts every five minutes."
     ]
   },
   {
