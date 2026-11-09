@@ -218,7 +218,15 @@ export default function App() {
   } = useSavedPortfolios()
 
   // Refresh saved scenario/portfolio quotes on every tab (data is global in localStorage).
-  const { quotesLoading, quoteCount, missingSymbols } = useAutoQuoteRefresh(
+  const {
+    quotesLoading,
+    quoteCount,
+    missingSymbols,
+    quoteRefreshError,
+    quoteLastSuccessAt,
+    quoteRefreshFailureDismissed,
+    dismissQuoteRefreshFailure,
+  } = useAutoQuoteRefresh(
     scenarios,
     portfolios,
     updateScenario,
@@ -353,7 +361,14 @@ export default function App() {
     <FeatureGuideProvider navigateTab={setTab}>
     <QuoteHealthProvider missingSymbols={missingSymbols}>
     <div className="flex h-screen overflow-hidden">
-      <QuoteLoadingHint loading={quotesLoading} count={quoteCount} />
+      <QuoteLoadingHint
+        loading={quotesLoading}
+        count={quoteCount}
+        failureMessage={quoteRefreshError}
+        lastSuccessAt={quoteLastSuccessAt}
+        failureDismissed={quoteRefreshFailureDismissed}
+        onDismissFailure={dismissQuoteRefreshFailure}
+      />
       {/* App sidebar */}
       <aside
         className={`relative flex h-full min-h-0 shrink-0 flex-col border-r border-white/10 bg-black/40 py-5 transition-[width] duration-200 ${

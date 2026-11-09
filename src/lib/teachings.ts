@@ -981,7 +981,7 @@ Opening **display currency 10k**, **2026** fixed deposit **5k**, perpetual **+2k
 
 ### Options vs manual marks
 
-- **Listed options** — **Now** = contracts × live premium × 100. Negative contracts = short. Quotes refresh with stocks; after expiry the last mark is kept.
+- **Listed options** — **Now** = contracts × live premium × 100. Negative contracts = short. Quotes refresh with stocks every few minutes; if refresh fails, a dismissible hint by the sidebar explains why and when prices last updated. After expiry the last mark is kept.
 - **Manual positions** — unit mark × quantity, or absolute $ by year. Negative qty/mark/totals allowed (shorts, liabilities). Not linked to stock projections.
 
 > **Ticker** fields check live quotes. Wrong symbols show a warning and **No quote** on the row; use the provider’s format (e.g. **BRK-B**, **NESN.SW**). Manual marks skip quote checks.
