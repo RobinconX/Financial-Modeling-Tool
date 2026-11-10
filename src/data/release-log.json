@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-10",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "e5a1d867e2f2ba2d3bfcbbe6aec02fac1ea5e9b4",
     "headline": "Recovery when saved projections, portfolio, or budget won't load",
     "notes": [
       "If browser storage has unreadable projection, portfolio, or budget data, an amber banner explains what happened instead of silently resetting.",
