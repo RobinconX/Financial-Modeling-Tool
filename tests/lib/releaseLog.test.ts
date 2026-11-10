@@ -10,8 +10,8 @@ describe('releaseLog', () => {
   it('lists merged-PR history newest-first', () => {
     const entries = listReleaseLogEntries()
     expect(entries.length).toBe(23)
-    expect(entries[0]?.pending).toBe(true)
-    expect(entries[0]?.prodSha).toBeNull()
+    expect(entries[0]?.pending).toBeUndefined()
+    expect(entries[0]?.prodSha).toBe('e5a1d867e2f2ba2d3bfcbbe6aec02fac1ea5e9b4')
     expect(entries[0]?.headline).toMatch(/Recovery when saved/i)
     expect(entries[1]?.pending).toBeUndefined()
     expect(entries[1]?.prodSha).toBe('1a9bb7ecf1cdc00f4e2a553bb5faf164ad7a34ab')
