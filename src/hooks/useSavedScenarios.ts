@@ -4,13 +4,18 @@ import { mergeImportedScenarios } from '../lib/projectionPack'
 import {
   findBySymbolAndName,
   groupScenariosByTicker,
-  loadScenarios,
+  loadScenariosWithRecovery,
   saveScenarios,
 } from '../lib/storage'
+import type { StorageRecoveryNotice } from '../lib/storageLoadRecovery'
 import { sortEasyProjections, sortYearProjections } from '../lib/valuation'
 
 export function useSavedScenarios() {
-  const [scenarios, setScenarios] = useState<SavedScenario[]>(() => loadScenarios())
+  const [initialLoad] = useState(() => loadScenariosWithRecovery())
+  const [scenarios, setScenarios] = useState<SavedScenario[]>(() => initialLoad.data)
+  const [storageRecovery, setStorageRecovery] = useState<StorageRecoveryNotice | null>(
+    () => initialLoad.recovery,
+  )
   const [error, setError] = useState<string | null>(null)
   const scenariosRef = useRef(scenarios)
   scenariosRef.current = scenarios
@@ -34,7 +39,9 @@ export function useSavedScenarios() {
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key === 'grok-lab.saved-scenarios.v1') {
-        setScenarios(loadScenarios())
+        const loaded = loadScenariosWithRecovery()
+        setScenarios(loaded.data)
+        if (loaded.recovery) setStorageRecovery(loaded.recovery)
       }
     }
     window.addEventListener('storage', onStorage)
@@ -153,11 +160,15 @@ export function useSavedScenarios() {
 
   const grouped = useMemo(() => groupScenariosByTicker(scenarios), [scenarios])
 
+  const dismissStorageRecovery = useCallback(() => setStorageRecovery(null), [])
+
   return {
     scenarios,
     grouped,
     error,
     setError,
+    storageRecovery,
+    dismissStorageRecovery,
     upsertScenario,
     updateScenario,
     deleteScenario,

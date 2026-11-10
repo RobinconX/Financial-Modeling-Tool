@@ -1,7 +1,9 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { withLinkedMirrorSuppressed } from '../../src/lib/linkedMirrorGate'
+import { corruptBackupKey } from '../../src/lib/storageLoadRecovery'
 import {
   loadPortfolios,
+  loadPortfoliosWithRecovery,
   loadSelectedPortfolioId,
   PORTFOLIO_STORAGE_KEY,
   persistSelectedPortfolioId,
@@ -204,6 +206,20 @@ describe('portfolioStorage load normalization — portfolio envelope', () => {
     expect(loadPortfolios()).toEqual([])
   })
 
+  it('archives corrupt portfolio payloads for recovery', () => {
+    const corrupt = '{not json'
+    store.set(PORTFOLIO_STORAGE_KEY, corrupt)
+    const result = loadPortfoliosWithRecovery()
+    expect(result.data).toEqual([])
+    expect(result.recovery).toMatchObject({
+      storageKey: PORTFOLIO_STORAGE_KEY,
+      label: 'Portfolio',
+      reason: 'parse',
+    })
+    expect(store.get(corruptBackupKey(PORTFOLIO_STORAGE_KEY))).toBe(corrupt)
+    expect(store.get(PORTFOLIO_STORAGE_KEY)).toBe(corrupt)
+  })
+
   it('treats non-array holdings as empty', () => {
     seedRawPortfolios([minimalPortfolio({ holdings: { bad: true } })])
     expect(loadPortfolios()[0]?.holdings).toEqual([])
@@ -244,8 +260,10 @@ describe('portfolioStorage save and load', () => {
   it('persistSelectedPortfolioId updates selection without dropping portfolios', () => {
     const a = newPortfolio('A')
     const b = newPortfolio('B')
-    withLinkedMirrorSuppressed(() => savePortfolios([a, b], a.id))
-    expect(persistSelectedPortfolioId(b.id)).toBe(true)
+    withLinkedMirrorSuppressed(() => {
+      savePortfolios([a, b], a.id)
+      expect(persistSelectedPortfolioId(b.id)).toBe(true)
+    })
     expect(loadSelectedPortfolioId()).toBe(b.id)
     expect(loadPortfolios()).toHaveLength(2)
   })

@@ -7,6 +7,10 @@ import type {
   SavedPortfolio,
 } from '../types'
 import { queueAppDataChanged } from './linkedMirrorGate'
+import {
+  buildRecoveryNotice,
+  type StorageLoadResult,
+} from './storageLoadRecovery'
 import { buildOccSymbol } from './optionContract'
 import { stripPortfolioActuals } from './portfolioActuals'
 import { newDeposit, newHolding, normalizePortfolioCashModel } from './portfolio'
@@ -354,20 +358,46 @@ function readPayload(): Record<string, unknown> | null {
   }
 }
 
-export function loadPortfolios(): SavedPortfolio[] {
+export function loadPortfoliosWithRecovery(): StorageLoadResult<SavedPortfolio[]> {
+  let raw: string | null = null
   try {
-    const parsed = readPayload()
-    if (!parsed || !Array.isArray(parsed.portfolios)) {
-      if (parsed) console.warn('[portfolioStorage] Invalid payload; resetting')
-      return []
+    raw = localStorage.getItem(PORTFOLIO_STORAGE_KEY)
+    if (!raw) return { data: [], recovery: null }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      console.warn('[portfolioStorage] Failed to parse', err)
+      return {
+        data: [],
+        recovery: buildRecoveryNotice(PORTFOLIO_STORAGE_KEY, 'Portfolio', 'parse', raw),
+      }
     }
-    return parsed.portfolios
+    if (!isRecord(parsed) || !Array.isArray(parsed.portfolios)) {
+      console.warn('[portfolioStorage] Invalid payload; resetting')
+      return {
+        data: [],
+        recovery: buildRecoveryNotice(PORTFOLIO_STORAGE_KEY, 'Portfolio', 'shape', raw),
+      }
+    }
+    const data = parsed.portfolios
       .map(normalizePortfolio)
       .filter((p): p is SavedPortfolio => p != null)
+    return { data, recovery: null }
   } catch (err) {
     console.warn('[portfolioStorage] Failed to load', err)
-    return []
+    if (raw) {
+      return {
+        data: [],
+        recovery: buildRecoveryNotice(PORTFOLIO_STORAGE_KEY, 'Portfolio', 'parse', raw),
+      }
+    }
+    return { data: [], recovery: null }
   }
+}
+
+export function loadPortfolios(): SavedPortfolio[] {
+  return loadPortfoliosWithRecovery().data
 }
 
 export function loadSelectedPortfolioId(): string | null {

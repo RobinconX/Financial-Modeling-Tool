@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react'
+import { useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ProjectionsView } from './components/projections/ProjectionsView'
 import { PortfolioView } from './components/portfolio/PortfolioView'
 import { useSavedScenarios } from './hooks/useSavedScenarios'
@@ -23,6 +23,7 @@ import { FeedbackHeaderButton } from './components/feedback/FeedbackHeaderButton
 import { FeedbackDialog } from './components/feedback/FeedbackDialog'
 import { ReleaseLogDialog } from './components/release-log/ReleaseLogDialog'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
+import { StorageRecoveryBanner } from './components/common/StorageRecoveryBanner'
 import { getAccountHint } from './lib/accountCatalog'
 import { writeActualsFocus } from './lib/actualsFocus'
 import type { ActualsRepairTarget } from './lib/history'
@@ -201,6 +202,8 @@ export default function App() {
   const {
     scenarios,
     error: storageError,
+    storageRecovery: projectionsStorageRecovery,
+    dismissStorageRecovery: dismissProjectionsStorageRecovery,
     upsertScenario,
     updateScenario,
     deleteScenario,
@@ -210,6 +213,8 @@ export default function App() {
   const {
     portfolios,
     error: portfolioError,
+    storageRecovery: portfolioStorageRecovery,
+    dismissStorageRecovery: dismissPortfolioStorageRecovery,
     createPortfolio,
     updatePortfolio,
     deletePortfolio,
@@ -239,6 +244,8 @@ export default function App() {
     lines: incomeCostLines,
     draws: incomeCostDraws,
     error: incomeCostError,
+    storageRecovery: incomeCostStorageRecovery,
+    dismissStorageRecovery: dismissIncomeCostStorageRecovery,
     upsertLine,
     removeLine,
     addLine,
@@ -265,6 +272,27 @@ export default function App() {
     updateComparable,
     deleteComparable,
   } = useComparables()
+
+  const storageRecoveryNotices = useMemo(() => {
+    const list = [
+      projectionsStorageRecovery,
+      portfolioStorageRecovery,
+      incomeCostStorageRecovery,
+    ].filter((n): n is NonNullable<typeof n> => n != null)
+    return list
+  }, [projectionsStorageRecovery, portfolioStorageRecovery, incomeCostStorageRecovery])
+
+  const dismissStorageRecovery = (storageKey: string) => {
+    if (projectionsStorageRecovery?.storageKey === storageKey) {
+      dismissProjectionsStorageRecovery()
+    }
+    if (portfolioStorageRecovery?.storageKey === storageKey) {
+      dismissPortfolioStorageRecovery()
+    }
+    if (incomeCostStorageRecovery?.storageKey === storageKey) {
+      dismissIncomeCostStorageRecovery()
+    }
+  }
 
   const sections: NavSection[] = [
     {
@@ -466,6 +494,11 @@ export default function App() {
           </header>
 
           <main className="min-h-0 flex-1 overflow-auto px-6 py-6">
+            <StorageRecoveryBanner
+              notices={storageRecoveryNotices}
+              onDismiss={dismissStorageRecovery}
+              onOpenDataSettings={() => setTab('settings')}
+            />
             {tab === 'projections' && (
               <ProjectionsView
                 scenarios={scenarios}

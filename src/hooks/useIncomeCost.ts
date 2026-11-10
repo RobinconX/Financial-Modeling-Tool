@@ -18,15 +18,23 @@ import {
 } from '../lib/incomeCost'
 import {
   INCOME_COST_STORAGE_KEY,
-  loadIncomeCost,
+  loadIncomeCostWithRecovery,
   saveIncomeCost,
 } from '../lib/incomeCostStorage'
+import type { StorageRecoveryNotice } from '../lib/storageLoadRecovery'
 
 export function useIncomeCost() {
-  const initial = loadIncomeCost()
-  const [scenarios, setScenarios] = useState<CashflowScenario[]>(() => initial.scenarios)
-  const [lines, setLines] = useState<CashflowLine[]>(() => initial.lines)
-  const [draws, setDraws] = useState<WorkingBalanceDraw[]>(() => initial.draws ?? [])
+  const [initialLoad] = useState(() => loadIncomeCostWithRecovery())
+  const [scenarios, setScenarios] = useState<CashflowScenario[]>(
+    () => initialLoad.data.scenarios,
+  )
+  const [lines, setLines] = useState<CashflowLine[]>(() => initialLoad.data.lines)
+  const [draws, setDraws] = useState<WorkingBalanceDraw[]>(
+    () => initialLoad.data.draws ?? [],
+  )
+  const [storageRecovery, setStorageRecovery] = useState<StorageRecoveryNotice | null>(
+    () => initialLoad.recovery,
+  )
   const [error, setError] = useState<string | null>(null)
 
   const persist = useCallback(
@@ -57,10 +65,11 @@ export function useIncomeCost() {
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key !== INCOME_COST_STORAGE_KEY) return
-      const s = loadIncomeCost()
-      setScenarios(s.scenarios)
-      setLines(s.lines)
-      setDraws(s.draws ?? [])
+      const s = loadIncomeCostWithRecovery()
+      setScenarios(s.data.scenarios)
+      setLines(s.data.lines)
+      setDraws(s.data.draws ?? [])
+      if (s.recovery) setStorageRecovery(s.recovery)
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -204,11 +213,15 @@ export function useIncomeCost() {
     return persist(empty.scenarios, empty.lines, empty.draws)
   }, [persist])
 
+  const dismissStorageRecovery = useCallback(() => setStorageRecovery(null), [])
+
   return {
     scenarios: orderedScenarios,
     lines,
     draws,
     error,
+    storageRecovery,
+    dismissStorageRecovery,
     upsertLine,
     removeLine,
     addLine,
