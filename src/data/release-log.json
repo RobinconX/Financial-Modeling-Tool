@@ -1,6 +1,16 @@
 [
   {
     "releasedAt": "2026-11-10",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Recovery when saved projections, portfolio, or budget won't load",
+    "notes": [
+      "If browser storage has unreadable projection, portfolio, or budget data, an amber banner explains what happened instead of silently resetting.",
+      "Download a corrupt-backup copy or open Data & backup to import a JSON export before editing that section."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-10",
     "prodSha": "1a9bb7ecf1cdc00f4e2a553bb5faf164ad7a34ab",
     "headline": "Budget Monthly opening cash hint",
     "notes": [
