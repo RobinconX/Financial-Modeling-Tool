@@ -24,8 +24,8 @@ import {
   scenarioTotals,
 } from '../../lib/incomeCost'
 import {
-  getPermanentCashAccount,
-  yearEndBalance,
+  formatOpeningCashHint,
+  openingCashFromSavings,
 } from '../../lib/savings'
 import { formatMoney, parseMoney } from '../../lib/format'
 import { formatInputNumber } from '../common/MoneyInput'
@@ -484,15 +484,15 @@ export function MonthlyBudgetView({
     () => drawsForScenario(draws, scenario.id),
     [draws, scenario.id],
   )
-  const cashAccount = useMemo(
-    () => getPermanentCashAccount(savingsAccounts),
-    [savingsAccounts],
-  )
   const priorYear = scenario.year - 1
-  const openingCash = useMemo(
-    () => (cashAccount ? yearEndBalance(cashAccount, priorYear) : 0),
-    [cashAccount, priorYear],
+  const openingCashMeta = useMemo(
+    () => openingCashFromSavings(savingsAccounts, scenario.year),
+    [savingsAccounts, scenario.year],
   )
+  const openingCash = openingCashMeta.balance
+  const openingCashHint = openingCashMeta.hint
+    ? formatOpeningCashHint(openingCashMeta.hint)
+    : undefined
   const schedule = useMemo(
     () => buildMonthlySchedule(lines, scenario.id, draws, openingCash),
     [lines, scenario.id, draws, openingCash],
@@ -525,6 +525,7 @@ export function MonthlyBudgetView({
             label={`Opening cash (Dec ${priorYear})`}
             value={formatMoney(openingCash, INCOME_COST_CURRENCY)}
             accent="text-sky-300/90"
+            hint={openingCashHint}
           />
           <Meta
             label="Annual income"
@@ -684,10 +685,12 @@ function Meta({
   label,
   value,
   accent,
+  hint,
 }: {
   label: string
   value: string
   accent?: string
+  hint?: string
 }) {
   return (
     <div className="min-w-0">
@@ -695,6 +698,11 @@ function Meta({
       <div className={`truncate text-sm font-semibold tabular-nums ${accent ?? 'text-white/90'}`}>
         {value}
       </div>
+      {hint ? (
+        <p className="mt-0.5 text-[10px] leading-snug text-amber-300/85" role="status">
+          {hint}
+        </p>
+      ) : null}
     </div>
   )
 }

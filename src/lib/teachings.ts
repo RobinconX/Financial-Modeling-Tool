@@ -387,6 +387,7 @@ Pin annual bills, bonuses, and one-offs to the months they actually hit. A flat 
 ### The cash path
 
 - **Opening cash (Dec prior year)** — permanent Cash savings year-end from Savings → Actuals
+- Missing **December** on **Cash** shows an amber hint under the opening figure (0 or latest fallback before year-end)
 - **Inflow / Outflow / Net** — budget lines in that month
 - **Balance** — cumulative working balance from opening + nets (budget only)
 - **Draws** — optional CHF you plan to take from working balance in specific months

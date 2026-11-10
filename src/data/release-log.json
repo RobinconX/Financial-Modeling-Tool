@@ -1,5 +1,15 @@
 [
   {
+    "releasedAt": "2026-11-10",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Budget Monthly opening cash hint",
+    "notes": [
+      "Monthly summary flags when permanent Cash has no December year-end actual for opening cash.",
+      "The displayed opening balance still uses the existing year-end fallback so the path stays usable."
+    ]
+  },
+  {
     "releasedAt": "2026-11-09",
     "prodSha": "eec7a555738b8ae90cdf3d28a7ea11c452cafd76",
     "headline": "App version labels and quote refresh hints",

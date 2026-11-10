@@ -178,6 +178,44 @@ export function yearEndBalance(account: SavingsAccount, year: number): number {
   return Math.max(0, latestActual(account, key))
 }
 
+/** True when end-of-December `year` is not stored on the account. */
+export function isYearEndActualMissing(account: SavingsAccount, year: number): boolean {
+  const y = Math.floor(year)
+  if (!Number.isFinite(y)) return true
+  return getActual(account, makePeriodKey(y, 12)) === undefined
+}
+
+export type OpeningCashHint =
+  | { kind: 'missing-dec'; priorYear: number; balance: number }
+  | { kind: 'no-cash-account'; priorYear: number }
+
+/** Permanent Cash year-end for Budget Monthly opening (Dec prior calendar year). */
+export function openingCashFromSavings(
+  accounts: SavingsAccount[],
+  scenarioYear: number,
+): { balance: number; hint: OpeningCashHint | null } {
+  const priorYear = Math.floor(scenarioYear) - 1
+  const cashAccount = getPermanentCashAccount(accounts)
+  if (!cashAccount) {
+    return { balance: 0, hint: { kind: 'no-cash-account', priorYear } }
+  }
+  const balance = yearEndBalance(cashAccount, priorYear)
+  if (isYearEndActualMissing(cashAccount, priorYear)) {
+    return { balance, hint: { kind: 'missing-dec', priorYear, balance } }
+  }
+  return { balance, hint: null }
+}
+
+export function formatOpeningCashHint(hint: OpeningCashHint): string {
+  if (hint.kind === 'no-cash-account') {
+    return 'Cash account missing in Savings'
+  }
+  if (hint.balance > 0) {
+    return `No Dec ${hint.priorYear} Cash actual — using latest before year-end`
+  }
+  return `No Dec ${hint.priorYear} Cash actual — treated as 0`
+}
+
 export function emptySavingsState(): SavingsState {
   return { version: 1, accounts: ensurePermanentCashAccount([]) }
 }
