@@ -1,10 +1,19 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SavedPortfolio } from '../types'
 import { clonePortfolio, newPortfolio, normalizePortfolioCashModel } from '../lib/portfolio'
-import { loadPortfolios, PORTFOLIO_STORAGE_KEY, savePortfolios } from '../lib/portfolioStorage'
+import {
+  loadPortfoliosWithRecovery,
+  PORTFOLIO_STORAGE_KEY,
+  savePortfolios,
+} from '../lib/portfolioStorage'
+import type { StorageRecoveryNotice } from '../lib/storageLoadRecovery'
 
 export function useSavedPortfolios() {
-  const [portfolios, setPortfolios] = useState<SavedPortfolio[]>(() => loadPortfolios())
+  const [initialLoad] = useState(() => loadPortfoliosWithRecovery())
+  const [portfolios, setPortfolios] = useState<SavedPortfolio[]>(() => initialLoad.data)
+  const [storageRecovery, setStorageRecovery] = useState<StorageRecoveryNotice | null>(
+    () => initialLoad.recovery,
+  )
   const [error, setError] = useState<string | null>(null)
   /** Always-current list so consecutive updates (e.g. copy to N portfolios) stack. */
   const portfoliosRef = useRef(portfolios)
@@ -28,9 +37,10 @@ export function useSavedPortfolios() {
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key === PORTFOLIO_STORAGE_KEY) {
-        const loaded = loadPortfolios()
-        portfoliosRef.current = loaded
-        setPortfolios(loaded)
+        const loaded = loadPortfoliosWithRecovery()
+        portfoliosRef.current = loaded.data
+        setPortfolios(loaded.data)
+        if (loaded.recovery) setStorageRecovery(loaded.recovery)
       }
     }
     window.addEventListener('storage', onStorage)
@@ -109,9 +119,13 @@ export function useSavedPortfolios() {
     [persist],
   )
 
+  const dismissStorageRecovery = useCallback(() => setStorageRecovery(null), [])
+
   return {
     portfolios,
     error,
+    storageRecovery,
+    dismissStorageRecovery,
     createPortfolio,
     updatePortfolio,
     deletePortfolio,

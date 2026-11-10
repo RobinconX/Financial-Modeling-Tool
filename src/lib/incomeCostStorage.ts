@@ -16,6 +16,10 @@ import {
   type CashflowTableSort,
 } from './incomeCost'
 import { queueAppDataChanged } from './linkedMirrorGate'
+import {
+  buildRecoveryNotice,
+  type StorageLoadResult,
+} from './storageLoadRecovery'
 
 export const INCOME_COST_STORAGE_KEY = 'grok-lab.income-cost.v1'
 
@@ -207,14 +211,80 @@ export function parseIncomeCostState(parsed: unknown): IncomeCostState {
   return emptyIncomeCostState()
 }
 
-export function loadIncomeCost(): IncomeCostState {
-  try {
-    const raw = localStorage.getItem(INCOME_COST_STORAGE_KEY)
-    if (!raw) return emptyIncomeCostState()
-    return parseIncomeCostState(JSON.parse(raw))
-  } catch {
-    return emptyIncomeCostState()
+function isKnownEmptyIncomeCostPayload(parsed: Record<string, unknown>): boolean {
+  const v = parsed.version
+  if (v === 2 || v === 3) {
+    return (
+      Array.isArray(parsed.scenarios) &&
+      parsed.scenarios.length === 0 &&
+      Array.isArray(parsed.lines) &&
+      parsed.lines.length === 0 &&
+      (!parsed.draws || (Array.isArray(parsed.draws) && parsed.draws.length === 0))
+    )
   }
+  if (Array.isArray(parsed.lines) && parsed.lines.length === 0) {
+    return true
+  }
+  return false
+}
+
+function incomeCostPayloadLooksCorrupt(parsed: Record<string, unknown>): boolean {
+  if (isKnownEmptyIncomeCostPayload(parsed)) return false
+  if ((parsed.version === 2 || parsed.version === 3) && !Array.isArray(parsed.scenarios)) {
+    return true
+  }
+  const hasV1Lines = Array.isArray(parsed.lines)
+  const hasV2V3 =
+    (parsed.version === 2 || parsed.version === 3) && Array.isArray(parsed.scenarios)
+  if (!hasV1Lines && !hasV2V3 && Object.keys(parsed).length > 0) {
+    return true
+  }
+  return false
+}
+
+export function loadIncomeCostWithRecovery(): StorageLoadResult<IncomeCostState> {
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(INCOME_COST_STORAGE_KEY)
+    if (!raw) return { data: emptyIncomeCostState(), recovery: null }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      console.warn('[incomeCostStorage] Failed to parse', err)
+      return {
+        data: emptyIncomeCostState(),
+        recovery: buildRecoveryNotice(INCOME_COST_STORAGE_KEY, 'Budget', 'parse', raw),
+      }
+    }
+    if (!isRecord(parsed)) {
+      return {
+        data: emptyIncomeCostState(),
+        recovery: buildRecoveryNotice(INCOME_COST_STORAGE_KEY, 'Budget', 'shape', raw),
+      }
+    }
+    const data = parseIncomeCostState(parsed)
+    if (incomeCostPayloadLooksCorrupt(parsed)) {
+      return {
+        data,
+        recovery: buildRecoveryNotice(INCOME_COST_STORAGE_KEY, 'Budget', 'content', raw),
+      }
+    }
+    return { data, recovery: null }
+  } catch (err) {
+    console.warn('[incomeCostStorage] Failed to load', err)
+    if (raw) {
+      return {
+        data: emptyIncomeCostState(),
+        recovery: buildRecoveryNotice(INCOME_COST_STORAGE_KEY, 'Budget', 'parse', raw),
+      }
+    }
+    return { data: emptyIncomeCostState(), recovery: null }
+  }
+}
+
+export function loadIncomeCost(): IncomeCostState {
+  return loadIncomeCostWithRecovery().data
 }
 
 export function saveIncomeCost(

@@ -1,6 +1,10 @@
 import type { SavedScenario, StoragePayload } from '../types'
 import { queueAppDataChanged } from './linkedMirrorGate'
 import {
+  buildRecoveryNotice,
+  type StorageLoadResult,
+} from './storageLoadRecovery'
+import {
   newEasyProjection,
   sortEasyProjections,
   sortYearProjections,
@@ -85,22 +89,46 @@ export function normalizeScenario(raw: unknown): SavedScenario | null {
   }
 }
 
-export function loadScenarios(): SavedScenario[] {
+export function loadScenariosWithRecovery(): StorageLoadResult<SavedScenario[]> {
+  let raw: string | null = null
   try {
-    const raw = localStorage.getItem(STORAGE_KEY)
-    if (!raw) return []
-    const parsed: unknown = JSON.parse(raw)
+    raw = localStorage.getItem(STORAGE_KEY)
+    if (!raw) return { data: [], recovery: null }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      console.warn('[storage] Failed to parse scenarios', err)
+      return {
+        data: [],
+        recovery: buildRecoveryNotice(STORAGE_KEY, 'Projections', 'parse', raw),
+      }
+    }
     if (!isRecord(parsed) || !Array.isArray(parsed.scenarios)) {
       console.warn('[storage] Invalid payload shape; resetting')
-      return []
+      return {
+        data: [],
+        recovery: buildRecoveryNotice(STORAGE_KEY, 'Projections', 'shape', raw),
+      }
     }
-    return parsed.scenarios
+    const data = parsed.scenarios
       .map(normalizeScenario)
       .filter((s): s is SavedScenario => s != null)
+    return { data, recovery: null }
   } catch (err) {
     console.warn('[storage] Failed to load scenarios', err)
-    return []
+    if (raw) {
+      return {
+        data: [],
+        recovery: buildRecoveryNotice(STORAGE_KEY, 'Projections', 'parse', raw),
+      }
+    }
+    return { data: [], recovery: null }
   }
+}
+
+export function loadScenarios(): SavedScenario[] {
+  return loadScenariosWithRecovery().data
 }
 
 export function saveScenarios(scenarios: SavedScenario[]): { ok: true } | { ok: false; error: string } {

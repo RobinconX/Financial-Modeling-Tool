@@ -1,8 +1,11 @@
 import { beforeEach, describe, expect, it } from 'vitest'
 import { DEFAULT_SCENARIO_NAME } from '../../src/lib/incomeCost'
+import { corruptBackupKey } from '../../src/lib/storageLoadRecovery'
 import {
   cashflowTableSortStorageKey,
+  INCOME_COST_STORAGE_KEY,
   loadCashflowTableSort,
+  loadIncomeCostWithRecovery,
   parseIncomeCostState,
   saveCashflowTableSort,
 } from '../../src/lib/incomeCostStorage'
@@ -80,6 +83,53 @@ describe('parseIncomeCostState empty scenario name', () => {
     })
 
     expect(state.scenarios[0]?.name).toBe('Lean')
+  })
+})
+
+describe('loadIncomeCostWithRecovery', () => {
+  const store = new Map<string, string>()
+
+  beforeEach(() => {
+    store.clear()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          store.set(k, String(v))
+        },
+        removeItem: (k: string) => {
+          store.delete(k)
+        },
+      },
+    })
+  })
+
+  it('does not flag an intentional empty v3 payload', () => {
+    store.set(
+      INCOME_COST_STORAGE_KEY,
+      JSON.stringify({ version: 3, scenarios: [], lines: [], draws: [] }),
+    )
+    const result = loadIncomeCostWithRecovery()
+    expect(result.recovery).toBeNull()
+    expect(result.data.scenarios).toHaveLength(1)
+    expect(result.data.scenarios[0]?.name).toBe('Base')
+  })
+
+  it('archives unreadable budget data', () => {
+    const corrupt = '{"version":3,"scenarios":"bad"}'
+    store.set(INCOME_COST_STORAGE_KEY, corrupt)
+    const result = loadIncomeCostWithRecovery()
+    expect(result.recovery?.reason).toBe('content')
+    expect(store.get(corruptBackupKey(INCOME_COST_STORAGE_KEY))).toBe(corrupt)
+  })
+
+  it('archives invalid JSON', () => {
+    const corrupt = '{nope'
+    store.set(INCOME_COST_STORAGE_KEY, corrupt)
+    const result = loadIncomeCostWithRecovery()
+    expect(result.recovery?.reason).toBe('parse')
+    expect(store.get(corruptBackupKey(INCOME_COST_STORAGE_KEY))).toBe(corrupt)
   })
 })
 
