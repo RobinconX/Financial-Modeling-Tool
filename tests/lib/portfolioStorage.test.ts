@@ -260,8 +260,10 @@ describe('portfolioStorage save and load', () => {
   it('persistSelectedPortfolioId updates selection without dropping portfolios', () => {
     const a = newPortfolio('A')
     const b = newPortfolio('B')
-    withLinkedMirrorSuppressed(() => savePortfolios([a, b], a.id))
-    expect(persistSelectedPortfolioId(b.id)).toBe(true)
+    withLinkedMirrorSuppressed(() => {
+      savePortfolios([a, b], a.id)
+      expect(persistSelectedPortfolioId(b.id)).toBe(true)
+    })
     expect(loadSelectedPortfolioId()).toBe(b.id)
     expect(loadPortfolios()).toHaveLength(2)
   })
