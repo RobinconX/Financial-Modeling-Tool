@@ -10,8 +10,8 @@ describe('releaseLog', () => {
   it('lists merged-PR history newest-first', () => {
     const entries = listReleaseLogEntries()
     expect(entries.length).toBe(22)
-    expect(entries[0]?.pending).toBe(true)
-    expect(entries[0]?.prodSha).toBeNull()
+    expect(entries[0]?.pending).toBeUndefined()
+    expect(entries[0]?.prodSha).toBe('1a9bb7ecf1cdc00f4e2a553bb5faf164ad7a34ab')
     expect(entries[0]?.headline).toMatch(/Budget Monthly opening cash/i)
     expect(entries[1]?.pending).toBeUndefined()
     expect(entries[1]?.prodSha).toBe('eec7a555738b8ae90cdf3d28a7ea11c452cafd76')

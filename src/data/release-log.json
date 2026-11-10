@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-10",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "1a9bb7ecf1cdc00f4e2a553bb5faf164ad7a34ab",
     "headline": "Budget Monthly opening cash hint",
     "notes": [
       "Monthly summary flags when permanent Cash has no December year-end actual for opening cash.",
