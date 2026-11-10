@@ -7,8 +7,12 @@ import {
   cellBalance,
   currentPeriodKey,
   ensurePastPeriodKey,
+  formatOpeningCashHint,
+  isYearEndActualMissing,
   latestActual,
   makePeriodKey,
+  openingCashFromSavings,
+  yearEndBalance,
   removePastPeriodKey,
   periodKeyFromDate,
   projectAccount,
@@ -52,6 +56,56 @@ describe('actuals', () => {
       acc({ id: '2', actuals: { [nowKey]: 2500 }, sortOrder: 1 }),
     ]
     expect(totalNow(accounts, asOf)).toBe(3500)
+  })
+
+  it('isYearEndActualMissing is false only when December is stored', () => {
+    const withDec = acc({ actuals: { '2024-11': 100, '2024-12': 5000 } })
+    expect(isYearEndActualMissing(withDec, 2024)).toBe(false)
+    const noDec = acc({ actuals: { '2024-11': 100 } })
+    expect(isYearEndActualMissing(noDec, 2024)).toBe(true)
+  })
+
+  it('yearEndBalance falls back when December is missing', () => {
+    const a = acc({ actuals: { '2024-11': 3000 } })
+    expect(yearEndBalance(a, 2024)).toBe(3000)
+    expect(yearEndBalance(acc({ actuals: {} }), 2024)).toBe(0)
+  })
+
+  it('openingCashFromSavings surfaces missing December for Budget Monthly', () => {
+    const cash = acc({
+      id: 'savings-cash',
+      name: 'Cash',
+      actuals: { '2024-11': 2000 },
+      sortOrder: 0,
+    })
+    Object.assign(cash, { role: 'cash' as const })
+    const ok = openingCashFromSavings([cash], 2025)
+    expect(ok.balance).toBe(2000)
+    expect(ok.hint?.kind).toBe('missing-dec')
+    expect(formatOpeningCashHint(ok.hint!)).toContain('using latest')
+
+    const empty = acc({
+      id: 'savings-cash',
+      name: 'Cash',
+      actuals: {},
+      sortOrder: 0,
+    })
+    Object.assign(empty, { role: 'cash' as const })
+    const miss = openingCashFromSavings([empty], 2025)
+    expect(miss.balance).toBe(0)
+    expect(formatOpeningCashHint(miss.hint!)).toContain('treated as 0')
+
+    const recorded = acc({
+      id: 'savings-cash',
+      name: 'Cash',
+      actuals: { '2024-12': 15_000 },
+      sortOrder: 0,
+    })
+    Object.assign(recorded, { role: 'cash' as const })
+    expect(openingCashFromSavings([recorded], 2025)).toEqual({
+      balance: 15_000,
+      hint: null,
+    })
   })
 
   it('latestActual prefers last past ≤ now, else 0', () => {
