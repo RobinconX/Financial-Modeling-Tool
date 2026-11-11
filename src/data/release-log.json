@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-11",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "8ada3fa99449f14481b56a8c2e705b44e911da77",
     "headline": "Overview upgrades, import clarity & Comparables layout",
     "notes": [
       "Upgrading an old Overview save keeps a permanent Leftover cash series instead of dropping it.",
