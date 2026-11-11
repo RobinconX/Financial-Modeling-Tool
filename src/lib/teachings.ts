@@ -1144,7 +1144,7 @@ Link or create the JSON in a **cloud-synced folder** (Dropbox, iCloud Drive, Goo
 
 - **Export JSON** — current account (same shape as before)
 - **Export all accounts** — multi-account catalog file
-- **Import JSON** — add as new account or replace current (prompt when ambiguous)
+- **Import JSON** — add as new account or replace current (prompt when ambiguous); multi-account **Replace all** lists accounts with invalid snapshots that were skipped
 - **Tables (.xlsx)** — Excel-friendly tables only; **not** re-importable
 
 On devices without linked files, export is the primary backup path.

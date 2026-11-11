@@ -2,6 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   addAccount,
   applyLoadedSave,
+  catalogImportSuccessMessage,
   createEmptyAccount,
   deleteAccount,
   downloadAllAccountsExport,
@@ -191,14 +192,19 @@ export function DataSettingsPanel({ onClose }: Props) {
     })
   }
 
-  function confirmReplaceAll(catalogFile: AccountCatalog) {
-    const applied = applyLoadedSave({ kind: 'catalog', catalog: catalogFile })
+  function confirmReplaceAll(parsed: Extract<ParsedSaveFile, { kind: 'catalog' }>) {
+    const applied = applyLoadedSave(parsed)
     if (!applied.ok) {
       setError(applied.error)
       return
     }
     setPendingImport(null)
-    setMessage('Imported all accounts.')
+    setMessage(
+      catalogImportSuccessMessage(
+        parsed.catalog.accounts.length,
+        parsed.skippedAccounts,
+      ),
+    )
     finishChange()
   }
 
@@ -439,15 +445,36 @@ export function DataSettingsPanel({ onClose }: Props) {
         {pendingImport?.kind === 'catalog' ? (
           <div className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5">
             <p className="text-sm text-white/70">
-              This file has {pendingImport.parsed.catalog.accounts.length} accounts. Replace every
-              account in this browser?
+              This file has{' '}
+              {pendingImport.parsed.catalog.accounts.length +
+                pendingImport.parsed.skippedAccounts.length}{' '}
+              account
+              {pendingImport.parsed.catalog.accounts.length +
+                pendingImport.parsed.skippedAccounts.length ===
+              1
+                ? ''
+                : 's'}
+              ; {pendingImport.parsed.catalog.accounts.length} will import
+              {pendingImport.parsed.skippedAccounts.length > 0
+                ? ` and ${pendingImport.parsed.skippedAccounts.length} will be skipped (invalid snapshots)`
+                : ''}
+              . Replace every account in this browser?
             </p>
+            {pendingImport.parsed.skippedAccounts.length > 0 ? (
+              <ul className="list-inside list-disc space-y-0.5 text-xs text-amber-200/90">
+                {pendingImport.parsed.skippedAccounts.map((s) => (
+                  <li key={`${s.label}:${s.reason}`}>
+                    {s.label} — {s.reason}
+                  </li>
+                ))}
+              </ul>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               <button
                 type="button"
                 className="btn-primary !py-1.5 !text-xs"
                 disabled={busy}
-                onClick={() => confirmReplaceAll(pendingImport.parsed.catalog)}
+                onClick={() => confirmReplaceAll(pendingImport.parsed)}
               >
                 Replace all
               </button>

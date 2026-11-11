@@ -286,6 +286,7 @@ describe('teachings registry', () => {
     expect(g?.body).toContain('## Example')
     expect(g?.body.toLowerCase()).toContain('browser storage')
     expect(g?.body.toLowerCase()).toContain('export')
+    expect(g?.body).toContain('skipped')
     expect(getGuide('settings.browser')).toBeUndefined()
     expect(getGuide('settings.linkedFile')).toBeUndefined()
     expect(getGuide('settings.export')).toBeUndefined()

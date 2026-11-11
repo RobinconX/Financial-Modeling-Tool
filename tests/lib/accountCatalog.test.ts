@@ -2,6 +2,8 @@ import { describe, expect, it } from 'vitest'
 import {
   isSnapshotPopulated,
   nextAccountName,
+  catalogImportSuccessMessage,
+  describeSkippedCatalogAccounts,
   parseSaveFile,
   resolveStartupSave,
   serializeSaveFile,
@@ -70,6 +72,29 @@ describe('parseSaveFile', () => {
     expect(parseSaveFile({ version: 2, selectedId: 'x', accounts: [] })).toMatchObject({
       error: expect.any(String),
     })
+  })
+
+  it('keeps valid accounts and reports skipped invalid catalog entries', () => {
+    const a = wrapSnapshotAsCatalog(snap(), 'Good', 'id-good')
+    const parsed = parseSaveFile({
+      version: 2,
+      selectedId: 'id-good',
+      accounts: [
+        ...a.accounts,
+        { id: 'bad', name: 'Broken', snapshot: { version: 1, scenarios: 'nope' } },
+        'not-an-object',
+      ],
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed || parsed.kind !== 'catalog') return
+    expect(parsed.catalog.accounts).toHaveLength(1)
+    expect(parsed.catalog.accounts[0]?.name).toBe('Good')
+    expect(parsed.skippedAccounts).toEqual([
+      { label: 'Broken', reason: 'Invalid file: missing scenarios' },
+      { label: 'Entry 3', reason: 'Invalid account entry' },
+    ])
+    expect(catalogImportSuccessMessage(1, parsed.skippedAccounts)).toContain('Skipped 2')
+    expect(describeSkippedCatalogAccounts(parsed.skippedAccounts)).toContain('Broken')
   })
 })
 
@@ -153,7 +178,10 @@ describe('startup hydrate', () => {
         { id: 'empty', name: 'Account 2', snapshot: empty },
       ],
     }
-    const resolved = resolveStartupSave({ kind: 'catalog', catalog }, snap())
+    const resolved = resolveStartupSave(
+      { kind: 'catalog', catalog, skippedAccounts: [] },
+      snap(),
+    )
     expect(resolved.kind).toBe('catalog')
     if (resolved.kind === 'catalog') {
       expect(resolved.catalog.selectedId).toBe('mine')
