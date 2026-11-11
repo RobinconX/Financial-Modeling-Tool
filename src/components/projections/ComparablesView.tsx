@@ -906,10 +906,6 @@ export function ComparablesView({
                     data-guide-anchor="comparables.upsideChart"
                     aria-hidden
                   />
-                  <div className="mb-2 flex flex-wrap justify-center gap-2">
-                    <FeatureGuideButton id="comparables.cagrChart" />
-                    <FeatureGuideButton id="comparables.upsideChart" />
-                  </div>
                   Tick a row to chart remaining upside vs today. Click the name to open the
                   projection.
                 </div>

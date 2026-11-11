@@ -1,5 +1,16 @@
 [
   {
+    "releasedAt": "2026-11-11",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Overview upgrades, import clarity & Comparables layout",
+    "notes": [
+      "Upgrading an old Overview save keeps a permanent Leftover cash series instead of dropping it.",
+      "Multi-account JSON import lists accounts that will be skipped for invalid snapshots before you confirm.",
+      "Comparables and Portfolio no longer overflow the main scroll; chart guides stay with their charts."
+    ]
+  },
+  {
     "releasedAt": "2026-11-10",
     "prodSha": "e5a1d867e2f2ba2d3bfcbbe6aec02fac1ea5e9b4",
     "headline": "Recovery when saved projections, portfolio, or budget won't load",

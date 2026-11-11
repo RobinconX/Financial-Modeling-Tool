@@ -37,9 +37,44 @@ export type AccountCatalog = {
   linkedSaveMode?: LinkedSaveMode
 }
 
+export type SkippedCatalogAccount = {
+  /** Display name from the save file, or a fallback label. */
+  label: string
+  reason: string
+}
+
 export type ParsedSaveFile =
   | { kind: 'snapshot'; snapshot: AppDataSnapshot }
-  | { kind: 'catalog'; catalog: AccountCatalog }
+  | { kind: 'catalog'; catalog: AccountCatalog; skippedAccounts: SkippedCatalogAccount[] }
+
+export function catalogImportSuccessMessage(
+  importedCount: number,
+  skipped: SkippedCatalogAccount[],
+): string {
+  const base =
+    importedCount === 1 ? 'Imported 1 account.' : `Imported ${importedCount} accounts.`
+  const detail = describeSkippedCatalogAccounts(skipped)
+  return detail ? `${base} ${detail}` : base
+}
+
+export function describeSkippedCatalogAccounts(
+  skipped: SkippedCatalogAccount[],
+): string | null {
+  if (skipped.length === 0) return null
+  const parts = skipped.map((s) => `“${s.label}” (${s.reason})`)
+  return `Skipped ${skipped.length} invalid account${
+    skipped.length === 1 ? '' : 's'
+  }: ${parts.join('; ')}.`
+}
+
+function catalogAccountLabelFromItem(
+  item: Record<string, unknown>,
+  entryIndex: number,
+): string {
+  if (typeof item.name === 'string' && item.name.trim()) return item.name.trim()
+  if (typeof item.id === 'string' && item.id) return item.id
+  return `Entry ${entryIndex}`
+}
 
 function isRecord(v: unknown): v is Record<string, unknown> {
   return typeof v === 'object' && v !== null
@@ -76,11 +111,24 @@ export function parseSaveFile(raw: unknown): ParsedSaveFile | { error: string } 
 
   if (raw.version === ACCOUNT_CATALOG_VERSION && Array.isArray(raw.accounts)) {
     const accounts: AccountRecord[] = []
+    const skippedAccounts: SkippedCatalogAccount[] = []
+    let entryIndex = 0
     for (const item of raw.accounts) {
-      if (!isRecord(item)) continue
+      entryIndex += 1
+      if (!isRecord(item)) {
+        skippedAccounts.push({
+          label: `Entry ${entryIndex}`,
+          reason: 'Invalid account entry',
+        })
+        continue
+      }
+      const label = catalogAccountLabelFromItem(item, entryIndex)
       const snapRaw = item.snapshot ?? item
       const snap = parseAppDataSnapshot(snapRaw)
-      if ('error' in snap) continue
+      if ('error' in snap) {
+        skippedAccounts.push({ label, reason: snap.error })
+        continue
+      }
       const id = typeof item.id === 'string' && item.id ? item.id : newId()
       const name =
         typeof item.name === 'string' && item.name.trim()
@@ -104,6 +152,7 @@ export function parseSaveFile(raw: unknown): ParsedSaveFile | { error: string } 
         accounts,
         linkedSaveMode: parseLinkedSaveMode(raw.linkedSaveMode),
       },
+      skippedAccounts,
     }
   }
 
@@ -162,7 +211,14 @@ export function resolveStartupSave(
   if (!anyRich && liveRich) {
     return { kind: 'snapshot', snapshot: live }
   }
-  return { kind: 'catalog', catalog: preferred }
+  if (parsed.kind === 'catalog' && parsed.skippedAccounts.length > 0) {
+    return {
+      kind: 'catalog',
+      catalog: preferred,
+      skippedAccounts: parsed.skippedAccounts,
+    }
+  }
+  return { kind: 'catalog', catalog: preferred, skippedAccounts: [] }
 }
 
 function rememberSnapshot(snapshot: AppDataSnapshot): void {
