@@ -8,7 +8,6 @@ import {
   clampOverviewRange,
   defaultOverviewState,
   ensurePermanentLeftover,
-  newOverviewScenario,
 } from './overview'
 import { queueAppDataChanged } from './linkedMirrorGate'
 import { normalizeRunwayConfig } from './runway'
@@ -162,19 +161,19 @@ function normalizeScenario(raw: unknown, index: number, asOf = new Date()): Over
 /** Migrate flat v1 { startYear, endYear, series } → v2 scenarios. */
 function migrateV1(raw: Record<string, unknown>): OverviewState {
   const asOf = new Date()
-  const cy = asOf.getFullYear()
-  const range = clampOverviewRange(
-    asNumber(raw.startYear, cy),
-    asNumber(raw.endYear, cy + 10),
+  const scenario = normalizeScenario(
+    {
+      name: 'Base',
+      sortOrder: 0,
+      startYear: raw.startYear,
+      endYear: raw.endYear,
+      series: raw.series,
+      runway: raw.runway,
+    },
+    0,
     asOf,
   )
-  const list = Array.isArray(raw.series) ? raw.series : []
-  const series = list
-    .map((s, i) => normalizeSeries(s, i))
-    .filter((s): s is OverviewSeries => s != null)
-  const scenario = newOverviewScenario('Base', 0, asOf, series)
-  scenario.startYear = range.startYear
-  scenario.endYear = range.endYear
+  if (!scenario) return defaultOverviewState(asOf)
   return {
     version: 2,
     scenarios: [scenario],
