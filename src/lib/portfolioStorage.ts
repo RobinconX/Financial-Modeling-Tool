@@ -12,7 +12,14 @@ import {
   type StorageLoadResult,
 } from './storageLoadRecovery'
 import { buildOccSymbol } from './optionContract'
+import { getPortfolioActualsMode } from './portfolioActualsMode'
+import {
+  normalizeActualsRecordStash,
+  normalizePortfolioMoneyIn,
+  stripPortfolioBookActuals,
+} from './portfolioBookActuals'
 import { stripPortfolioActuals } from './portfolioActuals'
+import { normalizePortfolioCashStash } from './portfolioSharedCash'
 import { newDeposit, newHolding, normalizePortfolioCashModel } from './portfolio'
 
 export const PORTFOLIO_STORAGE_KEY = 'grok-lab.saved-portfolios.v1'
@@ -328,6 +335,10 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     }
   }
 
+  const cashStash = normalizePortfolioCashStash(raw.cashStash)
+  const portfolioMoneyIn = normalizePortfolioMoneyIn(raw.portfolioMoneyIn)
+  const actualsRecordStash = normalizeActualsRecordStash(raw.actualsRecordStash)
+
   return normalizePortfolioCashModel({
     id,
     name,
@@ -342,6 +353,9 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     actualsCurrency,
     targetCompound,
     goalSpeed,
+    cashStash,
+    portfolioMoneyIn,
+    actualsRecordStash,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   })
@@ -425,7 +439,10 @@ export function savePortfolios(
       PORTFOLIO_STORAGE_KEY,
       JSON.stringify({
         version: 1,
-        portfolios: portfolios.map(stripPortfolioActuals),
+        portfolios: portfolios.map((p) => {
+          if (getPortfolioActualsMode() === 'perPortfolio') return p
+          return stripPortfolioActuals(stripPortfolioBookActuals(p))
+        }),
         selectedId: valid,
       }),
     )

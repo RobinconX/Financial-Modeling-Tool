@@ -39,13 +39,62 @@ import {
 } from '../../lib/linkedDataFile'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
+import { SettingsPortfolioSection } from './SettingsPortfolioSection'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
+import type { PortfolioCashMode } from '../../lib/portfolioCashMode'
+import {
+  buildSwitchToPerPortfolio,
+  buildSwitchToShared,
+  type SwitchToPerPortfolioChoice,
+} from '../../lib/portfolioCashModeSwitch'
+import type { PortfolioActualsMode } from '../../lib/portfolioActualsMode'
+import {
+  buildSwitchActualsToPerPortfolio,
+  buildSwitchActualsToShared,
+  emptySharedActualsStores,
+  type SwitchActualsToPerPortfolioChoice,
+} from '../../lib/portfolioActualsModeSwitch'
+import { portfolioSeedDisplayCurrency } from '../../lib/portfolioDisplayCurrency'
+import { loadSelectedPortfolioId } from '../../lib/portfolioStorage'
+import type {
+  DisplayCurrency,
+  PortfolioActualsState,
+  PortfolioContributionsState,
+  PortfolioSharedCashState,
+  SavedPortfolio,
+} from '../../types'
 
 type Props = {
   onClose?: () => void
+  portfolios: SavedPortfolio[]
+  replacePortfolios: (next: SavedPortfolio[]) => boolean
+  portfolioCashMode: PortfolioCashMode
+  onPortfolioCashModeChange: (mode: PortfolioCashMode) => void
+  sharedCash: PortfolioSharedCashState
+  replaceSharedCash: (next: PortfolioSharedCashState) => boolean
+  portfolioActualsMode: PortfolioActualsMode
+  onPortfolioActualsModeChange: (mode: PortfolioActualsMode) => void
+  portfolioActuals: PortfolioActualsState
+  replacePortfolioActuals: (next: PortfolioActualsState) => boolean
+  portfolioContributions: PortfolioContributionsState
+  replacePortfolioContributions: (next: PortfolioContributionsState) => boolean
 }
 
-export function DataSettingsPanel({ onClose }: Props) {
+export function DataSettingsPanel({
+  onClose,
+  portfolios,
+  replacePortfolios,
+  portfolioCashMode,
+  onPortfolioCashModeChange,
+  sharedCash,
+  replaceSharedCash,
+  portfolioActualsMode,
+  onPortfolioActualsModeChange,
+  portfolioActuals,
+  replacePortfolioActuals,
+  portfolioContributions,
+  replacePortfolioContributions,
+}: Props) {
   const [status, setStatus] = useState<LinkedFileStatus | null>(null)
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
@@ -57,6 +106,15 @@ export function DataSettingsPanel({ onClose }: Props) {
   >(null)
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [saveMode, setSaveMode] = useState<LinkedSaveMode>(getLinkedSaveMode)
+  const [pendingCashMode, setPendingCashMode] = useState<PortfolioCashMode | null>(null)
+  const [sharedSeedPortfolioId, setSharedSeedPortfolioId] = useState<string | null>(null)
+  const [sharedSeedCurrency, setSharedSeedCurrency] = useState<DisplayCurrency>('USD')
+  const [cashModeError, setCashModeError] = useState<string | null>(null)
+  const [pendingActualsMode, setPendingActualsMode] =
+    useState<PortfolioActualsMode | null>(null)
+  const [actualsSeedPortfolioId, setActualsSeedPortfolioId] = useState<string | null>(null)
+  const [actualsSeedCurrency, setActualsSeedCurrency] = useState<DisplayCurrency>('USD')
+  const [actualsModeError, setActualsModeError] = useState<string | null>(null)
   const catalog = loadCatalog()
   const accountCount = catalog?.accounts.length ?? 1
   const multi = accountCount > 1
@@ -235,11 +293,164 @@ export function DataSettingsPanel({ onClose }: Props) {
 
   useGuideTeleport('settings')
 
+  const openPortfolio = (() => {
+    const id = loadSelectedPortfolioId()
+    if (id) {
+      const p = portfolios.find((x) => x.id === id)
+      if (p) return p
+    }
+    return portfolios[0] ?? null
+  })()
+
+  const openPortfolioTabId = loadSelectedPortfolioId()
+
+  function seedCurrencyForPortfolio(portfolioId: string | null): DisplayCurrency {
+    const p = portfolios.find((x) => x.id === portfolioId)
+    if (!p) return 'USD'
+    return portfolioSeedDisplayCurrency(p, openPortfolioTabId)
+  }
+
+  function requestCashMode(next: PortfolioCashMode) {
+    if (next === portfolioCashMode) return
+    setCashModeError(null)
+    if (next === 'shared') {
+      const id = openPortfolio?.id ?? portfolios[0]?.id ?? null
+      setSharedSeedPortfolioId(id)
+      setSharedSeedCurrency(seedCurrencyForPortfolio(id))
+    }
+    setPendingCashMode(next)
+  }
+
+  function handleSharedSeedPortfolioChange(portfolioId: string) {
+    setSharedSeedPortfolioId(portfolioId)
+    setSharedSeedCurrency(seedCurrencyForPortfolio(portfolioId))
+  }
+
+  function confirmSwitchToShared() {
+    const seed = portfolios.find((p) => p.id === sharedSeedPortfolioId)
+    if (!seed) {
+      setCashModeError('Choose a portfolio to seed shared cash.')
+      setPendingCashMode(null)
+      return
+    }
+    const built = buildSwitchToShared(portfolios, seed.id, sharedSeedCurrency)
+    if ('error' in built) {
+      setCashModeError(built.error)
+      setPendingCashMode(null)
+      return
+    }
+    if (!replacePortfolios(built.portfolios) || !replaceSharedCash(built.sharedCash)) {
+      setCashModeError('Could not save portfolio cash.')
+      setPendingCashMode(null)
+      return
+    }
+    onPortfolioCashModeChange('shared')
+    setPendingCashMode(null)
+    setSharedSeedPortfolioId(null)
+    setSharedSeedCurrency('USD')
+    setMessage('Portfolio cash is now shared across all books.')
+    remountApp()
+  }
+
+  function requestActualsMode(next: PortfolioActualsMode) {
+    if (next === portfolioActualsMode) return
+    setActualsModeError(null)
+    if (next === 'shared') {
+      const id = openPortfolio?.id ?? portfolios[0]?.id ?? null
+      setActualsSeedPortfolioId(id)
+      setActualsSeedCurrency(seedCurrencyForPortfolio(id))
+    }
+    setPendingActualsMode(next)
+  }
+
+  function handleActualsSeedPortfolioChange(portfolioId: string) {
+    setActualsSeedPortfolioId(portfolioId)
+    setActualsSeedCurrency(seedCurrencyForPortfolio(portfolioId))
+  }
+
+  function confirmSwitchActualsToShared() {
+    const seed = portfolios.find((p) => p.id === actualsSeedPortfolioId)
+    if (!seed) {
+      setActualsModeError('Choose a portfolio to seed shared actuals.')
+      setPendingActualsMode(null)
+      return
+    }
+    const built = buildSwitchActualsToShared(
+      portfolios,
+      seed.id,
+      actualsSeedCurrency,
+    )
+    if ('error' in built) {
+      setActualsModeError(built.error)
+      setPendingActualsMode(null)
+      return
+    }
+    if (
+      !replacePortfolios(built.portfolios) ||
+      !replacePortfolioActuals(built.sharedActuals) ||
+      !replacePortfolioContributions(built.sharedContributions)
+    ) {
+      setActualsModeError('Could not save portfolio actuals.')
+      setPendingActualsMode(null)
+      return
+    }
+    onPortfolioActualsModeChange('shared')
+    setPendingActualsMode(null)
+    setActualsSeedPortfolioId(null)
+    setActualsSeedCurrency('USD')
+    setMessage('Portfolio actuals are now shared across all books.')
+    remountApp()
+  }
+
+  function confirmSwitchActualsToPerPortfolio(choice: SwitchActualsToPerPortfolioChoice) {
+    const next = buildSwitchActualsToPerPortfolio(
+      portfolios,
+      portfolioActuals,
+      portfolioContributions,
+      choice,
+    )
+    const empty = emptySharedActualsStores()
+    if (
+      !replacePortfolios(next) ||
+      !replacePortfolioActuals(empty.sharedActuals) ||
+      !replacePortfolioContributions(empty.sharedContributions)
+    ) {
+      setActualsModeError('Could not save portfolios.')
+      setPendingActualsMode(null)
+      return
+    }
+    onPortfolioActualsModeChange('perPortfolio')
+    setPendingActualsMode(null)
+    setMessage(
+      choice === 'restore'
+        ? 'Restored each portfolio’s stashed actuals.'
+        : 'Applied shared actuals to every portfolio.',
+    )
+    remountApp()
+  }
+
+  function confirmSwitchToPerPortfolio(choice: SwitchToPerPortfolioChoice) {
+    const next = buildSwitchToPerPortfolio(portfolios, sharedCash, choice)
+    if (!replacePortfolios(next)) {
+      setCashModeError('Could not save portfolios.')
+      setPendingCashMode(null)
+      return
+    }
+    onPortfolioCashModeChange('perPortfolio')
+    setPendingCashMode(null)
+    setMessage(
+      choice === 'restore'
+        ? 'Restored each portfolio’s stashed cash.'
+        : 'Applied shared cash to every portfolio.',
+    )
+    remountApp()
+  }
+
   return (
     <div className="max-w-xl space-y-5" data-guide-anchor="settings">
       <div className="flex items-start justify-between gap-3">
         <div className="flex items-center gap-1.5">
-          <h2 className="text-lg font-semibold text-white">Data &amp; backup</h2>
+          <h2 className="text-lg font-semibold text-white">Settings</h2>
           <FeatureGuideButton id="settings" />
 </div>
         {onClose && (
@@ -248,6 +459,19 @@ export function DataSettingsPanel({ onClose }: Props) {
           </button>
         )}
       </div>
+
+      <SettingsPortfolioSection
+        busy={busy}
+        portfolioCashMode={portfolioCashMode}
+        onRequestCashMode={requestCashMode}
+        sharedCash={sharedCash}
+        cashModeError={cashModeError}
+        portfolioActualsMode={portfolioActualsMode}
+        onRequestActualsMode={requestActualsMode}
+        portfolioActuals={portfolioActuals}
+        portfolioContributions={portfolioContributions}
+        actualsModeError={actualsModeError}
+      />
 
       <section className="panel space-y-3">
         <div className="flex items-center gap-1.5">
@@ -547,6 +771,204 @@ export function DataSettingsPanel({ onClose }: Props) {
           {message}
         </p>
       )}
+
+      {pendingCashMode === 'shared' && portfolioCashMode !== 'shared' ? (
+        <ConfirmDialog
+          title="Use shared portfolio cash?"
+          danger={false}
+          confirmLabel="Use shared cash"
+          cancelLabel="Cancel"
+          onClose={() => {
+            setPendingCashMode(null)
+            setSharedSeedPortfolioId(null)
+            setSharedSeedCurrency('USD')
+          }}
+          onConfirm={confirmSwitchToShared}
+        >
+          <p className="leading-relaxed">
+            Shared cash will start from the cash plan on{' '}
+            <select
+              className="select-compact mx-0.5 inline-block max-w-[14rem] align-baseline font-semibold text-white"
+              value={sharedSeedPortfolioId ?? ''}
+              disabled={portfolios.length === 0}
+              aria-label="Portfolio to seed shared cash from"
+              onChange={(e) => handleSharedSeedPortfolioChange(e.target.value)}
+            >
+              {portfolios.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            . Display currency{' '}
+            <select
+              className="select-compact mx-0.5 inline-block w-auto align-baseline font-semibold text-white"
+              value={sharedSeedCurrency}
+              aria-label="Shared cash display currency"
+              onChange={(e) =>
+                setSharedSeedCurrency(e.target.value === 'CHF' ? 'CHF' : 'USD')
+              }
+            >
+              <option value="USD">USD</option>
+              <option value="CHF">CHF</option>
+            </select>{' '}
+            applies to the shared record.
+          </p>
+          <p>
+            Each book’s current cash is stashed so you can restore it if you switch back to
+            separate cash later.
+          </p>
+        </ConfirmDialog>
+      ) : null}
+
+      {pendingActualsMode === 'shared' && portfolioActualsMode !== 'shared' ? (
+        <ConfirmDialog
+          title="Use shared portfolio actuals?"
+          danger={false}
+          confirmLabel="Use shared actuals"
+          cancelLabel="Cancel"
+          onClose={() => {
+            setPendingActualsMode(null)
+            setActualsSeedPortfolioId(null)
+            setActualsSeedCurrency('USD')
+          }}
+          onConfirm={confirmSwitchActualsToShared}
+        >
+          <p className="leading-relaxed">
+            Shared actuals and money-in start from{' '}
+            <select
+              className="select-compact mx-0.5 inline-block max-w-[14rem] align-baseline font-semibold text-white"
+              value={actualsSeedPortfolioId ?? ''}
+              disabled={portfolios.length === 0}
+              aria-label="Portfolio to seed shared actuals from"
+              onChange={(e) => handleActualsSeedPortfolioChange(e.target.value)}
+            >
+              {portfolios.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            . Display currency{' '}
+            <select
+              className="select-compact mx-0.5 inline-block w-auto align-baseline font-semibold text-white"
+              value={actualsSeedCurrency}
+              aria-label="Shared actuals display currency"
+              onChange={(e) =>
+                setActualsSeedCurrency(e.target.value === 'CHF' ? 'CHF' : 'USD')
+              }
+            >
+              <option value="USD">USD</option>
+              <option value="CHF">CHF</option>
+            </select>{' '}
+            applies to the shared record (value actuals and money-in).
+          </p>
+          <p>
+            Each book’s current actuals are stashed so you can restore them if you switch back to
+            separate actuals later.
+          </p>
+        </ConfirmDialog>
+      ) : null}
+
+      {pendingActualsMode === 'perPortfolio' && portfolioActualsMode === 'shared' ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPendingActualsMode(null)}
+        >
+          <div
+            className="card w-full max-w-md space-y-4 p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-white">Separate actuals per portfolio</h3>
+            <div className="space-y-2 text-sm text-white/65">
+              <p>How should each portfolio get its actuals back?</p>
+              <p>
+                <span className="font-semibold text-white">Restore stashed</span> — put back each
+                book’s actuals and money-in from before you turned on shared actuals.
+              </p>
+              <p>
+                <span className="font-semibold text-white">Apply shared to all</span> — copy the
+                current shared value actuals and money-in onto every book.
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 !text-xs"
+                onClick={() => setPendingActualsMode(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 !text-xs"
+                onClick={() => confirmSwitchActualsToPerPortfolio('restore')}
+              >
+                Restore stashed
+              </button>
+              <button
+                type="button"
+                className="btn-primary !py-1.5 !text-xs"
+                onClick={() => confirmSwitchActualsToPerPortfolio('applyShared')}
+              >
+                Apply shared to all
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
+
+      {pendingCashMode === 'perPortfolio' && portfolioCashMode === 'shared' ? (
+        <div
+          className="fixed inset-0 z-50 flex items-center justify-center bg-black/70 p-4"
+          role="dialog"
+          aria-modal="true"
+          onClick={() => setPendingCashMode(null)}
+        >
+          <div
+            className="card w-full max-w-md space-y-4 p-5 shadow-2xl"
+            onClick={(e) => e.stopPropagation()}
+          >
+            <h3 className="text-lg font-semibold text-white">Separate cash per portfolio</h3>
+            <div className="space-y-2 text-sm text-white/65">
+              <p>How should each portfolio get its cash plan back?</p>
+              <p>
+                <span className="font-semibold text-white">Restore stashed</span> — put back each
+                book’s cash from before you turned on shared cash.
+              </p>
+              <p>
+                <span className="font-semibold text-white">Apply shared to all</span> — copy the
+                current shared cash plan onto every book (new deposit row ids per book).
+              </p>
+            </div>
+            <div className="flex flex-wrap justify-end gap-2 pt-1">
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 !text-xs"
+                onClick={() => setPendingCashMode(null)}
+              >
+                Cancel
+              </button>
+              <button
+                type="button"
+                className="btn-ghost !py-1.5 !text-xs"
+                onClick={() => confirmSwitchToPerPortfolio('restore')}
+              >
+                Restore stashed
+              </button>
+              <button
+                type="button"
+                className="btn-primary !py-1.5 !text-xs"
+                onClick={() => confirmSwitchToPerPortfolio('applyShared')}
+              >
+                Apply shared to all
+              </button>
+            </div>
+          </div>
+        </div>
+      ) : null}
     </div>
   )
 }

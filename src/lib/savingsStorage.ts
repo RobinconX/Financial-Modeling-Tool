@@ -1,9 +1,10 @@
 import type { SavingsAccount, SavingsCadence, SavingsState } from '../types'
 import { queueAppDataChanged } from './linkedMirrorGate'
 import {
+  comparePeriodKeys,
   emptySavingsState,
   ensurePermanentCashAccount,
-  periodKeyFromDate,
+  LEGACY_SAVINGS_AMOUNT_PERIOD_KEY,
 } from './savings'
 
 export const SAVINGS_STORAGE_KEY = 'grok-lab.savings.v1'
@@ -40,13 +41,32 @@ function normalizeActuals(raw: unknown): Record<string, number> {
   return out
 }
 
-function normalizeAccount(raw: unknown, index: number): SavingsAccount | null {
+function latestPeriodKeyInPayload(accounts: unknown[]): string | null {
+  let best: string | null = null
+  for (const raw of accounts) {
+    const actuals = normalizeActuals(isRecord(raw) ? raw.actuals : undefined)
+    for (const k of Object.keys(actuals)) {
+      if (best == null || comparePeriodKeys(k, best) > 0) best = k
+    }
+  }
+  return best
+}
+
+/** Stable period for legacy single-balance `amount` (evidence from file, else v1 ship month). */
+export function legacyAmountMigrationPeriodKey(accounts: unknown[]): string {
+  return latestPeriodKeyInPayload(accounts) ?? LEGACY_SAVINGS_AMOUNT_PERIOD_KEY
+}
+
+function normalizeAccount(
+  raw: unknown,
+  index: number,
+  legacyAmountPeriodKey: string,
+): SavingsAccount | null {
   if (!isRecord(raw)) return null
   const actuals = normalizeActuals(raw.actuals)
   // Migrate legacy `amount` field if present
   if (Object.keys(actuals).length === 0 && raw.amount != null) {
-    const now = periodKeyFromDate(new Date())
-    actuals[now] = Math.max(0, asNumber(raw.amount, 0))
+    actuals[legacyAmountPeriodKey] = Math.max(0, asNumber(raw.amount, 0))
   }
   const role = raw.role === 'cash' ? 'cash' : null
   return {
@@ -68,9 +88,10 @@ export function accountsFromSavingsPayload(raw: unknown): SavingsAccount[] {
   if (!isRecord(raw) || !Array.isArray(raw.accounts)) {
     return ensurePermanentCashAccount([])
   }
+  const legacyAmountPeriodKey = legacyAmountMigrationPeriodKey(raw.accounts)
   return ensurePermanentCashAccount(
     raw.accounts
-      .map((a, i) => normalizeAccount(a, i))
+      .map((a, i) => normalizeAccount(a, i, legacyAmountPeriodKey))
       .filter((a): a is SavingsAccount => a != null),
   )
 }

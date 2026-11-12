@@ -5,9 +5,18 @@ import type {
   DisplayCurrency,
   PortfolioContributionsState,
   PortfolioActualsState,
+  PortfolioSharedCashState,
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
+import type { PortfolioCashMode } from '../../lib/portfolioCashMode'
+import type { PortfolioActualsMode } from '../../lib/portfolioActualsMode'
+import {
+  applyContributionsStateToPortfolio,
+  bookActualsState,
+  bookContributionsState,
+} from '../../lib/portfolioBookActuals'
+import { setContributionYear as setContributionYearInState } from '../../lib/portfolioContributions'
 import {
   buildPortfolioGrid,
   earliestActualYear,
@@ -126,6 +135,8 @@ function readShowTarget(): boolean {
 type Props = {
   scenarios: SavedScenario[]
   portfolios: SavedPortfolio[]
+  /** Cash-resolved copies for chart/grid when mode is shared */
+  portfoliosForCash: SavedPortfolio[]
   storageError: string | null
   createPortfolio: (name?: string) => SavedPortfolio | null
   updatePortfolio: (id: string, patch: Partial<SavedPortfolio>) => boolean
@@ -141,11 +152,20 @@ type Props = {
   portfolioActuals: PortfolioActualsState
   actualsError: string | null
   setPortfolioActuals: (next: PortfolioActualsState) => void
+  portfolioCashMode: PortfolioCashMode
+  sharedCash: PortfolioSharedCashState
+  sharedCashError: string | null
+  onSharedCashPatch: (patch: {
+    deposits?: PortfolioSharedCashState['deposits']
+    perpetualYearlyDeposit?: PortfolioSharedCashState['perpetualYearlyDeposit']
+  }) => boolean
+  portfolioActualsMode: PortfolioActualsMode
 }
 
 export function PortfolioView({
   scenarios,
   portfolios,
+  portfoliosForCash,
   storageError,
   createPortfolio,
   updatePortfolio,
@@ -161,6 +181,11 @@ export function PortfolioView({
   portfolioActuals,
   actualsError,
   setPortfolioActuals,
+  portfolioCashMode,
+  sharedCash,
+  sharedCashError,
+  onSharedCashPatch,
+  portfolioActualsMode,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     readSelectedPortfolioId(portfolios),
@@ -390,7 +415,7 @@ export function PortfolioView({
   function autoFromYear() {
     const earliest =
       selectedPortfolioId && selected
-        ? earliestActualYear(portfolioActuals, firstInputYear)
+        ? earliestActualYear(actualsForSelected, firstInputYear)
         : firstInputYear
     return Math.min(earliest, firstInputYear)
   }
@@ -408,7 +433,7 @@ export function PortfolioView({
     setRangeCustom(false)
     const earliest =
       selectedPortfolioId && selected
-        ? earliestActualYear(portfolioActuals, firstInputYear)
+        ? earliestActualYear(actualsForSelected, firstInputYear)
         : firstInputYear
     const from = Math.min(earliest, firstInputYear)
     setPeriodFrom(from)
@@ -445,14 +470,82 @@ export function PortfolioView({
     setToDraft(String(b))
   }
 
+  const canConvert = displayCurrency === 'USD' || (usdToChf != null && usdToChf > 0)
+  const activeCurrency: DisplayCurrency = canConvert ? displayCurrency : 'USD'
+
+  const selectedForCash =
+    portfoliosForCash.find((p) => p.id === selectedId) ?? selected
+
+  const actualsForSelected =
+    selected && portfolioActualsMode === 'perPortfolio'
+      ? bookActualsState(selected)
+      : portfolioActuals
+
+  const contributionsForSelected =
+    selected && portfolioActualsMode === 'perPortfolio'
+      ? bookContributionsState(selected)
+      : contributions
+
+  function handleActualsChange(next: PortfolioActualsState) {
+    if (!selected) return
+    if (portfolioActualsMode === 'shared') {
+      setPortfolioActuals(next)
+      return
+    }
+    updatePortfolio(selected.id, {
+      actuals: next.byMonth,
+      actualsCurrency: next.currency,
+    })
+  }
+
+  function handleContributionYear(year: number, amount: number | null) {
+    if (portfolioActualsMode === 'shared') {
+      setContributionYear(year, amount)
+      return
+    }
+    if (!selected) return
+    const next = setContributionYearInState(contributionsForSelected, year, amount)
+    updatePortfolio(
+      selected.id,
+      applyContributionsStateToPortfolio(selected, next),
+    )
+  }
+
+  function handleContributionsCurrency(currency: DisplayCurrency) {
+    if (portfolioActualsMode === 'shared') {
+      setContributionsCurrency(currency)
+      return
+    }
+    if (!selected) return
+    const base = bookContributionsState(selected)
+    updatePortfolio(selected.id, {
+      portfolioMoneyIn: { ...base, currency, version: 1 },
+    })
+  }
+
+  const cashDisplayCurrency: DisplayCurrency =
+    portfolioCashMode === 'shared' ? sharedCash.currency : activeCurrency
+
+  function handleCashPortfolioChange(patch: Partial<SavedPortfolio>) {
+    if (!selected) return
+    if (portfolioCashMode === 'shared') {
+      onSharedCashPatch({
+        deposits: patch.deposits,
+        perpetualYearlyDeposit: patch.perpetualYearlyDeposit,
+      })
+      return
+    }
+    updatePortfolio(selected.id, patch)
+  }
+
   /** Deposits (incl. CHF / surplus) as USD book — must be used for chart cash math */
   const resolvedSelected = useMemo(() => {
-    if (!selected) return null
-    return withResolvedDepositAmounts(selected, {
+    if (!selectedForCash) return null
+    return withResolvedDepositAmounts(selectedForCash, {
       incomeCostLines,
       usdToChf,
     })
-  }, [selected, selected?.updatedAt, incomeCostLines, usdToChf])
+  }, [selectedForCash, selectedForCash?.updatedAt, incomeCostLines, usdToChf])
 
   const grid = useMemo(() => {
     if (!resolvedSelected) return null
@@ -482,9 +575,6 @@ export function PortfolioView({
     periodTo,
     lastInputYear,
   ])
-
-  const canConvert = displayCurrency === 'USD' || (usdToChf != null && usdToChf > 0)
-  const activeCurrency: DisplayCurrency = canConvert ? displayCurrency : 'USD'
 
   function handleCreate() {
     const created = createPortfolio(`Portfolio ${portfolios.length + 1}`)
@@ -1040,7 +1130,7 @@ export function PortfolioView({
                 </div>
                 <FullscreenChart title="Portfolio value over time">
                   <PortfolioChart
-                    key={`chart-${selected.id}-${selected.updatedAt}-${periodFrom}-${periodTo}-${chartMode}-${grid.years.join(',')}-${Object.keys(portfolioActuals.byMonth).join(',')}`}
+                    key={`chart-${selected.id}-${selected.updatedAt}-${periodFrom}-${periodTo}-${chartMode}-${grid.years.join(',')}-${Object.keys(actualsForSelected.byMonth).join(',')}`}
                     grid={grid}
                     portfolio={resolvedSelected ?? selected}
                     scenarios={scenarios}
@@ -1049,11 +1139,11 @@ export function PortfolioView({
                     chartMode={chartMode}
                     fromYear={periodFrom}
                     toYear={periodTo}
-                    contributions={contributions}
+                    contributions={contributionsForSelected}
                     showCashInvested={showCashInvested}
                     showRoi={showRoi}
                     showTarget={showTarget}
-                    actuals={portfolioActuals}
+                    actuals={actualsForSelected}
                   />
                 </FullscreenChart>
                 <div className="relative z-20 border-t border-white/[0.06] pt-4">
@@ -1066,7 +1156,7 @@ export function PortfolioView({
                     scenarios={scenarios}
                     displayCurrency={activeCurrency}
                     usdToChf={usdToChf}
-                    contributions={contributions}
+                    contributions={contributionsForSelected}
                     onChange={(patch) => updatePortfolio(selected.id, patch)}
                   />
                 </div>
@@ -1111,26 +1201,36 @@ export function PortfolioView({
                   <FeatureGuideButton id="portfolio.actuals" />
                 </div>
                 <p className="text-[11px] text-white/40">
-                  Same record for every portfolio.
+                  {portfolioActualsMode === 'shared'
+                    ? 'Same record for every portfolio.'
+                    : 'Actuals for this portfolio only.'}
                 </p>
                 {actualsKind === 'value' ? (
                   <PortfolioActualsEditor
-                    actuals={portfolioActuals}
-                    onChange={setPortfolioActuals}
-                    displayCurrency={activeCurrency}
+                    actuals={actualsForSelected}
+                    onChange={handleActualsChange}
+                    displayCurrency={
+                      portfolioActualsMode === 'shared'
+                        ? actualsForSelected.currency
+                        : activeCurrency
+                    }
                     usdToChf={usdToChf}
                     error={actualsError}
                     highlightPeriodKey={actualsHighlightKey}
                   />
                 ) : (
                   <PortfolioMoneyIn
-                    contributions={contributions}
+                    contributions={contributionsForSelected}
                     error={contributionsError}
-                    displayCurrency={activeCurrency}
+                    displayCurrency={
+                      portfolioActualsMode === 'shared'
+                        ? contributionsForSelected.currency
+                        : activeCurrency
+                    }
                     usdToChf={usdToChf}
                     currentYear={currentYear}
-                    onSetYear={setContributionYear}
-                    onSetCurrency={setContributionsCurrency}
+                    onSetYear={handleContributionYear}
+                    onSetCurrency={handleContributionsCurrency}
                   />
                 )}
               </div>
@@ -1138,7 +1238,7 @@ export function PortfolioView({
 
             {selected && panel === 'goal' && (
               <GoalSpeedPanel
-                portfolio={selected}
+                portfolio={selectedForCash ?? selected}
                 scenarios={scenarios}
                 displayCurrency={activeCurrency}
                 usdToChf={usdToChf}
@@ -1150,15 +1250,25 @@ export function PortfolioView({
             {selected && editorPanel && (
               <PortfolioHoldingsEditor
                 panel={editorPanel}
-                portfolio={selected}
+                portfolio={editorPanel === 'cash' ? (selectedForCash ?? selected) : selected}
                 scenarios={scenarios}
-                onChange={(patch) => updatePortfolio(selected.id, patch)}
-                displayCurrency={activeCurrency}
+                onChange={
+                  editorPanel === 'cash'
+                    ? handleCashPortfolioChange
+                    : (patch) => updatePortfolio(selected.id, patch)
+                }
+                displayCurrency={
+                  editorPanel === 'cash' ? cashDisplayCurrency : activeCurrency
+                }
                 usdToChf={usdToChf}
                 incomeCostScenarios={incomeCostScenarios}
                 incomeCostLines={incomeCostLines}
                 otherPortfolios={portfolios.filter((p) => p.id !== selected.id)}
-                onUpdateOtherPortfolio={updatePortfolio}
+                onUpdateOtherPortfolio={
+                  portfolioCashMode === 'shared' ? undefined : updatePortfolio
+                }
+                sharedCashMode={portfolioCashMode === 'shared' && editorPanel === 'cash'}
+                sharedCashError={sharedCashError}
               />
             )}
         </div>

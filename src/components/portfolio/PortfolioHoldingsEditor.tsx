@@ -73,6 +73,9 @@ type Props = {
   /** Other portfolios for “copy cash & positions to…” */
   otherPortfolios?: SavedPortfolio[]
   onUpdateOtherPortfolio?: (id: string, patch: Partial<SavedPortfolio>) => boolean
+  /** One shared cash plan for every portfolio */
+  sharedCashMode?: boolean
+  sharedCashError?: string | null
 }
 
 const BASIS_OPTIONS: { id: ValuationBasis | 'easy'; label: string }[] = [
@@ -100,6 +103,8 @@ export function PortfolioHoldingsEditor({
   incomeCostLines = [],
   otherPortfolios = [],
   onUpdateOtherPortfolio,
+  sharedCashMode = false,
+  sharedCashError = null,
 }: Props) {
   const { missingSymbols } = useQuoteHealth()
   const showConfig = panel === 'all'
@@ -701,13 +706,21 @@ export function PortfolioHoldingsEditor({
 
       {showCash && (
       <div className="space-y-3">
+        {sharedCashMode ? (
+          <p className="text-[11px] text-white/40">
+            Same cash plan for every portfolio.
+          </p>
+        ) : null}
+        {sharedCashError ? (
+          <p className="text-[11px] text-amber-300/90">{sharedCashError}</p>
+        ) : null}
         <div className="flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-1.5">
             <h3 className="section-title text-sky-300/90">Cash & deposits</h3>
             <FeatureGuideButton id="portfolio.cash" />
           </div>
           <div className="flex flex-wrap gap-1">
-            {otherPortfolios.length > 0 && onUpdateOtherPortfolio && (
+            {otherPortfolios.length > 0 && onUpdateOtherPortfolio && !sharedCashMode && (
               <button
                 type="button"
                 className="btn-ghost !py-1 !text-xs"

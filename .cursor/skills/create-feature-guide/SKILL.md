@@ -120,6 +120,13 @@ Tone: direct, second person or impersonal; teach the mental model, not marketing
    - High contrast: white/near-white reading text on dark panels; mint (`#6ee7b7` / `#34d399`) for accents/titles only in the **illustration**, not in guide body prose.
 5. Spot-check the asset URL in the browser after writing; hard-refresh if cached.
 
+## Settings → Portfolio group
+
+Portfolio-wide toggles (cash mode, actuals mode, future portfolio prefs) live in **one** Settings panel:
+
+- UI: `src/components/settings/SettingsPortfolioSection.tsx` — add a new sub-block with `data-guide-anchor="settings.portfolio<Name>"`.
+- Guides: child of `settings.portfolio` (`parentId: 'settings.portfolio'`), anchor matching the sub-block; section guide `settings.portfolio` documents the group.
+
 ## Wiring checklist
 
 - [ ] `teachings.ts` entry `status: 'ready'` with full body
