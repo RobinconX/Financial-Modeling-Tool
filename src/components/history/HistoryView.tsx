@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState } from 'react'
 import type { PortfolioActualsState, SavedPortfolio, SavingsAccount } from '../../types'
+import type { PortfolioActualsMode } from '../../lib/portfolioActualsMode'
 import { fetchFxRateClient } from '../../lib/fx'
 import { formatMoney, formatPercent } from '../../lib/format'
 import {
@@ -33,6 +34,7 @@ type Props = {
   portfolios: SavedPortfolio[]
   savingsAccounts: SavingsAccount[]
   portfolioActuals?: PortfolioActualsState | null
+  portfolioActualsMode?: PortfolioActualsMode
 }
 
 function readJsonIds(): string[] | null {
@@ -79,6 +81,7 @@ export function HistoryView({
   portfolios,
   savingsAccounts,
   portfolioActuals = null,
+  portfolioActualsMode = 'shared',
 }: Props) {
   const [usdToChf, setUsdToChf] = useState<number | null>(null)
   const [fxError, setFxError] = useState<string | null>(null)
@@ -117,8 +120,15 @@ export function HistoryView({
   }, [loadFx])
 
   const allSeries = useMemo(
-    () => collectHistorySeries(portfolios, savingsAccounts, usdToChf, portfolioActuals),
-    [portfolios, savingsAccounts, usdToChf, portfolioActuals],
+    () =>
+      collectHistorySeries(
+        portfolios,
+        savingsAccounts,
+        usdToChf,
+        portfolioActuals,
+        portfolioActualsMode,
+      ),
+    [portfolios, savingsAccounts, usdToChf, portfolioActuals, portfolioActualsMode],
   )
 
   useEffect(() => {

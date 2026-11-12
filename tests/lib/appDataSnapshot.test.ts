@@ -35,6 +35,22 @@ describe('appDataSnapshot', () => {
     })
   })
 
+  it('keeps portfolio actuals mode on a snapshot', () => {
+    const parsed = parseAppDataSnapshot({
+      version: APP_DATA_SNAPSHOT_VERSION,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      scenarios: [],
+      portfolios: [],
+      incomeCost: { version: 3, scenarios: [], lines: [], draws: [] },
+      savings: { version: 1, accounts: [] },
+      overview: { version: 2, scenarios: [], selectedScenarioId: null },
+      portfolioActualsMode: 'perPortfolio',
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed) return
+    expect(parsed.portfolioActualsMode).toBe('perPortfolio')
+  })
+
   it('keeps portfolio cash mode and shared cash on a snapshot', () => {
     const parsed = parseAppDataSnapshot({
       version: APP_DATA_SNAPSHOT_VERSION,

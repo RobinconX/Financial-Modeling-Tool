@@ -52,6 +52,12 @@ import {
   type LinkedSaveMode,
 } from './linkedSaveMode'
 import {
+  applyPortfolioActualsModeSetting,
+  getPortfolioActualsMode,
+  parsePortfolioActualsMode,
+  type PortfolioActualsMode,
+} from './portfolioActualsMode'
+import {
   applyPortfolioCashModeSetting,
   getPortfolioCashMode,
   parsePortfolioCashMode,
@@ -83,6 +89,8 @@ export type AppDataSnapshot = {
   portfolioSharedCash?: PortfolioSharedCashState
   /** Per book vs one shared cash plan. Optional on older saves (defaults per book). */
   portfolioCashMode?: PortfolioCashMode
+  /** Shared (default) vs per-book value actuals + money-in. */
+  portfolioActualsMode?: PortfolioActualsMode
   /** How the linked file auto-saves. File-level; optional on older saves. */
   linkedSaveMode?: LinkedSaveMode
 }
@@ -104,6 +112,7 @@ export function collectAppData(): AppDataSnapshot {
     portfolioActuals: loadPortfolioActuals(),
     portfolioSharedCash: loadPortfolioSharedCash(),
     portfolioCashMode: getPortfolioCashMode(),
+    portfolioActualsMode: getPortfolioActualsMode(),
     linkedSaveMode: getLinkedSaveMode(),
   }
 }
@@ -126,6 +135,7 @@ export function emptyAppData(): AppDataSnapshot {
     portfolioActuals: emptyPortfolioActuals(),
     portfolioSharedCash: emptyPortfolioSharedCash(),
     portfolioCashMode: 'perPortfolio',
+    portfolioActualsMode: 'shared',
     linkedSaveMode: getLinkedSaveMode(),
   }
 }
@@ -179,7 +189,9 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
       : [],
     portfolioContributions: normalizePortfolioContributions(raw.portfolioContributions),
     portfolioActuals: (() => {
+      const mode = parsePortfolioActualsMode(raw.portfolioActualsMode) ?? 'shared'
       const stored = normalizePortfolioActuals(raw.portfolioActuals)
+      if (mode === 'perPortfolio') return stored
       if (hasActualMonths(stored)) return stored
       return pickActualsFromPortfolios(
         raw.portfolios as SavedPortfolio[],
@@ -188,6 +200,7 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
     })(),
     portfolioSharedCash: normalizePortfolioSharedCash(raw.portfolioSharedCash),
     portfolioCashMode: parsePortfolioCashMode(raw.portfolioCashMode),
+    portfolioActualsMode: parsePortfolioActualsMode(raw.portfolioActualsMode),
     linkedSaveMode: parseLinkedSaveMode(raw.linkedSaveMode),
   }
 }
@@ -201,6 +214,14 @@ export function applyAppDataToLocalStorage(
   snapshot: AppDataSnapshot,
 ): { ok: true } | { ok: false; error: string } {
   return withLinkedMirrorSuppressed(() => {
+    const actualsMode = snapshot.portfolioActualsMode ?? 'shared'
+    applyPortfolioActualsModeSetting(actualsMode)
+    if (snapshot.portfolioCashMode) {
+      applyPortfolioCashModeSetting(snapshot.portfolioCashMode)
+    } else {
+      applyPortfolioCashModeSetting('perPortfolio')
+    }
+
     const r1 = saveScenarios(snapshot.scenarios)
     if (!r1.ok) return { ok: false, error: r1.error }
 
@@ -226,13 +247,18 @@ export function applyAppDataToLocalStorage(
     if (!r8.ok) return { ok: false, error: r8.error }
 
     const r9 = savePortfolioContributions(
-      normalizePortfolioContributions(snapshot.portfolioContributions),
+      actualsMode === 'perPortfolio'
+        ? emptyPortfolioContributions()
+        : normalizePortfolioContributions(snapshot.portfolioContributions),
     )
     if (!r9.ok) return { ok: false, error: r9.error }
 
-    const actuals = hasActualMonths(snapshot.portfolioActuals)
-      ? normalizePortfolioActuals(snapshot.portfolioActuals)
-      : pickActualsFromPortfolios(snapshot.portfolios, snapshot.selectedPortfolioId)
+    const actuals =
+      actualsMode === 'perPortfolio'
+        ? emptyPortfolioActuals()
+        : hasActualMonths(snapshot.portfolioActuals)
+          ? normalizePortfolioActuals(snapshot.portfolioActuals)
+          : pickActualsFromPortfolios(snapshot.portfolios, snapshot.selectedPortfolioId)
     const r10 = savePortfolioActuals(actuals)
     if (!r10.ok) return { ok: false, error: r10.error }
 
@@ -240,12 +266,6 @@ export function applyAppDataToLocalStorage(
       normalizePortfolioSharedCash(snapshot.portfolioSharedCash),
     )
     if (!r11.ok) return { ok: false, error: r11.error }
-
-    if (snapshot.portfolioCashMode) {
-      applyPortfolioCashModeSetting(snapshot.portfolioCashMode)
-    } else {
-      applyPortfolioCashModeSetting('perPortfolio')
-    }
 
     if (snapshot.linkedSaveMode) applyLinkedSaveMode(snapshot.linkedSaveMode)
 

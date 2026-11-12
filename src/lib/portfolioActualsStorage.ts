@@ -7,6 +7,7 @@ import {
   stripPortfolioActuals,
 } from './portfolioActuals'
 import { queueAppDataChanged } from './linkedMirrorGate'
+import { getPortfolioActualsMode } from './portfolioActualsMode'
 import { loadPortfolios, loadSelectedPortfolioId, savePortfolios } from './portfolioStorage'
 
 export const PORTFOLIO_ACTUALS_KEY = 'grok-lab.portfolioActuals.v1'
@@ -27,6 +28,9 @@ function readStored(): PortfolioActualsState | null {
  */
 export function loadPortfolioActuals(): PortfolioActualsState {
   const stored = readStored()
+  if (getPortfolioActualsMode() === 'perPortfolio') {
+    return stored ?? emptyPortfolioActuals()
+  }
   if (stored && hasActualMonths(stored)) return stored
 
   const portfolios = loadPortfolios()
