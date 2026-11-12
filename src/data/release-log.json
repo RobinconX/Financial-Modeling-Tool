@@ -1,5 +1,16 @@
 [
   {
+    "releasedAt": "2026-11-12",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Portfolio settings, shared cash & actuals, savings migration fix",
+    "notes": [
+      "Settings → Portfolio groups shared vs per-book cash plans and recorded actuals, with stash/restore when you switch modes.",
+      "Legacy Savings one-off amounts keep a stable month when imported instead of shifting with the calendar.",
+      "Data & backup is now Settings; portfolio cash and actuals mode confirmations offer restore or apply-to-all choices."
+    ]
+  },
+  {
     "releasedAt": "2026-11-11",
     "prodSha": "8ada3fa99449f14481b56a8c2e705b44e911da77",
     "headline": "Overview upgrades, import clarity & Comparables layout",
