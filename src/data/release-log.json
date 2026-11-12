@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-12",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "76536dd5ed12f8cb38e5839f30ec3eea0c54b111",
     "headline": "Portfolio settings, shared cash & actuals, savings migration fix",
     "notes": [
       "Settings → Portfolio groups shared vs per-book cash plans and recorded actuals, with stash/restore when you switch modes.",
