@@ -1123,15 +1123,12 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
 
 Everything on this page stays on **this device** unless you export or link a file you sync yourself.
 
-### Portfolio actuals
+### Portfolio
 
-- **Shared actuals** — one value-actuals and money-in record for every book (default)
-- **Separate per portfolio** — each book keeps its own **Actuals** tab data
+One **Portfolio** panel groups portfolio-wide modes:
 
-### Portfolio cash
-
-- **Separate per portfolio** — each book has its own Cash tab (default)
-- **Shared cash** — one cash plan for every book
+- **Cash** — separate per book (default) or **Shared cash**
+- **Actuals** — **Shared actuals** (default) or separate per book
 
 Switching either mode asks for confirmation. Turning on a shared mode lets you pick which portfolio seeds the shared record (defaults to the one open on **Portfolio**); each book’s prior data is stashed for optional restore.
 
@@ -1177,6 +1174,38 @@ Link **financial-model.json** in synced folder, leave **Edits + periodic** on, e
     order: 0,
   },
 
+  'settings.portfolio': {
+    id: 'settings.portfolio',
+    title: 'Portfolio settings',
+    summary:
+      'Settings panel that groups portfolio-wide preferences: cash mode and actuals mode, with room for more portfolio toggles later.',
+    body: `## How it works
+
+Open **Settings** and find the **Portfolio** section near the top.
+
+### Subsections
+
+- **Cash** — shared vs separate cash plans (**settings.portfolioCash** guide)
+- **Actuals** — shared vs separate value actuals and money-in (**settings.portfolioActuals** guide)
+
+> New portfolio-wide settings belong in this section: implement them in **SettingsPortfolioSection** with their own **data-guide-anchor** and child guide id under **settings.portfolio***.
+
+Each subsection has its own **Guide** button for detail.
+
+## How to interpret
+
+Cash mode and actuals mode are independent — you can mix shared cash with separate actuals, or the reverse.
+
+## Example
+
+You keep **Shared actuals** for one history record but use **Separate per portfolio** cash so each book’s deposit schedule stays different.
+`,
+    status: 'ready',
+    location: { tab: 'settings', anchor: 'settings.portfolio' },
+    parentId: 'settings',
+    order: 0,
+  },
+
   'settings.portfolioActuals': {
     id: 'settings.portfolioActuals',
     title: 'Portfolio actuals mode',
@@ -1206,7 +1235,7 @@ Books **Growth** and **Conservative** each had different **2024** month-end valu
 `,
     status: 'ready',
     location: { tab: 'settings', anchor: 'settings.portfolioActuals' },
-    parentId: 'settings',
+    parentId: 'settings.portfolio',
     order: 1,
   },
 
@@ -1239,7 +1268,7 @@ Books **Growth** and **Conservative** each had different deposits. You enable **
 `,
     status: 'ready',
     location: { tab: 'settings', anchor: 'settings.portfolioCash' },
-    parentId: 'settings',
+    parentId: 'settings.portfolio',
     order: 0,
   },
 

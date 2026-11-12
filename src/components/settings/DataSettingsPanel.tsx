@@ -39,6 +39,7 @@ import {
 } from '../../lib/linkedDataFile'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
+import { SettingsPortfolioSection } from './SettingsPortfolioSection'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 import type { PortfolioCashMode } from '../../lib/portfolioCashMode'
 import {
@@ -459,96 +460,18 @@ export function DataSettingsPanel({
         )}
       </div>
 
-      <section className="panel space-y-3" data-guide-anchor="settings.portfolioCash">
-        <div className="flex items-center gap-1.5">
-          <h3 className="section-title text-sky-300/90">Portfolio cash</h3>
-          <FeatureGuideButton id="settings.portfolioCash" />
-        </div>
-        <p className="text-sm text-white/55">
-          Choose whether each portfolio book has its own cash plan, or one shared plan (like
-          Actuals).
-        </p>
-        <div
-          className="inline-flex gap-1 border-b border-white/10"
-          role="group"
-          aria-label="Portfolio cash mode"
-        >
-          {(
-            [
-              { id: 'perPortfolio' as const, label: 'Separate per portfolio' },
-              { id: 'shared' as const, label: 'Shared cash' },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              disabled={busy}
-              onClick={() => requestCashMode(opt.id)}
-              className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
-                portfolioCashMode === opt.id
-                  ? 'border-emerald-400 text-white'
-                  : 'border-transparent text-white/50 hover:text-white/80'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        {portfolioCashMode === 'shared' ? (
-          <p className="text-[11px] text-white/40">
-            Display currency for shared cash: <span className="text-white/70">{sharedCash.currency}</span>
-          </p>
-        ) : null}
-        {cashModeError ? <p className="text-sm text-amber-300/90">{cashModeError}</p> : null}
-      </section>
-
-      <section className="panel space-y-3" data-guide-anchor="settings.portfolioActuals">
-        <div className="flex items-center gap-1.5">
-          <h3 className="section-title text-violet-300/90">Portfolio actuals</h3>
-          <FeatureGuideButton id="settings.portfolioActuals" />
-        </div>
-        <p className="text-sm text-white/55">
-          Choose whether each portfolio keeps its own recorded value and money-in, or one shared
-          record for every book (default).
-        </p>
-        <div
-          className="inline-flex gap-1 border-b border-white/10"
-          role="group"
-          aria-label="Portfolio actuals mode"
-        >
-          {(
-            [
-              { id: 'shared' as const, label: 'Shared actuals' },
-              { id: 'perPortfolio' as const, label: 'Separate per portfolio' },
-            ] as const
-          ).map((opt) => (
-            <button
-              key={opt.id}
-              type="button"
-              disabled={busy}
-              onClick={() => requestActualsMode(opt.id)}
-              className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
-                portfolioActualsMode === opt.id
-                  ? 'border-emerald-400 text-white'
-                  : 'border-transparent text-white/50 hover:text-white/80'
-              }`}
-            >
-              {opt.label}
-            </button>
-          ))}
-        </div>
-        {portfolioActualsMode === 'shared' ? (
-          <p className="text-[11px] text-white/40">
-            Display currency for shared actuals:{' '}
-            <span className="text-white/70">{portfolioActuals.currency}</span>
-            {' · '}
-            Money in: <span className="text-white/70">{portfolioContributions.currency}</span>
-          </p>
-        ) : null}
-        {actualsModeError ? (
-          <p className="text-sm text-amber-300/90">{actualsModeError}</p>
-        ) : null}
-      </section>
+      <SettingsPortfolioSection
+        busy={busy}
+        portfolioCashMode={portfolioCashMode}
+        onRequestCashMode={requestCashMode}
+        sharedCash={sharedCash}
+        cashModeError={cashModeError}
+        portfolioActualsMode={portfolioActualsMode}
+        onRequestActualsMode={requestActualsMode}
+        portfolioActuals={portfolioActuals}
+        portfolioContributions={portfolioContributions}
+        actualsModeError={actualsModeError}
+      />
 
       <section className="panel space-y-3">
         <div className="flex items-center gap-1.5">

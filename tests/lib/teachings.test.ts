@@ -291,9 +291,18 @@ describe('teachings registry', () => {
     expect(getGuide('settings.linkedFile')).toBeUndefined()
     expect(getGuide('settings.export')).toBeUndefined()
     expect(listChildGuides('settings').map((c) => c.id)).toEqual([
+      'settings.portfolio',
+      'settings.feedback',
+    ])
+    const portfolioGroup = getGuide('settings.portfolio')
+    expect(portfolioGroup?.status).toBe('ready')
+    expect(portfolioGroup?.location).toEqual({
+      tab: 'settings',
+      anchor: 'settings.portfolio',
+    })
+    expect(listChildGuides('settings.portfolio').map((c) => c.id)).toEqual([
       'settings.portfolioCash',
       'settings.portfolioActuals',
-      'settings.feedback',
     ])
     const feedback = getGuide('settings.feedback')
     expect(feedback?.status).toBe('ready')
@@ -305,9 +314,13 @@ describe('teachings registry', () => {
     expect(settingsTab.roots.map((r) => r.guide.id)).toEqual(['settings', 'system.releaseLog'])
     const settingsRoot = settingsTab.roots.find((r) => r.guide.id === 'settings')!
     expect(settingsRoot.children.map((c) => c.guide.id)).toEqual([
+      'settings.portfolio',
+      'settings.feedback',
+    ])
+    const portfolioNode = settingsRoot.children.find((c) => c.guide.id === 'settings.portfolio')
+    expect(portfolioNode?.children.map((c) => c.guide.id)).toEqual([
       'settings.portfolioCash',
       'settings.portfolioActuals',
-      'settings.feedback',
     ])
   })
 
