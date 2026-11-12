@@ -1130,7 +1130,7 @@ Everything on this page stays on **this device** unless you export or link a fil
 - **Separate per portfolio** — each book has its own Cash tab (default)
 - **Shared cash** — one cash plan for every book (like **Actuals**)
 
-Switching modes asks for confirmation. Turning on shared cash seeds from the portfolio open on the **Portfolio** tab; each book’s prior cash is stashed for optional restore.
+Switching modes asks for confirmation. Turning on shared cash lets you pick which portfolio seeds the shared plan (defaults to the one open on **Portfolio**); each book’s prior cash is stashed for optional restore.
 
 ### Browser storage
 
@@ -1189,7 +1189,7 @@ Default. **Portfolio → Cash** edits only the selected book. **Copy cash…** c
 
 One opening balance and deposit schedule for **every** portfolio. **Portfolio → Cash** shows **Same cash plan for every portfolio.**
 
-> Turning on shared cash seeds from whichever portfolio is open on the Portfolio tab. Display currency on that tab becomes the shared cash display currency.
+> Turning on shared cash opens a confirmation with a portfolio picker (defaulting to the one open on Portfolio). Display currency follows the portfolio you choose.
 
 Each book’s previous cash is **stashed** when you enable shared mode.
 

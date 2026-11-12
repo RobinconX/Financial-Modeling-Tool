@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   addAccount,
   applyLoadedSave,
@@ -46,7 +46,7 @@ import {
   buildSwitchToShared,
   type SwitchToPerPortfolioChoice,
 } from '../../lib/portfolioCashModeSwitch'
-import { readPortfolioDisplayCurrency } from '../../lib/portfolioDisplayCurrency'
+import { portfolioSeedDisplayCurrency } from '../../lib/portfolioDisplayCurrency'
 import { loadSelectedPortfolioId } from '../../lib/portfolioStorage'
 import type { PortfolioSharedCashState, SavedPortfolio } from '../../types'
 
@@ -81,6 +81,7 @@ export function DataSettingsPanel({
   const fileInputRef = useRef<HTMLInputElement>(null)
   const [saveMode, setSaveMode] = useState<LinkedSaveMode>(getLinkedSaveMode)
   const [pendingCashMode, setPendingCashMode] = useState<PortfolioCashMode | null>(null)
+  const [sharedSeedPortfolioId, setSharedSeedPortfolioId] = useState<string | null>(null)
   const [cashModeError, setCashModeError] = useState<string | null>(null)
   const catalog = loadCatalog()
   const accountCount = catalog?.accounts.length ?? 1
@@ -269,22 +270,34 @@ export function DataSettingsPanel({
     return portfolios[0] ?? null
   })()
 
+  const openPortfolioTabId = loadSelectedPortfolioId()
+
+  const sharedSeedDisplayCurrency = useMemo(() => {
+    const p = portfolios.find((x) => x.id === sharedSeedPortfolioId)
+    if (!p) return 'USD'
+    return portfolioSeedDisplayCurrency(p, openPortfolioTabId)
+  }, [portfolios, sharedSeedPortfolioId, openPortfolioTabId])
+
   function requestCashMode(next: PortfolioCashMode) {
     if (next === portfolioCashMode) return
     setCashModeError(null)
+    if (next === 'shared') {
+      setSharedSeedPortfolioId(openPortfolio?.id ?? portfolios[0]?.id ?? null)
+    }
     setPendingCashMode(next)
   }
 
   function confirmSwitchToShared() {
-    if (!openPortfolio) {
-      setCashModeError('Create a portfolio first.')
+    const seed = portfolios.find((p) => p.id === sharedSeedPortfolioId)
+    if (!seed) {
+      setCashModeError('Choose a portfolio to seed shared cash.')
       setPendingCashMode(null)
       return
     }
     const built = buildSwitchToShared(
       portfolios,
-      openPortfolio.id,
-      readPortfolioDisplayCurrency(),
+      seed.id,
+      portfolioSeedDisplayCurrency(seed, openPortfolioTabId),
     )
     if ('error' in built) {
       setCashModeError(built.error)
@@ -298,6 +311,7 @@ export function DataSettingsPanel({
     }
     onPortfolioCashModeChange('shared')
     setPendingCashMode(null)
+    setSharedSeedPortfolioId(null)
     setMessage('Portfolio cash is now shared across all books.')
     remountApp()
   }
@@ -681,17 +695,30 @@ export function DataSettingsPanel({
           danger={false}
           confirmLabel="Use shared cash"
           cancelLabel="Cancel"
-          onClose={() => setPendingCashMode(null)}
+          onClose={() => {
+            setPendingCashMode(null)
+            setSharedSeedPortfolioId(null)
+          }}
           onConfirm={confirmSwitchToShared}
         >
-          <p>
+          <p className="leading-relaxed">
             Shared cash will start from the cash plan on{' '}
-            <span className="font-semibold text-white">
-              {openPortfolio?.name ?? 'the open portfolio'}
-            </span>{' '}
-            — whichever portfolio is open on the Portfolio tab right now. Display currency{' '}
-            <span className="font-semibold text-white">{readPortfolioDisplayCurrency()}</span>{' '}
-            from that tab applies to the shared record.
+            <select
+              className="select-compact mx-0.5 inline-block max-w-[14rem] align-baseline font-semibold text-white"
+              value={sharedSeedPortfolioId ?? ''}
+              disabled={portfolios.length === 0}
+              aria-label="Portfolio to seed shared cash from"
+              onChange={(e) => setSharedSeedPortfolioId(e.target.value)}
+            >
+              {portfolios.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            . Display currency{' '}
+            <span className="font-semibold text-white">{sharedSeedDisplayCurrency}</span> applies to
+            the shared record.
           </p>
           <p>
             Each book’s current cash is stashed so you can restore it if you switch back to
