@@ -51,6 +51,12 @@ export function periodKeyFromDate(d: Date): string {
   return `${y}-${String(m).padStart(2, '0')}`
 }
 
+/**
+ * Period for migrating pre-actuals `amount` when the payload has no other dated actuals.
+ * Anchored to Savings v1 storage ship month (not wall-clock at load time).
+ */
+export const LEGACY_SAVINGS_AMOUNT_PERIOD_KEY = '2026-07'
+
 export function makePeriodKey(year: number, month: number): string {
   return `${year}-${String(month).padStart(2, '0')}`
 }

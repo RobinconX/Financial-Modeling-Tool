@@ -1,4 +1,4 @@
-import { describe, expect, it } from 'vitest'
+import { describe, expect, it, vi } from 'vitest'
 import {
   addMonthsToKey,
   balanceNow,
@@ -398,6 +398,52 @@ describe('currentPeriodKey', () => {
 })
 
 describe('savings payload migrate', () => {
+  it('migrates legacy amount to a stable period, not wall-clock month', async () => {
+    vi.useFakeTimers()
+    vi.setSystemTime(new Date(2031, 10, 15))
+    try {
+      const { accountsFromSavingsPayload, legacyAmountMigrationPeriodKey } = await import(
+        '../../src/lib/savingsStorage'
+      )
+      const list = [
+        { id: 'acc-1', name: 'EF', amount: 8000, contribution: 0, cadence: 'monthly' },
+      ]
+      expect(legacyAmountMigrationPeriodKey(list)).toBe('2026-07')
+      const loaded = accountsFromSavingsPayload({ version: 1, accounts: list })
+      const ef = loaded.find((a) => a.id === 'acc-1')
+      expect(ef?.actuals).toEqual({ '2026-07': 8000 })
+      expect(ef?.actuals['2031-11']).toBeUndefined()
+    } finally {
+      vi.useRealTimers()
+    }
+  })
+
+  it('migrates legacy amount to the latest period already stored on sibling accounts', async () => {
+    const { accountsFromSavingsPayload } = await import('../../src/lib/savingsStorage')
+    const loaded = accountsFromSavingsPayload({
+      version: 1,
+      accounts: [
+        {
+          id: 'savings-cash',
+          name: 'Cash',
+          role: 'cash',
+          actuals: { '2024-11': 2000, '2024-12': 2500 },
+          contribution: 0,
+          cadence: 'monthly',
+        },
+        {
+          id: 'acc-pension',
+          name: 'Pension',
+          amount: 50_000,
+          contribution: 500,
+          cadence: 'monthly',
+        },
+      ],
+    })
+    const pension = loaded.find((a) => a.id === 'acc-pension')
+    expect(pension?.actuals).toEqual({ '2024-12': 50_000 })
+  })
+
   it('keeps every account and actuals when compoundUntilYear is missing', async () => {
     const { accountsFromSavingsPayload } = await import('../../src/lib/savingsStorage')
     const loaded = accountsFromSavingsPayload({
