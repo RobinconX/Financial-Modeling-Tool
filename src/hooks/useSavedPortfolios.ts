@@ -119,6 +119,11 @@ export function useSavedPortfolios() {
     [persist],
   )
 
+  const replacePortfolios = useCallback(
+    (next: SavedPortfolio[]) => persist(next).ok,
+    [persist],
+  )
+
   const dismissStorageRecovery = useCallback(() => setStorageRecovery(null), [])
 
   return {
@@ -131,5 +136,6 @@ export function useSavedPortfolios() {
     deletePortfolio,
     copyPortfolio,
     reorderPortfolios,
+    replacePortfolios,
   }
 }

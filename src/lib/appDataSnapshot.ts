@@ -13,6 +13,7 @@ import type {
   SavingsState,
   PortfolioActualsState,
   PortfolioContributionsState,
+  PortfolioSharedCashState,
 } from '../types'
 import { emptyIncomeCostState } from './incomeCost'
 import { defaultOverviewState } from './overview'
@@ -50,6 +51,17 @@ import {
   parseLinkedSaveMode,
   type LinkedSaveMode,
 } from './linkedSaveMode'
+import {
+  applyPortfolioCashModeSetting,
+  getPortfolioCashMode,
+  parsePortfolioCashMode,
+  type PortfolioCashMode,
+} from './portfolioCashMode'
+import { emptyPortfolioSharedCash, normalizePortfolioSharedCash } from './portfolioSharedCash'
+import {
+  loadPortfolioSharedCash,
+  savePortfolioSharedCash,
+} from './portfolioSharedCashStorage'
 
 export const APP_DATA_FILE_NAME = 'financial-model.json'
 export const APP_DATA_SNAPSHOT_VERSION = 1 as const
@@ -68,6 +80,9 @@ export type AppDataSnapshot = {
   goals: NetWorthGoal[]
   portfolioContributions?: PortfolioContributionsState
   portfolioActuals?: PortfolioActualsState
+  portfolioSharedCash?: PortfolioSharedCashState
+  /** Per book vs one shared cash plan. Optional on older saves (defaults per book). */
+  portfolioCashMode?: PortfolioCashMode
   /** How the linked file auto-saves. File-level; optional on older saves. */
   linkedSaveMode?: LinkedSaveMode
 }
@@ -87,6 +102,8 @@ export function collectAppData(): AppDataSnapshot {
     goals: loadGoals(),
     portfolioContributions: loadPortfolioContributions(),
     portfolioActuals: loadPortfolioActuals(),
+    portfolioSharedCash: loadPortfolioSharedCash(),
+    portfolioCashMode: getPortfolioCashMode(),
     linkedSaveMode: getLinkedSaveMode(),
   }
 }
@@ -107,6 +124,8 @@ export function emptyAppData(): AppDataSnapshot {
     goals: [],
     portfolioContributions: emptyPortfolioContributions(),
     portfolioActuals: emptyPortfolioActuals(),
+    portfolioSharedCash: emptyPortfolioSharedCash(),
+    portfolioCashMode: 'perPortfolio',
     linkedSaveMode: getLinkedSaveMode(),
   }
 }
@@ -167,6 +186,8 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
         typeof raw.selectedPortfolioId === 'string' ? raw.selectedPortfolioId : null,
       )
     })(),
+    portfolioSharedCash: normalizePortfolioSharedCash(raw.portfolioSharedCash),
+    portfolioCashMode: parsePortfolioCashMode(raw.portfolioCashMode),
     linkedSaveMode: parseLinkedSaveMode(raw.linkedSaveMode),
   }
 }
@@ -214,6 +235,17 @@ export function applyAppDataToLocalStorage(
       : pickActualsFromPortfolios(snapshot.portfolios, snapshot.selectedPortfolioId)
     const r10 = savePortfolioActuals(actuals)
     if (!r10.ok) return { ok: false, error: r10.error }
+
+    const r11 = savePortfolioSharedCash(
+      normalizePortfolioSharedCash(snapshot.portfolioSharedCash),
+    )
+    if (!r11.ok) return { ok: false, error: r11.error }
+
+    if (snapshot.portfolioCashMode) {
+      applyPortfolioCashModeSetting(snapshot.portfolioCashMode)
+    } else {
+      applyPortfolioCashModeSetting('perPortfolio')
+    }
 
     if (snapshot.linkedSaveMode) applyLinkedSaveMode(snapshot.linkedSaveMode)
 

@@ -5,9 +5,11 @@ import type {
   DisplayCurrency,
   PortfolioContributionsState,
   PortfolioActualsState,
+  PortfolioSharedCashState,
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
+import type { PortfolioCashMode } from '../../lib/portfolioCashMode'
 import {
   buildPortfolioGrid,
   earliestActualYear,
@@ -126,6 +128,8 @@ function readShowTarget(): boolean {
 type Props = {
   scenarios: SavedScenario[]
   portfolios: SavedPortfolio[]
+  /** Cash-resolved copies for chart/grid when mode is shared */
+  portfoliosForCash: SavedPortfolio[]
   storageError: string | null
   createPortfolio: (name?: string) => SavedPortfolio | null
   updatePortfolio: (id: string, patch: Partial<SavedPortfolio>) => boolean
@@ -141,11 +145,19 @@ type Props = {
   portfolioActuals: PortfolioActualsState
   actualsError: string | null
   setPortfolioActuals: (next: PortfolioActualsState) => void
+  portfolioCashMode: PortfolioCashMode
+  sharedCash: PortfolioSharedCashState
+  sharedCashError: string | null
+  onSharedCashPatch: (patch: {
+    deposits?: PortfolioSharedCashState['deposits']
+    perpetualYearlyDeposit?: PortfolioSharedCashState['perpetualYearlyDeposit']
+  }) => boolean
 }
 
 export function PortfolioView({
   scenarios,
   portfolios,
+  portfoliosForCash,
   storageError,
   createPortfolio,
   updatePortfolio,
@@ -161,6 +173,10 @@ export function PortfolioView({
   portfolioActuals,
   actualsError,
   setPortfolioActuals,
+  portfolioCashMode,
+  sharedCash,
+  sharedCashError,
+  onSharedCashPatch,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     readSelectedPortfolioId(portfolios),
@@ -445,14 +461,35 @@ export function PortfolioView({
     setToDraft(String(b))
   }
 
+  const canConvert = displayCurrency === 'USD' || (usdToChf != null && usdToChf > 0)
+  const activeCurrency: DisplayCurrency = canConvert ? displayCurrency : 'USD'
+
+  const selectedForCash =
+    portfoliosForCash.find((p) => p.id === selectedId) ?? selected
+
+  const cashDisplayCurrency: DisplayCurrency =
+    portfolioCashMode === 'shared' ? sharedCash.currency : activeCurrency
+
+  function handleCashPortfolioChange(patch: Partial<SavedPortfolio>) {
+    if (!selected) return
+    if (portfolioCashMode === 'shared') {
+      onSharedCashPatch({
+        deposits: patch.deposits,
+        perpetualYearlyDeposit: patch.perpetualYearlyDeposit,
+      })
+      return
+    }
+    updatePortfolio(selected.id, patch)
+  }
+
   /** Deposits (incl. CHF / surplus) as USD book — must be used for chart cash math */
   const resolvedSelected = useMemo(() => {
-    if (!selected) return null
-    return withResolvedDepositAmounts(selected, {
+    if (!selectedForCash) return null
+    return withResolvedDepositAmounts(selectedForCash, {
       incomeCostLines,
       usdToChf,
     })
-  }, [selected, selected?.updatedAt, incomeCostLines, usdToChf])
+  }, [selectedForCash, selectedForCash?.updatedAt, incomeCostLines, usdToChf])
 
   const grid = useMemo(() => {
     if (!resolvedSelected) return null
@@ -482,9 +519,6 @@ export function PortfolioView({
     periodTo,
     lastInputYear,
   ])
-
-  const canConvert = displayCurrency === 'USD' || (usdToChf != null && usdToChf > 0)
-  const activeCurrency: DisplayCurrency = canConvert ? displayCurrency : 'USD'
 
   function handleCreate() {
     const created = createPortfolio(`Portfolio ${portfolios.length + 1}`)
@@ -1138,7 +1172,7 @@ export function PortfolioView({
 
             {selected && panel === 'goal' && (
               <GoalSpeedPanel
-                portfolio={selected}
+                portfolio={selectedForCash ?? selected}
                 scenarios={scenarios}
                 displayCurrency={activeCurrency}
                 usdToChf={usdToChf}
@@ -1150,15 +1184,25 @@ export function PortfolioView({
             {selected && editorPanel && (
               <PortfolioHoldingsEditor
                 panel={editorPanel}
-                portfolio={selected}
+                portfolio={editorPanel === 'cash' ? (selectedForCash ?? selected) : selected}
                 scenarios={scenarios}
-                onChange={(patch) => updatePortfolio(selected.id, patch)}
-                displayCurrency={activeCurrency}
+                onChange={
+                  editorPanel === 'cash'
+                    ? handleCashPortfolioChange
+                    : (patch) => updatePortfolio(selected.id, patch)
+                }
+                displayCurrency={
+                  editorPanel === 'cash' ? cashDisplayCurrency : activeCurrency
+                }
                 usdToChf={usdToChf}
                 incomeCostScenarios={incomeCostScenarios}
                 incomeCostLines={incomeCostLines}
                 otherPortfolios={portfolios.filter((p) => p.id !== selected.id)}
-                onUpdateOtherPortfolio={updatePortfolio}
+                onUpdateOtherPortfolio={
+                  portfolioCashMode === 'shared' ? undefined : updatePortfolio
+                }
+                sharedCashMode={portfolioCashMode === 'shared' && editorPanel === 'cash'}
+                sharedCashError={sharedCashError}
               />
             )}
         </div>

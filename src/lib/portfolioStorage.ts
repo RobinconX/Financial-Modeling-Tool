@@ -13,6 +13,7 @@ import {
 } from './storageLoadRecovery'
 import { buildOccSymbol } from './optionContract'
 import { stripPortfolioActuals } from './portfolioActuals'
+import { normalizePortfolioCashStash } from './portfolioSharedCash'
 import { newDeposit, newHolding, normalizePortfolioCashModel } from './portfolio'
 
 export const PORTFOLIO_STORAGE_KEY = 'grok-lab.saved-portfolios.v1'
@@ -328,6 +329,8 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     }
   }
 
+  const cashStash = normalizePortfolioCashStash(raw.cashStash)
+
   return normalizePortfolioCashModel({
     id,
     name,
@@ -342,6 +345,7 @@ function normalizePortfolio(raw: unknown): SavedPortfolio | null {
     actualsCurrency,
     targetCompound,
     goalSpeed,
+    cashStash,
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   })

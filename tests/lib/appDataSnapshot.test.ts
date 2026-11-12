@@ -26,6 +26,36 @@ describe('appDataSnapshot', () => {
     expect(parsed.portfolioContributions).toEqual({ version: 1, currency: 'USD', byYear: {} })
     expect(parsed.portfolioActuals).toEqual({ version: 1, currency: 'USD', byMonth: {} })
     expect(parsed.linkedSaveMode).toBeUndefined()
+    expect(parsed.portfolioCashMode).toBeUndefined()
+    expect(parsed.portfolioSharedCash).toEqual({
+      version: 1,
+      currency: 'USD',
+      deposits: [],
+      perpetualYearlyDeposit: null,
+    })
+  })
+
+  it('keeps portfolio cash mode and shared cash on a snapshot', () => {
+    const parsed = parseAppDataSnapshot({
+      version: APP_DATA_SNAPSHOT_VERSION,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      scenarios: [],
+      portfolios: [],
+      incomeCost: { version: 3, scenarios: [], lines: [], draws: [] },
+      savings: { version: 1, accounts: [] },
+      overview: { version: 2, scenarios: [], selectedScenarioId: null },
+      portfolioCashMode: 'shared',
+      portfolioSharedCash: {
+        version: 1,
+        currency: 'CHF',
+        deposits: [],
+        perpetualYearlyDeposit: null,
+      },
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed) return
+    expect(parsed.portfolioCashMode).toBe('shared')
+    expect(parsed.portfolioSharedCash?.currency).toBe('CHF')
   })
 
   it('keeps linkedSaveMode on a snapshot', () => {
