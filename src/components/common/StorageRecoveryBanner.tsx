@@ -31,7 +31,7 @@ export function StorageRecoveryBanner({
             <code className="rounded bg-black/30 px-1 py-0.5 text-xs text-amber-50">
               {notice.backupKey}
             </code>
-            . Download it before editing this section, or use Data &amp; backup to import a JSON
+            . Download it before editing this section, or use Settings to import a JSON
             export if you have one.
           </p>
           <div className="flex flex-wrap gap-2">
@@ -48,7 +48,7 @@ export function StorageRecoveryBanner({
                 className="rounded-md border border-white/15 bg-white/5 px-3 py-1 text-xs font-medium text-white/90 hover:bg-white/10"
                 onClick={onOpenDataSettings}
               >
-                Open Data &amp; backup
+                Open Settings
               </button>
             ) : null}
             <button

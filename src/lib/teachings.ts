@@ -64,7 +64,7 @@ const TAB_LABELS: Record<AppTab, string> = {
   history: 'History',
   'income-cost': 'Budget',
   savings: 'Savings',
-  settings: 'Data & backup',
+  settings: 'Settings',
 }
 
 const GUIDES: Record<string, FeatureGuide> = {
@@ -938,15 +938,19 @@ Enter **display currency 250k** for **2024-11** under **Portfolio value**. Every
     id: 'portfolio.cash',
     title: 'Cash',
     summary:
-      'Opening cash and planned deposits for the selected portfolio by year. Fixed or Budget-surplus amounts, optional perpetual yearly deposit; proceeds and buys flow through the cash book.',
+      'Opening cash and planned deposits by year — per portfolio or one shared plan (Settings). Fixed or Budget-surplus amounts, optional perpetual yearly deposit; proceeds and buys flow through the cash book.',
     body: `## How it works
+
+In **Settings → Portfolio cash**, choose **Separate per portfolio** (default) or **Shared cash** (one plan for every book, like Actuals).
 
 ### Cash & deposits
 
 - **Opening row** — current cash (this calendar year); cannot be removed
 - **+ Deposit** — explicit year rows: **Fixed** amount or **% of Income/Cost surplus** from a Budget scenario (needs FX when surplus is CHF and book is USD)
 - **Perpetual yearly** — after the last explicit deposit year, repeat a fixed or surplus-linked amount each year
-- **Copy cash…** — push opening + deposits + perpetual row to other books
+- **Copy cash…** — per-portfolio mode only: push opening + deposits + perpetual row to other books
+
+Shared mode shows: **Same cash plan for every portfolio.**
 
 Columns show plan vs already deposited vs **Cash after** that year.
 
@@ -1114,12 +1118,19 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
 
   settings: {
     id: 'settings',
-    title: 'Data & backup',
+    title: 'Settings',
     summary:
-      'Local-only storage: browser mirror while you work, optional linked JSON for continuous save on desktop Chrome/Edge, and JSON export/import for backups or moving accounts. No shared cloud database.',
+      'Data file, backups, and portfolio preferences. Local-only storage: browser mirror, optional linked JSON on desktop Chrome/Edge, and JSON export/import. No shared cloud database.',
     body: `## How it works
 
 Everything on this page stays on **this device** unless you export or link a file you sync yourself.
+
+### Portfolio cash
+
+- **Separate per portfolio** — each book has its own Cash tab (default)
+- **Shared cash** — one cash plan for every book (like **Actuals**)
+
+Switching modes asks for confirmation. Turning on shared cash lets you pick which portfolio seeds the shared plan (defaults to the one open on **Portfolio**); each book’s prior cash is stashed for optional restore.
 
 ### Browser storage
 
@@ -1160,6 +1171,39 @@ Link **financial-model.json** in synced folder, leave **Edits + periodic** on, e
     status: 'ready',
     location: { tab: 'settings', anchor: 'settings' },
     parentId: null,
+    order: 0,
+  },
+
+  'settings.portfolioCash': {
+    id: 'settings.portfolioCash',
+    title: 'Portfolio cash mode',
+    summary:
+      'Use separate cash plans per portfolio book, or one shared cash record for all books — same idea as shared Actuals.',
+    body: `## How it works
+
+### Separate per portfolio
+
+Default. **Portfolio → Cash** edits only the selected book. **Copy cash…** can push the plan to other books.
+
+### Shared cash
+
+One opening balance and deposit schedule for **every** portfolio. **Portfolio → Cash** shows **Same cash plan for every portfolio.**
+
+> Turning on shared cash opens a confirmation with portfolio and display-currency pickers (defaults from the book open on Portfolio). Changing the portfolio re-defaults currency.
+
+Each book’s previous cash is **stashed** when you enable shared mode.
+
+## How to interpret
+
+Overview, History, and charts use the active mode: shared cash applies to all linked portfolio series at once.
+
+## Example
+
+Books **Growth** and **Conservative** each had different deposits. You enable **Shared cash** while **Growth** is open — both books now follow Growth’s cash plan; Conservative’s old plan stays in stash if you switch back and choose **Restore stashed**.
+`,
+    status: 'ready',
+    location: { tab: 'settings', anchor: 'settings.portfolioCash' },
+    parentId: 'settings',
     order: 0,
   },
 

@@ -267,6 +267,20 @@ export type PortfolioActualsState = {
   byMonth: Record<string, number>
 }
 
+/** Per-portfolio cash tab snapshot kept when switching to shared cash mode. */
+export type PortfolioCashStash = {
+  deposits: PortfolioDeposit[]
+  perpetualYearlyDeposit?: PerpetualYearlyDeposit | null
+}
+
+/** Shared opening cash + deposits for all portfolios when cash mode is `shared`. */
+export type PortfolioSharedCashState = {
+  version: 1
+  currency: DisplayCurrency
+  deposits: PortfolioDeposit[]
+  perpetualYearlyDeposit?: PerpetualYearlyDeposit | null
+}
+
 // --- Overview (net-worth stack config; display CHF) ---
 
 export type OverviewSeriesType = 'portfolio' | 'savings' | 'manual' | 'incomeLeftover'
@@ -590,6 +604,11 @@ export type SavedPortfolio = {
    * What-if: extra cash vs a wealth goal. Base is Now (or customStart),
    * no future deposits. Amounts in `currency`.
    */
+  /**
+   * Backup of this book’s cash tab before entering shared cash mode.
+   * Used when switching back to per-portfolio cash (restore).
+   */
+  cashStash?: PortfolioCashStash | null
   goalSpeed?: {
     goalAmount: number
     currency: DisplayCurrency

@@ -13,6 +13,13 @@ import { HistoryView } from './components/history/HistoryView'
 import { useSavings } from './hooks/useSavings'
 import { usePortfolioContributions } from './hooks/usePortfolioContributions'
 import { usePortfolioActuals } from './hooks/usePortfolioActuals'
+import { usePortfolioSharedCash } from './hooks/usePortfolioSharedCash'
+import {
+  applyPortfolioCashModeSetting,
+  getPortfolioCashMode,
+  type PortfolioCashMode,
+} from './lib/portfolioCashMode'
+import { resolvePortfoliosCash } from './lib/portfolioSharedCash'
 import { DataSettingsPanel } from './components/settings/DataSettingsPanel'
 import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
 import { QuoteHealthProvider } from './context/QuoteHealthContext'
@@ -172,8 +179,8 @@ const TAB_META: Record<AppTab, { title: string; subtitle: string }> = {
     subtitle: 'Balances, contributions, and compound projections (CHF).',
   },
   settings: {
-    title: 'Data & backup',
-    subtitle: 'Link a data file, export JSON or tables — your data stays on this device.',
+    title: 'Settings',
+    subtitle: 'Data file, backups, export — and portfolio modeling preferences.',
   },
 }
 
@@ -220,6 +227,7 @@ export default function App() {
     deletePortfolio,
     copyPortfolio,
     reorderPortfolios,
+    replacePortfolios,
   } = useSavedPortfolios()
 
   // Refresh saved scenario/portfolio quotes on every tab (data is global in localStorage).
@@ -264,6 +272,24 @@ export default function App() {
   const savingsAccounts = savings.accounts
   const portfolioContributions = usePortfolioContributions()
   const portfolioActuals = usePortfolioActuals()
+  const portfolioSharedCash = usePortfolioSharedCash()
+  const [portfolioCashMode, setPortfolioCashMode] =
+    useState<PortfolioCashMode>(getPortfolioCashMode)
+
+  const portfoliosForCash = useMemo(
+    () =>
+      resolvePortfoliosCash(
+        portfolios,
+        portfolioCashMode,
+        portfolioSharedCash.sharedCash,
+      ),
+    [portfolios, portfolioCashMode, portfolioSharedCash.sharedCash],
+  )
+
+  function setPortfolioCashModeAndPersist(mode: PortfolioCashMode) {
+    applyPortfolioCashModeSetting(mode)
+    setPortfolioCashMode(mode)
+  }
 
   const {
     comparables,
@@ -326,7 +352,7 @@ export default function App() {
     {
       id: 'system',
       label: 'System',
-      items: [{ id: 'settings', label: 'Data & backup' }],
+      items: [{ id: 'settings', label: 'Settings' }],
     },
   ]
 
@@ -424,7 +450,7 @@ export default function App() {
                 <button
                   type="button"
                   className="mt-0.5 block max-w-full truncate text-left text-[11px] text-white/45 hover:text-white/75"
-                  title="Open Data & backup to switch accounts"
+                  title="Open Settings to switch accounts"
                   onClick={() => setTab('settings')}
                 >
                   {accountHint.name}
@@ -520,6 +546,7 @@ export default function App() {
               <PortfolioView
                 scenarios={scenarios}
                 portfolios={portfolios}
+                portfoliosForCash={portfoliosForCash}
                 storageError={portfolioError}
                 createPortfolio={createPortfolio}
                 updatePortfolio={updatePortfolio}
@@ -535,12 +562,16 @@ export default function App() {
                 portfolioActuals={portfolioActuals.actuals}
                 actualsError={portfolioActuals.error}
                 setPortfolioActuals={portfolioActuals.replace}
+                portfolioCashMode={portfolioCashMode}
+                sharedCash={portfolioSharedCash.sharedCash}
+                sharedCashError={portfolioSharedCash.error}
+                onSharedCashPatch={portfolioSharedCash.updateFromPortfolioPatch}
               />
             )}
 
             {tab === 'overview' && (
               <OverviewView
-                portfolios={portfolios}
+                portfolios={portfoliosForCash}
                 stockScenarios={scenarios}
                 savingsAccounts={savingsAccounts}
                 incomeCostLines={incomeCostLines}
@@ -552,7 +583,7 @@ export default function App() {
 
             {tab === 'history' && (
               <HistoryView
-                portfolios={portfolios}
+                portfolios={portfoliosForCash}
                 savingsAccounts={savingsAccounts}
                 portfolioActuals={portfolioActuals.actuals}
               />
@@ -564,7 +595,7 @@ export default function App() {
                 lines={incomeCostLines}
                 draws={incomeCostDraws}
                 savingsAccounts={savingsAccounts}
-                portfolios={portfolios}
+                portfolios={portfoliosForCash}
                 storageError={incomeCostError}
                 upsertLine={upsertLine}
                 removeLine={removeLine}
@@ -583,7 +614,16 @@ export default function App() {
 
             {tab === 'savings' && <SavingsView {...savings} />}
 
-            {tab === 'settings' && <DataSettingsPanel />}
+            {tab === 'settings' && (
+              <DataSettingsPanel
+                portfolios={portfolios}
+                replacePortfolios={replacePortfolios}
+                portfolioCashMode={portfolioCashMode}
+                onPortfolioCashModeChange={setPortfolioCashModeAndPersist}
+                sharedCash={portfolioSharedCash.sharedCash}
+                replaceSharedCash={portfolioSharedCash.replace}
+              />
+            )}
           </main>
         </div>
         <FeatureGuideRail />

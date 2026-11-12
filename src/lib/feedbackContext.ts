@@ -9,7 +9,7 @@ const TAB_LABELS: Record<AppTab, string> = {
   history: 'History',
   'income-cost': 'Budget',
   savings: 'Savings',
-  settings: 'Data & backup',
+  settings: 'Settings',
 }
 
 export type FeedbackType = 'bug' | 'idea' | 'question'
