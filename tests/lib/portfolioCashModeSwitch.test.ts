@@ -7,7 +7,7 @@ import { newOpeningDeposit, newPortfolio } from '../../src/lib/portfolio'
 import { sharedCashFromPortfolio } from '../../src/lib/portfolioSharedCash'
 
 describe('portfolioCashModeSwitch', () => {
-  it('stashes all books and seeds shared cash from the open portfolio', () => {
+  it('stashes all books and seeds shared cash from the chosen portfolio', () => {
     const open = newPortfolio('Open book')
     const other = newPortfolio('Other')
     open.deposits = [newOpeningDeposit(100, 2026)]
@@ -19,6 +19,15 @@ describe('portfolioCashModeSwitch', () => {
     expect(built.sharedCash.deposits.find((d) => d.isOpening)?.amount).toBe(100)
     expect(built.portfolios[0]!.cashStash?.deposits.find((d) => d.isOpening)?.amount).toBe(100)
     expect(built.portfolios[1]!.cashStash?.deposits.find((d) => d.isOpening)?.amount).toBe(200)
+  })
+
+  it('stores an explicit display currency on shared cash (e.g. from the confirm modal)', () => {
+    const open = newPortfolio('Open book')
+    open.deposits = [newOpeningDeposit(100, 2026)]
+    const built = buildSwitchToShared([open], open.id, 'USD')
+    expect('error' in built).toBe(false)
+    if ('error' in built) return
+    expect(built.sharedCash.currency).toBe('USD')
   })
 
   it('restore vs applyShared when switching back', () => {

@@ -1189,7 +1189,7 @@ Default. **Portfolio → Cash** edits only the selected book. **Copy cash…** c
 
 One opening balance and deposit schedule for **every** portfolio. **Portfolio → Cash** shows **Same cash plan for every portfolio.**
 
-> Turning on shared cash opens a confirmation with a portfolio picker (defaulting to the one open on Portfolio). Display currency follows the portfolio you choose.
+> Turning on shared cash opens a confirmation with portfolio and display-currency pickers (defaults from the book open on Portfolio). Changing the portfolio re-defaults currency.
 
 Each book’s previous cash is **stashed** when you enable shared mode.
 

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { useCallback, useEffect, useRef, useState } from 'react'
 import {
   addAccount,
   applyLoadedSave,
@@ -48,7 +48,7 @@ import {
 } from '../../lib/portfolioCashModeSwitch'
 import { portfolioSeedDisplayCurrency } from '../../lib/portfolioDisplayCurrency'
 import { loadSelectedPortfolioId } from '../../lib/portfolioStorage'
-import type { PortfolioSharedCashState, SavedPortfolio } from '../../types'
+import type { DisplayCurrency, PortfolioSharedCashState, SavedPortfolio } from '../../types'
 
 type Props = {
   onClose?: () => void
@@ -82,6 +82,7 @@ export function DataSettingsPanel({
   const [saveMode, setSaveMode] = useState<LinkedSaveMode>(getLinkedSaveMode)
   const [pendingCashMode, setPendingCashMode] = useState<PortfolioCashMode | null>(null)
   const [sharedSeedPortfolioId, setSharedSeedPortfolioId] = useState<string | null>(null)
+  const [sharedSeedCurrency, setSharedSeedCurrency] = useState<DisplayCurrency>('USD')
   const [cashModeError, setCashModeError] = useState<string | null>(null)
   const catalog = loadCatalog()
   const accountCount = catalog?.accounts.length ?? 1
@@ -272,19 +273,26 @@ export function DataSettingsPanel({
 
   const openPortfolioTabId = loadSelectedPortfolioId()
 
-  const sharedSeedDisplayCurrency = useMemo(() => {
-    const p = portfolios.find((x) => x.id === sharedSeedPortfolioId)
+  function seedCurrencyForPortfolio(portfolioId: string | null): DisplayCurrency {
+    const p = portfolios.find((x) => x.id === portfolioId)
     if (!p) return 'USD'
     return portfolioSeedDisplayCurrency(p, openPortfolioTabId)
-  }, [portfolios, sharedSeedPortfolioId, openPortfolioTabId])
+  }
 
   function requestCashMode(next: PortfolioCashMode) {
     if (next === portfolioCashMode) return
     setCashModeError(null)
     if (next === 'shared') {
-      setSharedSeedPortfolioId(openPortfolio?.id ?? portfolios[0]?.id ?? null)
+      const id = openPortfolio?.id ?? portfolios[0]?.id ?? null
+      setSharedSeedPortfolioId(id)
+      setSharedSeedCurrency(seedCurrencyForPortfolio(id))
     }
     setPendingCashMode(next)
+  }
+
+  function handleSharedSeedPortfolioChange(portfolioId: string) {
+    setSharedSeedPortfolioId(portfolioId)
+    setSharedSeedCurrency(seedCurrencyForPortfolio(portfolioId))
   }
 
   function confirmSwitchToShared() {
@@ -294,11 +302,7 @@ export function DataSettingsPanel({
       setPendingCashMode(null)
       return
     }
-    const built = buildSwitchToShared(
-      portfolios,
-      seed.id,
-      portfolioSeedDisplayCurrency(seed, openPortfolioTabId),
-    )
+    const built = buildSwitchToShared(portfolios, seed.id, sharedSeedCurrency)
     if ('error' in built) {
       setCashModeError(built.error)
       setPendingCashMode(null)
@@ -312,6 +316,7 @@ export function DataSettingsPanel({
     onPortfolioCashModeChange('shared')
     setPendingCashMode(null)
     setSharedSeedPortfolioId(null)
+    setSharedSeedCurrency('USD')
     setMessage('Portfolio cash is now shared across all books.')
     remountApp()
   }
@@ -698,6 +703,7 @@ export function DataSettingsPanel({
           onClose={() => {
             setPendingCashMode(null)
             setSharedSeedPortfolioId(null)
+            setSharedSeedCurrency('USD')
           }}
           onConfirm={confirmSwitchToShared}
         >
@@ -708,7 +714,7 @@ export function DataSettingsPanel({
               value={sharedSeedPortfolioId ?? ''}
               disabled={portfolios.length === 0}
               aria-label="Portfolio to seed shared cash from"
-              onChange={(e) => setSharedSeedPortfolioId(e.target.value)}
+              onChange={(e) => handleSharedSeedPortfolioChange(e.target.value)}
             >
               {portfolios.map((p) => (
                 <option key={p.id} value={p.id}>
@@ -717,8 +723,18 @@ export function DataSettingsPanel({
               ))}
             </select>
             . Display currency{' '}
-            <span className="font-semibold text-white">{sharedSeedDisplayCurrency}</span> applies to
-            the shared record.
+            <select
+              className="select-compact mx-0.5 inline-block w-auto align-baseline font-semibold text-white"
+              value={sharedSeedCurrency}
+              aria-label="Shared cash display currency"
+              onChange={(e) =>
+                setSharedSeedCurrency(e.target.value === 'CHF' ? 'CHF' : 'USD')
+              }
+            >
+              <option value="USD">USD</option>
+              <option value="CHF">CHF</option>
+            </select>{' '}
+            applies to the shared record.
           </p>
           <p>
             Each book’s current cash is stashed so you can restore it if you switch back to
