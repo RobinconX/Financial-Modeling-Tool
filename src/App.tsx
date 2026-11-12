@@ -15,6 +15,11 @@ import { usePortfolioContributions } from './hooks/usePortfolioContributions'
 import { usePortfolioActuals } from './hooks/usePortfolioActuals'
 import { usePortfolioSharedCash } from './hooks/usePortfolioSharedCash'
 import {
+  applyPortfolioActualsModeSetting,
+  getPortfolioActualsMode,
+  type PortfolioActualsMode,
+} from './lib/portfolioActualsMode'
+import {
   applyPortfolioCashModeSetting,
   getPortfolioCashMode,
   type PortfolioCashMode,
@@ -275,6 +280,9 @@ export default function App() {
   const portfolioSharedCash = usePortfolioSharedCash()
   const [portfolioCashMode, setPortfolioCashMode] =
     useState<PortfolioCashMode>(getPortfolioCashMode)
+  const [portfolioActualsMode, setPortfolioActualsMode] = useState<PortfolioActualsMode>(
+    getPortfolioActualsMode,
+  )
 
   const portfoliosForCash = useMemo(
     () =>
@@ -289,6 +297,11 @@ export default function App() {
   function setPortfolioCashModeAndPersist(mode: PortfolioCashMode) {
     applyPortfolioCashModeSetting(mode)
     setPortfolioCashMode(mode)
+  }
+
+  function setPortfolioActualsModeAndPersist(mode: PortfolioActualsMode) {
+    applyPortfolioActualsModeSetting(mode)
+    setPortfolioActualsMode(mode)
   }
 
   const {
@@ -566,6 +579,7 @@ export default function App() {
                 sharedCash={portfolioSharedCash.sharedCash}
                 sharedCashError={portfolioSharedCash.error}
                 onSharedCashPatch={portfolioSharedCash.updateFromPortfolioPatch}
+                portfolioActualsMode={portfolioActualsMode}
               />
             )}
 
@@ -577,6 +591,7 @@ export default function App() {
                 incomeCostLines={incomeCostLines}
                 incomeCostScenarios={incomeCostScenarios}
                 portfolioActuals={portfolioActuals.actuals}
+                portfolioActualsMode={portfolioActualsMode}
                 onRepairActuals={openActualsRepair}
               />
             )}
@@ -586,6 +601,7 @@ export default function App() {
                 portfolios={portfoliosForCash}
                 savingsAccounts={savingsAccounts}
                 portfolioActuals={portfolioActuals.actuals}
+                portfolioActualsMode={portfolioActualsMode}
               />
             )}
 
@@ -622,6 +638,12 @@ export default function App() {
                 onPortfolioCashModeChange={setPortfolioCashModeAndPersist}
                 sharedCash={portfolioSharedCash.sharedCash}
                 replaceSharedCash={portfolioSharedCash.replace}
+                portfolioActualsMode={portfolioActualsMode}
+                onPortfolioActualsModeChange={setPortfolioActualsModeAndPersist}
+                portfolioActuals={portfolioActuals.actuals}
+                replacePortfolioActuals={portfolioActuals.replace}
+                portfolioContributions={portfolioContributions.contributions}
+                replacePortfolioContributions={portfolioContributions.replace}
               />
             )}
           </main>

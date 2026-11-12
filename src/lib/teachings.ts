@@ -902,32 +902,30 @@ Extend **To** to see projection-linked growth or perpetual **Growth** % after th
     id: 'portfolio.actuals',
     title: 'Actuals',
     summary:
-      'Shared recorded history for every portfolio: month-end total value and yearly money-in. Enter totals in display currency; the Chart past uses portfolio value actuals.',
+      'Recorded portfolio history: month-end total value and yearly money-in. Shared by default across books or separate per portfolio in Settings; the Chart past uses value actuals.',
     body: `## How it works
 
-Two views of the **same shared record** (not per book):
+**Settings → Portfolio actuals** chooses **Shared actuals** (default) or **Separate per portfolio**.
 
-### Portfolio value
+### Shared mode
 
-Month-end **total portfolio value** in display currency. Feeds the **Chart** past segment and **History** investing series.
+Two views of the **same shared record** (not per book): **Portfolio value** and **Money in**. Label: **Same record for every portfolio.**
 
-### Money in
+### Separate per portfolio
 
-Contributions by calendar year — separate from per-book **Cash** deposits but available for **Chart → Target** overlay in past years.
+Each book has its own value actuals and money-in on this tab. Label: **Actuals for this portfolio only.** **Overview** and **History** use the linked book’s record for each portfolio series.
 
-Switch with the **Portfolio value** / **Money in** tabs. Opening this guide lands on **Portfolio value**.
-
-> Label on page: **Same record for every portfolio.**
+Switch **Portfolio value** / **Money in** with the inner tabs. Opening this guide lands on **Portfolio value**.
 
 ## How to interpret
 
-Gaps or stale months surface in **History** completeness hints; filling value here fixes past bars on **Chart** for all books.
+Gaps or stale months surface in **History** completeness hints; filling value here fixes past bars on **Chart** for the active record (all books in shared mode, this book in separate mode).
 
 CHF display with USD-native entries waits on a live rate before converting stored USD actuals.
 
 ## Example
 
-Enter **display currency 250k** for **2024-11** under **Portfolio value**. Every book’s **Chart** shows that point in **2024** past bars; **Money in** for **2024** can still record how much you contributed that year for **Target** math.
+In **Shared actuals**, enter **display currency 250k** for **2024-11** under **Portfolio value**. Every book’s **Chart** shows that point in **2024** past bars. In **Separate per portfolio**, only the book you edit gets that month until you enter data on other books.
 `,
     status: 'ready',
     location: { tab: 'portfolio', view: 'actuals', anchor: 'portfolio.actuals' },
@@ -1125,12 +1123,17 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
 
 Everything on this page stays on **this device** unless you export or link a file you sync yourself.
 
+### Portfolio actuals
+
+- **Shared actuals** — one value-actuals and money-in record for every book (default)
+- **Separate per portfolio** — each book keeps its own **Actuals** tab data
+
 ### Portfolio cash
 
 - **Separate per portfolio** — each book has its own Cash tab (default)
-- **Shared cash** — one cash plan for every book (like **Actuals**)
+- **Shared cash** — one cash plan for every book
 
-Switching modes asks for confirmation. Turning on shared cash lets you pick which portfolio seeds the shared plan (defaults to the one open on **Portfolio**); each book’s prior cash is stashed for optional restore.
+Switching either mode asks for confirmation. Turning on a shared mode lets you pick which portfolio seeds the shared record (defaults to the one open on **Portfolio**); each book’s prior data is stashed for optional restore.
 
 ### Browser storage
 
@@ -1174,11 +1177,44 @@ Link **financial-model.json** in synced folder, leave **Edits + periodic** on, e
     order: 0,
   },
 
+  'settings.portfolioActuals': {
+    id: 'settings.portfolioActuals',
+    title: 'Portfolio actuals mode',
+    summary:
+      'Keep one shared value-actuals and money-in record for all books (default), or separate actuals per portfolio.',
+    body: `## How it works
+
+### Shared actuals
+
+Default. **Portfolio → Actuals** edits one record for every book. **Overview**, **History**, and charts use that shared store for portfolio investing series (unless you switch to separate mode).
+
+### Separate per portfolio
+
+Each book stores **actuals**, **actualsCurrency**, and **portfolioMoneyIn** on the portfolio JSON. **Portfolio → Actuals** shows **Actuals for this portfolio only.**
+
+> Turning on shared actuals opens a confirmation with portfolio and display-currency pickers. The choice seeds **both** portfolio value actuals and money-in. Changing the portfolio re-defaults currency.
+
+Each book’s previous actuals are **stashed** when you enable shared mode.
+
+## How to interpret
+
+Money-in follows the same mode as value actuals — no split where value is shared but contributions stay per book.
+
+## Example
+
+Books **Growth** and **Conservative** each had different **2024** month-end values. You enable **Shared actuals** while **Growth** is open — both books’ charts read Growth’s values until you edit the shared record; Conservative’s old values stay in stash if you switch back and choose **Restore stashed**.
+`,
+    status: 'ready',
+    location: { tab: 'settings', anchor: 'settings.portfolioActuals' },
+    parentId: 'settings',
+    order: 1,
+  },
+
   'settings.portfolioCash': {
     id: 'settings.portfolioCash',
     title: 'Portfolio cash mode',
     summary:
-      'Use separate cash plans per portfolio book, or one shared cash record for all books — same idea as shared Actuals.',
+      'Use separate cash plans per portfolio book, or one shared cash record for all books — independent from actuals mode.',
     body: `## How it works
 
 ### Separate per portfolio
@@ -1242,7 +1278,7 @@ On **Portfolio**, open **Feedback**, choose **Question**, ask how **Contribution
     status: 'ready',
     location: { tab: 'settings', anchor: 'settings.feedback' },
     parentId: 'settings',
-    order: 1,
+    order: 2,
   },
 
   'system.releaseLog': {

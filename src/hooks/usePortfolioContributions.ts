@@ -47,7 +47,9 @@ export function usePortfolioContributions() {
     [persist],
   )
 
-  return { contributions: state, error, setYear, setCurrency }
+  const replace = useCallback((next: PortfolioContributionsState) => persist(next), [persist])
+
+  return { contributions: state, error, setYear, setCurrency, replace }
 }
 
 export type PortfolioContributionsApi = ReturnType<typeof usePortfolioContributions>

@@ -10,6 +10,11 @@ import {
   parseActualKey,
 } from './portfolio'
 import { hasActualMonths } from './portfolioActuals'
+import type { PortfolioActualsMode } from './portfolioActualsMode'
+import {
+  bookActualsState,
+  hasBookActualsMonths,
+} from './portfolioBookActuals'
 import { addMonthsToKey, currentPeriodKey, parsePeriodKey } from './savings'
 
 export type HistoryKind = 'portfolio' | 'savings'
@@ -91,15 +96,42 @@ export function rollupYearly(points: HistorySeriesPoint[]): HistorySeriesPoint[]
 }
 
 export function collectHistorySeries(
-  _portfolios: SavedPortfolio[],
+  portfolios: SavedPortfolio[],
   accounts: SavingsAccount[],
   usdToChf: number | null,
   portfolioActuals?: PortfolioActualsState | null,
+  actualsMode: PortfolioActualsMode = 'shared',
 ): HistorySeries[] {
   const out: HistorySeries[] = []
   let sShade = 0
+  let pShade = 0
 
-  if (hasActualMonths(portfolioActuals)) {
+  if (actualsMode === 'perPortfolio') {
+    for (const p of portfolios) {
+      if (!hasBookActualsMonths(p)) continue
+      const state = bookActualsState(p)
+      const map = getActualsMap(state)
+      const raw = monthlyPointsFromMap(map)
+      const cur = getActualsCurrency(state)
+      const canChf = cur === 'CHF' || (usdToChf != null && usdToChf > 0)
+      const points =
+        cur === 'CHF'
+          ? raw
+          : canChf
+            ? raw.map((pt) => ({ ...pt, value: pt.value * usdToChf! }))
+            : raw
+      out.push({
+        id: historySeriesId('portfolio', p.id),
+        sourceId: p.id,
+        kind: 'portfolio',
+        name: p.name,
+        color: PORTFOLIO_SHADES[pShade % PORTFOLIO_SHADES.length]!,
+        inChf: canChf,
+        points,
+      })
+      pShade += 1
+    }
+  } else if (hasActualMonths(portfolioActuals)) {
     const map = getActualsMap(portfolioActuals)
     const raw = monthlyPointsFromMap(map)
     const cur = getActualsCurrency(portfolioActuals)
@@ -460,13 +492,23 @@ export function historyIdsForOverviewSeries(
   overviewSeries: OverviewSeries[],
   savingsAccounts: SavingsAccount[],
   portfolioActuals?: PortfolioActualsState | null,
+  actualsMode: PortfolioActualsMode = 'shared',
+  portfolios: SavedPortfolio[] = [],
 ): string[] {
   const ids: string[] = []
   const seen = new Set<string>()
   for (const s of overviewSeries) {
     if (!s.enabled) continue
-    if (s.type === 'portfolio' && hasActualMonths(portfolioActuals)) {
-      const id = historySeriesId('portfolio', SHARED_PORTFOLIO_SOURCE_ID)
+    if (s.type === 'portfolio' && s.portfolioId) {
+      const linked = portfolios.find((p) => p.id === s.portfolioId)
+      const has =
+        actualsMode === 'perPortfolio'
+          ? linked != null && hasBookActualsMonths(linked)
+          : hasActualMonths(portfolioActuals)
+      if (!has) continue
+      const sourceId =
+        actualsMode === 'perPortfolio' ? s.portfolioId : SHARED_PORTFOLIO_SOURCE_ID
+      const id = historySeriesId('portfolio', sourceId)
       if (!seen.has(id)) {
         seen.add(id)
         ids.push(id)
@@ -498,9 +540,17 @@ export function listHistoryAttention(
   asOf: Date,
   fromYear: number,
   toYear: number,
+  actualsMode: PortfolioActualsMode = 'shared',
+  portfolios: SavedPortfolio[] = [],
 ): HistoryAttentionItem[] {
   const want = new Set(
-    historyIdsForOverviewSeries(overviewSeries, savingsAccounts, portfolioActuals),
+    historyIdsForOverviewSeries(
+      overviewSeries,
+      savingsAccounts,
+      portfolioActuals,
+      actualsMode,
+      portfolios,
+    ),
   )
   const out: HistoryAttentionItem[] = []
   for (const s of allSeries) {

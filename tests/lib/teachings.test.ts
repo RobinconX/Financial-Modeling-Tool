@@ -292,6 +292,7 @@ describe('teachings registry', () => {
     expect(getGuide('settings.export')).toBeUndefined()
     expect(listChildGuides('settings').map((c) => c.id)).toEqual([
       'settings.portfolioCash',
+      'settings.portfolioActuals',
       'settings.feedback',
     ])
     const feedback = getGuide('settings.feedback')
@@ -305,6 +306,7 @@ describe('teachings registry', () => {
     const settingsRoot = settingsTab.roots.find((r) => r.guide.id === 'settings')!
     expect(settingsRoot.children.map((c) => c.guide.id)).toEqual([
       'settings.portfolioCash',
+      'settings.portfolioActuals',
       'settings.feedback',
     ])
   })

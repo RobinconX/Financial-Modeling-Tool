@@ -8,6 +8,7 @@ import type {
   SavedScenario,
   SavingsAccount,
 } from '../../types'
+import type { PortfolioActualsMode } from '../../lib/portfolioActualsMode'
 import { useChartAnnotations } from '../../hooks/useChartAnnotations'
 import { useGoals } from '../../hooks/useGoals'
 import { useOverview } from '../../hooks/useOverview'
@@ -50,6 +51,7 @@ type Props = {
   incomeCostLines: CashflowLine[]
   incomeCostScenarios?: CashflowScenario[]
   portfolioActuals?: PortfolioActualsState | null
+  portfolioActualsMode?: PortfolioActualsMode
   onRepairActuals?: (repair: ActualsRepairTarget) => void
 }
 
@@ -80,6 +82,7 @@ export function OverviewView({
   incomeCostLines,
   incomeCostScenarios = [],
   portfolioActuals = null,
+  portfolioActualsMode = 'shared',
   onRepairActuals,
 }: Props) {
   const {
@@ -232,8 +235,18 @@ export function OverviewView({
       usdToChf,
       asOf,
       portfolioActuals,
+      portfolioActualsMode,
     }),
-    [portfolios, stockScenarios, savingsAccounts, incomeCostLines, usdToChf, asOf, portfolioActuals],
+    [
+      portfolios,
+      stockScenarios,
+      savingsAccounts,
+      incomeCostLines,
+      usdToChf,
+      asOf,
+      portfolioActuals,
+      portfolioActualsMode,
+    ],
   )
 
   const shownCompareIds = useMemo(() => {
@@ -268,6 +281,7 @@ export function OverviewView({
       savingsAccounts,
       usdToChf,
       portfolioActuals,
+      portfolioActualsMode,
     )
     const currentYear = asOf.getFullYear()
     const toYear = Math.max(startYear, Math.min(endYear, currentYear))
@@ -279,6 +293,8 @@ export function OverviewView({
       asOf,
       startYear,
       toYear,
+      portfolioActualsMode,
+      portfolios,
     )
   }, [
     hasRecorded,
@@ -290,6 +306,7 @@ export function OverviewView({
     savingsAccounts,
     usdToChf,
     portfolioActuals,
+    portfolioActualsMode,
     asOf,
     startYear,
     endYear,

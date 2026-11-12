@@ -1,3 +1,5 @@
+import type { PortfolioActualsMode } from './portfolioActualsMode'
+import { bookActualsState } from './portfolioBookActuals'
 import type {
   CashflowLine,
   OverviewScenario,
@@ -71,8 +73,9 @@ export type OverviewBuildDeps = {
   savingsAccounts: SavingsAccount[]
   incomeCostLines: CashflowLine[]
   usdToChf: number | null
-  /** Shared investing actuals (all portfolio scenarios). */
+  /** Shared investing actuals when mode is `shared`. */
   portfolioActuals?: PortfolioActualsState | null
+  portfolioActualsMode?: PortfolioActualsMode
   asOf?: Date
   /**
    * Portfolio ids from enabled portfolio series on the Overview scenario being
@@ -764,16 +767,22 @@ export function portfolioBreakdownChfAtYear(
   }
 
   // Past years: year-end actual (if recorded) as a single stack segment
-  if (year < currentYear && isFirstEnabledPortfolioSeries(series, deps)) {
-    const actualUsd = yearEndActualUsd(deps.portfolioActuals, year, deps.usdToChf)
-    if (actualUsd != null) {
-      return [
-        {
-          label: 'Actual (year-end)',
-          kind: 'equity',
-          valueChf: toDisplay(actualUsd, 'CHF', deps.usdToChf),
-        },
-      ]
+  if (year < currentYear) {
+    const mode = deps.portfolioActualsMode ?? 'shared'
+    const useActuals =
+      mode === 'perPortfolio' || isFirstEnabledPortfolioSeries(series, deps)
+    if (useActuals) {
+      const actualsState = mode === 'perPortfolio' ? bookActualsState(p) : deps.portfolioActuals
+      const actualUsd = yearEndActualUsd(actualsState, year, deps.usdToChf)
+      if (actualUsd != null) {
+        return [
+          {
+            label: 'Actual (year-end)',
+            kind: 'equity',
+            valueChf: toDisplay(actualUsd, 'CHF', deps.usdToChf),
+          },
+        ]
+      }
     }
   }
 
@@ -1086,6 +1095,13 @@ export function recordedOverviewByYear(
   const currentYear = asOf.getFullYear()
 
   const anyPortfolio = series.some((s) => s.enabled && s.type === 'portfolio')
+  const mode = deps.portfolioActualsMode ?? 'shared'
+  const enabledPortfolioIds = new Set<string>()
+  for (const s of series) {
+    if (s.enabled && s.type === 'portfolio' && s.portfolioId) {
+      enabledPortfolioIds.add(s.portfolioId)
+    }
+  }
   const accounts: SavingsAccount[] = []
   const seenA = new Set<string>()
 
@@ -1102,8 +1118,18 @@ export function recordedOverviewByYear(
 
   let minY = currentYear
   if (anyPortfolio) {
-    for (const y of listActualYears(deps.portfolioActuals)) {
-      if (y < minY) minY = y
+    if (mode === 'shared') {
+      for (const y of listActualYears(deps.portfolioActuals)) {
+        if (y < minY) minY = y
+      }
+    } else {
+      for (const id of enabledPortfolioIds) {
+        const p = deps.portfolios.find((x) => x.id === id)
+        if (!p) continue
+        for (const y of listActualYears(bookActualsState(p))) {
+          if (y < minY) minY = y
+        }
+      }
     }
   }
   for (const a of accounts) {
@@ -1120,14 +1146,32 @@ export function recordedOverviewByYear(
     let sum = 0
     let any = false
     if (anyPortfolio) {
-      const usd = yearEndActualUsd(deps.portfolioActuals, year, deps.usdToChf)
-      if (usd != null) {
-        if (
-          !(
-            getActualsCurrency(deps.portfolioActuals) === 'USD' &&
+      if (mode === 'shared') {
+        const usd = yearEndActualUsd(deps.portfolioActuals, year, deps.usdToChf)
+        if (usd != null) {
+          if (
+            !(
+              getActualsCurrency(deps.portfolioActuals) === 'USD' &&
+              (deps.usdToChf == null || deps.usdToChf <= 0)
+            )
+          ) {
+            sum += toDisplay(usd, 'CHF', deps.usdToChf)
+            any = true
+          }
+        }
+      } else {
+        for (const id of enabledPortfolioIds) {
+          const p = deps.portfolios.find((x) => x.id === id)
+          if (!p) continue
+          const state = bookActualsState(p)
+          const usd = yearEndActualUsd(state, year, deps.usdToChf)
+          if (usd == null) continue
+          if (
+            getActualsCurrency(state) === 'USD' &&
             (deps.usdToChf == null || deps.usdToChf <= 0)
-          )
-        ) {
+          ) {
+            continue
+          }
           sum += toDisplay(usd, 'CHF', deps.usdToChf)
           any = true
         }
@@ -1173,10 +1217,13 @@ export function seriesValueChf(
     if (!p) return 0
     if (deps.usdToChf == null || deps.usdToChf <= 0) return 0
 
-    // Past years: shared actual once (first enabled portfolio series only)
+    // Past years: actuals from shared store or this portfolio book
     if (year < currentYear) {
-      if (!isFirstEnabledPortfolioSeries(series, deps)) return 0
-      const actualUsd = yearEndActualUsd(deps.portfolioActuals, year, deps.usdToChf)
+      const mode = deps.portfolioActualsMode ?? 'shared'
+      const actualsState =
+        mode === 'perPortfolio' ? bookActualsState(p) : deps.portfolioActuals
+      if (mode === 'shared' && !isFirstEnabledPortfolioSeries(series, deps)) return 0
+      const actualUsd = yearEndActualUsd(actualsState, year, deps.usdToChf)
       if (actualUsd != null) {
         return toDisplay(actualUsd, 'CHF', deps.usdToChf)
       }

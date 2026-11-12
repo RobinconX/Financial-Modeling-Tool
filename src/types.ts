@@ -281,6 +281,20 @@ export type PortfolioSharedCashState = {
   perpetualYearlyDeposit?: PerpetualYearlyDeposit | null
 }
 
+/** Per-book money-in when portfolio actuals mode is `perPortfolio`. */
+export type PortfolioMoneyIn = {
+  version: 1
+  currency: DisplayCurrency
+  byYear: Record<string, number>
+}
+
+/** Backup of value actuals + money-in before entering shared actuals mode. */
+export type PortfolioActualsRecordStash = {
+  actuals: Record<string, number>
+  actualsCurrency: DisplayCurrency
+  moneyIn: PortfolioMoneyIn
+}
+
 // --- Overview (net-worth stack config; display CHF) ---
 
 export type OverviewSeriesType = 'portfolio' | 'savings' | 'manual' | 'incomeLeftover'
@@ -583,11 +597,15 @@ export type SavedPortfolio = {
    */
   holdingSort?: PortfolioHoldingSort
   /**
-   * @deprecated Shared in `PortfolioActualsState`. Parsed only to migrate old saves.
+   * Month-end portfolio value actuals when `portfolioActualsMode` is `perPortfolio`.
+   * Omitted from saves in shared mode (lives in `PortfolioActualsState`).
    */
   actuals?: Record<string, number>
-  /** @deprecated See `PortfolioActualsState.currency`. */
   actualsCurrency?: DisplayCurrency
+  /** Money-in by year when actuals mode is per portfolio. */
+  portfolioMoneyIn?: PortfolioMoneyIn | null
+  /** Stash when switching to shared actuals (restore path). */
+  actualsRecordStash?: PortfolioActualsRecordStash | null
   /**
    * Chart overlay: `amount` (in `currency`) at `year`. Later years:
    * V_y = V_{y-1} × (1 + ratePercent/100) + cash that year.
