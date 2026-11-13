@@ -288,6 +288,27 @@ export function targetPathValue(
   return (1 + rate) ** yrs - 1
 }
 
+/** One compact line for overlay charts when some tickers fail history fetch. */
+export function formatOverlayHistoryErrors(
+  symbols: string[],
+  errors: Record<string, string>,
+): string | null {
+  const byMessage = new Map<string, string[]>()
+  for (const raw of symbols) {
+    const symbol = raw.toUpperCase()
+    const message = errors[symbol]
+    if (!message) continue
+    const list = byMessage.get(message) ?? []
+    if (!list.includes(symbol)) list.push(symbol)
+    byMessage.set(message, list)
+  }
+  if (byMessage.size === 0) return null
+  const parts = [...byMessage.entries()].map(([message, syms]) => {
+    return `${syms.join(', ')}: ${message}`
+  })
+  return `Price history unavailable — ${parts.join('; ')}`
+}
+
 export function mergeUpsideSeries(series: NamedUpsideSeries[]): MergedUpsideRow[] {
   const dates = new Set<string>()
   const maps = series.map((s) => {
