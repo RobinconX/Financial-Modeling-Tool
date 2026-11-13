@@ -3,6 +3,7 @@ import {
   nasdaqAssetClassOrder,
   normalizeInstrumentType,
 } from '../src/lib/instrumentType'
+import { NASDAQ_HEADERS } from './nasdaq'
 
 export type Quote = {
   symbol: string
@@ -57,16 +58,6 @@ type NasdaqSummaryResponse = {
   }
 }
 
-type NasdaqInfoResponse = {
-  data?: {
-    symbol?: string
-    companyName?: string
-    primaryData?: {
-      lastSalePrice?: string
-    }
-  }
-}
-
 const YAHOO_HEADERS = {
   'User-Agent':
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
@@ -76,10 +67,11 @@ const YAHOO_HEADERS = {
 /** Symbols per spark request (URL length + practical limit). */
 const YAHOO_BATCH_SIZE = 40
 
-/** Upstream timeouts — Nasdaq is often the slow leg of multi-ticker batch. */
+/** Upstream timeouts — Nasdaq is often the slow leg from Cloudflare Workers. */
 const SPARK_TIMEOUT_MS = 5000
-const NASDAQ_TIMEOUT_MS = 1800
-const NASDAQ_SINGLE_TIMEOUT_MS = 4500
+export const NASDAQ_TIMEOUT_MS = 5000
+export const NASDAQ_RETRY_TIMEOUT_MS = 8000
+export const NASDAQ_BATCH_CONCURRENCY = 6
 const CHART_TIMEOUT_MS = 4000
 
 /** Equity tickers plus OCC option symbols (e.g. AAPL260821C00150000). */
@@ -112,11 +104,12 @@ function fetchTimeoutSignal(ms: number): AbortSignal | undefined {
 async function fetchJson(
   url: string,
   timeoutMs: number,
+  headers: Record<string, string>,
 ): Promise<{ ok: boolean; json: () => Promise<unknown> } | null> {
   try {
     const signal = fetchTimeoutSignal(timeoutMs)
     const res = await fetch(url, {
-      headers: YAHOO_HEADERS,
+      headers,
       ...(signal ? { signal } : {}),
     })
     return res
@@ -137,12 +130,6 @@ function parseNasdaqAum(value: string | undefined): number | null {
   const n = parseNasdaqMoney(value)
   if (n == null) return null
   return n * 1000
-}
-
-function parseNasdaqPrice(value: string | undefined): number | null {
-  if (!value) return null
-  const n = Number(value.replace(/[$,\s]/g, ''))
-  return Number.isFinite(n) ? n : null
 }
 
 function normalizeSymbol(raw: string): string | null {
@@ -208,7 +195,7 @@ async function fetchYahooChart(symbol: string): Promise<{
   instrumentType: string | null
 } | null> {
   const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`
-  const chartRes = await fetchJson(chartUrl, CHART_TIMEOUT_MS)
+  const chartRes = await fetchJson(chartUrl, CHART_TIMEOUT_MS, YAHOO_HEADERS)
   if (!chartRes?.ok) return null
 
   const chartJson = (await chartRes.json()) as YahooChartResponse
@@ -227,73 +214,62 @@ async function fetchYahooChart(symbol: string): Promise<{
   }
 }
 
-async function fetchNasdaqMarketCap(
+/** Nasdaq summary only (Market Cap, then AUM). */
+async function fetchNasdaqMarketCapOnly(
   symbol: string,
   instrumentType: string | null,
-  timeoutMs = NASDAQ_SINGLE_TIMEOUT_MS,
-): Promise<{
-  marketCap: number | null
-  name: string | null
-  price: number | null
-}> {
-  if (isIndexSymbol(symbol)) {
-    return { marketCap: null, name: null, price: null }
-  }
-
+  timeoutMs: number,
+): Promise<number | null> {
+  if (isIndexSymbol(symbol)) return null
   const assetClasses = nasdaqAssetClassOrder(instrumentType, symbol)
-  let partial: { marketCap: number | null; name: string | null; price: number | null } = {
-    marketCap: null,
-    name: null,
-    price: null,
-  }
-
   for (const assetClass of assetClasses) {
     try {
-      const [summaryRes, infoRes] = await Promise.all([
-        fetchJson(
-          `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/summary?assetclass=${assetClass}`,
-          timeoutMs,
-        ),
-        fetchJson(
-          `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/info?assetclass=${assetClass}`,
-          timeoutMs,
-        ),
-      ])
-
-      let marketCap: number | null = null
-      let name: string | null = null
-      let price: number | null = null
-
-      if (summaryRes?.ok) {
-        const summaryJson = (await summaryRes.json()) as NasdaqSummaryResponse
-        marketCap = marketCapFromNasdaqSummary(summaryJson)
-      }
-      if (infoRes?.ok) {
-        const infoJson = (await infoRes.json()) as NasdaqInfoResponse
-        name = infoJson.data?.companyName ?? null
-        price = parseNasdaqPrice(infoJson.data?.primaryData?.lastSalePrice)
-      }
-
-      if (marketCap != null) {
-        return {
-          marketCap,
-          name: name ?? partial.name,
-          price: price ?? partial.price,
-        }
-      }
-
-      if (price != null || name) {
-        partial = {
-          marketCap: null,
-          name: name ?? partial.name,
-          price: price ?? partial.price,
-        }
-      }
+      const res = await fetchJson(
+        `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/summary?assetclass=${assetClass}`,
+        timeoutMs,
+        NASDAQ_HEADERS,
+      )
+      if (!res?.ok) continue
+      const json = (await res.json()) as NasdaqSummaryResponse
+      const mcap = marketCapFromNasdaqSummary(json)
+      if (mcap != null) return mcap
     } catch {
       // try next asset class
     }
   }
-  return partial
+  return null
+}
+
+async function fetchNasdaqMarketCapWithRetry(
+  symbol: string,
+  instrumentType: string | null,
+): Promise<number | null> {
+  const first = await fetchNasdaqMarketCapOnly(symbol, instrumentType, NASDAQ_TIMEOUT_MS)
+  if (first != null) return first
+  return fetchNasdaqMarketCapOnly(symbol, instrumentType, NASDAQ_RETRY_TIMEOUT_MS)
+}
+
+/** Run async work over items with at most `limit` tasks in flight. */
+export async function runWithConcurrency<T, R>(
+  items: T[],
+  limit: number,
+  fn: (item: T, index: number) => Promise<R>,
+): Promise<R[]> {
+  if (items.length === 0) return []
+  const results = new Array<R>(items.length)
+  let next = 0
+  const workers = Math.min(Math.max(1, limit), items.length)
+
+  async function worker(): Promise<void> {
+    for (;;) {
+      const i = next++
+      if (i >= items.length) return
+      results[i] = await fn(items[i]!, i)
+    }
+  }
+
+  await Promise.all(Array.from({ length: workers }, () => worker()))
+  return results
 }
 
 /**
@@ -307,7 +283,7 @@ async function fetchYahooSparkBatch(symbols: string[]): Promise<Map<string, Quot
   const url = `https://query1.finance.yahoo.com/v7/finance/spark?symbols=${symbols
     .map((s) => encodeURIComponent(s))
     .join(',')}&range=1d&interval=1d`
-  const res = await fetchJson(url, SPARK_TIMEOUT_MS)
+  const res = await fetchJson(url, SPARK_TIMEOUT_MS, YAHOO_HEADERS)
   if (!res?.ok) return out
 
   const json = (await res.json()) as YahooSparkResponse
@@ -334,80 +310,55 @@ async function fetchYahooSparkBatch(symbols: string[]): Promise<Map<string, Quot
   return out
 }
 
-/** Lightweight mcap-only (summary endpoint). Parallelized for batch enrichment. */
-async function fetchNasdaqMarketCapOnly(
-  symbol: string,
-  instrumentType: string | null,
-): Promise<number | null> {
-  if (isIndexSymbol(symbol)) return null
-  const assetClasses = nasdaqAssetClassOrder(instrumentType, symbol)
-  for (const assetClass of assetClasses) {
-    try {
-      const res = await fetchJson(
-        `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/summary?assetclass=${assetClass}`,
-        NASDAQ_TIMEOUT_MS,
-      )
-      if (!res?.ok) continue
-      const json = (await res.json()) as NasdaqSummaryResponse
-      const mcap = marketCapFromNasdaqSummary(json)
-      if (mcap != null) return mcap
-    } catch {
-      // try next
-    }
-  }
-  return null
-}
-
-/** Attach market cap (+ derived shares) to spark quotes in parallel. */
+/** Attach market cap (+ derived shares) to spark quotes with bounded Nasdaq concurrency. */
 async function enrichQuotesWithMarketCap(quotes: Map<string, Quote>): Promise<void> {
   const entries = [...quotes.entries()]
   if (entries.length === 0) return
 
-  const caps = await Promise.all(
-    entries.map(async ([symbol, q]) => {
+  const caps = await runWithConcurrency(
+    entries,
+    NASDAQ_BATCH_CONCURRENCY,
+    async ([, q]) => {
       try {
-        return await fetchNasdaqMarketCapOnly(symbol, q.instrumentType)
+        return await fetchNasdaqMarketCapWithRetry(q.symbol, q.instrumentType)
       } catch {
         return null
       }
-    }),
+    },
   )
 
   for (let i = 0; i < entries.length; i++) {
-    const [symbol, q] = entries[i]!
+    const [, q] = entries[i]!
     const marketCap = caps[i] ?? null
     if (marketCap == null) continue
     quotes.set(
-      symbol,
+      q.symbol,
       quoteFromFields({
         symbol: q.symbol,
         name: q.name,
         price: q.price,
         currency: q.currency,
         marketCap,
-        sharesOutstanding: null, // derived in quoteFromFields from mcap/price
+        sharesOutstanding: null,
         instrumentType: q.instrumentType,
       }),
     )
   }
 }
 
-/** Per-symbol fallback (chart + Nasdaq) when batch misses a ticker. */
+/** Per-symbol fallback (chart + Nasdaq summary) when batch misses a ticker. */
 async function fetchQuoteFallback(symbol: string): Promise<Quote | null> {
   const yahoo = await fetchYahooChart(symbol)
   if (!yahoo) return null
 
-  const nasdaq = await fetchNasdaqMarketCap(symbol, yahoo.instrumentType)
-
-  const price = yahoo.price ?? nasdaq.price
-  if (price == null) return null
+  const marketCap = await fetchNasdaqMarketCapWithRetry(symbol, yahoo.instrumentType)
 
   return quoteFromFields({
     symbol,
-    name: yahoo.name ?? nasdaq.name ?? symbol,
-    price,
-    currency: yahoo.currency ?? 'USD',
-    marketCap: nasdaq.marketCap,
+    name: yahoo.name,
+    price: yahoo.price,
+    currency: yahoo.currency,
+    marketCap,
     sharesOutstanding: null,
     instrumentType: yahoo.instrumentType,
   })

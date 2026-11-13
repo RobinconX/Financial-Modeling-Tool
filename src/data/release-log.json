@@ -1,6 +1,17 @@
 [
   {
     "releasedAt": "2026-11-13",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Live quotes return market cap more reliably",
+    "notes": [
+      "Stock and ETF quotes from the market API are less likely to show price without market cap when Nasdaq fundamentals are slow to respond.",
+      "Batch quote requests throttle parallel Nasdaq calls and retry once when market cap is still missing after the first pass.",
+      "Redeploy the Cloudflare worker after this release for the quote API change to take effect in production."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-13",
     "prodSha": "09ecc4eaa035806fb5fa9bbef11f36480390d962",
     "headline": "ETFs in Analyze, Comparables chart guides & overlay errors",
     "notes": [
