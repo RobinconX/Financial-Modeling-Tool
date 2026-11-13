@@ -12,7 +12,7 @@ describe('releaseLog', () => {
     expect(entries.length).toBe(25)
     expect(entries[0]?.pending).toBeUndefined()
     expect(entries[0]?.prodSha).toBe('76536dd5ed12f8cb38e5839f30ec3eea0c54b111')
-    expect(entries[0]?.headline).toMatch(/Portfolio settings/i)
+    expect(entries[0]?.headline).toMatch(/Portfolio settings, shared cash/i)
     expect(entries[1]?.pending).toBeUndefined()
     expect(entries[1]?.prodSha).toBe('8ada3fa99449f14481b56a8c2e705b44e911da77')
     expect(entries[1]?.headline).toMatch(/Overview upgrades/i)
