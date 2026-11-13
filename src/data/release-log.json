@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-13",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "ff2f5325d89965e59036cb557dd17dfeaa58f0a5",
     "headline": "Live quotes return market cap more reliably",
     "notes": [
       "Stock and ETF quotes from the market API are less likely to show price without market cap when Nasdaq fundamentals are slow to respond.",
