@@ -10,6 +10,10 @@ import {
   ensurePermanentLeftover,
 } from './overview'
 import { queueAppDataChanged } from './linkedMirrorGate'
+import {
+  buildRecoveryNotice,
+  type StorageLoadResult,
+} from './storageLoadRecovery'
 import { normalizeRunwayConfig } from './runway'
 
 export const OVERVIEW_STORAGE_KEY = 'grok-lab.overview.v1'
@@ -181,39 +185,98 @@ function migrateV1(raw: Record<string, unknown>): OverviewState {
   }
 }
 
-export function loadOverview(): OverviewState {
-  try {
-    const raw = localStorage.getItem(OVERVIEW_STORAGE_KEY)
-    if (!raw) return defaultOverviewState()
-    const parsed: unknown = JSON.parse(raw)
-    if (!isRecord(parsed)) return defaultOverviewState()
+function overviewStateFromParsed(parsed: unknown): OverviewState {
+  if (!isRecord(parsed)) return defaultOverviewState()
 
-    // v1 flat shape
-    if (parsed.version === 1 || (!parsed.scenarios && Array.isArray(parsed.series))) {
-      return migrateV1(parsed)
-    }
-
-    const list = Array.isArray(parsed.scenarios) ? parsed.scenarios : []
-    const scenarios = list
-      .map((s, i) => normalizeScenario(s, i))
-      .filter((s): s is OverviewScenario => s != null)
-
-    if (scenarios.length === 0) return defaultOverviewState()
-
-    let selectedScenarioId =
-      typeof parsed.selectedScenarioId === 'string' ? parsed.selectedScenarioId : null
-    if (!selectedScenarioId || !scenarios.some((s) => s.id === selectedScenarioId)) {
-      selectedScenarioId = scenarios[0]!.id
-    }
-
-    return {
-      version: 2,
-      scenarios,
-      selectedScenarioId,
-    }
-  } catch {
-    return defaultOverviewState()
+  // v1 flat shape
+  if (parsed.version === 1 || (!parsed.scenarios && Array.isArray(parsed.series))) {
+    return migrateV1(parsed)
   }
+
+  const list = Array.isArray(parsed.scenarios) ? parsed.scenarios : []
+  const scenarios = list
+    .map((s, i) => normalizeScenario(s, i))
+    .filter((s): s is OverviewScenario => s != null)
+
+  if (scenarios.length === 0) return defaultOverviewState()
+
+  let selectedScenarioId =
+    typeof parsed.selectedScenarioId === 'string' ? parsed.selectedScenarioId : null
+  if (!selectedScenarioId || !scenarios.some((s) => s.id === selectedScenarioId)) {
+    selectedScenarioId = scenarios[0]!.id
+  }
+
+  return {
+    version: 2,
+    scenarios,
+    selectedScenarioId,
+  }
+}
+
+function overviewPayloadLooksCorrupt(parsed: Record<string, unknown>): boolean {
+  const isV1 =
+    parsed.version === 1 || (!parsed.scenarios && Array.isArray(parsed.series))
+  if (isV1) return false
+  if (!Array.isArray(parsed.scenarios)) return true
+  if (parsed.scenarios.length === 0) return false
+  const scenarios = parsed.scenarios
+    .map((s, i) => normalizeScenario(s, i))
+    .filter((s): s is OverviewScenario => s != null)
+  return scenarios.length === 0
+}
+
+export function loadOverviewWithRecovery(): StorageLoadResult<OverviewState> {
+  let raw: string | null = null
+  try {
+    raw = localStorage.getItem(OVERVIEW_STORAGE_KEY)
+    if (!raw) return { data: defaultOverviewState(), recovery: null }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      console.warn('[overviewStorage] Failed to parse', err)
+      return {
+        data: defaultOverviewState(),
+        recovery: buildRecoveryNotice(OVERVIEW_STORAGE_KEY, 'Overview', 'parse', raw),
+      }
+    }
+    if (!isRecord(parsed)) {
+      console.warn('[overviewStorage] Invalid payload; resetting')
+      return {
+        data: defaultOverviewState(),
+        recovery: buildRecoveryNotice(OVERVIEW_STORAGE_KEY, 'Overview', 'shape', raw),
+      }
+    }
+    const isV1 =
+      parsed.version === 1 || (!parsed.scenarios && Array.isArray(parsed.series))
+    if (!isV1 && !Array.isArray(parsed.scenarios)) {
+      console.warn('[overviewStorage] Invalid payload; resetting')
+      return {
+        data: defaultOverviewState(),
+        recovery: buildRecoveryNotice(OVERVIEW_STORAGE_KEY, 'Overview', 'shape', raw),
+      }
+    }
+    if (overviewPayloadLooksCorrupt(parsed)) {
+      return {
+        data: defaultOverviewState(),
+        recovery: buildRecoveryNotice(OVERVIEW_STORAGE_KEY, 'Overview', 'content', raw),
+      }
+    }
+    return { data: overviewStateFromParsed(parsed), recovery: null }
+  } catch (err) {
+    console.warn('[overviewStorage] Failed to load', err)
+    if (raw) {
+      return {
+        data: defaultOverviewState(),
+        recovery: buildRecoveryNotice(OVERVIEW_STORAGE_KEY, 'Overview', 'parse', raw),
+      }
+    }
+    return { data: defaultOverviewState(), recovery: null }
+  }
+}
+
+export function loadOverview(): OverviewState {
+  return loadOverviewWithRecovery().data
 }
 
 export function saveOverview(state: OverviewState): { ok: true } | { ok: false; error: string } {

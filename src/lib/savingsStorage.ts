@@ -1,6 +1,10 @@
 import type { SavingsAccount, SavingsCadence, SavingsState } from '../types'
 import { queueAppDataChanged } from './linkedMirrorGate'
 import {
+  buildRecoveryNotice,
+  type StorageLoadResult,
+} from './storageLoadRecovery'
+import {
   comparePeriodKeys,
   emptySavingsState,
   ensurePermanentCashAccount,
@@ -96,14 +100,46 @@ export function accountsFromSavingsPayload(raw: unknown): SavingsAccount[] {
   )
 }
 
-export function loadSavings(): SavingsState {
+export function loadSavingsWithRecovery(): StorageLoadResult<SavingsState> {
+  let raw: string | null = null
   try {
-    const raw = localStorage.getItem(SAVINGS_STORAGE_KEY)
-    if (!raw) return emptySavingsState()
-    return { version: 1, accounts: accountsFromSavingsPayload(JSON.parse(raw)) }
-  } catch {
-    return emptySavingsState()
+    raw = localStorage.getItem(SAVINGS_STORAGE_KEY)
+    if (!raw) return { data: emptySavingsState(), recovery: null }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      console.warn('[savingsStorage] Failed to parse', err)
+      return {
+        data: emptySavingsState(),
+        recovery: buildRecoveryNotice(SAVINGS_STORAGE_KEY, 'Savings', 'parse', raw),
+      }
+    }
+    if (!isRecord(parsed) || !Array.isArray(parsed.accounts)) {
+      console.warn('[savingsStorage] Invalid payload; resetting')
+      return {
+        data: emptySavingsState(),
+        recovery: buildRecoveryNotice(SAVINGS_STORAGE_KEY, 'Savings', 'shape', raw),
+      }
+    }
+    return {
+      data: { version: 1, accounts: accountsFromSavingsPayload(parsed) },
+      recovery: null,
+    }
+  } catch (err) {
+    console.warn('[savingsStorage] Failed to load', err)
+    if (raw) {
+      return {
+        data: emptySavingsState(),
+        recovery: buildRecoveryNotice(SAVINGS_STORAGE_KEY, 'Savings', 'parse', raw),
+      }
+    }
+    return { data: emptySavingsState(), recovery: null }
   }
+}
+
+export function loadSavings(): SavingsState {
+  return loadSavingsWithRecovery().data
 }
 
 export function saveSavings(state: SavingsState): { ok: true } | { ok: false; error: string } {

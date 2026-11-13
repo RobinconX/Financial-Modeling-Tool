@@ -11,7 +11,7 @@ import type {
 import type { PortfolioActualsMode } from '../../lib/portfolioActualsMode'
 import { useChartAnnotations } from '../../hooks/useChartAnnotations'
 import { useGoals } from '../../hooks/useGoals'
-import { useOverview } from '../../hooks/useOverview'
+import type { OverviewApi } from '../../hooks/useOverview'
 import { fetchFxRateClient } from '../../lib/fx'
 import {
   collectHistorySeries,
@@ -45,6 +45,7 @@ import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
 type Props = {
+  overview: OverviewApi
   portfolios: SavedPortfolio[]
   stockScenarios: SavedScenario[]
   savingsAccounts: SavingsAccount[]
@@ -76,6 +77,7 @@ function readCompareIds(): string[] | null {
 }
 
 export function OverviewView({
+  overview,
   portfolios,
   stockScenarios,
   savingsAccounts,
@@ -108,7 +110,7 @@ export function OverviewView({
     syncSavingsToScenarios,
     reorderSeriesGroups,
     reorderSavingsSeries,
-  } = useOverview()
+  } = overview
   const {
     annotations,
     error: notesError,

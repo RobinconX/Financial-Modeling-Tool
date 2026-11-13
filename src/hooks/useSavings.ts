@@ -9,12 +9,20 @@ import {
   sortedAccounts,
   totalNow,
 } from '../lib/savings'
-import { loadSavings, saveSavings, SAVINGS_STORAGE_KEY } from '../lib/savingsStorage'
+import {
+  loadSavingsWithRecovery,
+  saveSavings,
+  SAVINGS_STORAGE_KEY,
+} from '../lib/savingsStorage'
+import type { StorageRecoveryNotice } from '../lib/storageLoadRecovery'
 
 export function useSavings() {
-  const initial = loadSavings()
+  const [initialLoad] = useState(() => loadSavingsWithRecovery())
   const [accounts, setAccounts] = useState<SavingsAccount[]>(() =>
-    ensurePermanentCashAccount(initial.accounts),
+    ensurePermanentCashAccount(initialLoad.data.accounts),
+  )
+  const [storageRecovery, setStorageRecovery] = useState<StorageRecoveryNotice | null>(
+    () => initialLoad.recovery,
   )
   const [error, setError] = useState<string | null>(null)
   /** Always-current list so consecutive cell edits stack correctly. */
@@ -34,12 +42,16 @@ export function useSavings() {
     return true
   }, [])
 
+  const dismissStorageRecovery = useCallback(() => setStorageRecovery(null), [])
+
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key !== SAVINGS_STORAGE_KEY) return
-      const loaded = ensurePermanentCashAccount(loadSavings().accounts)
-      accountsRef.current = loaded
-      setAccounts(loaded)
+      const loaded = loadSavingsWithRecovery()
+      const accounts = ensurePermanentCashAccount(loaded.data.accounts)
+      accountsRef.current = accounts
+      setAccounts(accounts)
+      if (loaded.recovery) setStorageRecovery(loaded.recovery)
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -200,6 +212,8 @@ export function useSavings() {
     accounts: ordered,
     total,
     error,
+    storageRecovery,
+    dismissStorageRecovery,
     addAccount,
     removeAccount,
     upsertAccount,

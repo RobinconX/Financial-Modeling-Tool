@@ -1,5 +1,10 @@
 import { beforeEach, describe, expect, it } from 'vitest'
-import { loadOverview, OVERVIEW_STORAGE_KEY } from '../../src/lib/overviewStorage'
+import { corruptBackupKey } from '../../src/lib/storageLoadRecovery'
+import {
+  loadOverview,
+  loadOverviewWithRecovery,
+  OVERVIEW_STORAGE_KEY,
+} from '../../src/lib/overviewStorage'
 
 describe('loadOverview v1 migration', () => {
   const store = new Map<string, string>()
@@ -86,5 +91,79 @@ describe('loadOverview v1 migration', () => {
     expect(leftover!.annualRatePercent).toBe(3)
     expect(leftover!.yearBindings).toEqual([{ year: 2024, incomeCostScenarioId: 'ic-1' }])
     expect(leftover!.perpetualYearlyChf).toBe(5_000)
+  })
+})
+
+describe('loadOverviewWithRecovery', () => {
+  const store = new Map<string, string>()
+
+  beforeEach(() => {
+    store.clear()
+    Object.defineProperty(globalThis, 'localStorage', {
+      configurable: true,
+      value: {
+        getItem: (k: string) => store.get(k) ?? null,
+        setItem: (k: string, v: string) => {
+          store.set(k, String(v))
+        },
+        removeItem: (k: string) => {
+          store.delete(k)
+        },
+        clear: () => {
+          store.clear()
+        },
+      },
+    })
+  })
+
+  it('does not flag valid v2 payload', () => {
+    store.set(
+      OVERVIEW_STORAGE_KEY,
+      JSON.stringify({
+        version: 2,
+        scenarios: [
+          {
+            id: 'sc-1',
+            name: 'Base',
+            sortOrder: 0,
+            startYear: 2024,
+            endYear: 2030,
+            series: [],
+          },
+        ],
+        selectedScenarioId: 'sc-1',
+      }),
+    )
+    const result = loadOverviewWithRecovery()
+    expect(result.recovery).toBeNull()
+    expect(result.data.scenarios).toHaveLength(1)
+  })
+
+  it('archives invalid JSON', () => {
+    const corrupt = '{nope'
+    store.set(OVERVIEW_STORAGE_KEY, corrupt)
+    const result = loadOverviewWithRecovery()
+    expect(result.recovery?.reason).toBe('parse')
+    expect(store.get(corruptBackupKey(OVERVIEW_STORAGE_KEY))).toBe(corrupt)
+  })
+
+  it('archives unreadable v2 scenarios', () => {
+    const corrupt = JSON.stringify({
+      version: 2,
+      scenarios: [1, 2],
+      selectedScenarioId: 'x',
+    })
+    store.set(OVERVIEW_STORAGE_KEY, corrupt)
+    const result = loadOverviewWithRecovery()
+    expect(result.recovery?.reason).toBe('content')
+    expect(store.get(corruptBackupKey(OVERVIEW_STORAGE_KEY))).toBe(corrupt)
+  })
+
+  it('archives wrong shape', () => {
+    const corrupt = JSON.stringify({ version: 2, scenarios: 'bad' })
+    store.set(OVERVIEW_STORAGE_KEY, corrupt)
+    const result = loadOverviewWithRecovery()
+    expect(result.recovery?.reason).toBe('shape')
+    expect(store.get(corruptBackupKey(OVERVIEW_STORAGE_KEY))).toBe(corrupt)
   })
 })
