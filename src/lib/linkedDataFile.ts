@@ -275,11 +275,24 @@ export async function requestLinkedFileAccess(options?: {
       const applied = hydrateOnStartup(snap)
       if (applied.ok) {
         reloaded = true
+        clearLinkedFileLoadFailedIfNeeded()
         syncPeriodicLinkedSaves()
+        emitSaveEvent({
+          status: 'saved',
+          message: 'Saved',
+          fileName: cachedHandle.name,
+          savedAt: Date.now(),
+        })
+      } else {
+        reportLinkedFileStartupHydrateFailure(applied.error, cachedHandle.name)
+        return { ok: false, error: applied.error }
       }
     } else if (snap && 'error' in snap) {
+      reportLinkedFileStartupHydrateFailure(snap.error, cachedHandle.name)
       return { ok: false, error: snap.error }
     }
+  } else {
+    clearLinkedFileLoadFailedIfNeeded()
   }
 
   return { ok: true, fileName: cachedHandle.name, reloaded }
@@ -506,19 +519,59 @@ export async function writeLinkedSnapshot(
   return result
 }
 
-export async function readLinkedSnapshot(): Promise<
-  ParsedSaveFile | { error: string } | null
-> {
+async function linkedSnapshotGranted(
+  handle: FsFileHandle,
+  opts: { requestPermission: boolean },
+): Promise<boolean> {
+  if (opts.requestPermission) {
+    let canRead = await ensurePermission(handle, 'readwrite')
+    if (!canRead) canRead = await ensurePermission(handle, 'read')
+    return canRead
+  }
+  const rw = await queryPermissionState(handle, 'readwrite')
+  const r = await queryPermissionState(handle, 'read')
+  return rw === 'granted' || r === 'granted'
+}
+
+async function linkedSnapshotAccessError(
+  handle: FsFileHandle,
+  requestPermission: boolean,
+): Promise<{ error: string }> {
+  if (requestPermission) {
+    return { error: 'Read permission denied — re-link the data file' }
+  }
+  const rw = await queryPermissionState(handle, 'readwrite')
+  const r = await queryPermissionState(handle, 'read')
+  if (rw === 'denied' || r === 'denied') {
+    return {
+      error: 'File access denied — open Settings to link the file again',
+    }
+  }
+  return {
+    error: 'File access needed — open Settings and use Allow file access',
+  }
+}
+
+export type ReadLinkedSnapshotOptions = {
+  /**
+   * When false (boot hydrate), only queryPermission — never requestPermission,
+   * so the header can steer users to Settings without a second browser prompt.
+   */
+  requestPermission?: boolean
+}
+
+export async function readLinkedSnapshot(
+  options?: ReadLinkedSnapshotOptions,
+): Promise<ParsedSaveFile | { error: string } | null> {
+  const requestPermission = options?.requestPermission !== false
   if (!cachedHandle) {
     cachedHandle = await idbGetHandle()
   }
   if (!cachedHandle) return null
   try {
-    // Prefer readwrite so one Allow covers later autosave (avoids a second "edit" prompt).
-    let canRead = await ensurePermission(cachedHandle, 'readwrite')
-    if (!canRead) canRead = await ensurePermission(cachedHandle, 'read')
+    const canRead = await linkedSnapshotGranted(cachedHandle, { requestPermission })
     if (!canRead) {
-      return { error: 'Read permission denied — re-link the data file' }
+      return await linkedSnapshotAccessError(cachedHandle, requestPermission)
     }
     const file = await cachedHandle.getFile()
     const text = await file.text()
@@ -532,6 +585,11 @@ export async function readLinkedSnapshot(): Promise<
       error: e instanceof Error ? e.message : 'Failed to read data file',
     }
   }
+}
+
+/** Boot-time read — query permission only (see ReadLinkedSnapshotOptions). */
+export function readLinkedSnapshotForStartup(): ReturnType<typeof readLinkedSnapshot> {
+  return readLinkedSnapshot({ requestPermission: false })
 }
 
 let writeTimer: ReturnType<typeof setTimeout> | null = null
@@ -551,7 +609,7 @@ function cancelPendingLinkedWrite(): void {
 }
 
 export type LinkedFileSaveEvent = {
-  status: 'pending' | 'saving' | 'saved' | 'error' | 'idle'
+  status: 'pending' | 'saving' | 'saved' | 'error' | 'load-failed' | 'idle'
   /** Short label for UI status */
   message: string
   fileName?: string | null
@@ -602,6 +660,31 @@ function emitSaveEvent(event: LinkedFileSaveEvent): void {
       /* ignore listener errors */
     }
   }
+}
+
+/** Startup hydrate could not apply the linked file — surface in header (not a toast). */
+export function reportLinkedFileStartupHydrateFailure(
+  errorMessage: string,
+  fileName?: string | null,
+): void {
+  lastError = errorMessage
+  emitSaveEvent({
+    status: 'load-failed',
+    message: errorMessage,
+    fileName: fileName ?? cachedHandle?.name ?? null,
+    savedAt: lastSuccessfulSaveAt,
+  })
+}
+
+function clearLinkedFileLoadFailedIfNeeded(): void {
+  if (lastSaveEvent.status !== 'load-failed') return
+  lastError = null
+  emitSaveEvent({
+    status: 'idle',
+    message: 'Linked',
+    fileName: cachedHandle?.name ?? null,
+    savedAt: lastSuccessfulSaveAt,
+  })
 }
 
 /** Wait this long after the last edit before writing the linked file. */

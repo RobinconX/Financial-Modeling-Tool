@@ -16,11 +16,15 @@ function formatSaveTime(ms: number): string {
   })
 }
 
+type Props = {
+  onOpenDataSettings?: () => void
+}
+
 /**
  * Permanent, subtle save status (Excel Online–style) for the linked data file.
  * Always visible in the app chrome — not a transient toast.
  */
-export function LinkedFileSaveHint() {
+export function LinkedFileSaveHint({ onOpenDataSettings }: Props) {
   const [event, setEvent] = useState<LinkedFileSaveEvent>(() =>
     getLastLinkedFileSaveEvent(),
   )
@@ -33,7 +37,12 @@ export function LinkedFileSaveHint() {
         const mtime = await getLinkedFileLastModified()
         const savedAt = mtime ?? getLastLinkedFileSaveEvent().savedAt ?? Date.now()
         setEvent((cur) => {
-          if (cur.status === 'pending' || cur.status === 'saving' || cur.status === 'error') {
+          if (
+            cur.status === 'pending' ||
+            cur.status === 'saving' ||
+            cur.status === 'error' ||
+            cur.status === 'load-failed'
+          ) {
             return cur
           }
           return {
@@ -90,6 +99,11 @@ export function LinkedFileSaveHint() {
       tone = 'text-red-300/90'
       secondary = event.message
       break
+    case 'load-failed':
+      label = 'Couldn’t load file'
+      tone = 'text-amber-200/90'
+      secondary = event.message
+      break
     default:
       label = 'No linked file'
       tone = 'text-white/30'
@@ -97,7 +111,7 @@ export function LinkedFileSaveHint() {
   }
 
   const fullTitle =
-    event.status === 'error'
+    event.status === 'error' || event.status === 'load-failed'
       ? event.message
       : [
           label,
@@ -123,16 +137,29 @@ export function LinkedFileSaveHint() {
         <span className="text-[10px] text-emerald-400/50" aria-hidden>
           ✓
         </span>
+      ) : event.status === 'load-failed' ? (
+        <span className="text-[10px] text-amber-300/70" aria-hidden>
+          !
+        </span>
       ) : null}
       <span className="min-w-0 truncate">
         <span className="font-medium">{label}</span>
-        {secondary && event.status !== 'error' ? (
+        {secondary && event.status !== 'error' && event.status !== 'load-failed' ? (
           <span className="text-white/25"> · {secondary}</span>
         ) : null}
-        {event.status === 'error' && secondary ? (
+        {(event.status === 'error' || event.status === 'load-failed') && secondary ? (
           <span className="block truncate text-[10px] opacity-90">{secondary}</span>
         ) : null}
       </span>
+      {event.status === 'load-failed' && onOpenDataSettings ? (
+        <button
+          type="button"
+          className="shrink-0 rounded border border-amber-400/35 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-100/95 hover:bg-amber-500/20"
+          onClick={onOpenDataSettings}
+        >
+          Settings
+        </button>
+      ) : null}
     </div>
   )
 }
