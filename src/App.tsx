@@ -11,6 +11,7 @@ import { SavingsView } from './components/savings/SavingsView'
 import { OverviewView } from './components/overview/OverviewView'
 import { HistoryView } from './components/history/HistoryView'
 import { useSavings } from './hooks/useSavings'
+import { useOverview } from './hooks/useOverview'
 import { usePortfolioContributions } from './hooks/usePortfolioContributions'
 import { usePortfolioActuals } from './hooks/usePortfolioActuals'
 import { usePortfolioSharedCash } from './hooks/usePortfolioSharedCash'
@@ -275,6 +276,7 @@ export default function App() {
 
   const savings = useSavings()
   const savingsAccounts = savings.accounts
+  const overview = useOverview()
   const portfolioContributions = usePortfolioContributions()
   const portfolioActuals = usePortfolioActuals()
   const {
@@ -311,10 +313,21 @@ export default function App() {
   const {
     comparables,
     error: comparablesError,
+    storageRecovery: comparablesStorageRecovery,
+    dismissStorageRecovery: dismissComparablesStorageRecovery,
     createComparable,
     updateComparable,
     deleteComparable,
   } = useComparables()
+
+  const {
+    storageRecovery: savingsStorageRecovery,
+    dismissStorageRecovery: dismissSavingsStorageRecovery,
+  } = savings
+  const {
+    storageRecovery: overviewStorageRecovery,
+    dismissStorageRecovery: dismissOverviewStorageRecovery,
+  } = overview
 
   const storageRecoveryNotices = useMemo(() => {
     const list = [
@@ -322,6 +335,9 @@ export default function App() {
       portfolioStorageRecovery,
       incomeCostStorageRecovery,
       portfolioActualsStorageRecovery,
+      savingsStorageRecovery,
+      overviewStorageRecovery,
+      comparablesStorageRecovery,
     ].filter((n): n is NonNullable<typeof n> => n != null)
     return list
   }, [
@@ -329,6 +345,9 @@ export default function App() {
     portfolioStorageRecovery,
     incomeCostStorageRecovery,
     portfolioActualsStorageRecovery,
+    savingsStorageRecovery,
+    overviewStorageRecovery,
+    comparablesStorageRecovery,
   ])
 
   const dismissStorageRecovery = (storageKey: string) => {
@@ -343,6 +362,15 @@ export default function App() {
     }
     if (portfolioActualsStorageRecovery?.storageKey === storageKey) {
       dismissPortfolioActualsStorageRecovery()
+    }
+    if (savingsStorageRecovery?.storageKey === storageKey) {
+      dismissSavingsStorageRecovery()
+    }
+    if (overviewStorageRecovery?.storageKey === storageKey) {
+      dismissOverviewStorageRecovery()
+    }
+    if (comparablesStorageRecovery?.storageKey === storageKey) {
+      dismissComparablesStorageRecovery()
     }
   }
 
@@ -598,6 +626,7 @@ export default function App() {
 
             {tab === 'overview' && (
               <OverviewView
+                overview={overview}
                 portfolios={portfoliosForCash}
                 stockScenarios={scenarios}
                 savingsAccounts={savingsAccounts}
