@@ -20,6 +20,8 @@ type Props = {
   currency?: string
   /** Required to show share-price mode (mcap ÷ shares) */
   sharesOutstanding?: number | null
+  /** "shares" or "units" for chart hints */
+  unitCountLabelLower?: string
   /** Controlled metric; omit for internal toggle state */
   metric?: ChartMetric
   onMetricChange?: (m: ChartMetric) => void
@@ -67,6 +69,7 @@ export function MarketCapChart({
   mode,
   currency = 'USD',
   sharesOutstanding = null,
+  unitCountLabelLower = 'shares',
   metric: metricProp,
   onMetricChange,
   fillContainer = false,
@@ -159,7 +162,7 @@ export function MarketCapChart({
             title={
               canShowPrice
                 ? 'Share price = plotted value ÷ current shares'
-                : 'Needs shares outstanding (refresh quote)'
+                : `Needs ${unitCountLabelLower} outstanding (refresh quote)`
             }
             aria-pressed={effectiveMetric === 'price'}
           >
@@ -168,7 +171,7 @@ export function MarketCapChart({
         </div>
         {!canShowPrice && (
           <span className="text-[10px] text-white/35">
-            Share price needs shares outstanding
+            Share price needs {unitCountLabelLower} outstanding
           </span>
         )}
       </div>

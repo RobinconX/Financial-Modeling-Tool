@@ -20,7 +20,9 @@ import {
   pickHeroRow,
 } from '../../lib/valuation'
 import { formatMoney, formatPrice } from '../../lib/format'
+import { equityShareCountLabel, equityShareCountLabelLower } from '../../lib/instrumentType'
 import {
+  baselineMarketCap,
   impliedSharePrice,
   marketCapFromSharePrice,
   resolveSharesOutstanding,
@@ -64,6 +66,7 @@ function scenarioToQuote(sc: SavedScenario): Quote {
     currency: sc.currency,
     marketCap: sc.currentMarketCap,
     sharesOutstanding: sc.sharesOutstanding,
+    instrumentType: sc.instrumentType,
   }
 }
 
@@ -130,14 +133,26 @@ export function ProjectionPanel({
   const advancedRows = isDraft ? draftAdvanced : (scenario?.advancedRows ?? [])
 
   const currency = quote?.currency ?? scenario?.currency ?? 'USD'
+  const instrumentType = quote?.instrumentType ?? scenario?.instrumentType ?? null
+  const symbol = quote?.symbol ?? scenario?.symbol ?? null
+  const unitLabel = equityShareCountLabel(instrumentType, symbol)
+  const unitLabelLower = equityShareCountLabelLower(instrumentType, symbol)
   const sharesOutstanding = resolveSharesOutstanding({
     sharesOutstanding: quote?.sharesOutstanding ?? scenario?.sharesOutstanding ?? null,
     marketCap: quote?.marketCap ?? scenario?.currentMarketCap ?? null,
     price: quote?.price ?? scenario?.currentPrice ?? null,
     mcapOverride,
+    instrumentType,
+    symbol,
   })
   const liveMcap = quote?.marketCap ?? scenario?.currentMarketCap ?? null
-  const currentMarketCap = mcapOverride ?? liveMcap
+  const currentMarketCap = baselineMarketCap({
+    mcapOverride,
+    marketCap: liveMcap,
+    price: quote?.price ?? scenario?.currentPrice ?? null,
+    instrumentType,
+    symbol,
+  })
   const currentSharePrice =
     impliedSharePrice(currentMarketCap, sharesOutstanding) ??
     (quote?.price != null && quote.price > 0 ? quote.price : null)
@@ -230,6 +245,8 @@ export function ProjectionPanel({
           sharesOutstanding: q.sharesOutstanding,
           marketCap: q.marketCap,
           price: q.price,
+          instrumentType: q.instrumentType,
+          symbol: q.symbol,
         })
         onUpdateScenario(scenarioId, {
           companyName: q.name,
@@ -237,6 +254,7 @@ export function ProjectionPanel({
           currentPrice: q.price,
           currentMarketCap: q.marketCap ?? scenario?.currentMarketCap ?? null,
           sharesOutstanding: derivedShares ?? scenario?.sharesOutstanding ?? null,
+          instrumentType: q.instrumentType ?? scenario?.instrumentType ?? null,
           // symbol intentionally not updated — ticker locked
         })
       }
@@ -442,12 +460,12 @@ export function ProjectionPanel({
           displayDecimals={4}
           hint={
             sharesOutstanding == null
-              ? 'Needs shares (mcap ÷ price)'
+              ? `Needs ${unitLabelLower} (mcap ÷ price)`
               : mcapOverride != null
                 ? `→ mcap ${formatMoney(currentMarketCap, currency)}`
                 : quote?.price != null
                   ? `Live ${formatPrice(quote.price, currency)}`
-                  : 'Price × shares = mcap'
+                  : `Price × ${unitLabelLower} = mcap`
           }
         />
         <div className="min-w-0">
@@ -459,12 +477,14 @@ export function ProjectionPanel({
           </div>
         </div>
         <div className="min-w-0">
-          <div className="text-[10px] uppercase tracking-wider text-white/40">Shares / price</div>
+          <div className="text-[10px] uppercase tracking-wider text-white/40">
+            {unitLabel} / price
+          </div>
           <div className="mt-0.5 text-sm font-semibold tabular-nums text-white">
             {sharesOutstanding != null
               ? sharesOutstanding.toLocaleString(undefined, { maximumFractionDigits: 0 })
               : '—'}{' '}
-            <span className="text-white/40">sh</span>
+            <span className="text-white/40">{unitLabel === 'Units' ? 'units' : 'sh'}</span>
           </div>
           <div className="text-xs tabular-nums text-white/50">
             {currentSharePrice != null ? formatPrice(currentSharePrice, currency) : '—'}
@@ -500,6 +520,7 @@ export function ProjectionPanel({
               currentMarketCap={currentMarketCap}
               sharesOutstanding={sharesOutstanding}
               currentPrice={quote?.price ?? scenario?.currentPrice ?? null}
+              unitCountLabelLower={unitLabelLower}
             />
           </div>
         ) : null}
@@ -545,6 +566,7 @@ export function ProjectionPanel({
               mode="easy"
               currency={currency}
               sharesOutstanding={sharesOutstanding}
+              unitCountLabelLower={unitLabelLower}
             />
           </FullscreenChart>
         </div>
@@ -560,6 +582,7 @@ export function ProjectionPanel({
                 mode="advanced"
                 currency={currency}
                 sharesOutstanding={sharesOutstanding}
+                unitCountLabelLower={unitLabelLower}
               />
             </FullscreenChart>
           </div>

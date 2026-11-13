@@ -26,6 +26,7 @@ function sc(
     currentPrice: 120,
     currentMarketCap: 240_000_000_000,
     sharesOutstanding: 2_000_000_000,
+    instrumentType: null,
     mcapOverride: null,
     easyRows: [],
     advancedRows: [],

@@ -17,6 +17,8 @@ type Props = {
   currentMarketCap?: number | null
   sharesOutstanding?: number | null
   currentPrice?: number | null
+  /** "shares" or "units" for ETF/index modeling */
+  unitCountLabelLower?: string
 }
 
 export function EasyInputs({
@@ -25,6 +27,7 @@ export function EasyInputs({
   currency = 'USD',
   currentMarketCap,
   sharesOutstanding,
+  unitCountLabelLower = 'shares',
 }: Props) {
   const currentYear = new Date().getFullYear()
   const sorted = sortEasyProjections(rows)
@@ -70,7 +73,7 @@ export function EasyInputs({
     <div className="space-y-2">
       {!canConvert && (
         <p className="text-[11px] text-amber-200/80">
-          Share price needs shares outstanding (fetch a ticker, or set a mcap override).
+          Share price needs {unitCountLabelLower} outstanding (fetch a ticker, or set a mcap override).
         </p>
       )}
 

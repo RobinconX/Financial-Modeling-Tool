@@ -2,7 +2,7 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { SavedPortfolio, SavedScenario } from '../types'
 import { gatherAutoRefreshSymbols } from '../lib/quoteSymbol'
 import { fetchQuoteClient, fetchQuotesClient } from '../lib/quote'
-import { marketCapFromSharePrice } from '../lib/sharePrice'
+import { marketCapFromSharePrice, resolveSharesOutstanding } from '../lib/sharePrice'
 import { optionIsExpired } from '../lib/optionContract'
 import { withLinkedMirrorSuppressed } from '../lib/linkedMirrorGate'
 import {
@@ -109,25 +109,14 @@ export function useAutoQuoteRefresh(
         for (const s of scenariosRef.current) {
           const q = quoteBySym.get(s.symbol.toUpperCase())
           if (!q) continue
-          let shares: number | null =
-            q.sharesOutstanding != null &&
-            Number.isFinite(q.sharesOutstanding) &&
-            q.sharesOutstanding > 0
-              ? q.sharesOutstanding
-              : s.sharesOutstanding != null &&
-                  Number.isFinite(s.sharesOutstanding) &&
-                  s.sharesOutstanding > 0
-                ? s.sharesOutstanding
-                : null
-          if (
-            shares == null &&
-            s.currentMarketCap != null &&
-            s.currentMarketCap > 0 &&
-            s.currentPrice != null &&
-            s.currentPrice > 0
-          ) {
-            shares = s.currentMarketCap / s.currentPrice
-          }
+          const instrumentType = q.instrumentType ?? s.instrumentType ?? null
+          const shares = resolveSharesOutstanding({
+            sharesOutstanding: q.sharesOutstanding ?? s.sharesOutstanding,
+            marketCap: q.marketCap ?? s.currentMarketCap,
+            price: q.price,
+            instrumentType,
+            symbol: s.symbol,
+          })
 
           const mcap =
             q.marketCap ??
@@ -139,7 +128,8 @@ export function useAutoQuoteRefresh(
             s.currency === q.currency &&
             s.currentPrice === q.price &&
             s.currentMarketCap === mcap &&
-            s.sharesOutstanding === shares
+            s.sharesOutstanding === shares &&
+            s.instrumentType === instrumentType
           ) {
             continue
           }
@@ -150,6 +140,7 @@ export function useAutoQuoteRefresh(
             currentPrice: q.price,
             currentMarketCap: mcap,
             sharesOutstanding: shares,
+            instrumentType,
           })
         }
 

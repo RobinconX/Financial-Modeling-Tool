@@ -1,3 +1,9 @@
+import {
+  isIndexSymbol,
+  nasdaqAssetClassOrder,
+  normalizeInstrumentType,
+} from '../src/lib/instrumentType'
+
 export type Quote = {
   symbol: string
   name: string
@@ -5,20 +11,24 @@ export type Quote = {
   currency: string
   marketCap: number | null
   sharesOutstanding: number | null
+  instrumentType: string | null
+}
+
+type YahooChartMeta = {
+  symbol?: string
+  currency?: string
+  regularMarketPrice?: number
+  chartPreviousClose?: number
+  previousClose?: number
+  longName?: string
+  shortName?: string
+  instrumentType?: string
 }
 
 type YahooChartResponse = {
   chart?: {
     result?: Array<{
-      meta?: {
-        symbol?: string
-        currency?: string
-        regularMarketPrice?: number
-        chartPreviousClose?: number
-        previousClose?: number
-        longName?: string
-        shortName?: string
-      }
+      meta?: YahooChartMeta
     }>
     error?: { description?: string } | null
   }
@@ -30,15 +40,7 @@ type YahooSparkResponse = {
     result?: Array<{
       symbol?: string
       response?: Array<{
-        meta?: {
-          symbol?: string
-          currency?: string
-          regularMarketPrice?: number
-          chartPreviousClose?: number
-          previousClose?: number
-          longName?: string
-          shortName?: string
-        }
+        meta?: YahooChartMeta
       }>
     }>
     error?: { description?: string } | null
@@ -50,6 +52,7 @@ type NasdaqSummaryResponse = {
     symbol?: string
     summaryData?: {
       MarketCap?: { value?: string }
+      AUM?: { value?: string; label?: string }
     }
   }
 }
@@ -76,6 +79,7 @@ const YAHOO_BATCH_SIZE = 40
 /** Upstream timeouts — Nasdaq is often the slow leg of multi-ticker batch. */
 const SPARK_TIMEOUT_MS = 5000
 const NASDAQ_TIMEOUT_MS = 1800
+const NASDAQ_SINGLE_TIMEOUT_MS = 4500
 const CHART_TIMEOUT_MS = 4000
 
 /** Equity tickers plus OCC option symbols (e.g. AAPL260821C00150000). */
@@ -128,6 +132,13 @@ function parseNasdaqMoney(value: string | undefined): number | null {
   return Number.isFinite(n) && n > 0 ? n : null
 }
 
+/** Nasdaq AUM field is quoted in thousands (per field label). */
+function parseNasdaqAum(value: string | undefined): number | null {
+  const n = parseNasdaqMoney(value)
+  if (n == null) return null
+  return n * 1000
+}
+
 function parseNasdaqPrice(value: string | undefined): number | null {
   if (!value) return null
   const n = Number(value.replace(/[$,\s]/g, ''))
@@ -140,6 +151,22 @@ function normalizeSymbol(raw: string): string | null {
   return symbol
 }
 
+function instrumentTypeForSymbol(
+  symbol: string,
+  fromYahoo: string | null | undefined,
+): string | null {
+  const yahoo = normalizeInstrumentType(fromYahoo ?? null)
+  if (yahoo) return yahoo
+  if (isIndexSymbol(symbol)) return 'INDEX'
+  return null
+}
+
+function marketCapFromNasdaqSummary(summaryJson: NasdaqSummaryResponse): number | null {
+  const mcap = parseNasdaqMoney(summaryJson.data?.summaryData?.MarketCap?.value)
+  if (mcap != null) return mcap
+  return parseNasdaqAum(summaryJson.data?.summaryData?.AUM?.value)
+}
+
 function quoteFromFields(fields: {
   symbol: string
   name?: string | null
@@ -147,6 +174,7 @@ function quoteFromFields(fields: {
   currency?: string | null
   marketCap?: number | null
   sharesOutstanding?: number | null
+  instrumentType?: string | null
 }): Quote {
   const price = fields.price
   const marketCap =
@@ -169,6 +197,7 @@ function quoteFromFields(fields: {
     currency: fields.currency?.trim() || 'USD',
     marketCap,
     sharesOutstanding,
+    instrumentType: instrumentTypeForSymbol(fields.symbol, fields.instrumentType),
   }
 }
 
@@ -176,6 +205,7 @@ async function fetchYahooChart(symbol: string): Promise<{
   price: number
   name: string
   currency: string
+  instrumentType: string | null
 } | null> {
   const chartUrl = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&range=1d`
   const chartRes = await fetchJson(chartUrl, CHART_TIMEOUT_MS)
@@ -193,25 +223,40 @@ async function fetchYahooChart(symbol: string): Promise<{
     price,
     name: meta.longName ?? meta.shortName ?? symbol,
     currency: meta.currency ?? 'USD',
+    instrumentType: instrumentTypeForSymbol(symbol, meta.instrumentType),
   }
 }
 
-async function fetchNasdaqMarketCap(symbol: string): Promise<{
+async function fetchNasdaqMarketCap(
+  symbol: string,
+  instrumentType: string | null,
+  timeoutMs = NASDAQ_SINGLE_TIMEOUT_MS,
+): Promise<{
   marketCap: number | null
   name: string | null
   price: number | null
 }> {
-  const assetClasses = ['stocks', 'etf'] as const
+  if (isIndexSymbol(symbol)) {
+    return { marketCap: null, name: null, price: null }
+  }
+
+  const assetClasses = nasdaqAssetClassOrder(instrumentType, symbol)
+  let partial: { marketCap: number | null; name: string | null; price: number | null } = {
+    marketCap: null,
+    name: null,
+    price: null,
+  }
+
   for (const assetClass of assetClasses) {
     try {
       const [summaryRes, infoRes] = await Promise.all([
         fetchJson(
           `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/summary?assetclass=${assetClass}`,
-          NASDAQ_TIMEOUT_MS,
+          timeoutMs,
         ),
         fetchJson(
           `https://api.nasdaq.com/api/quote/${encodeURIComponent(symbol)}/info?assetclass=${assetClass}`,
-          NASDAQ_TIMEOUT_MS,
+          timeoutMs,
         ),
       ])
 
@@ -221,7 +266,7 @@ async function fetchNasdaqMarketCap(symbol: string): Promise<{
 
       if (summaryRes?.ok) {
         const summaryJson = (await summaryRes.json()) as NasdaqSummaryResponse
-        marketCap = parseNasdaqMoney(summaryJson.data?.summaryData?.MarketCap?.value)
+        marketCap = marketCapFromNasdaqSummary(summaryJson)
       }
       if (infoRes?.ok) {
         const infoJson = (await infoRes.json()) as NasdaqInfoResponse
@@ -229,14 +274,26 @@ async function fetchNasdaqMarketCap(symbol: string): Promise<{
         price = parseNasdaqPrice(infoJson.data?.primaryData?.lastSalePrice)
       }
 
-      if (marketCap != null || price != null || name) {
-        return { marketCap, name, price }
+      if (marketCap != null) {
+        return {
+          marketCap,
+          name: name ?? partial.name,
+          price: price ?? partial.price,
+        }
+      }
+
+      if (price != null || name) {
+        partial = {
+          marketCap: null,
+          name: name ?? partial.name,
+          price: price ?? partial.price,
+        }
       }
     } catch {
       // try next asset class
     }
   }
-  return { marketCap: null, name: null, price: null }
+  return partial
 }
 
 /**
@@ -270,6 +327,7 @@ async function fetchYahooSparkBatch(symbols: string[]): Promise<Map<string, Quot
         currency: meta?.currency,
         marketCap: null,
         sharesOutstanding: null,
+        instrumentType: meta?.instrumentType,
       }),
     )
   }
@@ -277,8 +335,12 @@ async function fetchYahooSparkBatch(symbols: string[]): Promise<Map<string, Quot
 }
 
 /** Lightweight mcap-only (summary endpoint). Parallelized for batch enrichment. */
-async function fetchNasdaqMarketCapOnly(symbol: string): Promise<number | null> {
-  const assetClasses = ['stocks', 'etf'] as const
+async function fetchNasdaqMarketCapOnly(
+  symbol: string,
+  instrumentType: string | null,
+): Promise<number | null> {
+  if (isIndexSymbol(symbol)) return null
+  const assetClasses = nasdaqAssetClassOrder(instrumentType, symbol)
   for (const assetClass of assetClasses) {
     try {
       const res = await fetchJson(
@@ -287,7 +349,7 @@ async function fetchNasdaqMarketCapOnly(symbol: string): Promise<number | null> 
       )
       if (!res?.ok) continue
       const json = (await res.json()) as NasdaqSummaryResponse
-      const mcap = parseNasdaqMoney(json.data?.summaryData?.MarketCap?.value)
+      const mcap = marketCapFromNasdaqSummary(json)
       if (mcap != null) return mcap
     } catch {
       // try next
@@ -302,9 +364,9 @@ async function enrichQuotesWithMarketCap(quotes: Map<string, Quote>): Promise<vo
   if (entries.length === 0) return
 
   const caps = await Promise.all(
-    entries.map(async ([symbol]) => {
+    entries.map(async ([symbol, q]) => {
       try {
-        return await fetchNasdaqMarketCapOnly(symbol)
+        return await fetchNasdaqMarketCapOnly(symbol, q.instrumentType)
       } catch {
         return null
       }
@@ -324,6 +386,7 @@ async function enrichQuotesWithMarketCap(quotes: Map<string, Quote>): Promise<vo
         currency: q.currency,
         marketCap,
         sharesOutstanding: null, // derived in quoteFromFields from mcap/price
+        instrumentType: q.instrumentType,
       }),
     )
   }
@@ -331,21 +394,22 @@ async function enrichQuotesWithMarketCap(quotes: Map<string, Quote>): Promise<vo
 
 /** Per-symbol fallback (chart + Nasdaq) when batch misses a ticker. */
 async function fetchQuoteFallback(symbol: string): Promise<Quote | null> {
-  const [yahoo, nasdaq] = await Promise.all([
-    fetchYahooChart(symbol),
-    fetchNasdaqMarketCap(symbol),
-  ])
+  const yahoo = await fetchYahooChart(symbol)
+  if (!yahoo) return null
 
-  const price = yahoo?.price ?? nasdaq.price
+  const nasdaq = await fetchNasdaqMarketCap(symbol, yahoo.instrumentType)
+
+  const price = yahoo.price ?? nasdaq.price
   if (price == null) return null
 
   return quoteFromFields({
     symbol,
-    name: yahoo?.name ?? nasdaq.name ?? symbol,
+    name: yahoo.name ?? nasdaq.name ?? symbol,
     price,
-    currency: yahoo?.currency ?? 'USD',
+    currency: yahoo.currency ?? 'USD',
     marketCap: nasdaq.marketCap,
     sharesOutstanding: null,
+    instrumentType: yahoo.instrumentType,
   })
 }
 
@@ -404,6 +468,7 @@ export async function fetchQuotes(
               currency: yahoo.currency,
               marketCap: null,
               sharesOutstanding: null,
+              instrumentType: yahoo.instrumentType,
             })
           }
           return await fetchQuoteFallback(symbol)
@@ -434,6 +499,7 @@ export async function fetchQuote(rawSymbol: string): Promise<Quote> {
       currency: yahoo.currency,
       marketCap: null,
       sharesOutstanding: null,
+      instrumentType: 'OPTION',
     })
   }
 

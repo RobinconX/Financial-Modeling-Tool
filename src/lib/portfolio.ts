@@ -1062,6 +1062,8 @@ function equityToSharePrice(
     marketCap: scenario.currentMarketCap,
     price: scenario.currentPrice ?? fallbackPrice ?? null,
     mcapOverride: scenario.mcapOverride,
+    instrumentType: scenario.instrumentType,
+    symbol: scenario.symbol,
   })
   if (shares != null && shares > 0) {
     return impliedSharePrice(equity, shares)

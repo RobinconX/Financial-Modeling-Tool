@@ -644,6 +644,8 @@ Save **AAPL · Base case** in **Analyze**, then **Comparables → + New**, add t
 - **New projection** — enter the ticker exactly as your data source lists it (no auto-fix), **Fetch**, then fill assumptions
 - Saved scenario — picker at top; **Refresh quote** updates price/mcap without changing your rows
 
+> **ETFs, funds, and indexes** (e.g. **SPY**, **^GSPC**) use **Units** instead of shares. Live **market cap** comes from Nasdaq when available (AUM only if mcap is missing). With price only, the app models **1 unit** at the live price until you set **Market cap (override)** for your “size.”
+
 > If **Fetch** or refresh finds no price, you see a warning (e.g. use **BRK-B** not **BRK.B**, or **NESN.SW** for Swiss listings). Fix the symbol or set **Market cap (override)** before first **Save**.
 
 ### Layout
@@ -653,8 +655,8 @@ Save **AAPL · Base case** in **Analyze**, then **Comparables → + New**, add t
 
 ### Assumptions
 
-- **Easy** — year-by-year **projected market cap** or share price; the other is derived from shares outstanding. CAGR uses market cap vs today.
-- **Advanced** — per year: fundamentals × multiples for implied mcap. **Dilution** is that year’s extra shares (**1.05** = +5%) and compounds with earlier years; **1.0** = none. Leave unused bases blank.
+- **Easy** — year-by-year **projected market cap** or share price; the other is derived from shares or **units** outstanding. CAGR uses market cap vs today.
+- **Advanced** — per year: fundamentals × multiples for implied mcap (manual fund-level inputs for ETFs; no look-through). **Dilution** is that year’s extra shares or units (**1.05** = +5%) and compounds with earlier years; **1.0** = none. Leave unused bases blank.
 
 Toggle basis tabs (**Easy**, **P/S**, etc.) to drive the hero ROI, **Market cap** chart, and **Projection table**.
 

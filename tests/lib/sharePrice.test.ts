@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest'
 import {
+  baselineMarketCap,
   effectiveMarketCap,
   impliedSharePrice,
   marketCapFromSharePrice,
@@ -72,5 +73,25 @@ describe('resolveSharesOutstanding', () => {
 
   it('returns null when cannot derive', () => {
     expect(resolveSharesOutstanding({})).toBeNull()
+  })
+
+  it('uses synthetic 1 unit for ETFs when only price is known', () => {
+    expect(
+      resolveSharesOutstanding({
+        price: 500,
+        instrumentType: 'ETF',
+        symbol: 'SPY',
+      }),
+    ).toBe(1)
+  })
+
+  it('uses synthetic baseline mcap as price for index symbols', () => {
+    expect(
+      baselineMarketCap({
+        price: 5000,
+        instrumentType: 'INDEX',
+        symbol: '^GSPC',
+      }),
+    ).toBe(5000)
   })
 })

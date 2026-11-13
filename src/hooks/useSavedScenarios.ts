@@ -94,6 +94,7 @@ export function useSavedScenarios() {
         currentPrice: input.currentPrice,
         currentMarketCap: input.currentMarketCap,
         sharesOutstanding: input.sharesOutstanding,
+        instrumentType: input.instrumentType ?? null,
         mcapOverride: input.mcapOverride,
         easyRows: sortEasyProjections(input.easyRows),
         advancedRows: sortYearProjections(input.advancedRows),

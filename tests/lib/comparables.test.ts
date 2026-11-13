@@ -20,6 +20,7 @@ function sc(partial: Partial<SavedScenario> & Pick<SavedScenario, 'id' | 'symbol
     currentPrice: 10,
     currentMarketCap: 1000,
     sharesOutstanding: 100,
+    instrumentType: null,
     mcapOverride: null,
     easyRows: [],
     advancedRows: [],
@@ -28,6 +29,25 @@ function sc(partial: Partial<SavedScenario> & Pick<SavedScenario, 'id' | 'symbol
     ...partial,
   }
 }
+
+describe('ETF comparable rows', () => {
+  it('uses synthetic unit baseline when only ETF price is stored', () => {
+    const spy = sc({
+      id: 'spy',
+      symbol: 'SPY',
+      name: 'Base',
+      currentPrice: 500,
+      currentMarketCap: null,
+      sharesOutstanding: null,
+      instrumentType: 'ETF',
+      easyRows: [{ id: '1', year: 2030, projectedMarketCap: 1_000 }],
+    })
+    const table = buildComparableTable([{ scenarioId: 'spy', basis: 'easy' }], [spy], new Date(2026, 5, 1))
+    expect(table.rows).toHaveLength(1)
+    expect(table.rows[0]!.priceNow).toBeCloseTo(500)
+    expect(table.rows[0]!.byYear[2030]?.price).toBeCloseTo(1000)
+  })
+})
 
 describe('buildComparableTable', () => {
   const a = sc({
