@@ -40,6 +40,7 @@ import { StorageRecoveryBanner } from './components/common/StorageRecoveryBanner
 import { getAccountHint } from './lib/accountCatalog'
 import { writeActualsFocus } from './lib/actualsFocus'
 import type { ActualsRepairTarget } from './lib/history'
+import { filterStorageRecoveryNoticesForTab } from './lib/storageRecoveryTab'
 import type { AppTab } from './types'
 
 const NAV_COLLAPSED_KEY = 'grok-lab-nav-collapsed'
@@ -339,8 +340,9 @@ export default function App() {
       overviewStorageRecovery,
       comparablesStorageRecovery,
     ].filter((n): n is NonNullable<typeof n> => n != null)
-    return list
+    return filterStorageRecoveryNoticesForTab(tab, list)
   }, [
+    tab,
     projectionsStorageRecovery,
     portfolioStorageRecovery,
     incomeCostStorageRecovery,
