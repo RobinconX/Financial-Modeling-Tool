@@ -10,7 +10,8 @@ describe('releaseLog', () => {
   it('lists merged-PR history newest-first', () => {
     const entries = listReleaseLogEntries()
     expect(entries.length).toBe(27)
-    expect(entries[0]?.pending).toBe(true)
+    expect(entries[0]?.pending).toBeUndefined()
+    expect(entries[0]?.prodSha).toBe('09ecc4eaa035806fb5fa9bbef11f36480390d962')
     expect(entries[0]?.headline).toMatch(/ETFs in Analyze/i)
     expect(entries[1]?.pending).toBeUndefined()
     expect(entries[1]?.prodSha).toBe('bd2ed26e80f2bb02161b735683e9acb9e199c9ff')
