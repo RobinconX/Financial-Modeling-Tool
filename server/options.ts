@@ -41,11 +41,7 @@ type NasdaqChainResponse = {
   }
 }
 
-const NASDAQ_HEADERS = {
-  'User-Agent':
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36',
-  Accept: 'application/json',
-}
+import { NASDAQ_HEADERS } from './nasdaq'
 
 function parseNum(raw: string | null | undefined): number | null {
   if (raw == null || raw === '' || raw === '--') return null
