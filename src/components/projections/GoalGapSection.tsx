@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { FeatureGuideId } from '../../lib/teachings'
 import type { SavedScenario } from '../../types'
 import type { CachedPriceHistory } from '../../lib/priceHistory'
 import {
@@ -43,6 +44,38 @@ export const OVERLAY_COLORS = [
   '#fb923c',
   '#818cf8',
 ]
+
+const CHART_GUIDE_STUBS: {
+  anchor: FeatureGuideId
+  title: string
+}[] = [
+  { anchor: 'comparables.upsideChart', title: 'Remaining upside' },
+  { anchor: 'comparables.cagrChart', title: 'CAGR' },
+]
+
+/** Visible teleport targets when no comparables row is ticked for the chart overlay. */
+export function ComparablesChartEmptyPlaceholder() {
+  return (
+    <div className="space-y-3 border-t border-white/[0.06] pt-4">
+      <p className="text-sm text-white/55">
+        Tick a row to chart remaining upside vs today. Click the name to open the projection.
+      </p>
+      {CHART_GUIDE_STUBS.map(({ anchor, title }) => (
+        <div
+          key={anchor}
+          data-guide-anchor={anchor}
+          className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-3"
+        >
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h3 className="section-title">{title}</h3>
+            <FeatureGuideButton id={anchor} />
+          </div>
+          <p className="mt-2 text-sm text-white/50">Tick a row to see this chart.</p>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 type Props = {
   overlayIds: string[]

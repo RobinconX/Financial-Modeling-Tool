@@ -37,7 +37,11 @@ import { ConfirmDialog } from '../common/ConfirmDialog'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
 import { symbolMissingQuoteData, useQuoteHealth } from '../../context/QuoteHealthContext'
-import { GoalGapSection, OVERLAY_COLORS } from './GoalGapSection'
+import {
+  ComparablesChartEmptyPlaceholder,
+  GoalGapSection,
+  OVERLAY_COLORS,
+} from './GoalGapSection'
 
 const SELECTED_KEY = 'grok-lab-selected-comparable'
 
@@ -895,20 +899,7 @@ export function ComparablesView({
                 </table>
               </div>
               {overlayIds.length === 0 ? (
-                <div className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-3 text-sm text-white/55">
-                  <span
-                    className="sr-only"
-                    data-guide-anchor="comparables.cagrChart"
-                    aria-hidden
-                  />
-                  <span
-                    className="sr-only"
-                    data-guide-anchor="comparables.upsideChart"
-                    aria-hidden
-                  />
-                  Tick a row to chart remaining upside vs today. Click the name to open the
-                  projection.
-                </div>
+                <ComparablesChartEmptyPlaceholder />
               ) : (
                 <GoalGapSection
                   overlayIds={overlayIds}
