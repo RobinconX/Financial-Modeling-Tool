@@ -2,6 +2,7 @@ import { useMemo, useState } from 'react'
 import type { OptionContract, SavedScenario } from '../../types'
 import { fetchOptionChainClient, type OptionChainContract } from '../../lib/options'
 import { formatPrice } from '../../lib/format'
+import { normalizeQuoteSymbol } from '../../lib/quoteSymbol'
 import { SymbolQuoteFieldHint } from '../common/SymbolQuoteFieldHint'
 
 type Props = {
@@ -36,9 +37,9 @@ export function PortfolioOptionPicker({ scenarios, onAdd, onClose }: Props) {
   const rows = right === 'C' ? calls : puts
 
   async function loadChain(sym: string, date?: string) {
-    const ticker = sym.trim().toUpperCase()
-    if (!/^[A-Z]{1,6}$/.test(ticker)) {
-      setError('Underlying must be a ticker (1–6 letters)')
+    const ticker = normalizeQuoteSymbol(sym)
+    if (!ticker) {
+      setError('Enter a valid ticker symbol')
       return
     }
     setLoading(true)
