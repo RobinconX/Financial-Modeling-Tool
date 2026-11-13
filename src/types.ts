@@ -7,6 +7,8 @@ export type Quote = {
   currency: string
   marketCap: number | null
   sharesOutstanding: number | null
+  /** Yahoo instrumentType when known (e.g. EQUITY, ETF, INDEX). */
+  instrumentType: string | null
 }
 
 export type AnalysisMode = 'easy' | 'advanced'
@@ -71,6 +73,8 @@ export type SavedScenario = {
   currentPrice: number | null
   currentMarketCap: number | null
   sharesOutstanding: number | null
+  /** Yahoo instrumentType when saved (ETF, INDEX, …). */
+  instrumentType: string | null
   mcapOverride: number | null
   easyRows: EasyProjection[]
   advancedRows: YearProjection[]

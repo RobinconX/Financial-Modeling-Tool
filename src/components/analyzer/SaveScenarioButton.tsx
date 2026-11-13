@@ -59,6 +59,7 @@ export function SaveScenarioButton({
       currentPrice: quote.price,
       currentMarketCap: quote.marketCap,
       sharesOutstanding: quote.sharesOutstanding,
+      instrumentType: quote.instrumentType,
       mcapOverride,
       easyRows,
       advancedRows,

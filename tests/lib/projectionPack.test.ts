@@ -22,6 +22,7 @@ function sc(
     currentPrice: 10,
     currentMarketCap: 1000,
     sharesOutstanding: 100,
+    instrumentType: null,
     mcapOverride: null,
     easyRows: [{ id: 'e1', year: 2030, projectedMarketCap: 2_000 }],
     advancedRows: [],
