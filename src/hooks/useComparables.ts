@@ -3,13 +3,20 @@ import type { SavedComparable } from '../types'
 import { newComparable } from '../lib/comparables'
 import {
   COMPARABLES_STORAGE_KEY,
-  loadComparables,
+  loadComparablesWithRecovery,
   saveComparables,
 } from '../lib/comparablesStorage'
+import type { StorageRecoveryNotice } from '../lib/storageLoadRecovery'
 
 export function useComparables() {
-  const [comparables, setComparables] = useState<SavedComparable[]>(() => loadComparables())
+  const [initialLoad] = useState(() => loadComparablesWithRecovery())
+  const [comparables, setComparables] = useState<SavedComparable[]>(() => initialLoad.data)
+  const [storageRecovery, setStorageRecovery] = useState<StorageRecoveryNotice | null>(
+    () => initialLoad.recovery,
+  )
   const [error, setError] = useState<string | null>(null)
+
+  const dismissStorageRecovery = useCallback(() => setStorageRecovery(null), [])
   const ref = useRef(comparables)
   ref.current = comparables
 
@@ -28,9 +35,10 @@ export function useComparables() {
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key !== COMPARABLES_STORAGE_KEY) return
-      const loaded = loadComparables()
-      ref.current = loaded
-      setComparables(loaded)
+      const loaded = loadComparablesWithRecovery()
+      ref.current = loaded.data
+      setComparables(loaded.data)
+      if (loaded.recovery) setStorageRecovery(loaded.recovery)
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -72,6 +80,8 @@ export function useComparables() {
   return {
     comparables,
     error,
+    storageRecovery,
+    dismissStorageRecovery,
     createComparable,
     updateComparable,
     deleteComparable,

@@ -1,6 +1,10 @@
 import type { ComparableEntry, SavedComparable } from '../types'
 import { isComparableBasis, newComparable } from './comparables'
 import { queueAppDataChanged } from './linkedMirrorGate'
+import {
+  buildRecoveryNotice,
+  type StorageLoadResult,
+} from './storageLoadRecovery'
 
 export const COMPARABLES_STORAGE_KEY = 'grok-lab.saved-comparables.v1'
 
@@ -56,22 +60,46 @@ export function normalizeComparable(raw: unknown): SavedComparable | null {
   }
 }
 
-export function loadComparables(): SavedComparable[] {
+export function loadComparablesWithRecovery(): StorageLoadResult<SavedComparable[]> {
+  let raw: string | null = null
   try {
-    const raw = localStorage.getItem(COMPARABLES_STORAGE_KEY)
-    if (!raw) return []
-    const parsed: unknown = JSON.parse(raw)
+    raw = localStorage.getItem(COMPARABLES_STORAGE_KEY)
+    if (!raw) return { data: [], recovery: null }
+    let parsed: unknown
+    try {
+      parsed = JSON.parse(raw)
+    } catch (err) {
+      console.warn('[comparablesStorage] Failed to parse', err)
+      return {
+        data: [],
+        recovery: buildRecoveryNotice(COMPARABLES_STORAGE_KEY, 'Comparables', 'parse', raw),
+      }
+    }
     if (!isRecord(parsed) || !Array.isArray(parsed.comparables)) {
       console.warn('[comparablesStorage] Invalid payload; resetting')
-      return []
+      return {
+        data: [],
+        recovery: buildRecoveryNotice(COMPARABLES_STORAGE_KEY, 'Comparables', 'shape', raw),
+      }
     }
-    return parsed.comparables
+    const data = parsed.comparables
       .map(normalizeComparable)
       .filter((c): c is SavedComparable => c != null)
+    return { data, recovery: null }
   } catch (err) {
     console.warn('[comparablesStorage] Failed to load', err)
-    return []
+    if (raw) {
+      return {
+        data: [],
+        recovery: buildRecoveryNotice(COMPARABLES_STORAGE_KEY, 'Comparables', 'parse', raw),
+      }
+    }
+    return { data: [], recovery: null }
   }
+}
+
+export function loadComparables(): SavedComparable[] {
+  return loadComparablesWithRecovery().data
 }
 
 export function saveComparables(

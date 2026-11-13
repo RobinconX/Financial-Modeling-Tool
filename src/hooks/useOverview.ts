@@ -11,11 +11,22 @@ import {
   newOverviewSeries,
   sortedOverviewScenarios,
 } from '../lib/overview'
-import { loadOverview, saveOverview, OVERVIEW_STORAGE_KEY } from '../lib/overviewStorage'
+import {
+  loadOverviewWithRecovery,
+  saveOverview,
+  OVERVIEW_STORAGE_KEY,
+} from '../lib/overviewStorage'
+import type { StorageRecoveryNotice } from '../lib/storageLoadRecovery'
 
 export function useOverview() {
-  const [state, setState] = useState<OverviewState>(() => loadOverview())
+  const [initialLoad] = useState(() => loadOverviewWithRecovery())
+  const [state, setState] = useState<OverviewState>(() => initialLoad.data)
+  const [storageRecovery, setStorageRecovery] = useState<StorageRecoveryNotice | null>(
+    () => initialLoad.recovery,
+  )
   const [error, setError] = useState<string | null>(null)
+
+  const dismissStorageRecovery = useCallback(() => setStorageRecovery(null), [])
 
   /** Always derive next state from the latest snapshot (avoids stale range edits). */
   const persistUpdate = useCallback((recipe: (prev: OverviewState) => OverviewState) => {
@@ -37,7 +48,9 @@ export function useOverview() {
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key !== OVERVIEW_STORAGE_KEY) return
-      setState(loadOverview())
+      const loaded = loadOverviewWithRecovery()
+      setState(loaded.data)
+      if (loaded.recovery) setStorageRecovery(loaded.recovery)
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -420,6 +433,8 @@ export function useOverview() {
     endYear: selected?.endYear ?? new Date().getFullYear() + 10,
     series: orderedSeries,
     error,
+    storageRecovery,
+    dismissStorageRecovery,
     selectScenario,
     addScenario,
     saveAsScenario,
@@ -437,3 +452,5 @@ export function useOverview() {
     reorderSavingsSeries,
   }
 }
+
+export type OverviewApi = ReturnType<typeof useOverview>
