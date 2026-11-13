@@ -5,9 +5,9 @@ import type {
   SavedScenario,
 } from '../types'
 import {
+  baselineMarketCap,
   impliedSharePrice,
   resolveSharesOutstanding,
-  effectiveMarketCap,
 } from './sharePrice'
 import {
   buildAdvancedProjections,
@@ -113,7 +113,13 @@ export function nextSortYear(remaining: number[], removed: number): number | nul
 }
 
 export function currentMcapForScenario(sc: SavedScenario): number | null {
-  return effectiveMarketCap(sc.mcapOverride, sc.currentMarketCap)
+  return baselineMarketCap({
+    mcapOverride: sc.mcapOverride,
+    marketCap: sc.currentMarketCap,
+    price: sc.currentPrice,
+    instrumentType: sc.instrumentType,
+    symbol: sc.symbol,
+  })
 }
 
 export function sharesForScenario(sc: SavedScenario): number | null {
@@ -122,6 +128,8 @@ export function sharesForScenario(sc: SavedScenario): number | null {
     marketCap: sc.currentMarketCap,
     price: sc.currentPrice,
     mcapOverride: sc.mcapOverride,
+    instrumentType: sc.instrumentType,
+    symbol: sc.symbol,
   })
 }
 

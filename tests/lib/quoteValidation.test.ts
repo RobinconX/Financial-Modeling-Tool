@@ -25,6 +25,7 @@ const goodQuote: Quote = {
   currency: 'CHF',
   marketCap: 1e11,
   sharesOutstanding: null,
+  instrumentType: null,
 }
 
 describe('quoteValidation', () => {

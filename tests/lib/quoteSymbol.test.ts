@@ -42,6 +42,7 @@ function minimalScenario(symbol: string): SavedScenario {
     currentPrice: 1,
     currentMarketCap: null,
     sharesOutstanding: null,
+    instrumentType: null,
     mcapOverride: null,
     easyRows: [],
     advancedRows: [],

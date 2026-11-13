@@ -3,6 +3,7 @@ import {
   buildGoalGapTable,
   defaultGoalYear,
   easyGoalPrice,
+  formatOverlayHistoryErrors,
   goalPriceForBasis,
   mergeUpsideSeries,
   pathSeries,
@@ -26,6 +27,7 @@ function sc(
     currentPrice: 120,
     currentMarketCap: 240_000_000_000,
     sharesOutstanding: 2_000_000_000,
+    instrumentType: null,
     mcapOverride: null,
     easyRows: [],
     advancedRows: [],
@@ -236,5 +238,32 @@ describe('upsideSeries', () => {
       { date: '2022-01-03', a: 1, b: null },
       { date: '2022-06-01', a: 0.5, b: 0.2 },
     ])
+  })
+})
+
+describe('formatOverlayHistoryErrors', () => {
+  it('returns null when no overlay symbol has a captured error', () => {
+    expect(formatOverlayHistoryErrors(['AAPL', 'MSFT'], {})).toBeNull()
+    expect(
+      formatOverlayHistoryErrors(['AAPL'], { MSFT: 'Network error' }),
+    ).toBeNull()
+  })
+
+  it('lists each failing ticker with its message on one line', () => {
+    const line = formatOverlayHistoryErrors(['AAPL', 'MSFT', 'GOOG'], {
+      AAPL: 'Network error',
+      MSFT: 'Network error',
+      GOOG: 'VITE_API_BASE is not set',
+    })
+    expect(line).toBe(
+      'Price history unavailable — AAPL, MSFT: Network error; GOOG: VITE_API_BASE is not set',
+    )
+  })
+
+  it('dedupes symbols and uppercases lookup', () => {
+    const line = formatOverlayHistoryErrors(['aapl', 'AAPL'], {
+      AAPL: 'Network error',
+    })
+    expect(line).toBe('Price history unavailable — AAPL: Network error')
   })
 })

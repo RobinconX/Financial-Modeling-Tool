@@ -278,6 +278,7 @@ describe('scenario projection share prices on portfolio', () => {
       currentPrice: 10,
       currentMarketCap: 1_000_000,
       sharesOutstanding: null, // often missing from quotes — must derive
+      instrumentType: null,
       mcapOverride: null,
       easyRows: [
         {
@@ -582,6 +583,7 @@ describe('portfolio vs overview totals match', () => {
       currentPrice: 10,
       currentMarketCap: 1_000_000,
       sharesOutstanding: 100_000,
+      instrumentType: null,
       mcapOverride: null,
       easyRows: [
         { id: 'e1', year: 2027, projectedMarketCap: 2_000_000 },
@@ -814,6 +816,7 @@ describe('portfolio actuals and chart', () => {
       currentPrice: 20,
       currentMarketCap: 20,
       sharesOutstanding: 1,
+      instrumentType: null,
       mcapOverride: null,
       easyRows: [],
       advancedRows: [],
@@ -1045,6 +1048,7 @@ describe('cashAtYear with actions', () => {
       currentPrice: 50,
       currentMarketCap: 50,
       sharesOutstanding: 1,
+      instrumentType: null,
       mcapOverride: null,
       easyRows: [],
       advancedRows: [],

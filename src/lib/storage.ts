@@ -80,6 +80,10 @@ export function normalizeScenario(raw: unknown): SavedScenario | null {
     currentPrice: asNumberOrNull(raw.currentPrice),
     currentMarketCap: asNumberOrNull(raw.currentMarketCap),
     sharesOutstanding: asNumberOrNull(raw.sharesOutstanding),
+    instrumentType:
+      typeof raw.instrumentType === 'string' && raw.instrumentType.trim()
+        ? raw.instrumentType.trim().toUpperCase()
+        : null,
     mcapOverride: asNumberOrNull(raw.mcapOverride),
     easyRows: sortEasyProjections(easyRows.length ? easyRows : [newEasyProjection()]),
     // Empty allowed — advanced is optional until the user adds it

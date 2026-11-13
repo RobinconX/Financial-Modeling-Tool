@@ -1,6 +1,17 @@
 [
   {
     "releasedAt": "2026-11-13",
+    "prodSha": null,
+    "pending": true,
+    "headline": "ETFs in Analyze, Comparables chart guides & overlay errors",
+    "notes": [
+      "Analyze and Comparables treat ETFs and indexes (e.g. SPY, ^GSPC) with Units labeling, Nasdaq market-cap baselines, and synthetic unit sizing when shares are unavailable.",
+      "Comparables upside and CAGR guides teleport to visible empty-chart stubs with “Tick a row to see this chart.” when no rows are selected.",
+      "Multi-ticker overlay charts list per-symbol history failures in one compact banner while series with data still render."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-13",
     "prodSha": "bd2ed26e80f2bb02161b735683e9acb9e199c9ff",
     "headline": "Storage recovery, dotted options, budget hints & linked-file status",
     "notes": [

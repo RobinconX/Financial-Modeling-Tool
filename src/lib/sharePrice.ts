@@ -1,3 +1,5 @@
+import { usesUnitLabel } from './instrumentType'
+
 /** Round to avoid float noise from mcap ↔ price conversions. */
 function cleanPrice(n: number): number {
   // 6 decimal places is more than enough for share prices
@@ -50,14 +52,35 @@ export function effectiveMarketCap(
 }
 
 /**
+ * Live baseline mcap for valuation: override → quote mcap → synthetic (1 unit × price) for funds/indexes.
+ */
+export function baselineMarketCap(opts: {
+  mcapOverride?: number | null
+  marketCap?: number | null
+  price?: number | null
+  instrumentType?: string | null
+  symbol?: string | null
+}): number | null {
+  const direct = effectiveMarketCap(opts.mcapOverride ?? null, opts.marketCap ?? null)
+  if (direct != null) return direct
+  const price = opts.price
+  if (price != null && price > 0 && usesUnitLabel(opts.instrumentType, opts.symbol)) {
+    return price
+  }
+  return null
+}
+
+/**
  * Resolve shares outstanding from quote fields and optional mcap override.
- * Prefers explicit shares; else mcap / price.
+ * Prefers explicit shares; else mcap / price; else 1 synthetic unit for tradable funds/indexes.
  */
 export function resolveSharesOutstanding(opts: {
   sharesOutstanding?: number | null
   marketCap?: number | null
   price?: number | null
   mcapOverride?: number | null
+  instrumentType?: string | null
+  symbol?: string | null
 }): number | null {
   if (
     opts.sharesOutstanding != null &&
@@ -66,10 +89,13 @@ export function resolveSharesOutstanding(opts: {
   ) {
     return opts.sharesOutstanding
   }
-  const mcap = effectiveMarketCap(opts.mcapOverride ?? null, opts.marketCap ?? null)
+  const mcap = baselineMarketCap(opts)
   const price = opts.price
   if (mcap != null && mcap > 0 && price != null && price > 0) {
     return mcap / price
+  }
+  if (price != null && price > 0 && usesUnitLabel(opts.instrumentType, opts.symbol)) {
+    return 1
   }
   return null
 }

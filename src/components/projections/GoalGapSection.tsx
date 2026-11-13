@@ -1,7 +1,9 @@
 import { useEffect, useMemo, useState } from 'react'
+import type { FeatureGuideId } from '../../lib/teachings'
 import type { SavedScenario } from '../../types'
 import type { CachedPriceHistory } from '../../lib/priceHistory'
 import {
+  formatOverlayHistoryErrors,
   goalPriceForBasis,
   localIsoDate,
   pathSeries,
@@ -43,6 +45,38 @@ export const OVERLAY_COLORS = [
   '#fb923c',
   '#818cf8',
 ]
+
+const CHART_GUIDE_STUBS: {
+  anchor: FeatureGuideId
+  title: string
+}[] = [
+  { anchor: 'comparables.upsideChart', title: 'Remaining upside' },
+  { anchor: 'comparables.cagrChart', title: 'CAGR' },
+]
+
+/** Visible teleport targets when no comparables row is ticked for the chart overlay. */
+export function ComparablesChartEmptyPlaceholder() {
+  return (
+    <div className="space-y-3 border-t border-white/[0.06] pt-4">
+      <p className="text-sm text-white/55">
+        Tick a row to chart remaining upside vs today. Click the name to open the projection.
+      </p>
+      {CHART_GUIDE_STUBS.map(({ anchor, title }) => (
+        <div
+          key={anchor}
+          data-guide-anchor={anchor}
+          className="rounded-lg border border-dashed border-white/15 bg-white/[0.02] px-3 py-3"
+        >
+          <div className="flex flex-wrap items-center gap-1.5">
+            <h3 className="section-title">{title}</h3>
+            <FeatureGuideButton id={anchor} />
+          </div>
+          <p className="mt-2 text-sm text-white/50">Tick a row to see this chart.</p>
+        </div>
+      ))}
+    </div>
+  )
+}
 
 type Props = {
   overlayIds: string[]
@@ -135,8 +169,14 @@ export function GoalGapSection({
   }, [overlayRows, scenarios, effectiveChartYear, histories, metric])
 
   const loading = overlayRows.some((r) => loadingSymbols.has(r.symbol.toUpperCase()))
-  const error =
-    overlayRows.map((r) => errors[r.symbol.toUpperCase()]).find(Boolean) ?? null
+  const overlaySymbols = useMemo(
+    () => [...new Set(overlayRows.map((r) => r.symbol.toUpperCase()))],
+    [overlayRows],
+  )
+  const error = useMemo(
+    () => formatOverlayHistoryErrors(overlaySymbols, errors),
+    [overlaySymbols, errors],
+  )
 
   if (overlayRows.length === 0) return null
 

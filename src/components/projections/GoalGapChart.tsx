@@ -364,12 +364,20 @@ export function GoalGapChart({
       className={
         fillContainer
           ? 'flex h-full min-h-0 w-full min-w-0 flex-col'
-          : 'h-72 w-full min-w-0'
+          : 'flex h-72 w-full min-w-0 flex-col'
       }
     >
+      {error ? (
+        <p
+          className="mb-1.5 shrink-0 px-1 text-xs leading-snug text-red-300/90"
+          role="status"
+        >
+          {error}
+        </p>
+      ) : null}
       <div
         ref={chartRef}
-        className={`${fillContainer ? 'min-h-0 w-full flex-1' : 'h-full w-full'} ${
+        className={`min-h-0 w-full flex-1 ${
           panning ? 'cursor-grabbing select-none' : zoomed ? 'cursor-grab' : ''
         }`}
         onDoubleClick={() => setWin(null)}

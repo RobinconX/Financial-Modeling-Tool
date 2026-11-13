@@ -93,6 +93,95 @@ describe('fetchQuote', () => {
     expect(q.name).toBe('Apple Inc.')
     expect(q.marketCap).toBe(3_000_000_000_000)
     expect(q.sharesOutstanding).toBeCloseTo(3_000_000_000_000 / 200)
+    expect(q.instrumentType).toBeNull()
+  })
+
+  it('fetches ETF mcap via Nasdaq etf asset class and AUM fallback', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url)
+        if (u.includes('/chart/SPY')) {
+          return jsonResponse({
+            chart: {
+              result: [
+                {
+                  meta: {
+                    symbol: 'SPY',
+                    regularMarketPrice: 500,
+                    longName: 'SPDR S&P 500',
+                    currency: 'USD',
+                    instrumentType: 'ETF',
+                  },
+                },
+              ],
+            },
+          })
+        }
+        if (u.includes('nasdaq.com') && u.includes('summary') && u.includes('assetclass=etf')) {
+          return jsonResponse({
+            data: { summaryData: { MarketCap: { value: '$650,000,000,000' } } },
+          })
+        }
+        if (u.includes('nasdaq.com') && u.includes('info') && u.includes('assetclass=etf')) {
+          return jsonResponse({
+            data: {
+              companyName: 'SPDR S&P 500',
+              primaryData: { lastSalePrice: '$500.00' },
+            },
+          })
+        }
+        return jsonResponse({}, false)
+      }),
+    )
+
+    const q = await fetchQuote('SPY')
+    expect(q.symbol).toBe('SPY')
+    expect(q.instrumentType).toBe('ETF')
+    expect(q.marketCap).toBe(650_000_000_000)
+    expect(q.sharesOutstanding).toBeCloseTo(650_000_000_000 / 500)
+  })
+
+  it('falls back to Nasdaq AUM when ETF market cap is absent', async () => {
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url)
+        if (u.includes('/chart/VOO')) {
+          return jsonResponse({
+            chart: {
+              result: [
+                {
+                  meta: {
+                    symbol: 'VOO',
+                    regularMarketPrice: 400,
+                    instrumentType: 'ETF',
+                    currency: 'USD',
+                  },
+                },
+              ],
+            },
+          })
+        }
+        if (u.includes('nasdaq.com') && u.includes('summary') && u.includes('assetclass=etf')) {
+          return jsonResponse({
+            data: {
+              summaryData: {
+                AUM: { value: '500,000', label: 'Assets Under Management (,000)' },
+              },
+            },
+          })
+        }
+        if (u.includes('nasdaq.com') && u.includes('info') && u.includes('assetclass=etf')) {
+          return jsonResponse({ data: {} })
+        }
+        return jsonResponse({}, false)
+      }),
+    )
+
+    const q = await fetchQuote('VOO')
+    expect(q.marketCap).toBe(500_000_000)
+    expect(q.sharesOutstanding).toBeCloseTo(500_000_000 / 400)
   })
 
   it('throws when no price available', async () => {
