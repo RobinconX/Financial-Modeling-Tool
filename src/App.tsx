@@ -277,6 +277,10 @@ export default function App() {
   const savingsAccounts = savings.accounts
   const portfolioContributions = usePortfolioContributions()
   const portfolioActuals = usePortfolioActuals()
+  const {
+    storageRecovery: portfolioActualsStorageRecovery,
+    dismissStorageRecovery: dismissPortfolioActualsStorageRecovery,
+  } = portfolioActuals
   const portfolioSharedCash = usePortfolioSharedCash()
   const [portfolioCashMode, setPortfolioCashMode] =
     useState<PortfolioCashMode>(getPortfolioCashMode)
@@ -317,9 +321,15 @@ export default function App() {
       projectionsStorageRecovery,
       portfolioStorageRecovery,
       incomeCostStorageRecovery,
+      portfolioActualsStorageRecovery,
     ].filter((n): n is NonNullable<typeof n> => n != null)
     return list
-  }, [projectionsStorageRecovery, portfolioStorageRecovery, incomeCostStorageRecovery])
+  }, [
+    projectionsStorageRecovery,
+    portfolioStorageRecovery,
+    incomeCostStorageRecovery,
+    portfolioActualsStorageRecovery,
+  ])
 
   const dismissStorageRecovery = (storageKey: string) => {
     if (projectionsStorageRecovery?.storageKey === storageKey) {
@@ -330,6 +340,9 @@ export default function App() {
     }
     if (incomeCostStorageRecovery?.storageKey === storageKey) {
       dismissIncomeCostStorageRecovery()
+    }
+    if (portfolioActualsStorageRecovery?.storageKey === storageKey) {
+      dismissPortfolioActualsStorageRecovery()
     }
   }
 

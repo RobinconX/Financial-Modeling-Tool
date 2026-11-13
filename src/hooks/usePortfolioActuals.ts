@@ -1,14 +1,20 @@
 import { useCallback, useEffect, useRef, useState } from 'react'
 import type { DisplayCurrency, PortfolioActualsState } from '../types'
 import { clearActualYear, setActualMonth } from '../lib/portfolioActuals'
+import type { StorageRecoveryNotice } from '../lib/storageLoadRecovery'
 import {
-  loadPortfolioActuals,
+  loadPortfolioActualsWithRecovery,
   PORTFOLIO_ACTUALS_KEY,
   savePortfolioActuals,
 } from '../lib/portfolioActualsStorage'
+import { PORTFOLIO_STORAGE_KEY } from '../lib/portfolioStorage'
 
 export function usePortfolioActuals() {
-  const [state, setState] = useState<PortfolioActualsState>(() => loadPortfolioActuals())
+  const [initialLoad] = useState(() => loadPortfolioActualsWithRecovery())
+  const [state, setState] = useState<PortfolioActualsState>(() => initialLoad.data)
+  const [storageRecovery, setStorageRecovery] = useState<StorageRecoveryNotice | null>(
+    () => initialLoad.recovery,
+  )
   const [error, setError] = useState<string | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
@@ -27,10 +33,11 @@ export function usePortfolioActuals() {
 
   useEffect(() => {
     function onStorage(e: StorageEvent) {
-      if (e.key !== PORTFOLIO_ACTUALS_KEY) return
-      const loaded = loadPortfolioActuals()
-      stateRef.current = loaded
-      setState(loaded)
+      if (e.key !== PORTFOLIO_ACTUALS_KEY && e.key !== PORTFOLIO_STORAGE_KEY) return
+      const loaded = loadPortfolioActualsWithRecovery()
+      stateRef.current = loaded.data
+      setState(loaded.data)
+      if (loaded.recovery) setStorageRecovery(loaded.recovery)
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -54,7 +61,18 @@ export function usePortfolioActuals() {
 
   const replace = useCallback((next: PortfolioActualsState) => persist(next), [persist])
 
-  return { actuals: state, error, setMonth, clearYear, setCurrency, replace }
+  const dismissStorageRecovery = useCallback(() => setStorageRecovery(null), [])
+
+  return {
+    actuals: state,
+    error,
+    storageRecovery,
+    dismissStorageRecovery,
+    setMonth,
+    clearYear,
+    setCurrency,
+    replace,
+  }
 }
 
 export type PortfolioActualsApi = ReturnType<typeof usePortfolioActuals>
