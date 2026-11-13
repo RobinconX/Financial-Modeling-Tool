@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-13",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "09ecc4eaa035806fb5fa9bbef11f36480390d962",
     "headline": "ETFs in Analyze, Comparables chart guides & overlay errors",
     "notes": [
       "Analyze and Comparables treat ETFs and indexes (e.g. SPY, ^GSPC) with Units labeling, Nasdaq market-cap baselines, and synthetic unit sizing when shares are unavailable.",
