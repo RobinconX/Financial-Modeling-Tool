@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-13",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "bd2ed26e80f2bb02161b735683e9acb9e199c9ff",
     "headline": "Storage recovery, dotted options, budget hints & linked-file status",
     "notes": [
       "Corrupt local data shows a tab-scoped recovery banner for Portfolio actuals, Savings, Overview, Comparables, and related sections, with backup download and Settings import actions.",
