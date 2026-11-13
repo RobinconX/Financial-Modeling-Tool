@@ -1,4 +1,5 @@
 import { buildOccSymbol, parseExpiryGroupLabel } from '../src/lib/optionContract'
+import { normalizeQuoteSymbol } from '../src/lib/quoteSymbol'
 
 export type OptionChainContract = {
   occSymbol: string
@@ -81,8 +82,8 @@ export async function fetchOptionChain(
   rawUnderlying: string,
   expiration?: string | null,
 ): Promise<OptionChain> {
-  const underlying = rawUnderlying.trim().toUpperCase()
-  if (!/^[A-Z]{1,6}$/.test(underlying)) {
+  const underlying = normalizeQuoteSymbol(rawUnderlying)
+  if (!underlying) {
     throw new Error('Invalid underlying ticker')
   }
 

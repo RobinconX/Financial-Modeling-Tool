@@ -12,6 +12,13 @@ describe('normalizeQuoteSymbol', () => {
     expect(normalizeQuoteSymbol('^GSPC')).toBe('^GSPC')
   })
 
+  it('matches listed-option picker underlyings (no duplicate letter-only regex)', () => {
+    for (const raw of ['BRK.B', 'BF.B', 'NESN.SW', 'AAPL']) {
+      expect(normalizeQuoteSymbol(raw)).toBe(raw.toUpperCase())
+    }
+    expect(normalizeQuoteSymbol('A'.repeat(22))).toBeNull()
+  })
+
   it('accepts OCC option symbols', () => {
     expect(normalizeQuoteSymbol('aapl260821c00150000')).toBe(
       'AAPL260821C00150000',

@@ -9,7 +9,20 @@ afterEach(() => {
 describe('fetchOptionChain', () => {
   it('rejects bad underlyings', async () => {
     await expect(fetchOptionChain('')).rejects.toThrow(/Invalid/)
-    await expect(fetchOptionChain('AAPLTOOLONG')).rejects.toThrow(/Invalid/)
+    await expect(fetchOptionChain('!!!')).rejects.toThrow(/Invalid/)
+  })
+
+  it('accepts class-share tickers before calling Nasdaq', async () => {
+    const fetchMock = vi.fn().mockResolvedValue({
+      ok: true,
+      json: async () => ({ data: { table: { rows: [] } } }),
+    })
+    vi.stubGlobal('fetch', fetchMock)
+    await expect(fetchOptionChain('BRK.B')).rejects.toThrow(/No option chain/)
+    expect(fetchMock).toHaveBeenCalledWith(
+      expect.stringContaining('/quote/BRK.B/option-chain'),
+      expect.any(Object),
+    )
   })
 
   it('parses Nasdaq expiry groups and strikes', async () => {
