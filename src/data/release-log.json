@@ -1,5 +1,16 @@
 [
   {
+    "releasedAt": "2026-11-13",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Storage recovery, dotted options, budget hints & linked-file status",
+    "notes": [
+      "Corrupt local data shows a tab-scoped recovery banner for Portfolio actuals, Savings, Overview, Comparables, and related sections, with backup download and Settings import actions.",
+      "Listed-option search accepts dotted tickers (e.g. BRK.B); Budget Monthly opening-cash warnings deep-link to Savings actuals.",
+      "Header status shows when startup hydrate from a linked JSON file fails, separate from save errors."
+    ]
+  },
+  {
     "releasedAt": "2026-11-12",
     "prodSha": "76536dd5ed12f8cb38e5839f30ec3eea0c54b111",
     "headline": "Portfolio settings, shared cash & actuals, savings migration fix",
