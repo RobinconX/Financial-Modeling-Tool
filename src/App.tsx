@@ -625,6 +625,7 @@ export default function App() {
                 removeScenario={removeScenario}
                 reorderScenariosByIds={reorderScenariosByIds}
                 copyScenario={copyScenario}
+                onRepairActuals={openActualsRepair}
               />
             )}
 

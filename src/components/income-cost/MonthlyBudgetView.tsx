@@ -23,8 +23,10 @@ import {
   normalizeAmounts12,
   scenarioTotals,
 } from '../../lib/incomeCost'
+import type { ActualsRepairTarget } from '../../lib/history'
 import {
   formatOpeningCashHint,
+  openingCashActualsRepair,
   openingCashFromSavings,
 } from '../../lib/savings'
 import { formatMoney, parseMoney } from '../../lib/format'
@@ -41,6 +43,7 @@ type Props = {
   onUpsertDraw: (draw: WorkingBalanceDraw) => void
   onRemoveDraw: (id: string) => void
   onAddDraw: () => void
+  onRepairActuals?: (repair: ActualsRepairTarget) => void
 }
 
 function formatAxis(v: number): string {
@@ -478,6 +481,7 @@ export function MonthlyBudgetView({
   onUpsertDraw,
   onRemoveDraw,
   onAddDraw,
+  onRepairActuals,
 }: Props) {
   const [seriesOn, setSeriesOn] = useState<SeriesVisible>(readSeriesVisible)
   const scenarioDraws = useMemo(
@@ -493,6 +497,10 @@ export function MonthlyBudgetView({
   const openingCashHint = openingCashMeta.hint
     ? formatOpeningCashHint(openingCashMeta.hint)
     : undefined
+  const openingCashRepair = useMemo(
+    () => openingCashActualsRepair(savingsAccounts, scenario.year),
+    [savingsAccounts, scenario.year],
+  )
   const schedule = useMemo(
     () => buildMonthlySchedule(lines, scenario.id, draws, openingCash),
     [lines, scenario.id, draws, openingCash],
@@ -526,6 +534,11 @@ export function MonthlyBudgetView({
             value={formatMoney(openingCash, INCOME_COST_CURRENCY)}
             accent="text-sky-300/90"
             hint={openingCashHint}
+            hintRepair={
+              openingCashRepair && openingCashHint && onRepairActuals
+                ? { repair: openingCashRepair, onClick: onRepairActuals }
+                : undefined
+            }
           />
           <Meta
             label="Annual income"
@@ -686,11 +699,16 @@ function Meta({
   value,
   accent,
   hint,
+  hintRepair,
 }: {
   label: string
   value: string
   accent?: string
   hint?: string
+  hintRepair?: {
+    repair: ActualsRepairTarget
+    onClick: (repair: ActualsRepairTarget) => void
+  }
 }) {
   return (
     <div className="min-w-0">
@@ -699,9 +717,21 @@ function Meta({
         {value}
       </div>
       {hint ? (
-        <p className="mt-0.5 text-[10px] leading-snug text-amber-300/85" role="status">
-          {hint}
-        </p>
+        hintRepair ? (
+          <button
+            type="button"
+            className="mt-0.5 text-left text-[10px] leading-snug text-amber-300/85 transition hover:text-amber-200"
+            role="status"
+            title={`Open Savings Actuals · ${hintRepair.repair.periodKey}`}
+            onClick={() => hintRepair.onClick(hintRepair.repair)}
+          >
+            {hint}
+          </button>
+        ) : (
+          <p className="mt-0.5 text-[10px] leading-snug text-amber-300/85" role="status">
+            {hint}
+          </p>
+        )
       ) : null}
     </div>
   )

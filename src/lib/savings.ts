@@ -222,6 +222,21 @@ export function formatOpeningCashHint(hint: OpeningCashHint): string {
   return `No Dec ${hint.priorYear} Cash actual — treated as 0`
 }
 
+/** Deep-link target for Savings → Actuals when Budget Monthly opening cash lacks December. */
+export function openingCashActualsRepair(
+  accounts: SavingsAccount[],
+  scenarioYear: number,
+): { tab: 'savings'; savingsAccountId: string; periodKey: string } | null {
+  const priorYear = Math.floor(scenarioYear) - 1
+  const cashAccount = getPermanentCashAccount(accounts)
+  if (!cashAccount || !isYearEndActualMissing(cashAccount, priorYear)) return null
+  return {
+    tab: 'savings',
+    savingsAccountId: cashAccount.id,
+    periodKey: makePeriodKey(priorYear, 12),
+  }
+}
+
 export function emptySavingsState(): SavingsState {
   return { version: 1, accounts: ensurePermanentCashAccount([]) }
 }

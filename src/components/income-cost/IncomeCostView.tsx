@@ -21,6 +21,7 @@ import { ConfirmDialog } from '../common/ConfirmDialog'
 import { CopyScenarioDialog } from './CopyScenarioDialog'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
+import type { ActualsRepairTarget } from '../../lib/history'
 
 type WorkspaceTab = 'budget' | 'monthly'
 
@@ -85,6 +86,7 @@ type Props = {
   removeScenario: (id: string) => boolean
   reorderScenariosByIds: (orderedIds: string[]) => boolean
   copyScenario: (fromId: string, newName: string) => CashflowScenario | null
+  onRepairActuals?: (repair: ActualsRepairTarget) => void
 }
 
 export function IncomeCostView({
@@ -106,6 +108,7 @@ export function IncomeCostView({
   removeScenario,
   reorderScenariosByIds,
   copyScenario,
+  onRepairActuals,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(
     () => scenarios[0]?.id ?? null,
@@ -456,6 +459,7 @@ export function IncomeCostView({
             onAddDraw={() => {
               addDraw(selected.id)
             }}
+            onRepairActuals={onRepairActuals}
           />
         </div>
       )}
