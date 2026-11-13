@@ -11,6 +11,7 @@ import {
   isYearEndActualMissing,
   latestActual,
   makePeriodKey,
+  openingCashActualsRepair,
   openingCashFromSavings,
   yearEndBalance,
   removePastPeriodKey,
@@ -106,6 +107,29 @@ describe('actuals', () => {
       balance: 15_000,
       hint: null,
     })
+  })
+
+  it('openingCashActualsRepair targets December Cash when missing', () => {
+    const cash = acc({
+      id: 'savings-cash',
+      name: 'Cash',
+      actuals: { '2024-11': 2000 },
+      sortOrder: 0,
+    })
+    Object.assign(cash, { role: 'cash' as const })
+    expect(openingCashActualsRepair([cash], 2025)).toEqual({
+      tab: 'savings',
+      savingsAccountId: 'savings-cash',
+      periodKey: '2024-12',
+    })
+    const recorded = acc({
+      id: 'savings-cash',
+      name: 'Cash',
+      actuals: { '2024-12': 1 },
+      sortOrder: 0,
+    })
+    Object.assign(recorded, { role: 'cash' as const })
+    expect(openingCashActualsRepair([recorded], 2025)).toBeNull()
   })
 
   it('latestActual prefers last past ≤ now, else 0', () => {
