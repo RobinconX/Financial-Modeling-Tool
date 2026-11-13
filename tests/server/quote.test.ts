@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it, vi } from 'vitest'
-import { fetchQuote, fetchQuotes } from '../../server/quote'
+import {
+  fetchQuote,
+  fetchQuotes,
+  NASDAQ_BATCH_CONCURRENCY,
+  runWithConcurrency,
+} from '../../server/quote'
 
 afterEach(() => {
   vi.unstubAllGlobals()
@@ -94,6 +99,17 @@ describe('fetchQuote', () => {
     expect(q.marketCap).toBe(3_000_000_000_000)
     expect(q.sharesOutstanding).toBeCloseTo(3_000_000_000_000 / 200)
     expect(q.instrumentType).toBeNull()
+    const fetchMock = vi.mocked(globalThis.fetch)
+    expect(
+      fetchMock.mock.calls.every((c) => !String(c[0]).includes('/info')),
+    ).toBe(true)
+    const nasdaqCalls = fetchMock.mock.calls.filter((c) => String(c[0]).includes('nasdaq.com'))
+    expect(
+      nasdaqCalls.every((c) => {
+        const headers = c[1]?.headers as Record<string, string> | undefined
+        return headers?.Referer?.includes('nasdaq.com')
+      }),
+    ).toBe(true)
   })
 
   it('fetches ETF mcap via Nasdaq etf asset class and AUM fallback', async () => {
@@ -196,6 +212,82 @@ describe('fetchQuote', () => {
       }),
     )
     await expect(fetchQuote('ZZZZ')).rejects.toThrow(/No data/)
+  })
+
+  it('returns mcap when Nasdaq summary responds slower than the old 1.8s batch cutoff', async () => {
+    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url)
+        if (u.includes('/chart/AAPL')) {
+          return jsonResponse({
+            chart: {
+              result: [
+                {
+                  meta: {
+                    symbol: 'AAPL',
+                    regularMarketPrice: 200,
+                    longName: 'Apple Inc.',
+                    currency: 'USD',
+                  },
+                },
+              ],
+            },
+          })
+        }
+        if (u.includes('nasdaq.com') && u.includes('/summary')) {
+          await delay(2100)
+          return jsonResponse({
+            data: { summaryData: { MarketCap: { value: '$3,000,000,000,000' } } },
+          })
+        }
+        return jsonResponse({}, false)
+      }),
+    )
+
+    const q = await fetchQuote('AAPL')
+    expect(q.marketCap).toBe(3_000_000_000_000)
+  })
+
+  it('retries Nasdaq summary once when the first attempt yields no mcap', async () => {
+    let summaryCalls = 0
+    vi.stubGlobal(
+      'fetch',
+      vi.fn(async (url: string) => {
+        const u = String(url)
+        if (u.includes('/chart/MSFT')) {
+          return jsonResponse({
+            chart: {
+              result: [
+                {
+                  meta: {
+                    symbol: 'MSFT',
+                    regularMarketPrice: 400,
+                    longName: 'Microsoft',
+                    currency: 'USD',
+                  },
+                },
+              ],
+            },
+          })
+        }
+        if (u.includes('nasdaq.com') && u.includes('/summary')) {
+          summaryCalls += 1
+          if (summaryCalls <= 2) {
+            return jsonResponse({ data: { summaryData: {} } })
+          }
+          return jsonResponse({
+            data: { summaryData: { MarketCap: { value: '$2,000,000,000,000' } } },
+          })
+        }
+        return jsonResponse({}, false)
+      }),
+    )
+
+    const q = await fetchQuote('MSFT')
+    expect(q.marketCap).toBe(2_000_000_000_000)
+    expect(summaryCalls).toBeGreaterThan(2)
   })
 })
 
@@ -359,5 +451,70 @@ describe('fetchQuotes', () => {
     expect(fetchMock.mock.calls.every((c) => !String(c[0]).includes('nasdaq.com'))).toBe(
       true,
     )
+  })
+
+  it('limits concurrent Nasdaq enrichment calls', async () => {
+    const symbols = Array.from({ length: 12 }, (_, i) => `SYM${i}`)
+    let active = 0
+    let peak = 0
+    const delay = (ms: number) => new Promise((r) => setTimeout(r, ms))
+
+    const fetchMock = vi.fn(async (url: string) => {
+      const u = String(url)
+      if (u.includes('/v7/finance/spark')) {
+        return jsonResponse({
+          spark: {
+            result: symbols.map((symbol) => ({
+              symbol,
+              response: [
+                {
+                  meta: {
+                    symbol,
+                    regularMarketPrice: 10,
+                    longName: symbol,
+                    currency: 'USD',
+                  },
+                },
+              ],
+            })),
+          },
+        })
+      }
+      if (u.includes('nasdaq.com') && u.includes('/summary')) {
+        active += 1
+        peak = Math.max(peak, active)
+        await delay(30)
+        active -= 1
+        const sym = symbols.find((s) => u.includes(s))
+        return jsonResponse({
+          data: {
+            summaryData: { MarketCap: { value: sym ? '$1,000,000' : 'N/A' } },
+          },
+        })
+      }
+      return jsonResponse({}, false)
+    })
+    vi.stubGlobal('fetch', fetchMock)
+
+    await fetchQuotes(symbols)
+    expect(peak).toBeLessThanOrEqual(NASDAQ_BATCH_CONCURRENCY)
+    expect(peak).toBeGreaterThan(1)
+  })
+})
+
+describe('runWithConcurrency', () => {
+  it('runs at most the given number of tasks in parallel', async () => {
+    let active = 0
+    let peak = 0
+    const items = Array.from({ length: 10 }, (_, i) => i)
+    await runWithConcurrency(items, 3, async () => {
+      active += 1
+      peak = Math.max(peak, active)
+      await new Promise((r) => setTimeout(r, 20))
+      active -= 1
+      return null
+    })
+    expect(peak).toBeLessThanOrEqual(3)
+    expect(peak).toBe(3)
   })
 })
