@@ -3,6 +3,7 @@ import type { FeatureGuideId } from '../../lib/teachings'
 import type { SavedScenario } from '../../types'
 import type { CachedPriceHistory } from '../../lib/priceHistory'
 import {
+  formatOverlayHistoryErrors,
   goalPriceForBasis,
   localIsoDate,
   pathSeries,
@@ -168,8 +169,14 @@ export function GoalGapSection({
   }, [overlayRows, scenarios, effectiveChartYear, histories, metric])
 
   const loading = overlayRows.some((r) => loadingSymbols.has(r.symbol.toUpperCase()))
-  const error =
-    overlayRows.map((r) => errors[r.symbol.toUpperCase()]).find(Boolean) ?? null
+  const overlaySymbols = useMemo(
+    () => [...new Set(overlayRows.map((r) => r.symbol.toUpperCase()))],
+    [overlayRows],
+  )
+  const error = useMemo(
+    () => formatOverlayHistoryErrors(overlaySymbols, errors),
+    [overlaySymbols, errors],
+  )
 
   if (overlayRows.length === 0) return null
 
