@@ -35,7 +35,14 @@ import { ProjectionTable } from '../analyzer/ProjectionTable'
 import { SaveScenarioButton } from '../analyzer/SaveScenarioButton'
 import { MarketCapChart } from '../charts/MarketCapChart'
 import { FullscreenChart } from '../common/FullscreenChart'
+import { MarkdownTextarea } from '../common/MarkdownTextarea'
 import { MoneyInput } from '../common/MoneyInput'
+import {
+  hasInvestmentThesis,
+  INVESTMENT_THESIS_MAX_LENGTH,
+  normalizeInvestmentThesis,
+} from '../../lib/investmentThesis'
+import { LightMarkdown } from '../../lib/lightMarkdown'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -101,6 +108,8 @@ export function ProjectionPanel({
   /** Assumptions collapsed by default on saved scenarios; expand to edit. */
   const [easyOpen, setEasyOpen] = useState(isDraft)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [draftThesis, setDraftThesis] = useState('')
+  const [thesisOpen, setThesisOpen] = useState(isDraft)
 
   // Reset draft when switching into draft mode
   useEffect(() => {
@@ -116,6 +125,8 @@ export function ProjectionPanel({
     setSelectedBasis('easy')
     setEasyOpen(true)
     setAdvancedOpen(false)
+    setDraftThesis('')
+    setThesisOpen(true)
   }, [isDraft, scenarioId])
 
   useEffect(() => {
@@ -127,7 +138,15 @@ export function ProjectionPanel({
     setAdvancedOpen(initialBasis != null && initialBasis !== 'easy')
   }, [scenario?.id, initialBasis]) // eslint-disable-line react-hooks/exhaustive-deps
 
+  useEffect(() => {
+    if (!scenario) return
+    setThesisOpen(hasInvestmentThesis(scenario.investmentThesis))
+  }, [scenario?.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
   const quote: Quote | null = isDraft ? draftQuote : scenario ? scenarioToQuote(scenario) : null
+  const investmentThesis = isDraft
+    ? draftThesis
+    : (scenario?.investmentThesis ?? '')
   const mcapOverride = isDraft ? draftMcapOverride : (scenario?.mcapOverride ?? null)
   const easyRows = isDraft ? draftEasy : (scenario?.easyRows ?? [])
   const advancedRows = isDraft ? draftAdvanced : (scenario?.advancedRows ?? [])
@@ -171,6 +190,22 @@ export function ProjectionPanel({
       return
     }
     if (scenarioId) onUpdateScenario(scenarioId, { easyRows: rows })
+  }
+
+  function setInvestmentThesis(next: string) {
+    const clipped =
+      next.length > INVESTMENT_THESIS_MAX_LENGTH
+        ? next.slice(0, INVESTMENT_THESIS_MAX_LENGTH)
+        : next
+    if (isDraft) {
+      setDraftThesis(clipped)
+      return
+    }
+    if (scenarioId) {
+      onUpdateScenario(scenarioId, {
+        investmentThesis: normalizeInvestmentThesis(clipped),
+      })
+    }
   }
 
   function setAdvancedRows(rows: YearProjection[]) {
@@ -382,6 +417,7 @@ export function ProjectionPanel({
               mcapOverride={draftMcapOverride}
               easyRows={draftEasy}
               advancedRows={draftAdvanced}
+              investmentThesis={draftThesis}
               onSave={handleSave}
               requireBaselineQuote
             />
@@ -392,12 +428,14 @@ export function ProjectionPanel({
                 mcapOverride={mcapOverride}
                 easyRows={easyRows}
                 advancedRows={advancedRows}
+                investmentThesis={scenario!.investmentThesis}
                 buttonLabel="Save as…"
                 defaultName={`Copy of ${scenario!.name}`}
                 onSave={(input) =>
                   onUpsertScenario({
                     ...input,
                     symbol: scenario!.symbol,
+                    investmentThesis: input.investmentThesis ?? scenario!.investmentThesis,
                   })
                 }
               />
@@ -432,6 +470,41 @@ export function ProjectionPanel({
       {savedSymbolMissing && !refreshDataWarning ? (
         <QuoteDataWarning message={quoteMissingDataWarning(scenario!.symbol)} />
       ) : null}
+
+      <div
+        className="space-y-1 border-t border-white/[0.06] pt-2"
+        data-guide-anchor="projections.analyze.thesis"
+      >
+        <AssumptionToggle
+          title="Investment thesis"
+          open={thesisOpen}
+          onToggle={() => setThesisOpen((v) => !v)}
+          summary={
+            hasInvestmentThesis(investmentThesis)
+              ? 'Has notes'
+              : 'Optional story and buy/sell criteria'
+          }
+        />
+        {thesisOpen ? (
+          <div className="space-y-3 pb-3 pt-1">
+            <MarkdownTextarea
+              id={scenarioId ? `thesis-${scenarioId}` : 'thesis-draft'}
+              value={investmentThesis}
+              onChange={setInvestmentThesis}
+              placeholder="Why you own it; what would make you add or trim. Use the toolbar for bold, italic, bullets, or a heading."
+              aria-label="Investment thesis"
+            />
+            {hasInvestmentThesis(investmentThesis) ? (
+              <div className="rounded-lg border border-white/[0.06] bg-white/[0.02] px-3 py-2">
+                <p className="mb-1.5 text-[10px] font-semibold uppercase tracking-wider text-white/40">
+                  Preview
+                </p>
+                <LightMarkdown source={investmentThesis} />
+              </div>
+            ) : null}
+          </div>
+        ) : null}
+      </div>
 
       {/* Quote context — always visible to read ROI */}
       <div className="grid gap-x-4 gap-y-3 sm:grid-cols-2 lg:grid-cols-4">

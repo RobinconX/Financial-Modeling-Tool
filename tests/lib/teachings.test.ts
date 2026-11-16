@@ -268,6 +268,7 @@ describe('teachings registry', () => {
     expect(getGuide('comparables.upsideChart')?.status).toBe('ready')
     expect(isGuideReady('comparables.upsideChart')).toBe(true)
     expect(getGuide('comparables.upsideChart')?.body.toLowerCase()).toContain('upside')
+    expect(getGuide('projections.analyze')?.body).toContain('Investment thesis')
     const projectionsTab = listGuideTree().find((t) => t.tab === 'projections')!
     const root = projectionsTab.roots.find((r) => r.guide.id === 'projections')!
     expect(root.children.map((c) => c.guide.id)).toEqual([

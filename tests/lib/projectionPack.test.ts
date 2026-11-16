@@ -49,6 +49,17 @@ describe('buildProjectionPack', () => {
     expect(pack.scenarios.map((s) => s.name)).toEqual(['Base', 'Bull'])
   })
 
+  it('packs investmentThesis on scenarios', () => {
+    const pack = buildProjectionPack([
+      sc({ id: 'a', symbol: 'NVDA', name: 'Base', investmentThesis: '**AI** story' }),
+    ])
+    const parsed = parseProjectionFile(pack)
+    expect('candidates' in parsed).toBe(true)
+    if ('candidates' in parsed) {
+      expect(parsed.candidates[0]?.scenario.investmentThesis).toBe('**AI** story')
+    }
+  })
+
   it('packs mixed tickers in one file', () => {
     const pack = buildProjectionPack([
       sc({ id: 'a', symbol: 'NVDA', name: 'Base' }),
