@@ -44,7 +44,7 @@ type Props = {
 }
 
 /**
- * Safe subset of markdown for user thesis text: paragraphs, ##/###, **bold**,
+ * Safe subset of markdown for user thesis text: paragraphs, #/##/###, **bold**,
  * *italic*, `-` lists, inline `code`. No HTML, images, or links.
  */
 export function LightMarkdown({ source, className = '' }: Props) {
@@ -84,6 +84,18 @@ export function LightMarkdown({ source, className = '' }: Props) {
       i += 1
       continue
     }
+    if (line.startsWith('# ')) {
+      blocks.push(
+        <h3
+          key={key++}
+          className="mt-4 mb-1.5 border-l-2 border-emerald-400/70 pl-2 text-sm font-semibold text-emerald-400/90 first:mt-0"
+        >
+          {renderInline(line.slice(2))}
+        </h3>,
+      )
+      i += 1
+      continue
+    }
 
     if (/^[-*] /.test(line)) {
       const items: ReactNode[] = []
@@ -107,7 +119,9 @@ export function LightMarkdown({ source, className = '' }: Props) {
     while (
       i < lines.length &&
       lines[i]!.trim() !== '' &&
-      !lines[i]!.startsWith('#') &&
+      !lines[i]!.startsWith('### ') &&
+      !lines[i]!.startsWith('## ') &&
+      !lines[i]!.startsWith('# ') &&
       !/^[-*] /.test(lines[i]!)
     ) {
       para.push(lines[i]!)
