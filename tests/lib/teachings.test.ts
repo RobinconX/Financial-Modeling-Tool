@@ -11,6 +11,11 @@ import {
 } from '../../src/lib/teachings'
 
 describe('teachings registry', () => {
+  it('documents projection import as a header drop zone', () => {
+    expect(getGuide('projections')?.body).toContain('drop zone')
+    expect(getGuide('projections.comps')?.body).toContain('### Import projections')
+  })
+
   it('exposes a ready CAGR guide with a selective figure reference', () => {
     const g = getGuide('comparables.cagrChart')
     expect(g?.status).toBe('ready')

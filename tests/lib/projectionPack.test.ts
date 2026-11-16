@@ -4,7 +4,9 @@ import { emptyAppData, type AppDataSnapshot } from '../../src/lib/appDataSnapsho
 import {
   buildProjectionPack,
   defaultImportSelection,
+  dragTransferHasInvalidProjectionImport,
   formatImportMessage,
+  isJsonProjectionImportFile,
   mergeImportedScenarios,
   parseProjectionFile,
   projectionPackFilename,
@@ -240,6 +242,48 @@ describe('formatImportMessage', () => {
     expect(formatImportMessage([sc({ id: 'a', symbol: 'NVDA', name: 'Bull (imported)' })])).toBe(
       'Added NVDA · Bull (imported)',
     )
+  })
+})
+
+describe('isJsonProjectionImportFile', () => {
+  it('accepts .json extension with empty MIME', () => {
+    expect(isJsonProjectionImportFile(new File(['{}'], 'pack.json', { type: '' }))).toBe(true)
+  })
+
+  it('accepts application/json MIME', () => {
+    expect(isJsonProjectionImportFile(new File(['{}'], 'blob', { type: 'application/json' }))).toBe(
+      true,
+    )
+  })
+
+  it('rejects non-json extension and MIME', () => {
+    expect(isJsonProjectionImportFile(new File(['x'], 'notes.txt', { type: 'text/plain' }))).toBe(
+      false,
+    )
+  })
+})
+
+describe('dragTransferHasInvalidProjectionImport', () => {
+  function dt(
+    items: { kind: string; type: string }[],
+  ): Pick<DataTransfer, 'items'> {
+    return { items: items as unknown as DataTransferItemList }
+  }
+
+  it('flags a known non-json MIME during drag', () => {
+    expect(
+      dragTransferHasInvalidProjectionImport(
+        dt([{ kind: 'file', type: 'text/plain' }]) as DataTransfer,
+      ),
+    ).toBe(true)
+  })
+
+  it('does not flag json MIME', () => {
+    expect(
+      dragTransferHasInvalidProjectionImport(
+        dt([{ kind: 'file', type: 'application/json' }]) as DataTransfer,
+      ),
+    ).toBe(false)
   })
 })
 

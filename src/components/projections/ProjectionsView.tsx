@@ -17,6 +17,7 @@ import {
   type ProjectionCandidate,
 } from '../../lib/projectionPack'
 import { ProjectionPanel } from './ProjectionPanel'
+import { ProjectionImportDropZone } from './ProjectionImportDropZone'
 import { ComparablesView } from './ComparablesView'
 import { ProjectionPickDialog } from './ProjectionPickDialog'
 import { ConfirmDialog } from '../common/ConfirmDialog'
@@ -338,7 +339,6 @@ export function ProjectionsView({
   const [selA, setSelA] = useState<string>(() => sorted[0]?.id ?? DRAFT)
   const [selB, setSelB] = useState<string>(DRAFT)
   const [openBasis, setOpenBasis] = useState<ComparableBasis | undefined>(undefined)
-  const importInputRef = useRef<HTMLInputElement>(null)
   const [importPick, setImportPick] = useState<ProjectionCandidate[] | null>(null)
   const [importChecked, setImportChecked] = useState<string[]>([])
   const [exportOpen, setExportOpen] = useState(false)
@@ -463,13 +463,7 @@ export function ProjectionsView({
         </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 pb-1.5">
-          <button
-            type="button"
-            className="btn-ghost !py-1.5 !text-xs"
-            onClick={() => importInputRef.current?.click()}
-          >
-            Import
-          </button>
+          <ProjectionImportDropZone onFile={(f) => void handleImportFile(f)} />
           <button
             type="button"
             className="btn-ghost !py-1.5 !text-xs"
@@ -478,17 +472,6 @@ export function ProjectionsView({
           >
             Export
           </button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json,text/json"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              e.target.value = ''
-              if (f) void handleImportFile(f)
-            }}
-          />
         </div>
       </div>
 

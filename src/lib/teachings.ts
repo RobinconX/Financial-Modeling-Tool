@@ -615,7 +615,7 @@ Portfolio **USD 100k** in **2024-11**, **Cash CHF 5k** in **2024-12**, rate **0.
 
 ### Import / Export
 
-Header **Import** / **Export** move projection JSON packs only (pick which saves to include). Import can rename collisions with “ (imported)”.
+Header **Import** is a compact drop zone (drag a file or click to browse) and **Export** downloads projection JSON packs only (pick which saves to include). Import can rename collisions with “ (imported)”.
 
 > Delete lists every **Portfolio** holding and **Comparables** row still linked — re-link on **Positions** or edit the set after removal.
 
@@ -686,6 +686,10 @@ Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today 
     summary:
       'Build named sets of saved projections, add year-end columns, and sort by a year’s ROI. Tick rows to chart remaining upside or CAGR to that row’s goal year; set Buy/Sell CAGR hints on sort columns.',
     body: `## How it works
+
+### Import projections
+
+- **Import** (header, same on **Analyze**) — drag a JSON projection pack or full save onto the control, or click to browse; only the first file is used if several are dropped
 
 ### Comparable sets
 
