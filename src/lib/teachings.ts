@@ -660,6 +660,12 @@ Save **AAPL · Base case** in **Analyze**, then **Comparables → + New**, add t
 
 Toggle basis tabs (**Easy**, **P/S**, etc.) to drive the hero ROI, **Market cap** chart, and **Projection table**.
 
+### Investment thesis
+
+- **Investment thesis** — optional collapsible notes for your story and buy/sell criteria (light markdown: **bold**, *italic*, bullets, \`##\` headings)
+- Edits auto-save on a saved scenario; **Save** / **Save as…** includes the thesis (copies verbatim on **Save as…**)
+- **Comparables** — a note icon on a row opens the thesis in the right shelf (click only, not hover)
+
 ### Overrides & save
 
 - **Market cap (override)** and **Share price (override)** replace live quote inputs for math

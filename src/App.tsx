@@ -31,6 +31,8 @@ import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
 import { QuoteHealthProvider } from './context/QuoteHealthContext'
 import { FeatureGuideProvider } from './components/guides/FeatureGuideProvider'
 import { FeatureGuideRail } from './components/guides/FeatureGuideRail'
+import { ThesisRail } from './components/projections/ThesisRail'
+import { ThesisRailProvider } from './components/projections/ThesisRailProvider'
 import { GuidesHeaderButton } from './components/guides/GuidesHeaderButton'
 import { FeedbackHeaderButton } from './components/feedback/FeedbackHeaderButton'
 import { FeedbackDialog } from './components/feedback/FeedbackDialog'
@@ -469,6 +471,7 @@ export default function App() {
 
   return (
     <FeatureGuideProvider navigateTab={setTab}>
+      <ThesisRailProvider>
     <QuoteHealthProvider missingSymbols={missingSymbols}>
     <div className="flex h-full min-h-0 overflow-hidden">
       <QuoteLoadingHint
@@ -694,11 +697,13 @@ export default function App() {
           </main>
         </div>
         <FeatureGuideRail />
+        <ThesisRail />
       </div>
       {feedbackOpen ? <FeedbackDialog tab={tab} onClose={() => setFeedbackOpen(false)} /> : null}
       {releaseLogOpen ? <ReleaseLogDialog onClose={() => setReleaseLogOpen(false)} /> : null}
     </div>
     </QuoteHealthProvider>
+      </ThesisRailProvider>
     </FeatureGuideProvider>
   )
 }

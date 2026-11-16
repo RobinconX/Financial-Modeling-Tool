@@ -78,6 +78,10 @@ export type SavedScenario = {
   mcapOverride: number | null
   easyRows: EasyProjection[]
   advancedRows: YearProjection[]
+  /**
+   * Free-text investment story and optional buy/sell notes (light markdown; UI only).
+   */
+  investmentThesis?: string
   createdAt: string
   updatedAt: string
 }

@@ -1,5 +1,6 @@
 import { useState } from 'react'
 import type { EasyProjection, Quote, SavedScenario, YearProjection } from '../../types'
+import { normalizeInvestmentThesis } from '../../lib/investmentThesis'
 import { isUsableQuote } from '../../lib/quoteValidation'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
@@ -18,6 +19,7 @@ type Props = {
   defaultName?: string
   /** When true, require a live quote or mcap override before enabling save (new draft). */
   requireBaselineQuote?: boolean
+  investmentThesis?: string
 }
 
 export function SaveScenarioButton({
@@ -29,6 +31,7 @@ export function SaveScenarioButton({
   buttonLabel = 'Save scenario',
   defaultName = 'Base',
   requireBaselineQuote = false,
+  investmentThesis,
 }: Props) {
   const [open, setOpen] = useState(false)
   const [name, setName] = useState(defaultName)
@@ -63,6 +66,7 @@ export function SaveScenarioButton({
       mcapOverride,
       easyRows,
       advancedRows,
+      investmentThesis: normalizeInvestmentThesis(investmentThesis),
     })
     if ('error' in result) {
       setError(result.error)
