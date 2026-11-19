@@ -4,6 +4,8 @@ import {
   buildOverviewChartRows,
   buildOverviewCompareRows,
   clampOverviewRange,
+  formatOverviewRangeClampNotice,
+  getOverviewRangeClampNotice,
   ensurePermanentSavings,
   manualValueAtYear,
   recordedOverviewByYear,
@@ -58,6 +60,58 @@ describe('range helpers', () => {
     const r = clampOverviewRange(2030, 2026, asOf)
     expect(r.startYear).toBe(2026)
     expect(r.endYear).toBe(2030)
+  })
+
+  it('clamps start to 20 years past current year', () => {
+    const r = clampOverviewRange(1990, 2030, asOf)
+    expect(r.startYear).toBe(2006)
+    expect(r.endYear).toBe(2030)
+  })
+
+  it('clamps end to 80 years forward from current year', () => {
+    const r = clampOverviewRange(2026, 2150, asOf)
+    expect(r.startYear).toBe(2026)
+    expect(r.endYear).toBe(2106)
+  })
+
+  it('getOverviewRangeClampNotice: null when inside window', () => {
+    expect(getOverviewRangeClampNotice(2024, 2035, asOf)).toBeNull()
+  })
+
+  it('getOverviewRangeClampNotice: flags limited From and To separately', () => {
+    expect(getOverviewRangeClampNotice(1990, 2035, asOf)).toEqual({
+      fromLimited: true,
+      toLimited: false,
+      fromLimitedToYear: 2006,
+      toLimitedToYear: 2035,
+    })
+    expect(getOverviewRangeClampNotice(2026, 2150, asOf)).toEqual({
+      fromLimited: false,
+      toLimited: true,
+      fromLimitedToYear: 2026,
+      toLimitedToYear: 2106,
+    })
+    expect(getOverviewRangeClampNotice(1980, 2120, asOf)).toEqual({
+      fromLimited: true,
+      toLimited: true,
+      fromLimitedToYear: 2006,
+      toLimitedToYear: 2106,
+    })
+  })
+
+  it('getOverviewRangeClampNotice: inverted range without clamping', () => {
+    expect(getOverviewRangeClampNotice(2030, 2028, asOf)).toBeNull()
+  })
+
+  it('formatOverviewRangeClampNotice: one line copy for UI', () => {
+    expect(formatOverviewRangeClampNotice(1990, 2035, asOf)).toBe(
+      'From limited to 2006',
+    )
+    expect(formatOverviewRangeClampNotice(2026, 2150, asOf)).toBe('To limited to 2106')
+    expect(formatOverviewRangeClampNotice(1980, 2120, asOf)).toBe(
+      'From limited to 2006 · To limited to 2106',
+    )
+    expect(formatOverviewRangeClampNotice(2024, 2035, asOf)).toBeNull()
   })
 
   it('yearKind: past actual, current and future projected (Now is separate)', () => {

@@ -21,6 +21,7 @@ import {
 import {
   assignOverviewSeriesColors,
   buildOverviewChartRows,
+  formatOverviewRangeClampNotice,
   OVERVIEW_CURRENCY,
   recordedOverviewByYear,
   type OverviewBuildDeps,
@@ -154,6 +155,7 @@ export function OverviewView({
   // Draft year inputs so typing multi-digit years doesn't clamp mid-edit
   const [fromDraft, setFromDraft] = useState(String(startYear))
   const [toDraft, setToDraft] = useState(String(endYear))
+  const [rangeClampNotice, setRangeClampNotice] = useState<string | null>(null)
   const [yearKey, setYearKey] = useState<string | null>(null)
   const [pendingDelete, setPendingDelete] = useState<{ id: string; name: string } | null>(
     null,
@@ -165,6 +167,7 @@ export function OverviewView({
   useEffect(() => {
     setFromDraft(String(startYear))
     setToDraft(String(endYear))
+    setRangeClampNotice(null)
   }, [startYear, endYear, selectedScenarioId])
 
   const loadFx = useCallback(async () => {
@@ -347,6 +350,11 @@ export function OverviewView({
   const effectiveChartMode: ChartMode =
     pageTab === 'runway' && chartMode === 'compare' ? 'bars' : chartMode
 
+  function commitYearRange(from: number, to: number) {
+    setRangeClampNotice(formatOverviewRangeClampNotice(from, to, deps.asOf))
+    setRange(from, to)
+  }
+
   /** Apply year range immediately when both values look like calendar years (spinner or finished typing). */
   function applyRangeDraft(fromStr: string, toStr: string) {
     const from = Number(fromStr)
@@ -355,7 +363,7 @@ export function OverviewView({
     // Avoid clamping partial keystrokes like "20" / "203"
     if (from < 1000 || from > 9999 || to < 1000 || to > 9999) return
     if (from === startYear && to === endYear) return
-    setRange(from, to)
+    commitYearRange(from, to)
   }
 
   const needsFx =
@@ -608,7 +616,8 @@ export function OverviewView({
               <FeatureGuideButton id="overview.chart" />
             )}
 </div>
-          <div className="flex flex-wrap items-center gap-2">
+          <div className="flex flex-col items-end gap-0.5">
+            <div className="flex flex-wrap items-center gap-2">
             <div
               className="inline-flex gap-1 border-b border-white/10"
               role="group"
@@ -668,7 +677,7 @@ export function OverviewView({
                     setToDraft(String(endYear))
                     return
                   }
-                  setRange(from, to)
+                  commitYearRange(from, to)
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
@@ -694,7 +703,7 @@ export function OverviewView({
                     setToDraft(String(endYear))
                     return
                   }
-                  setRange(from, to)
+                  commitYearRange(from, to)
                 }}
                 onKeyDown={(e) => {
                   if (e.key === 'Enter') (e.target as HTMLInputElement).blur()
@@ -702,6 +711,12 @@ export function OverviewView({
               />
             </label>
             <span className="text-[11px] text-white/40">{OVERVIEW_CURRENCY}</span>
+            </div>
+            {rangeClampNotice ? (
+              <p className="text-[11px] text-amber-200/65" role="status">
+                {rangeClampNotice}
+              </p>
+            ) : null}
           </div>
         </div>
 
