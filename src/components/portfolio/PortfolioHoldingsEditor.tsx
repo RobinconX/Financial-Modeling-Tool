@@ -81,6 +81,10 @@ type Props = {
   /** One shared cash plan for every portfolio */
   sharedCashMode?: boolean
   sharedCashError?: string | null
+  /** From Chart value table → expand, scroll, highlight */
+  focusHoldingId?: string | null
+  focusOpeningCash?: boolean
+  focusGrowthRate?: boolean
 }
 
 const BASIS_OPTIONS: { id: ValuationBasis | 'easy'; label: string }[] = [
@@ -110,6 +114,9 @@ export function PortfolioHoldingsEditor({
   onUpdateOtherPortfolio,
   sharedCashMode = false,
   sharedCashError = null,
+  focusHoldingId = null,
+  focusOpeningCash = false,
+  focusGrowthRate = false,
 }: Props) {
   const { missingSymbols } = useQuoteHealth()
   const showConfig = panel === 'all'
@@ -216,6 +223,42 @@ export function PortfolioHoldingsEditor({
 
     knownHoldingIdsRef.current = new Set(ids)
   }, [holdingIds, portfolio.id])
+
+  useEffect(() => {
+    if (!focusHoldingId || !showPositions) return
+    setExpanded((prev) => ({ ...prev, [focusHoldingId]: true }))
+    const scroll = () => {
+      document
+        .querySelector(`[data-portfolio-holding="${focusHoldingId}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+    const t = window.setTimeout(scroll, 80)
+    return () => window.clearTimeout(t)
+  }, [focusHoldingId, showPositions])
+
+  useEffect(() => {
+    if (!focusOpeningCash || !showCash) return
+    const scroll = () => {
+      document
+        .querySelector('[data-portfolio-focus="opening-cash"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+    const t = window.setTimeout(scroll, 80)
+    return () => window.clearTimeout(t)
+  }, [focusOpeningCash, showCash])
+
+  useEffect(() => {
+    if (!focusGrowthRate || !showGrowth) return
+    const scroll = () => {
+      const el = document.querySelector(
+        '[data-portfolio-focus="growth-rate"]',
+      ) as HTMLElement | null
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      el?.focus()
+    }
+    const t = window.setTimeout(scroll, 80)
+    return () => window.clearTimeout(t)
+  }, [focusGrowthRate, showGrowth])
 
   const availableSymbols = [...new Set(scenarios.map((s) => s.symbol))].sort()
   const projectionOptions = [...scenarios].sort(
@@ -765,6 +808,7 @@ export function PortfolioHoldingsEditor({
             cashAfter={cashForYear(bookPortfolio, d.year)}
             canRemove={!d.isOpening}
             isOpening={!!d.isOpening}
+            highlighted={focusOpeningCash && !!d.isOpening}
             displayCurrency={displayCurrency}
             usdToChf={usdToChf}
             incomeCostScenarios={incomeCostScenarios}
@@ -844,7 +888,10 @@ export function PortfolioHoldingsEditor({
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative w-28">
               <input
-                className="input !py-2 !pr-7 !text-sm tabular-nums"
+                data-portfolio-focus="growth-rate"
+                className={`input !py-2 !pr-7 !text-sm tabular-nums ${
+                  focusGrowthRate ? 'ring-1 ring-amber-400/50 bg-amber-500/10' : ''
+                }`}
                 type="text"
                 inputMode="decimal"
                 value={
@@ -1054,8 +1101,16 @@ export function PortfolioHoldingsEditor({
               ? equityShareCountAbbrev(holdingInstrumentType, h.symbol)
               : null
 
+          const holdingHighlighted = focusHoldingId === h.id
+
           return (
-            <div key={h.id} className="py-2 first:pt-0 last:pb-0">
+            <div
+              key={h.id}
+              data-portfolio-holding={h.id}
+              className={`py-2 first:pt-0 last:pb-0 ${
+                holdingHighlighted ? 'rounded-lg bg-amber-500/10 ring-1 ring-inset ring-amber-400/50' : ''
+              }`}
+            >
               <div className="flex items-start gap-2">
                 <button
                   type="button"
@@ -1835,6 +1890,7 @@ function DepositRow({
   cashAfter,
   canRemove,
   isOpening = false,
+  highlighted = false,
   displayCurrency,
   usdToChf,
   incomeCostScenarios,
@@ -1849,6 +1905,7 @@ function DepositRow({
   cashAfter: number
   canRemove: boolean
   isOpening?: boolean
+  highlighted?: boolean
   displayCurrency: DisplayCurrency
   usdToChf: number | null
   incomeCostScenarios: CashflowScenario[]
@@ -2063,9 +2120,10 @@ function DepositRow({
 
   return (
     <div
+      data-portfolio-focus={isOpening ? 'opening-cash' : undefined}
       className={`grid grid-cols-1 items-start gap-2 sm:grid-cols-[5.5rem_6.5rem_minmax(0,1fr)_auto_auto] sm:items-center ${
         isOpening ? 'rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] px-0.5 py-1' : ''
-      }`}
+      } ${highlighted ? 'ring-1 ring-amber-400/50 bg-amber-500/10' : ''}`}
     >
       {isOpening ? (
         <div className="px-2 text-sm tabular-nums text-white/70" title="Opening cash year">

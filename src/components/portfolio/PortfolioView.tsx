@@ -8,6 +8,7 @@ import type {
   PortfolioSharedCashState,
   SavedPortfolio,
   SavedScenario,
+  PortfolioGridRow,
 } from '../../types'
 import type { PortfolioCashMode } from '../../lib/portfolioCashMode'
 import type { PortfolioActualsMode } from '../../lib/portfolioActualsMode'
@@ -44,6 +45,10 @@ import { DeleteUsageBody } from '../common/DeleteUsageBody'
 import { portfolioScenarioUsage } from '../../lib/deleteUsage'
 import { loadOverview } from '../../lib/overviewStorage'
 import { clearActualsFocus, readActualsFocus } from '../../lib/actualsFocus'
+import {
+  portfolioChartNavigateTarget,
+  type PortfolioChartNavigateTarget,
+} from '../../lib/portfolioFocus'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 
@@ -215,6 +220,7 @@ export function PortfolioView({
   })
   const [actualsKind, setActualsKind] = useState<'value' | 'moneyin'>('value')
   const [actualsHighlightKey, setActualsHighlightKey] = useState<string | null>(null)
+  const [editorFocus, setEditorFocus] = useState<PortfolioChartNavigateTarget | null>(null)
 
   useEffect(() => {
     const focus = readActualsFocus()
@@ -228,6 +234,20 @@ export function PortfolioView({
       return () => window.clearTimeout(clearTimer)
     }
   }, [])
+
+  useEffect(() => {
+    if (!editorFocus) return
+    const clearTimer = window.setTimeout(() => setEditorFocus(null), 3200)
+    return () => window.clearTimeout(clearTimer)
+  }, [editorFocus])
+
+  const handleChartPositionNavigate = useCallback((row: PortfolioGridRow) => {
+    const target = portfolioChartNavigateTarget(row)
+    if (!target) return
+    setPanel(target.panel)
+    setEditorFocus(target)
+  }, [])
+
   const [chartMode, setChartMode] = useState<PortfolioChartMode>(readChartMode)
   const [showCashInvested, setShowCashInvested] = useState(readCashInvested)
   const [showRoi, setShowRoi] = useState(readShowRoi)
@@ -1158,6 +1178,7 @@ export function PortfolioView({
                     usdToChf={usdToChf}
                     contributions={contributionsForSelected}
                     onChange={(patch) => updatePortfolio(selected.id, patch)}
+                    onPositionNavigate={handleChartPositionNavigate}
                   />
                 </div>
               </div>
@@ -1269,6 +1290,15 @@ export function PortfolioView({
                 }
                 sharedCashMode={portfolioCashMode === 'shared' && editorPanel === 'cash'}
                 sharedCashError={sharedCashError}
+                focusHoldingId={
+                  editorFocus?.panel === 'positions' ? editorFocus.holdingId : null
+                }
+                focusOpeningCash={
+                  editorFocus?.panel === 'cash' && editorFocus.focus === 'opening-cash'
+                }
+                focusGrowthRate={
+                  editorFocus?.panel === 'growth' && editorFocus.focus === 'growth-rate'
+                }
               />
             )}
         </div>
