@@ -43,6 +43,7 @@ import {
   normalizeInvestmentThesis,
 } from '../../lib/investmentThesis'
 import { LightMarkdown } from '../../lib/lightMarkdown'
+import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -473,18 +474,23 @@ export function ProjectionPanel({
 
       <div
         className="space-y-1 border-t border-white/[0.06] pt-2"
-        data-guide-anchor="projections.analyze.thesis"
+        data-guide-anchor="projections.thesis"
       >
-        <AssumptionToggle
-          title="Investment thesis"
-          open={thesisOpen}
-          onToggle={() => setThesisOpen((v) => !v)}
-          summary={
-            hasInvestmentThesis(investmentThesis)
-              ? 'Has notes'
-              : 'Optional story and buy/sell criteria'
-          }
-        />
+        <div className="flex flex-wrap items-center gap-1.5">
+          <div className="min-w-0 flex-1">
+            <AssumptionToggle
+              title="Investment thesis"
+              open={thesisOpen}
+              onToggle={() => setThesisOpen((v) => !v)}
+              summary={
+                hasInvestmentThesis(investmentThesis)
+                  ? 'Has notes'
+                  : 'Optional story and buy/sell criteria'
+              }
+            />
+          </div>
+          <FeatureGuideButton id="projections.thesis" />
+        </div>
         {thesisOpen ? (
           <div className="space-y-3 pb-3 pt-1">
             <MarkdownTextarea

@@ -662,9 +662,7 @@ Toggle basis tabs (**Easy**, **P/S**, etc.) to drive the hero ROI, **Market cap*
 
 ### Investment thesis
 
-- **Investment thesis** — optional collapsible notes for your story and buy/sell criteria (light markdown: **bold**, *italic*, bullets, \`##\` headings)
-- Edits auto-save on a saved scenario; **Save** / **Save as…** includes the thesis (copies verbatim on **Save as…**)
-- **Comparables** — a note icon on a row opens the thesis in the right shelf (click only, not hover)
+Optional notes per save — see the **Investment thesis** child guide (**Guide** on that collapsible block).
 
 ### Overrides & save
 
@@ -684,6 +682,68 @@ Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today 
     status: 'ready',
     location: { tab: 'projections', view: 'analyze', anchor: 'projections.analyze' },
     parentId: 'projections',
+    order: 1,
+  },
+  'projections.thesis': {
+    id: 'projections.thesis',
+    title: 'Investment thesis',
+    summary:
+      'Optional per-scenario notes for your story, key assumptions, and buy/sell criteria — light markdown with a toolbar, live preview, and a 4,000-character cap. Saved with the projection; readable from **Comparables** in the right shelf.',
+    body: `## How it works
+
+The **Investment thesis** block sits on **Analyze** below quote warnings. Expand it to write; collapse it when you only need numbers.
+
+> Use it for the narrative behind the model — not duplicate every assumption row.
+
+### What to capture
+
+- **Story** — why this name fits your portfolio or watchlist
+- **Key assumptions** — what has to stay true for your valuation path
+- **Buy / sell criteria** — what would make you add, trim, or exit
+
+### Editor & toolbar
+
+- **B** — wrap selection in \`**bold**\`
+- **I** — wrap in \`*italic*\`
+- **•** — start or continue a \`-\` bullet line
+- **H** — insert a \`##\` section heading at the cursor
+- **Preview** — formatted read-only view below the box (only when text is non-empty)
+
+Supported in **Preview**: \`##\` and \`###\` headings, \`-\` bullets, \`**bold**\`, \`*italic*\`, and inline \`code\`. No links, images, or tables.
+
+### Length & persistence
+
+Typed text is capped at **4,000** characters (counter under the box). Extra paste or toolbar edits are clipped to that limit.
+
+On a **saved** scenario, thesis edits **auto-save** with the rest of the row. **Save** / **Save as…** includes the thesis; **Save as…** copies it verbatim to the new name.
+
+Draft (unsaved) tickers keep thesis in memory until the first **Save**.
+
+### Comparables
+
+On **Comparables**, a filled-in save shows a small **document** icon beside the name (click only — not hover). It opens the **ThesisRail** side shelf: read-only rendered notes for that row’s scenario, resizable from the left edge; **Escape** or **Close** dismisses it.
+
+Opening **Analyze** from the name still loads the full editor for edits.
+
+## How to interpret
+
+> The thesis does not change ROI, CAGR, or chart math — it documents intent next to the numbers.
+
+Use **Preview** to sanity-check headings and lists before you rely on the shelf in a comp set.
+
+## Example
+
+On save **MSFT · Cloud bet**, you might write a \`## Bull case\` section, bullets on **Azure** growth, then \`### Trim if\` with a P/E trigger — roughly 250 characters, far below **4,000**.
+
+After **Save**, **Comparables** lists the row with a document icon; open the shelf to review without leaving the table. **Save as…** copies the thesis text to the new scenario name unchanged.
+`,
+    status: 'ready',
+    location: {
+      tab: 'projections',
+      view: 'analyze',
+      anchor: 'projections.thesis',
+    },
+    parentId: 'projections.analyze',
     order: 1,
   },
   'projections.comps': {
