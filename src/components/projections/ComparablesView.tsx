@@ -818,6 +818,7 @@ export function ComparablesView({
                               {sc && hasInvestmentThesis(sc.investmentThesis) ? (
                                 <button
                                   type="button"
+                                  data-guide-anchor="projections.thesis"
                                   className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/45 hover:bg-white/10 hover:text-emerald-300"
                                   aria-label={`Read investment thesis for ${row.label}`}
                                   onClick={(e) => {
