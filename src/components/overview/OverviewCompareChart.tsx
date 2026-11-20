@@ -14,6 +14,7 @@ import {
   assignScenarioCompareColors,
   buildOverviewCompareRows,
   OVERVIEW_CURRENCY,
+  sortOverviewCompareTooltipPayload,
   type OverviewBuildDeps,
 } from '../../lib/overview'
 import type { ChartAnnotation, NetWorthGoal, OverviewScenario } from '../../types'
@@ -145,7 +146,7 @@ export function OverviewCompareChart({
                       )}
                     </div>
                     <div className="mt-1.5 space-y-0.5">
-                      {payload.map((p) => {
+                      {sortOverviewCompareTooltipPayload(payload).map((p) => {
                         const id = String(p.dataKey ?? '')
                         if (id === RECORDED_ACTUAL_KEY) {
                           return (

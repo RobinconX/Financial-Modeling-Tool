@@ -101,7 +101,7 @@ export function SavingsTable({
                         />
                         {isCash ? (
                           <span className="text-[10px] text-emerald-400/70">
-                            Permanent · IC working cash
+                            Permanent · opening cash for Budget Monthly
                           </span>
                         ) : null}
                       </div>

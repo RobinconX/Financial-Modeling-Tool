@@ -390,7 +390,7 @@ export function OverviewView({
       })
       return
     }
-    // Manual: year → IC → % bindings (unclaimed → permanent leftover)
+    // Manual: year → Budget scenario → % bindings (unclaimed → permanent leftover)
     addSeries({
       type: 'manual',
       name: '',

@@ -195,7 +195,7 @@ export type CashflowLine = {
 
 /**
  * Informative monthly draw from working balance.
- * Not part of Income/Cost budget net, Sankey, or portfolio surplus deposits.
+ * Not part of Budget net, Sankey, or portfolio surplus deposits.
  */
 export type WorkingBalanceDraw = {
   id: string
@@ -249,7 +249,7 @@ export type SavingsAccount = {
   sortOrder: number
   /**
    * Permanent system role. `cash` is always present, cannot be deleted, and
-   * supplies prior-year Dec balance for Income/Cost working capital.
+   * supplies prior-year Dec balance for Budget Monthly working capital.
    */
   role?: 'cash' | null
 }
@@ -309,14 +309,14 @@ export type OverviewSeriesType = 'portfolio' | 'savings' | 'manual' | 'incomeLef
 export type RunwayDrawTiming = 'growFirst' | 'drawFirst'
 
 /**
- * Calendar year → Income/Cost scenario binding.
- * Manual series also set `percent` of that year's available IC cash for this position;
+ * Calendar year → Budget scenario binding.
+ * Manual series also set `percent` of that year's available Budget net for this position;
  * anything unclaimed becomes leftover cash.
  */
 export type OverviewYearBinding = {
   year: number
   incomeCostScenarioId: string
-  /** type === 'manual': percent of available IC cash (0–100). Ignored on leftover. */
+  /** type === 'manual': percent of available Budget net (0–100). Ignored on leftover. */
   percent?: number
 }
 
@@ -340,14 +340,14 @@ export type OverviewSeries = {
    */
   incomeCostScenarioId?: string | null
   /**
-   * type === 'incomeLeftover' | 'manual': map calendar year → Income/Cost scenario.
+   * type === 'incomeLeftover' | 'manual': map calendar year → Budget scenario.
    * Manual bindings include percent of available cash for this position.
    * Leftover is permanent; net residual after all manual % claims.
    */
   yearBindings?: OverviewYearBinding[]
   /**
    * Flat CHF added each year after the last stated year for this series:
-   * - incomeLeftover: after the last IC binding on the Overview scenario
+   * - incomeLeftover: after the last Budget binding on the Overview scenario
    *   (any manual/leftover); if none, every year from baseYear onward.
    * - manual: after this series' last year-binding; if none, every year from
    *   baseYear onward (in addition to any year-binding % claims).
@@ -501,7 +501,7 @@ export type PortfolioDeposit = {
   /**
    * Nominal amount when `source` is `fixed` (default), in `currency` (default USD).
    * Stored as entered so CHF figures do not drift when the FX rate changes.
-   * Ignored for cash math when `source` is `surplus` (computed from Income/Cost).
+   * Ignored for cash math when `source` is `surplus` (computed from Budget net).
    */
   amount: number
   /**
@@ -514,10 +514,10 @@ export type PortfolioDeposit = {
   /**
    * `fixed` = use `amount` (+ `currency`).
    * `surplus` = deposit = max(0, scenario net yearly) × surplusPercent / 100 (CHF→USD via FX).
-   * Income/Cost scenario is not modified.
+   * The linked Budget scenario is not modified.
    */
   source?: PortfolioDepositSource
-  /** Income/Cost scenario id when source is surplus */
+  /** Budget scenario id when source is surplus */
   surplusScenarioId?: string | null
   /** Percent of that scenario’s yearly surplus (e.g. 50 = half of left-over) */
   surplusPercent?: number

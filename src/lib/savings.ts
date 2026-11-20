@@ -173,7 +173,7 @@ export function getPermanentCashAccount(
 
 /**
  * End-of-year cash balance for calendar `year` (Dec actual, or latest ≤ Dec).
- * Used as opening working capital for Income/Cost scenario year `year + 1`.
+ * Used as opening working capital for Budget scenario year `year + 1`.
  */
 export function yearEndBalance(account: SavingsAccount, year: number): number {
   const y = Math.floor(year)
