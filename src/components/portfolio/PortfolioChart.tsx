@@ -339,14 +339,6 @@ export function PortfolioChart({
     return () => cancelAnimationFrame(id)
   }, [hover?.point.xKey, hover?.point.total, areaSize.h])
 
-  if (data.length < 1 || !data.some((d) => d.total > 0 || d.isNow)) {
-    return (
-      <div className="flex h-64 w-full items-center justify-center text-sm text-white/40">
-        Portfolio value chart appears once you have shares, cash, or actuals
-      </div>
-    )
-  }
-
   const barCategoryGap = data.length > 14 ? '12%' : data.length > 8 ? '18%' : '28%'
   const maxBarSize = data.length > 14 ? 28 : data.length > 8 ? 40 : 52
 
@@ -448,9 +440,20 @@ export function PortfolioChart({
     if (selectedXKey && !data.some((d) => d.xKey === selectedXKey)) setSelectedXKey(null)
   }, [data, selectedXKey])
 
+  const isEmpty =
+    data.length < 1 || !data.some((d) => d.total > 0 || d.isNow)
+
   function clearHover() {
     hoverKeyRef.current = null
     setHover(null)
+  }
+
+  if (isEmpty) {
+    return (
+      <div className="flex h-64 w-full items-center justify-center text-sm text-white/40">
+        Portfolio value chart appears once you have shares, cash, or actuals
+      </div>
+    )
   }
 
   return (
