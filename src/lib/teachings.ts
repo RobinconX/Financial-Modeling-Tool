@@ -145,6 +145,10 @@ Treat scenarios as **labeled what-ifs**: same global data, different inclusion, 
 
 Timeline reads **From** and **To** calendar years (stored on the scenario). The X-axis is past years, **Now** (live), then projected years.
 
+### From / To range
+
+- **From** / **To** — chart span; years outside the supported window (20 years back, 80 years forward from today) are limited with a short note beside these fields
+
 ### Chart mode (Net worth tab)
 
 - **Bars** — stacked columns by enabled series

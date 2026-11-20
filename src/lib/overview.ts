@@ -49,6 +49,8 @@ import {
 export const OVERVIEW_CURRENCY = 'CHF' as const
 export const OVERVIEW_DEFAULT_HORIZON_YEARS = 10
 export const OVERVIEW_MAX_HORIZON_YEARS = 80
+/** How many calendar years before the as-of year Overview allows for **From**. */
+export const OVERVIEW_RANGE_PAST_YEARS = 20
 
 export type OverviewYearKind = 'actual' | 'projected' | 'now'
 
@@ -882,7 +884,7 @@ export function clampOverviewRange(
   let end = Math.floor(endYear)
   if (!Number.isFinite(start)) start = cy
   if (!Number.isFinite(end)) end = cy + OVERVIEW_DEFAULT_HORIZON_YEARS
-  const minY = cy - 20
+  const minY = cy - OVERVIEW_RANGE_PAST_YEARS
   const maxY = cy + OVERVIEW_MAX_HORIZON_YEARS
   start = Math.min(Math.max(start, minY), maxY)
   end = Math.min(Math.max(end, minY), maxY)
@@ -893,6 +895,55 @@ export function clampOverviewRange(
     end = t
   }
   return { startYear: start, endYear: end }
+}
+
+export type OverviewRangeClampNotice = {
+  fromLimited: boolean
+  toLimited: boolean
+  /** Calendar year the From field was limited to (before any range swap). */
+  fromLimitedToYear: number
+  /** Calendar year the To field was limited to (before any range swap). */
+  toLimitedToYear: number
+}
+
+/** Detect whether requested years fall outside the supported Overview window (before swap). */
+export function getOverviewRangeClampNotice(
+  requestedStartYear: number,
+  requestedEndYear: number,
+  asOf: Date = new Date(),
+): OverviewRangeClampNotice | null {
+  const cy = asOf.getFullYear()
+  let start = Math.floor(requestedStartYear)
+  let end = Math.floor(requestedEndYear)
+  if (!Number.isFinite(start)) start = cy
+  if (!Number.isFinite(end)) end = cy + OVERVIEW_DEFAULT_HORIZON_YEARS
+  const minY = cy - OVERVIEW_RANGE_PAST_YEARS
+  const maxY = cy + OVERVIEW_MAX_HORIZON_YEARS
+  const fromBefore = start
+  const toBefore = end
+  const fromLimitedToYear = Math.min(Math.max(start, minY), maxY)
+  const toLimitedToYear = Math.min(Math.max(end, minY), maxY)
+  const fromLimited = fromLimitedToYear !== fromBefore
+  const toLimited = toLimitedToYear !== toBefore
+  if (!fromLimited && !toLimited) return null
+  return { fromLimited, toLimited, fromLimitedToYear, toLimitedToYear }
+}
+
+export function formatOverviewRangeClampNotice(
+  requestedStartYear: number,
+  requestedEndYear: number,
+  asOf: Date = new Date(),
+): string | null {
+  const notice = getOverviewRangeClampNotice(requestedStartYear, requestedEndYear, asOf)
+  if (!notice) return null
+  const parts: string[] = []
+  if (notice.fromLimited) {
+    parts.push(`From limited to ${notice.fromLimitedToYear}`)
+  }
+  if (notice.toLimited) {
+    parts.push(`To limited to ${notice.toLimitedToYear}`)
+  }
+  return parts.join(' · ')
 }
 
 export function yearsInRange(
