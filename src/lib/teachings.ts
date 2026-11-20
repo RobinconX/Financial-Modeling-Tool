@@ -189,7 +189,7 @@ Each row is one **stack layer** on the Net worth chart. Drag **⋮⋮** on group
 
 - **Savings** group — every savings account appears here; toggle accounts or the whole group. **Cash** is permanent and stays included
 - **Portfolio** — links one portfolio book (USD converted at the Overview FX rate)
-- **Other** (manual) — flat **base CHF**, optional **annual rate**, **Year → Income/Cost → %** rows claiming Budget surplus for that calendar year
+- **Other** (manual) — flat **base CHF**, optional **annual rate**, **Year → Budget scenario → %** rows claiming net cash from that year’s Budget
 - **Leftover** (permanent) — receives Budget cash not claimed by manual **%** rows; optional **perpetual yearly CHF** after bindings end
 
 ### Common fields
@@ -197,7 +197,7 @@ Each row is one **stack layer** on the Net worth chart. Drag **⋮⋮** on group
 - **Compound until** / **Contribute until** — last year growth or additions apply (blank = no limit)
 - **Draw locked until** — Runway cannot tap this pile before that year (Runway tab)
 
-Manual **%** on a Budget year must sum with other claims; unclaimed income-cost net flows to **Leftover**.
+Manual **%** on a Budget year must sum with other claims; any unclaimed net from that Budget flows to **Leftover**.
 
 ## How to interpret
 
@@ -956,7 +956,7 @@ In **Settings → Portfolio cash**, choose **Separate per portfolio** (default) 
 ### Cash & deposits
 
 - **Opening row** — current cash (this calendar year); cannot be removed
-- **+ Deposit** — explicit year rows: **Fixed** amount or **% of Income/Cost surplus** from a Budget scenario (needs FX when surplus is CHF and book is USD)
+- **+ Deposit** — explicit year rows: **Fixed** amount or **% of net surplus** from a linked Budget scenario (needs FX when surplus is CHF and book is USD)
 - **Perpetual yearly** — after the last explicit deposit year, repeat a fixed or surplus-linked amount each year
 - **Copy cash…** — per-portfolio mode only: push opening + deposits + perpetual row to other books
 

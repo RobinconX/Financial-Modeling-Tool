@@ -3,6 +3,7 @@ import {
   assignOverviewSeriesColors,
   buildOverviewChartRows,
   buildOverviewCompareRows,
+  sortOverviewCompareTooltipPayload,
   clampOverviewRange,
   ensurePermanentSavings,
   manualValueAtYear,
@@ -101,7 +102,7 @@ describe('manual series', () => {
     expect(residualCashValueAtYear(leftover, 2028, deps)).toBeCloseTo(11_000)
   })
 
-  it('manual % of IC year leaves remainder on permanent leftover', () => {
+  it('manual % of Budget year leaves remainder on permanent leftover', () => {
     const leftover: OverviewSeries = {
       id: 'left',
       name: 'Leftover cash',
@@ -154,7 +155,7 @@ describe('manual series', () => {
       overviewPortfolioIds: [] as string[],
       overviewSeries: [leftover, manual],
     }
-    // IC net 40k; manual 75% → 30k; leftover 25% → 10k
+    // Budget net 40k; manual 75% → 30k; leftover 25% → 10k
     expect(seriesValueChf(manual, 2027, deps)).toBeCloseTo(30_000, 4)
     expect(seriesValueChf(leftover, 2027, deps)).toBeCloseTo(10_000, 4)
   })
@@ -201,7 +202,7 @@ describe('manual series', () => {
     }
     // 2026: base only (no binding, but last binding is 2027 so no perpetual yet)
     expect(seriesValueChf(manual, 2026, deps)).toBeCloseTo(1_000, 4)
-    // 2027: base + 50% of 40k IC
+    // 2027: base + 50% of 40k Budget net
     expect(seriesValueChf(manual, 2027, deps)).toBeCloseTo(21_000, 4)
     // 2028+: +5k perpetual each year
     expect(seriesValueChf(manual, 2028, deps)).toBeCloseTo(26_000, 4)
@@ -476,6 +477,19 @@ describe('buildOverviewCompareRows', () => {
   })
 })
 
+describe('sortOverviewCompareTooltipPayload', () => {
+  it('omits null values and sorts descending by numeric value', () => {
+    const sorted = sortOverviewCompareTooltipPayload([
+      { dataKey: 'low', value: 1000 },
+      { dataKey: 'high', value: 9000 },
+      { dataKey: 'mid', value: 5000 },
+      { dataKey: 'gone', value: null },
+      { dataKey: 'recorded', value: 7000 },
+    ])
+    expect(sorted.map((p) => p.dataKey)).toEqual(['high', 'recorded', 'mid', 'low'])
+  })
+})
+
 describe('residual surplus / income leftover', () => {
   const ic2027 = 'ic-2027'
   const ic2028 = 'ic-2028'
@@ -555,7 +569,7 @@ describe('residual surplus / income leftover', () => {
     expect(residualCashValueAtYear(series, 2029, deps)).toBeCloseTo(275_000, 4)
   })
 
-  it('no-portfolio: leftover gets full IC net for bound years then perpetual', () => {
+  it('no-portfolio: leftover gets full Budget net for bound years then perpetual', () => {
     const series: OverviewSeries = {
       id: 'left',
       name: 'Leftover cash',

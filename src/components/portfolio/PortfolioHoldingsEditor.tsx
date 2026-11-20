@@ -67,7 +67,7 @@ type Props = {
   /** Focus + select portfolio name (after New / Copy). */
   autoFocusName?: boolean
   onNameFocused?: () => void
-  /** Income/Cost scenarios for surplus-linked deposits (read-only). */
+  /** Budget scenarios for surplus-linked deposits (read-only). */
   incomeCostScenarios?: CashflowScenario[]
   incomeCostLines?: CashflowLine[]
   /** Other portfolios for “copy cash & positions to…” */
@@ -821,7 +821,7 @@ export function PortfolioHoldingsEditor({
             perpetual?.source === 'surplus') &&
             usdToChf == null && (
             <p className="text-amber-300/90">
-              Surplus deposits need a USD/CHF rate to convert Income/Cost (CHF) into portfolio cash.
+              Surplus deposits need a USD/CHF rate to convert Budget net (CHF) into portfolio cash.
             </p>
           )}
         </div>
@@ -1749,7 +1749,7 @@ function PerpetualDepositRow({
                   }
                 >
                   <option value="" disabled>
-                    {orderedScenarios.length ? 'Scenario…' : 'No Income/Cost scenarios'}
+                    {orderedScenarios.length ? 'Scenario…' : 'No Budget scenarios'}
                   </option>
                   {orderedScenarios.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -2111,10 +2111,10 @@ function DepositRow({
                     surplusScenarioId: e.target.value || null,
                   })
                 }
-                aria-label="Income/Cost scenario for surplus"
+                aria-label="Budget scenario for surplus"
               >
                 <option value="" disabled>
-                  {orderedScenarios.length ? 'Scenario…' : 'No Income/Cost scenarios'}
+                  {orderedScenarios.length ? 'Scenario…' : 'No Budget scenarios'}
                 </option>
                 {orderedScenarios.map((s) => {
                   const net = scenarioTotals(incomeCostLines, s.id).netYearly
@@ -2164,7 +2164,7 @@ function DepositRow({
               </p>
             ) : (
               <p className="text-[10px] text-white/35">
-                Pick an Income/Cost scenario and % of yearly surplus (left over).
+                Pick a Budget scenario and % of its yearly net surplus.
               </p>
             )}
           </div>
