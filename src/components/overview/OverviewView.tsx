@@ -26,6 +26,10 @@ import {
   type OverviewBuildDeps,
 } from '../../lib/overview'
 import {
+  effectiveOverviewChartMode,
+  overviewChartModeAfterPageTabChange,
+} from '../../lib/overviewChartMode'
+import {
   buildRunwayModel,
   defaultRunwayConfig,
   runwayAssetSeries,
@@ -214,6 +218,10 @@ export function OverviewView({
   }, [pageTab])
 
   useEffect(() => {
+    setChartMode((mode) => overviewChartModeAfterPageTabChange(pageTab, mode))
+  }, [pageTab])
+
+  useEffect(() => {
     setYearKey(null)
   }, [selectedScenarioId, pageTab, startYear, endYear])
 
@@ -344,8 +352,7 @@ export function OverviewView({
     setYearKey((cur) => (cur === xKey ? null : xKey))
   }, [])
   const chartSeries = pageTab === 'runway' ? runwaySeries : series
-  const effectiveChartMode: ChartMode =
-    pageTab === 'runway' && chartMode === 'compare' ? 'bars' : chartMode
+  const effectiveChartMode = effectiveOverviewChartMode(pageTab, chartMode)
 
   /** Apply year range immediately when both values look like calendar years (spinner or finished typing). */
   function applyRangeDraft(fromStr: string, toStr: string) {
@@ -629,16 +636,7 @@ export function OverviewView({
                 <button
                   key={opt.id}
                   type="button"
-                  onClick={() => {
-                    if (
-                      pageTab === 'runway' &&
-                      chartMode === 'compare' &&
-                      opt.id === 'bars'
-                    ) {
-                      return
-                    }
-                    setChartMode(opt.id)
-                  }}
+                  onClick={() => setChartMode(opt.id)}
                   className={`-mb-px border-b-2 px-2.5 py-1 text-xs font-medium transition ${
                     effectiveChartMode === opt.id
                       ? 'border-emerald-400 text-white'
