@@ -33,6 +33,36 @@ export function equityShareCountLabelLower(
   return usesUnitLabel(instrumentType, symbol) ? 'units' : 'shares'
 }
 
+/** Short suffix for compact quantity display (matches Analyze panel). */
+export function equityShareCountAbbrev(
+  instrumentType: string | null | undefined,
+  symbol?: string | null,
+): string {
+  return usesUnitLabel(instrumentType, symbol) ? 'units' : 'sh'
+}
+
+/** Per-unit price suffix in action previews (e.g. USD/sh vs USD/unit). */
+export function equityPricePerUnitSuffix(
+  instrumentType: string | null | undefined,
+  symbol?: string | null,
+): string {
+  return usesUnitLabel(instrumentType, symbol) ? 'unit' : 'sh'
+}
+
+/** Saved-projection instrumentType for a portfolio row: linked scenario, then any save for the symbol. */
+export function instrumentTypeForHolding(
+  linkedScenario: { instrumentType: string | null } | null | undefined,
+  scenariosForSymbol: { instrumentType: string | null }[] = [],
+): string | null {
+  const linked = normalizeInstrumentType(linkedScenario?.instrumentType ?? null)
+  if (linked) return linked
+  for (const s of scenariosForSymbol) {
+    const t = normalizeInstrumentType(s.instrumentType)
+    if (t) return t
+  }
+  return null
+}
+
 /** Order Nasdaq `assetclass` query tries (etf-first for fund-like symbols). */
 export function nasdaqAssetClassOrder(
   instrumentType: string | null | undefined,

@@ -77,6 +77,7 @@ describe('teachings registry', () => {
       'portfolio.goal',
     ])
     expect(getGuideAncestors('portfolio.cash').map((g) => g.id)).toEqual(['portfolio'])
+    expect(getGuide('portfolio.positions')?.body).toContain('Units held')
   })
 
   it('exposes a ready contribution-effectiveness guide with a figure', () => {
