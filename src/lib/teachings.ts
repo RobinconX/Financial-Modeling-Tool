@@ -994,7 +994,7 @@ Opening **display currency 10k**, **2026** fixed deposit **5k**, perpetual **+2k
 
 ### Holdings list
 
-- **+ Add from projections…** — stock rows tied to **Projections → Analyze** saves (symbol, shares, **Saved projection** path)
+- **+ Add from projections…** — stock rows tied to **Projections → Analyze** saves (symbol, **Shares** or **Units held**, **Saved projection** path; ETFs, funds, and indexes use **Units**)
 - **+ Option**, manual / absolute marks — valued without a projection link
 - **Sort** — as added, A–Z, or by value (display order only)
 
@@ -1005,7 +1005,7 @@ Opening **display currency 10k**, **2026** fixed deposit **5k**, perpetual **+2k
 
 > **Ticker** fields check live quotes. Wrong symbols show a warning and **No quote** on the row; use the provider’s format (e.g. **BRK-B**, **NESN.SW**). Manual marks skip quote checks.
 
-Expand a row to set shares, projection basis (**Easy mcap**, **P/S**, etc.), and **Actions** by calendar year (buy/sell quantities).
+Expand a row to set **Shares held** or **Units held**, projection basis (**Easy mcap**, **P/S**, etc.), and **Actions** by calendar year (buy/sell quantities).
 
 ### Copy holdings…
 
@@ -1017,7 +1017,7 @@ Perpetual **Growth** % on the **Growth** tab applies after the last year with ex
 
 ## How to interpret
 
-**Now** share counts drive the live **Chart** slice; year columns show simulated holdings after planned trades.
+**Now** share or unit counts drive the live **Chart** slice; year columns show simulated holdings after planned trades.
 
 Negative quantity or marks are allowed (shorts / liabilities).
 

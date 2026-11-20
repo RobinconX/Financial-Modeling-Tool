@@ -13,6 +13,11 @@ import {
 import { formatMoney, formatPrice } from '../../lib/format'
 import { toDisplay } from '../../lib/fx'
 import { PortfolioActionRow } from './PortfolioActionsEditor'
+import {
+  equityPricePerUnitSuffix,
+  equityShareCountLabel,
+  instrumentTypeForHolding,
+} from '../../lib/instrumentType'
 
 type Props = {
   portfolio: SavedPortfolio
@@ -47,6 +52,11 @@ export function PortfolioYearActionsEditor({
 
   const h = holding
   const title = holdingDisplayName(h)
+  const linked = h.scenarioId ? (scenariosById.get(h.scenarioId) ?? null) : null
+  const symbolScenarios = scenarios.filter((sc) => sc.symbol === h.symbol.toUpperCase())
+  const holdingInstrumentType = instrumentTypeForHolding(linked, symbolScenarios)
+  const shareCountLabel = equityShareCountLabel(holdingInstrumentType, h.symbol)
+  const pricePerUnitSuffix = equityPricePerUnitSuffix(holdingInstrumentType, h.symbol)
 
   function updateAction(id: string, patch: Partial<PortfolioAction>) {
     onChange({
@@ -74,7 +84,7 @@ export function PortfolioYearActionsEditor({
     const cashDisp = toDisplay(dollars, displayCurrency, usdToChf)
     const pxDisp = toDisplay(px, displayCurrency, usdToChf)
     const auto = a.price == null || !(a.price > 0)
-    return `${sign}${formatMoney(cashDisp, displayCurrency)} cash · ${formatPrice(pxDisp, displayCurrency)}/sh${auto ? ' (auto)' : ''}`
+    return `${sign}${formatMoney(cashDisp, displayCurrency)} cash · ${formatPrice(pxDisp, displayCurrency)}/${pricePerUnitSuffix}${auto ? ' (auto)' : ''}`
   }
 
   return (
@@ -116,6 +126,8 @@ export function PortfolioYearActionsEditor({
               preview={preview(a)}
               displayCurrency={displayCurrency}
               usdToChf={usdToChf}
+              shareCountLabel={shareCountLabel}
+              pricePerUnitSuffix={pricePerUnitSuffix}
               onCommit={(patch) => updateAction(a.id, patch)}
               onRemove={() => removeAction(a.id)}
             />

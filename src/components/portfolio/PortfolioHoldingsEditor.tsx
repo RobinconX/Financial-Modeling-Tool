@@ -48,6 +48,11 @@ import { portfolioHoldingDeleteDetail } from '../../lib/deleteUsage'
 import { SymbolQuoteFieldHint } from '../common/SymbolQuoteFieldHint'
 import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
 import { symbolMissingQuoteData, useQuoteHealth } from '../../context/QuoteHealthContext'
+import {
+  equityShareCountAbbrev,
+  equityShareCountLabel,
+  instrumentTypeForHolding,
+} from '../../lib/instrumentType'
 
 export type PortfolioEditorPanel = 'cash' | 'positions' | 'growth' | 'all'
 
@@ -1036,6 +1041,18 @@ export function PortfolioHoldingsEditor({
           const holdingActions = allActions.filter((a) => a.holdingId === h.id)
           const actionCount = holdingActions.length
           const displayName = holdingDisplayName(h)
+          const holdingInstrumentType =
+            !h.manualOnly && !isOption
+              ? instrumentTypeForHolding(linked, symbolScenarios)
+              : null
+          const shareCountLabel =
+            !h.manualOnly && !isOption
+              ? equityShareCountLabel(holdingInstrumentType, h.symbol)
+              : null
+          const shareCountAbbrev =
+            !h.manualOnly && !isOption
+              ? equityShareCountAbbrev(holdingInstrumentType, h.symbol)
+              : null
 
           return (
             <div key={h.id} className="py-2 first:pt-0 last:pb-0">
@@ -1070,7 +1087,7 @@ export function PortfolioHoldingsEditor({
                           {h.sharesHeld.toLocaleString(undefined, {
                             maximumFractionDigits: 4,
                           })}{' '}
-                          {isOption ? 'contracts' : h.manualOnly ? 'units' : 'sh'}
+                          {isOption ? 'contracts' : h.manualOnly ? 'units' : shareCountAbbrev ?? 'sh'}
                         </span>
                       )}
                       {currentValue != null && (
@@ -1306,7 +1323,9 @@ export function PortfolioHoldingsEditor({
                           ) : null}
                         </div>
                         <div>
-                          <label className="label">Shares held</label>
+                          <label className="label">
+                            {shareCountLabel ? `${shareCountLabel} held` : 'Shares held'}
+                          </label>
                           <SignedQtyInput
                             value={h.sharesHeld}
                             min={0}
