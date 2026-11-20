@@ -651,7 +651,7 @@ Save **AAPL · Base case** in **Analyze**, then **Comparables → + New**, add t
 ### Layout
 
 - **Single** — one **ProjectionPanel**
-- **Compare** — **Panel A** and **Panel B** with independent pickers
+- **Compare** — **Panel A** and **Panel B** side by side; if **Panel B** is still **New projection**, turning **Compare** on fills **Panel B** with your most recently saved other projection (never overwrites a pick you already made)
 
 ### Assumptions
 
@@ -679,7 +679,7 @@ Table **ROI** and **CAGR** columns are versus spot (or override) through each st
 
 ## Example
 
-Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today → table shows multi-year ROI/CAGR to **2030**. Switch **Compare**, pick a second save, and contrast two assumption sets on the same ticker.
+Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today → table shows multi-year ROI/CAGR to **2030**. **Save as…** a second case, switch **Compare** — **Panel B** opens on that other save when you had not picked **Panel B** yet; contrast the two assumption sets on the same ticker.
 `,
     status: 'ready',
     location: { tab: 'projections', view: 'analyze', anchor: 'projections.analyze' },
