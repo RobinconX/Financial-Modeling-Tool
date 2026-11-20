@@ -25,6 +25,10 @@ import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
 import { symbolMissingQuoteData, useQuoteHealth } from '../../context/QuoteHealthContext'
+import {
+  COMPARE_PANEL_B_HINT,
+  pickComparePanelBScenario,
+} from '../../lib/comparePanelSelection'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -363,6 +367,16 @@ export function ProjectionsView({
   const scenarioA = selA === DRAFT ? null : (scenarios.find((s) => s.id === selA) ?? null)
   const scenarioB = selB === DRAFT ? null : (scenarios.find((s) => s.id === selB) ?? null)
 
+  function enableCompare() {
+    setCompare(true)
+    if (selB !== DRAFT) return
+    const nextB = pickComparePanelBScenario(scenarios, selA)
+    if (nextB) setSelB(nextB)
+  }
+
+  const showComparePanelBHint =
+    compare && selB === DRAFT && pickComparePanelBScenario(scenarios, selA) == null
+
   function applyImported(incoming: SavedScenario[]) {
     const result = importScenarios(incoming)
     if ('error' in result) {
@@ -544,7 +558,7 @@ export function ProjectionsView({
           </button>
           <button
             type="button"
-            onClick={() => setCompare(true)}
+            onClick={enableCompare}
             className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
               compare
                 ? 'border-emerald-400 text-white'
@@ -555,6 +569,10 @@ export function ProjectionsView({
           </button>
         </div>
       </div>
+
+      {showComparePanelBHint ? (
+        <p className="text-sm text-white/50">{COMPARE_PANEL_B_HINT}</p>
+      ) : null}
 
       {storageError && (
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">
