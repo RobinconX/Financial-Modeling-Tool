@@ -943,6 +943,8 @@ Past years use **Actuals → Portfolio value** (last month in each year). **Now*
 
 Grid of year columns for holdings, **Cash**, and totals.
 
+Click a **position** name in the first column to jump to **Positions**, **Cash**, or **Growth** (when the growth row appears). The target expands, scrolls into view, and highlights briefly. **Total** stays in place.
+
 ### Planned actions in the grid
 
 On each **position** row, year columns (not **Now**) support inline **buy/sell** editing:
