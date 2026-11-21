@@ -2,7 +2,6 @@ import {
   CartesianGrid,
   Line,
   LineChart,
-  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -96,7 +95,6 @@ export function PortfolioReturnChart({
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
-            <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
             <XAxis
               dataKey="date"
               tickFormatter={formatTick}
