@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest'
-import { normalizeInvestmentThesis, hasInvestmentThesis } from '../../src/lib/investmentThesis'
+import {
+  clipInvestmentThesis,
+  normalizeInvestmentThesis,
+  hasInvestmentThesis,
+  INVESTMENT_THESIS_MAX_LENGTH,
+} from '../../src/lib/investmentThesis'
 import { normalizeScenario } from '../../src/lib/storage'
 
 describe('normalizeInvestmentThesis', () => {
@@ -17,6 +22,17 @@ describe('normalizeInvestmentThesis', () => {
   it('clips overly long text', () => {
     const long = 'x'.repeat(5000)
     expect(normalizeInvestmentThesis(long)?.length).toBe(4000)
+  })
+})
+
+describe('clipInvestmentThesis', () => {
+  it('passes through under the cap', () => {
+    expect(clipInvestmentThesis('hello')).toBe('hello')
+  })
+
+  it('clips at the max length', () => {
+    const long = 'y'.repeat(INVESTMENT_THESIS_MAX_LENGTH + 1)
+    expect(clipInvestmentThesis(long).length).toBe(INVESTMENT_THESIS_MAX_LENGTH)
   })
 })
 

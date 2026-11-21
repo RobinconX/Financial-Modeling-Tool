@@ -474,7 +474,11 @@ export default function App() {
 
   return (
     <FeatureGuideProvider navigateTab={setTab}>
-      <ThesisRailProvider>
+      <ThesisRailProvider
+        onPatchThesis={(id, thesis) => {
+          updateScenario(id, { investmentThesis: thesis })
+        }}
+      >
     <QuoteHealthProvider missingSymbols={missingSymbols}>
     <div className="flex h-full min-h-0 overflow-hidden">
       <QuoteLoadingHint
