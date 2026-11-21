@@ -282,7 +282,7 @@ describe('teachings registry', () => {
     expect(thesis?.body).toContain('4,000')
     expect(thesis?.body).toContain('ThesisRail')
     expect(thesis?.body).toContain('Add thesis')
-    expect(thesis?.body).toContain('WYSIWYG')
+    expect(thesis?.body).toContain('Toolbar')
     expect(thesis?.body).toContain('## Example')
     const projectionsTab = listGuideTree().find((t) => t.tab === 'projections')!
     const root = projectionsTab.roots.find((r) => r.guide.id === 'projections')!

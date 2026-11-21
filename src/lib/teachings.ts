@@ -692,7 +692,7 @@ Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today 
     id: 'projections.thesis',
     title: 'Investment thesis',
     summary:
-      'Optional per-scenario notes for your story, key assumptions, and buy/sell criteria — WYSIWYG editor in a large modal on **Analyze**, stored as light markdown, **4,000** characters. **Comparables** opens a read-only **ThesisRail** shelf.',
+      'Optional per-scenario notes for your story, key assumptions, and buy/sell criteria — rich-text editor in a large modal on **Analyze**, **4,000** characters. **Comparables** opens a read-only **ThesisRail** shelf.',
     body: `## How it works
 
 On **Analyze**, thesis notes open in a centered modal (about **4xl** wide, most of the viewport height) — not inline under the assumptions.
@@ -711,20 +711,20 @@ On **Analyze**, thesis notes open in a centered modal (about **4xl** wide, most 
 - **Key assumptions** — what has to stay true for your valuation path
 - **Buy / sell criteria** — what would make you add, trim, or exit
 
-### WYSIWYG toolbar
+### Toolbar
 
-Formatting shows **immediately** in the editor — you do not type raw markdown syntax.
+Formatting shows **immediately** in the editor.
 
 - **B** — bold
 - **I** — italic
 - **•** — bullet list
-- **H** — section heading (level 2, stored as \`##\` markdown)
+- **H** — section heading (level 2)
 
-Paste can include inline \`code\`; there is no code button. Older saves with \`###\` headings still load correctly.
+Pasting plain text with monospace segments is supported; there is no code button.
 
 ### Length & persistence
 
-The counter tracks **serialized markdown** up to **4,000** characters. At the cap you can still delete or replace text; you cannot add more until you free space.
+The counter tracks up to **4,000** characters. At the cap you can still delete or replace text; you cannot add more until you free space.
 
 On a **saved** scenario, thesis edits **auto-save** with the row. **Save** / **Save as…** includes the thesis (whitespace trimmed on save); **Save as…** copies it to the new name.
 
@@ -742,7 +742,7 @@ Click a row **name** on **Comparables** to land on **Analyze** and edit in the m
 
 ## Example
 
-On **MSFT · Cloud bet**, open the modal, add a **## Bull case** heading, bold **Azure**, and a bullet on margin — under **4,000** characters. After **Save**, the document icon appears on **Analyze** and **Comparables**; the shelf shows the same content rendered.
+On **MSFT · Cloud bet**, open the modal, add a **Bull case** heading, bold **Azure**, and a bullet on margin — under **4,000** characters. After **Save**, the document icon appears on **Analyze** and **Comparables**; the shelf shows the same notes read-only.
 `,
     status: 'ready',
     location: {

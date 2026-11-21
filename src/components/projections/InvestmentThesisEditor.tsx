@@ -165,9 +165,6 @@ export function InvestmentThesisEditor({
           H
         </ToolbarButton>
       </div>
-      <p className="text-[10px] text-white/30">
-        WYSIWYG — stored as light markdown for Comparables shelf
-      </p>
       <div className="min-h-0 flex-1 overflow-y-auto rounded-lg border border-white/10 bg-white/[0.02] px-3">
         <EditorContent editor={editor} />
       </div>
