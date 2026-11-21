@@ -137,12 +137,43 @@ function formatReturnProgressionValue(
   return mode === 'pct' ? `${value.toFixed(2)}%` : formatMoney(value, displayCurrency)
 }
 
+type TooltipPayloadItem = {
+  dataKey?: string | number
+  payload?: ChartRow | ReturnChartTradeMarker
+}
+
 type ReturnProgressionTooltipProps = {
   active?: boolean
-  payload?: ReadonlyArray<{ payload?: ChartRow }>
+  payload?: ReadonlyArray<TooltipPayloadItem>
   label?: string | number
   mode: ReturnChartMode
   displayCurrency: DisplayCurrency
+  usdToChf?: number | null
+  /** When hovering a trade dot, line series may be absent — supply row from chart data. */
+  rowOverride?: ChartRow
+  trades?: ReturnChartTradeMarker[]
+}
+
+export function resolveReturnChartTooltipState(
+  payload: ReadonlyArray<TooltipPayloadItem> | undefined,
+  chartData: ChartRow[],
+): { row: ChartRow | undefined; trades: ReturnChartTradeMarker[] } {
+  const trades: ReturnChartTradeMarker[] = []
+  for (const p of payload ?? []) {
+    if (p.dataKey === 'y' && isTradeMarkerPayload(p.payload)) {
+      trades.push(p.payload)
+    }
+  }
+  let row = payload?.find((p) => p.dataKey === 'value')?.payload as
+    | ChartRow
+    | undefined
+  if (!row && trades[0]) {
+    const t = trades[0]
+    row =
+      chartData.find((d) => d.date === t.tradeDate) ??
+      chartData.find((d) => d.time === t.time)
+  }
+  return { row, trades }
 }
 
 function isTradeMarkerPayload(
@@ -153,74 +184,45 @@ function isTradeMarkerPayload(
   return typeof p.symbol === 'string' && typeof p.side === 'string' && 'time' in p
 }
 
-/** Trade dot hover — matches other chart tooltip chrome. */
-export function TradeMarkerTooltip({
-  marker,
+function TradeTooltipRows({
+  trades,
   displayCurrency,
   usdToChf,
 }: {
-  marker: ReturnChartTradeMarker
+  trades: ReturnChartTradeMarker[]
   displayCurrency: DisplayCurrency
   usdToChf: number | null
 }) {
-  const sideLabel = marker.side === 'buy' ? 'Buy' : 'Sell'
-  const sideTone = marker.side === 'buy' ? '#34d399' : '#f87171'
-  const px = formatPrice(
-    toDisplay(marker.price, displayCurrency, usdToChf),
-    displayCurrency,
-  )
+  if (trades.length === 0) return null
   return (
-    <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
-      <div className="mb-1.5 font-medium text-white/70">{marker.tradeDate}</div>
-      <div className="flex items-center justify-between gap-4">
-        <span className="font-medium text-white/85">{marker.symbol}</span>
-        <span style={{ color: sideTone }}>{sideLabel}</span>
-      </div>
-      <div className="mt-1.5 tabular-nums text-white/80">
-        {marker.shares} @ {px}
-      </div>
-      {marker.fees > 0 ? (
-        <div className="mt-1 text-white/50">
-          Fees: {formatMoney(toDisplay(marker.fees, displayCurrency, usdToChf), displayCurrency)}
-        </div>
-      ) : null}
+    <div className="mt-2 space-y-1.5 border-t border-white/10 pt-2">
+      <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
+        Trades
+      </p>
+      {trades.map((m) => {
+        const sideTone = m.side === 'buy' ? '#34d399' : '#f87171'
+        const px = formatPrice(
+          toDisplay(m.price, displayCurrency, usdToChf),
+          displayCurrency,
+        )
+        return (
+          <div key={m.id} className="flex flex-col gap-0.5">
+            <div className="flex items-center justify-between gap-3">
+              <span className="font-medium text-white/85">{m.symbol}</span>
+              <span style={{ color: sideTone }}>
+                {m.side === 'buy' ? 'Buy' : 'Sell'}
+              </span>
+            </div>
+            <div className="tabular-nums text-white/75">
+              {m.shares} @ {px}
+              {m.fees > 0
+                ? ` · fees ${formatMoney(toDisplay(m.fees, displayCurrency, usdToChf), displayCurrency)}`
+                : ''}
+            </div>
+          </div>
+        )
+      })}
     </div>
-  )
-}
-
-type ReturnChartTooltipProps = ReturnProgressionTooltipProps & {
-  usdToChf: number | null
-}
-
-function ReturnChartTooltip({
-  active,
-  payload,
-  label,
-  mode,
-  displayCurrency,
-  usdToChf,
-}: ReturnChartTooltipProps) {
-  if (!active || !payload?.length) return null
-  const tradeHit = payload.find(
-    (p) => p?.payload != null && isTradeMarkerPayload(p.payload),
-  )
-  if (tradeHit?.payload && isTradeMarkerPayload(tradeHit.payload)) {
-    return (
-      <TradeMarkerTooltip
-        marker={tradeHit.payload}
-        displayCurrency={displayCurrency}
-        usdToChf={usdToChf}
-      />
-    )
-  }
-  return (
-    <ReturnProgressionTooltip
-      active={active}
-      payload={payload}
-      label={label}
-      mode={mode}
-      displayCurrency={displayCurrency}
-    />
   )
 }
 
@@ -231,41 +233,94 @@ export function ReturnProgressionTooltip({
   label,
   mode,
   displayCurrency,
+  usdToChf = null,
+  rowOverride,
+  trades = [],
 }: ReturnProgressionTooltipProps) {
-  if (!active || !payload?.length) return null
-  const row = payload[0]?.payload as ChartRow | undefined
+  if (!active) return null
+  const row =
+    rowOverride ??
+    ((payload?.find((p) => p.dataKey === 'value')?.payload ??
+      payload?.[0]?.payload) as ChartRow | undefined)
   const seriesLabel = returnProgressionSeriesLabel(mode)
   const dateLabel =
-    label != null
+    row?.date ??
+    (label != null
       ? typeof label === 'number' && Number.isFinite(label)
         ? formatTick(isoDateFromUtcMs(label))
         : String(label)
-      : ''
-  if (row?.value == null || !Number.isFinite(row.value)) {
-    return (
-      <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
-        <div className="mb-1.5 font-medium text-white/70">{dateLabel}</div>
-        <div className="tabular-nums text-white/50">—</div>
-      </div>
+      : trades[0]?.tradeDate ?? '')
+  const body =
+    row?.value == null || !Number.isFinite(row.value) ? (
+      <div className="tabular-nums text-white/50">—</div>
+    ) : (
+      (() => {
+        const tone =
+          row.value > 0 ? '#34d399' : row.value < 0 ? '#f87171' : 'rgba(255,255,255,0.45)'
+        const formatted = formatReturnProgressionValue(
+          row.value,
+          mode,
+          displayCurrency,
+        )
+        return (
+          <div className="flex items-center justify-between gap-4">
+            <span className="flex items-center gap-1.5 text-white/60">
+              <span
+                className="inline-block h-1.5 w-1.5 rounded-sm"
+                style={{ background: tone }}
+              />
+              {seriesLabel}
+            </span>
+            <span className="tabular-nums text-white/85">{formatted}</span>
+          </div>
+        )
+      })()
     )
-  }
-  const tone =
-    row.value > 0 ? '#34d399' : row.value < 0 ? '#f87171' : 'rgba(255,255,255,0.45)'
-  const formatted = formatReturnProgressionValue(row.value, mode, displayCurrency)
   return (
     <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
       <div className="mb-1.5 font-medium text-white/70">{dateLabel}</div>
-      <div className="flex items-center justify-between gap-4">
-        <span className="flex items-center gap-1.5 text-white/60">
-          <span
-            className="inline-block h-1.5 w-1.5 rounded-sm"
-            style={{ background: tone }}
-          />
-          {seriesLabel}
-        </span>
-        <span className="tabular-nums text-white/85">{formatted}</span>
-      </div>
+      {body}
+      <TradeTooltipRows
+        trades={trades}
+        displayCurrency={displayCurrency}
+        usdToChf={usdToChf}
+      />
     </div>
+  )
+}
+
+type ReturnChartTooltipProps = {
+  active?: boolean
+  payload?: ReadonlyArray<TooltipPayloadItem>
+  label?: string | number
+  mode: ReturnChartMode
+  displayCurrency: DisplayCurrency
+  usdToChf: number | null
+  chartData: ChartRow[]
+}
+
+function ReturnChartTooltip({
+  active,
+  payload,
+  label,
+  mode,
+  displayCurrency,
+  usdToChf,
+  chartData,
+}: ReturnChartTooltipProps) {
+  if (!active || !payload?.length) return null
+  const { row, trades } = resolveReturnChartTooltipState(payload, chartData)
+  return (
+    <ReturnProgressionTooltip
+      active={active}
+      payload={payload}
+      label={label}
+      mode={mode}
+      displayCurrency={displayCurrency}
+      usdToChf={usdToChf}
+      rowOverride={row}
+      trades={trades}
+    />
   )
 }
 
@@ -484,13 +539,17 @@ export function PortfolioReturnChart({
               }
             />
             <Tooltip
+              shared={false}
               cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
               content={(props) => (
                 <ReturnChartTooltip
-                  {...props}
+                  active={props.active}
+                  label={props.label}
+                  payload={props.payload as unknown as TooltipPayloadItem[] | undefined}
                   mode={mode}
                   displayCurrency={displayCurrency}
                   usdToChf={usdToChf}
+                  chartData={data}
                 />
               )}
             />

@@ -3,8 +3,8 @@ import {
   buildReturnChartTradeMarkers,
   buildSignedReturnChartRows,
   chartTimeForTradeDate,
+  resolveReturnChartTooltipState,
   ReturnProgressionTooltip,
-  TradeMarkerTooltip,
 } from '../../src/components/portfolio/PortfolioReturnChart'
 import type { PortfolioTrade } from '../../src/types'
 import type { ReturnProgressionPoint } from '../../src/lib/portfolioPerformanceStats'
@@ -73,6 +73,7 @@ describe('ReturnProgressionTooltip', () => {
       displayCurrency: 'USD',
       payload: [
         {
+          dataKey: 'value',
           payload: {
             date: '2024-01-02',
             time: chartTimeForTradeDate('2024-01-02'),
@@ -88,6 +89,41 @@ describe('ReturnProgressionTooltip', () => {
     expect(text).toContain('2024-01-02')
     expect(text).toContain('Total P&L')
     expect(text).toContain('$1.25K')
+    expect(text).not.toContain('Trades')
+  })
+
+  it('appends trade rows when trades prop is set', () => {
+    const el = ReturnProgressionTooltip({
+      active: true,
+      label: '2024-03-01',
+      mode: 'usd',
+      displayCurrency: 'USD',
+      usdToChf: null,
+      rowOverride: {
+        date: '2024-03-01',
+        time: chartTimeForTradeDate('2024-03-01'),
+        value: 100,
+        valuePos: 100,
+        valueNeg: null,
+      },
+      trades: [
+        {
+          id: 't1',
+          tradeDate: '2024-03-01',
+          time: chartTimeForTradeDate('2024-03-01'),
+          side: 'buy',
+          symbol: 'AAPL',
+          shares: 1,
+          price: 50,
+          fees: 0,
+          y: 100,
+        },
+      ],
+    })
+    const text = JSON.stringify(el)
+    expect(text).toContain('Total P&L')
+    expect(text).toContain('AAPL')
+    expect(text).toContain('"side":"buy"')
   })
 
   it('shows one placeholder when value is missing', () => {
@@ -98,6 +134,7 @@ describe('ReturnProgressionTooltip', () => {
       displayCurrency: 'USD',
       payload: [
         {
+          dataKey: 'value',
           payload: {
             date: '2024-01-01',
             time: chartTimeForTradeDate('2024-01-01'),
@@ -115,28 +152,48 @@ describe('ReturnProgressionTooltip', () => {
   })
 })
 
-describe('TradeMarkerTooltip', () => {
-  it('shows symbol, side, shares, and price', () => {
-    const el = TradeMarkerTooltip({
-      displayCurrency: 'USD',
-      usdToChf: null,
-      marker: {
-        id: '1',
-        tradeDate: '2024-03-01',
-        time: Date.parse('2024-03-01T12:00:00Z'),
-        side: 'buy',
-        symbol: 'AAPL',
-        shares: 10,
-        price: 150,
-        fees: 5,
-        y: 12,
-      },
-    })
-    const text = JSON.stringify(el)
-    expect(text).toContain('AAPL')
-    expect(text).toContain('Buy')
-    expect(text).toContain('2024-03-01')
-    expect(text).toContain('10')
+describe('resolveReturnChartTooltipState', () => {
+  it('keeps trades empty when only the return line is hovered', () => {
+    const row = {
+      date: '2024-01-02',
+      time: chartTimeForTradeDate('2024-01-02'),
+      value: 10,
+      valuePos: 10,
+      valueNeg: null,
+    }
+    const state = resolveReturnChartTooltipState(
+      [{ dataKey: 'value', payload: row }],
+      [row],
+    )
+    expect(state.trades).toHaveLength(0)
+    expect(state.row?.value).toBe(10)
+  })
+
+  it('includes trade only from scatter hover payload', () => {
+    const trade = {
+      id: '1',
+      tradeDate: '2024-03-01',
+      time: chartTimeForTradeDate('2024-03-01'),
+      side: 'sell' as const,
+      symbol: 'MSFT',
+      shares: 2,
+      price: 300,
+      fees: 0,
+      y: 5,
+    }
+    const row = {
+      date: '2024-03-01',
+      time: trade.time,
+      value: 5,
+      valuePos: 5,
+      valueNeg: null,
+    }
+    const state = resolveReturnChartTooltipState(
+      [{ dataKey: 'y', payload: trade }],
+      [row],
+    )
+    expect(state.trades).toHaveLength(1)
+    expect(state.row?.date).toBe('2024-03-01')
   })
 })
 
