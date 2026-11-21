@@ -1,5 +1,9 @@
 import { describe, expect, it } from 'vitest'
-import { buildSignedReturnChartRows } from '../../src/components/portfolio/PortfolioReturnChart'
+import {
+  buildReturnChartTradeMarkers,
+  buildSignedReturnChartRows,
+} from '../../src/components/portfolio/PortfolioReturnChart'
+import type { PortfolioTrade } from '../../src/types'
 import type { ReturnProgressionPoint } from '../../src/lib/portfolioPerformanceStats'
 
 describe('buildSignedReturnChartRows', () => {
@@ -46,5 +50,45 @@ describe('buildSignedReturnChartRows', () => {
         expect(r.valueNeg).toBeNull()
       }
     }
+  })
+})
+
+describe('buildReturnChartTradeMarkers', () => {
+  const PORT_ID = '11111111-1111-4111-8111-111111111111'
+
+  function trade(
+    partial: Partial<PortfolioTrade> & Pick<PortfolioTrade, 'side' | 'tradeDate'>,
+  ): PortfolioTrade {
+    return {
+      id: partial.id ?? crypto.randomUUID(),
+      portfolioId: PORT_ID,
+      symbol: partial.symbol ?? 'TST',
+      side: partial.side,
+      tradeDate: partial.tradeDate,
+      shares: partial.shares ?? 1,
+      price: partial.price ?? 100,
+      fees: partial.fees ?? 0,
+    }
+  }
+
+  it('places markers at progression Y on trade dates', () => {
+    const points: ReturnProgressionPoint[] = [
+      { date: '2024-01-02', totalPnl: 0, returnPct: 0 },
+      { date: '2024-01-10', totalPnl: 50, returnPct: 0.05 },
+    ]
+    const markers = buildReturnChartTradeMarkers(
+      [trade({ id: 't1', side: 'buy', tradeDate: '2024-01-02' })],
+      points,
+      'usd',
+    )
+    expect(markers).toHaveLength(1)
+    expect(markers[0]!.y).toBe(0)
+    const pct = buildReturnChartTradeMarkers(
+      [trade({ id: 't2', side: 'sell', tradeDate: '2024-01-10', shares: 2 })],
+      points,
+      'pct',
+    )
+    expect(pct[0]!.y).toBeCloseTo(5, 4)
+    expect(pct[0]!.side).toBe('sell')
   })
 })

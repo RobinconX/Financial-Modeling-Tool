@@ -1,5 +1,4 @@
-import { useMemo } from 'react'
-import { useState } from 'react'
+import { useMemo, useState } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -196,30 +195,46 @@ export function PortfolioReturnChart({
         <h4 className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
           Return progression
         </h4>
-        <div
-          className="inline-flex gap-0.5 rounded-md border border-white/10 p-0.5"
-          role="group"
-          aria-label="Return chart units"
-        >
-          {(
-            [
-              { id: 'pct' as const, label: '%' },
-              { id: 'usd' as const, label: '$' },
-            ] as const
-          ).map((opt) => (
+        <div className="flex flex-wrap items-center gap-2">
+          {tradeMarkers.length > 0 ? (
             <button
-              key={opt.id}
               type="button"
-              className={`rounded px-2 py-0.5 text-[11px] font-medium tabular-nums ${
-                mode === opt.id
-                  ? 'bg-white/15 text-white'
-                  : 'text-white/45 hover:text-white/75'
+              className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${
+                showTrades
+                  ? 'border-sky-400/40 bg-sky-500/15 text-sky-200'
+                  : 'border-white/10 text-white/45 hover:text-white/75'
               }`}
-              onClick={() => onModeChange(opt.id)}
+              aria-pressed={showTrades}
+              onClick={() => setShowTrades((v) => !v)}
             >
-              {opt.label}
+              Trades
             </button>
-          ))}
+          ) : null}
+          <div
+            className="inline-flex gap-0.5 rounded-md border border-white/10 p-0.5"
+            role="group"
+            aria-label="Return chart units"
+          >
+            {(
+              [
+                { id: 'pct' as const, label: '%' },
+                { id: 'usd' as const, label: '$' },
+              ] as const
+            ).map((opt) => (
+              <button
+                key={opt.id}
+                type="button"
+                className={`rounded px-2 py-0.5 text-[11px] font-medium tabular-nums ${
+                  mode === opt.id
+                    ? 'bg-white/15 text-white'
+                    : 'text-white/45 hover:text-white/75'
+                }`}
+                onClick={() => onModeChange(opt.id)}
+              >
+                {opt.label}
+              </button>
+            ))}
+          </div>
         </div>
       </div>
       {missingNote ? (
@@ -298,6 +313,20 @@ export function PortfolioReturnChart({
               legendType="none"
               isAnimationActive={false}
             />
+            {showTrades
+              ? tradeMarkers.map((m) => (
+                  <ReferenceDot
+                    key={m.id}
+                    x={m.tradeDate}
+                    y={m.y}
+                    r={4}
+                    fill={m.side === 'buy' ? '#34d399' : '#f87171'}
+                    stroke="#0b0f14"
+                    strokeWidth={1.25}
+                    ifOverflow="discard"
+                  />
+                ))
+              : null}
           </LineChart>
         </ResponsiveContainer>
       </div>

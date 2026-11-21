@@ -453,6 +453,7 @@ export function PortfolioPerformancePanel({
         <section className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
           <PortfolioReturnChart
             points={returnProgression.points}
+            trades={scopedTrades}
             mode={returnChartMode}
             missingNote={returnMissingNote}
             onModeChange={setReturnChartMode}

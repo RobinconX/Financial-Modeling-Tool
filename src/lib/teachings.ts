@@ -1241,12 +1241,12 @@ A highlighted card shows **today’s** total return for the current scope: **$**
 
 ### Return progression
 
-Below **Activity**, a line chart (toggle **%** vs **$**) shows cumulative performance from the first trade through today for the current scope.
+Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** overlay) shows cumulative performance from the first trade through today for the current scope.
 
 - **$** — realized + unrealized P&L each day (ledger marks from daily closes when shares are open)
 - **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** %)
 
-The line is **green above zero** and **red below zero**. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
+The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged buy (green dot) and sell (red dot) on the curve at that day’s return. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
 
 ### Save file / agents
 
