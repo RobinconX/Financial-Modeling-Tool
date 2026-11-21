@@ -8,6 +8,25 @@ import {
   tradesForPortfolio,
   tradesMatchingSymbol,
 } from '../../lib/portfolioTrades'
+import {
+  computeHoldingCostStats,
+  computePortfolioActivityRollup,
+  computeTimeWeightedReturn,
+  computeTradeActivity,
+  formatHoldingPeriod,
+  type PortfolioActivityRollup,
+  type TwrResult,
+  type TradeActivityStats,
+} from '../../lib/portfolioPerformanceStats'
+import {
+  fetchPriceHistoryClient,
+  isHistoryFresh,
+  type CachedPriceHistory,
+} from '../../lib/priceHistory'
+import {
+  loadCachedPriceHistory,
+  saveCachedPriceHistory,
+} from '../../lib/priceHistoryStorage'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { PortfolioTradeDrawer } from './PortfolioTradeDrawer'
 import { ConfirmDialog } from '../common/ConfirmDialog'
@@ -19,7 +38,6 @@ type Props = {
   scenarios: SavedScenario[]
   onSaveTrade: (trade: PortfolioTrade) => boolean
   onDeleteTrade: (tradeId: string) => boolean
-  /** When user clicks Log trade on Positions, open drawer with this symbol. */
   logTradeSeed?: { symbol: string; holdingId?: string } | null
   onClearLogTradeSeed?: () => void
 }
@@ -33,6 +51,29 @@ function pnlClass(v: number): string {
   if (v > 0) return 'text-emerald-300/90'
   if (v < 0) return 'text-red-300/90'
   return 'text-white/70'
+}
+
+function twrLabel(r: TwrResult | undefined): string {
+  if (!r || r.status === 'na') return '—'
+  if (r.status === 'unavailable') return 'Unavailable'
+  if (r.twr == null) return '—'
+  return pct(r.twr)
+}
+
+function CompactStats({ rows }: { rows: { label: string; value: string }[] }) {
+  if (rows.length === 0) return null
+  return (
+    <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3 lg:grid-cols-4">
+      {rows.map((r) => (
+        <div key={r.label}>
+          <dt className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
+            {r.label}
+          </dt>
+          <dd className="mt-0.5 tabular-nums text-white/85">{r.value}</dd>
+        </div>
+      ))}
+    </dl>
+  )
 }
 
 export function PortfolioPerformancePanel({
@@ -54,6 +95,8 @@ export function PortfolioPerformancePanel({
     [portfolioTrades],
   )
   const [scopeSymbol, setScopeSymbol] = useState<string | null>(null)
+  const [histories, setHistories] = useState<Record<string, CachedPriceHistory>>({})
+  const [histLoading, setHistLoading] = useState<Set<string>>(new Set())
 
   useEffect(() => {
     setScopeSymbol(null)
@@ -73,6 +116,123 @@ export function PortfolioPerformancePanel({
     () => computePortfolioPerformance(scopedTrades, portfolio, scenarios),
     [scopedTrades, portfolio, scenarios],
   )
+
+  const tradesBySymbol = useMemo(() => {
+    const m = new Map<string, PortfolioTrade[]>()
+    for (const t of scopedTrades) {
+      const list = m.get(t.symbol) ?? []
+      list.push(t)
+      m.set(t.symbol, list)
+    }
+    return m
+  }, [scopedTrades])
+
+  const totalOpenMarketValue = useMemo(() => {
+    let sum = 0
+    let any = false
+    for (const s of summary.symbols) {
+      if (s.marketValue != null && s.marketValue > 0) {
+        sum += s.marketValue
+        any = true
+      }
+    }
+    return any ? sum : null
+  }, [summary.symbols])
+
+  const symbolsForHistory = useMemo(() => {
+    if (scopeSymbol) return [scopeSymbol]
+    return summary.symbols.map((s) => s.symbol)
+  }, [scopeSymbol, summary.symbols])
+
+  useEffect(() => {
+    if (symbolsForHistory.length === 0) return
+    let cancelled = false
+    const stale: string[] = []
+    const next: Record<string, CachedPriceHistory> = {}
+    for (const symbol of symbolsForHistory) {
+      const cached = loadCachedPriceHistory(symbol)
+      if (cached) next[symbol] = cached
+      if (!cached || !isHistoryFresh(cached.fetchedAt)) stale.push(symbol)
+    }
+    setHistories((prev) => ({ ...prev, ...next }))
+    if (stale.length === 0) return
+
+    setHistLoading((prev) => {
+      const s = new Set(prev)
+      for (const symbol of stale) s.add(symbol)
+      return s
+    })
+
+    void Promise.all(
+      stale.map(async (symbol) => {
+        try {
+          const result = await fetchPriceHistoryClient(symbol)
+          if (cancelled) return
+          const cached: CachedPriceHistory = {
+            ...result,
+            fetchedAt: new Date().toISOString(),
+          }
+          saveCachedPriceHistory(cached)
+          setHistories((prev) => ({ ...prev, [symbol]: cached }))
+        } catch {
+          /* keep stale/missing → TWR unavailable */
+        } finally {
+          if (!cancelled) {
+            setHistLoading((prev) => {
+              const s = new Set(prev)
+              s.delete(symbol)
+              return s
+            })
+          }
+        }
+      }),
+    )
+    return () => {
+      cancelled = true
+    }
+  }, [symbolsForHistory.join(',')])
+
+  const twrBySymbol = useMemo(() => {
+    const out = new Map<string, TwrResult>()
+    for (const sym of summary.symbols.map((s) => s.symbol)) {
+      const trades = tradesBySymbol.get(sym) ?? []
+      const hist = histories[sym]
+      if (!hist?.points?.length) {
+        out.set(sym, { twr: null, status: 'unavailable' })
+        continue
+      }
+      out.set(sym, computeTimeWeightedReturn(trades, hist.points))
+    }
+    return out
+  }, [summary.symbols, tradesBySymbol, histories])
+
+  const activityStats = useMemo((): TradeActivityStats | PortfolioActivityRollup => {
+    if (scopeSymbol) {
+      const sym = summary.symbols[0]
+      const trades = tradesBySymbol.get(scopeSymbol) ?? scopedTrades
+      return computeTradeActivity(trades, sym?.ledgerShares ?? 0)
+    }
+    return computePortfolioActivityRollup(
+      summary.symbols.map((s) => ({
+        trades: tradesBySymbol.get(s.symbol) ?? [],
+        ledgerShares: s.ledgerShares,
+      })),
+    )
+  }, [scopeSymbol, summary.symbols, tradesBySymbol, scopedTrades])
+
+  const holdingStats = useMemo(() => {
+    if (!scopeSymbol || !summary.symbols[0]) return null
+    const s = summary.symbols[0]
+    const trades = tradesBySymbol.get(s.symbol) ?? []
+    return computeHoldingCostStats(
+      trades,
+      s.ledgerShares,
+      s.costBasis,
+      s.grossBuys,
+      s.marketValue,
+      totalOpenMarketValue,
+    )
+  }, [scopeSymbol, summary.symbols, tradesBySymbol, totalOpenMarketValue])
 
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [draft, setDraft] = useState<PortfolioTrade | null>(null)
@@ -104,6 +264,88 @@ export function PortfolioPerformancePanel({
     setDraft({ ...trade })
     setDrawerOpen(true)
   }
+
+  const activityRows = useMemo(() => {
+    const rows: { label: string; value: string }[] = [
+      { label: 'Trades', value: String(activityStats.tradeCount) },
+      { label: 'Buys', value: String(activityStats.buyCount) },
+      { label: 'Sells', value: String(activityStats.sellCount) },
+      {
+        label: 'First trade',
+        value: activityStats.firstTradeDate ?? '—',
+      },
+      {
+        label: 'Last trade',
+        value: activityStats.lastTradeDate ?? '—',
+      },
+    ]
+    if (scopeSymbol) {
+      rows.push({
+        label: 'Holding period',
+        value: formatHoldingPeriod(activityStats.holdingPeriodDays),
+      })
+      rows.push({
+        label: 'Status',
+        value: activityStats.status === 'open' ? 'Open' : 'Closed',
+      })
+    } else if ('openSymbolCount' in activityStats) {
+      rows.push({
+        label: 'Symbols',
+        value: `${activityStats.openSymbolCount} open · ${activityStats.closedSymbolCount} closed`,
+      })
+    }
+    return rows
+  }, [activityStats, scopeSymbol])
+
+  const holdingRows = useMemo(() => {
+    if (!holdingStats) return []
+    return [
+      { label: 'Ledger shares', value: formatInputShares(holdingStats.ledgerShares) },
+      {
+        label: 'Avg cost',
+        value:
+          holdingStats.averageCost != null
+            ? formatMoney(holdingStats.averageCost, 'USD')
+            : '—',
+      },
+      {
+        label: 'Breakeven',
+        value:
+          holdingStats.breakeven != null
+            ? formatMoney(holdingStats.breakeven, 'USD')
+            : '—',
+      },
+      {
+        label: 'Gross buys',
+        value: formatMoney(holdingStats.grossBuys, 'USD'),
+      },
+      {
+        label: 'Sell proceeds',
+        value: formatMoney(holdingStats.sellProceeds, 'USD'),
+      },
+      {
+        label: '% sold',
+        value: pct(holdingStats.pctSold),
+      },
+      {
+        label: 'Open basis',
+        value: formatMoney(holdingStats.openCostBasis, 'USD'),
+      },
+      {
+        label: 'Current value',
+        value:
+          holdingStats.currentValue != null
+            ? formatMoney(holdingStats.currentValue, 'USD')
+            : 'No mark',
+      },
+      {
+        label: 'TWR',
+        value: scopeSymbol
+          ? twrLabel(twrBySymbol.get(scopeSymbol))
+          : '—',
+      },
+    ]
+  }, [holdingStats, scopeSymbol, twrBySymbol])
 
   return (
     <div className="space-y-5" data-guide-anchor="portfolio.performance">
@@ -154,6 +396,24 @@ export function PortfolioPerformancePanel({
         </p>
       ) : null}
 
+      {scopedTrades.length > 0 ? (
+        <section className="space-y-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+          <h4 className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
+            Activity
+          </h4>
+          <CompactStats rows={activityRows} />
+        </section>
+      ) : null}
+
+      {scopeSymbol && holdingRows.length > 0 ? (
+        <section className="space-y-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+          <h4 className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
+            Position
+          </h4>
+          <CompactStats rows={holdingRows} />
+        </section>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {(
           [
@@ -185,7 +445,7 @@ export function PortfolioPerformancePanel({
         ))}
       </div>
 
-      {summary.symbols.length > 0 ? (
+      {summary.symbols.length > 0 && !scopeSymbol ? (
         <section className="space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-300/80">
             By symbol
@@ -194,39 +454,51 @@ export function PortfolioPerformancePanel({
             <table className="min-w-full text-sm">
               <thead className="text-xs uppercase tracking-wider text-white/45">
                 <tr>
-                  <th className="px-3 py-2 text-left font-medium">Symbol</th>
-                  <th className="px-3 py-2 text-right font-medium">Ledger sh.</th>
-                  <th className="px-3 py-2 text-right font-medium">Realized</th>
-                  <th className="px-3 py-2 text-right font-medium">Unrealized</th>
-                  <th className="px-3 py-2 text-right font-medium">Return</th>
+                  <th className="px-2 py-2 text-left font-medium">Symbol</th>
+                  <th className="px-2 py-2 text-left font-medium">Status</th>
+                  <th className="px-2 py-2 text-right font-medium">TWR</th>
+                  <th className="px-2 py-2 text-right font-medium">Realized</th>
+                  <th className="px-2 py-2 text-right font-medium">Return</th>
+                  <th className="px-2 py-2 text-right font-medium">Conc.</th>
                 </tr>
               </thead>
               <tbody>
-                {summary.symbols.map((s) => (
-                  <tr key={s.symbol} className="border-t border-white/5">
-                    <td className="px-3 py-2 font-medium text-white">{s.symbol}</td>
-                    <td className="px-3 py-2 text-right tabular-nums text-white/80">
-                      {s.ledgerShares > 0 ? formatInputShares(s.ledgerShares) : '0'}
-                    </td>
-                    <td className={`px-3 py-2 text-right tabular-nums ${pnlClass(s.realizedPnl)}`}>
-                      {formatMoney(s.realizedPnl, 'USD')}
-                    </td>
-                    <td
-                      className={`px-3 py-2 text-right tabular-nums ${
-                        s.unrealizedPnl != null ? pnlClass(s.unrealizedPnl) : 'text-white/40'
-                      }`}
-                    >
-                      {s.unrealizedPnl != null
-                        ? formatMoney(s.unrealizedPnl, 'USD')
-                        : s.ledgerShares > 0
-                          ? 'No mark'
+                {summary.symbols.map((s) => {
+                  const holding = computeHoldingCostStats(
+                    tradesBySymbol.get(s.symbol) ?? [],
+                    s.ledgerShares,
+                    s.costBasis,
+                    s.grossBuys,
+                    s.marketValue,
+                    totalOpenMarketValue,
+                  )
+                  const twr = twrBySymbol.get(s.symbol)
+                  const loading = histLoading.has(s.symbol)
+                  return (
+                    <tr key={s.symbol} className="border-t border-white/5">
+                      <td className="px-2 py-2 font-medium text-white">{s.symbol}</td>
+                      <td className="px-2 py-2 text-xs text-white/55">
+                        {s.ledgerShares > 0 ? 'Open' : 'Closed'}
+                      </td>
+                      <td className="px-2 py-2 text-right text-xs tabular-nums text-white/80">
+                        {loading ? '…' : twrLabel(twr)}
+                      </td>
+                      <td
+                        className={`px-2 py-2 text-right tabular-nums text-xs ${pnlClass(s.realizedPnl)}`}
+                      >
+                        {formatMoney(s.realizedPnl, 'USD')}
+                      </td>
+                      <td className="px-2 py-2 text-right text-xs tabular-nums text-white/80">
+                        {pct(s.returnPct)}
+                      </td>
+                      <td className="px-2 py-2 text-right text-xs tabular-nums text-white/55">
+                        {holding.concentration != null
+                          ? pct(holding.concentration)
                           : '—'}
-                    </td>
-                    <td className="px-3 py-2 text-right tabular-nums text-white/80">
-                      {pct(s.returnPct)}
-                    </td>
-                  </tr>
-                ))}
+                      </td>
+                    </tr>
+                  )
+                })}
               </tbody>
             </table>
           </div>

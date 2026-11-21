@@ -1227,6 +1227,14 @@ The header **select** switches what you are viewing:
 
 > Realized P&L on closed tickers still counts in the whole-portfolio rollup.
 
+### Stats blocks
+
+- **Activity** — trade, buy, and sell counts; first / last trade; holding period and open/closed **status** on one ticker; **open · closed symbol counts** on whole portfolio
+- **Position** (single ticker) — ledger shares, average cost / breakeven, gross buys, sell proceeds, % sold, open cost basis, current value
+- **TWR** — time-weighted return **per ticker** from daily price history (lazy fetch, shared cache with Comparables); shows **Unavailable** when history cannot cover the holding window
+
+Whole-portfolio view adds **By symbol** columns: status, **TWR**, return on buys, and **Concentration** (% of open ledger value).
+
 ### Save file / agents
 
 Trades live under \`portfolioTrades\` in **Export** / linked JSON. Invalid rows are dropped on import; missing \`id\` values are minted.
