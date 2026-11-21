@@ -597,6 +597,7 @@ export default function App() {
               <ProjectionsView
                 scenarios={scenarios}
                 portfolios={portfolios}
+                tradesState={portfolioTrades.trades}
                 storageError={storageError}
                 upsertScenario={upsertScenario}
                 updateScenario={updateScenario}

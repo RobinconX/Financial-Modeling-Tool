@@ -1,9 +1,10 @@
 import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
 import {
   CartesianGrid,
+  ComposedChart,
   Legend,
   Line,
-  LineChart,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   useActiveTooltipCoordinate,
@@ -11,6 +12,8 @@ import {
   XAxis,
   YAxis,
 } from 'recharts'
+import type { ComparablesTradeMarker } from '../../lib/comparablesTradeChart'
+import { GoalGapChartTradeTooltip } from './GoalGapChartTradeTooltip'
 import { formatPercent } from '../../lib/format'
 import {
   mergeUpsideSeries,
@@ -38,6 +41,8 @@ type Props = {
   loading?: boolean
   error?: string | null
   fillContainer?: boolean
+  tradeMarkers?: ComparablesTradeMarker[]
+  showTrades?: boolean
 }
 
 type DateWindow = { from: string; to: string }
@@ -132,6 +137,13 @@ function finiteNumber(value: unknown): number | null {
 
 type GuideItem = { value?: unknown; color?: string; stroke?: string }
 
+type PayloadItem = {
+  dataKey?: string | number
+  name?: string
+  value?: number | string | null
+  color?: string
+}
+
 /** Pixel y and stroke of the series value closest to the pointer. */
 export function pickValueGuide(
   payload: ReadonlyArray<GuideItem> | undefined,
@@ -210,6 +222,8 @@ export function GoalGapChart({
   loading,
   error,
   fillContainer = false,
+  tradeMarkers = [],
+  showTrades = false,
 }: Props) {
   const valueLabel = metric === 'cagr' ? 'CAGR' : 'Remaining upside'
   const targetSeriesName = metric === 'cagr' ? 'Target CAGR' : 'Target return'
@@ -387,7 +401,7 @@ export function GoalGapChart({
         onPointerCancel={onPointerUp}
       >
         <ResponsiveContainer width="100%" height="100%" debounce={50}>
-          <LineChart data={visible} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
+          <ComposedChart data={visible} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" strokeDasharray="3 3" />
             <XAxis
               dataKey="date"
@@ -409,20 +423,18 @@ export function GoalGapChart({
             {panning ? null : (
               <Tooltip
                 cursor={<HoverCrosshair />}
-                contentStyle={{
-                  background: '#121820',
-                  border: '1px solid rgba(255,255,255,0.1)',
-                  borderRadius: 12,
-                  fontSize: 12,
-                }}
-                labelStyle={{ color: 'rgba(255,255,255,0.6)' }}
-                formatter={(value, name) => {
-                  const n = typeof value === 'number' ? value : Number(value)
-                  const label = String(name)
-                  if (label === targetSeriesName) return [formatPercent(n), label]
-                  return [formatPercent(n), `${label} · ${valueLabel}`]
-                }}
-                labelFormatter={(label) => String(label)}
+                content={(props) => (
+                  <GoalGapChartTradeTooltip
+                    active={props.active}
+                    label={props.label}
+                    payload={props.payload as unknown as PayloadItem[] | undefined}
+                    metric={metric}
+                    targetSeriesName={targetSeriesName}
+                    valueLabel={valueLabel}
+                    tradeMarkers={tradeMarkers}
+                    showTrades={showTrades}
+                  />
+                )}
               />
             )}
             {plot.length > 1 || showTarget ? (
@@ -455,7 +467,23 @@ export function GoalGapChart({
                 legendType="line"
               />
             ) : null}
-          </LineChart>
+            {showTrades
+              ? tradeMarkers
+                  .filter((m) => visible.some((row) => row.date === m.chartDate))
+                  .map((m) => (
+                    <ReferenceDot
+                      key={m.id}
+                      x={m.chartDate}
+                      y={m.y}
+                      r={m.side === 'buy' ? 5 : 4}
+                      fill={m.side === 'buy' ? '#34d399' : '#f87171'}
+                      stroke="#0b0f14"
+                      strokeWidth={1.5}
+                      ifOverflow="discard"
+                    />
+                  ))
+              : null}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
       <p className="mt-1 flex flex-wrap items-center justify-center gap-x-2 text-[10px] text-white/30">

@@ -887,6 +887,43 @@ Same goal; a higher starting price shrinks the raw gap still required.
     parentId: 'projections.comps',
     order: 4,
   },
+  'comparables.tradeMarkers': {
+    id: 'comparables.tradeMarkers',
+    title: 'Trade markers',
+    summary:
+      'Overlay buy and sell dots from the portfolio trade ledger on ticked Comparables upside and CAGR charts (ticker match only).',
+    body: `## How it works
+
+When at least one ticked row has trades in the **portfolio trade ledger**, a **Trades** toggle appears above the chart (same place for **Upside %** and **CAGR %**).
+
+- **Green circle** — buy
+- **Red square** — sell
+
+Dots sit at the chart value for that ticker on the trade date (or the nearest prior price-history date). Only symbols you ticked for the overlay are shown — no extra tickers.
+
+> Trade ledger data is workspace-wide: any logged buy/sell for that ticker counts, not just one portfolio book.
+
+Hover the line: the tooltip shows the usual series values for that date; when **Trades** is on, it also lists matching trades that share the chart anchor date.
+
+## How to interpret
+
+Markers are timing context, not recalculated returns. **Y** is the implied upside or CAGR **on that history date**, not P&L from the trade.
+
+Compare when you bought or sold against the path the ticker needed to reach your comparables goal.
+
+## Example
+
+You tick **MSFT** and toggle **Trades**. A buy logged on a dip appears below prior implied CAGR; a later sell near goal sits closer to 0% remaining upside on the upside chart.
+`,
+    status: 'ready',
+    location: {
+      tab: 'projections',
+      view: 'comps',
+      anchor: 'comparables.tradeMarkers',
+    },
+    parentId: 'projections.comps',
+    order: 5,
+  },
 
   portfolio: {
     id: 'portfolio',
@@ -1358,6 +1395,8 @@ Open **Settings** and find the **Portfolio** section near the top.
 
 > New portfolio-wide settings belong in this section: implement them in **SettingsPortfolioSection** with their own **data-guide-anchor** and child guide id under **settings.portfolio***.
 
+**Comparables charts** — optional default to show trade markers when tickers have ledger trades (**settings.portfolioComparablesTrades**).
+
 Each subsection has its own **Guide** button for detail.
 
 ## How to interpret
@@ -1438,6 +1477,32 @@ Books **Growth** and **Conservative** each had different deposits. You enable **
     location: { tab: 'settings', anchor: 'settings.portfolioCash' },
     parentId: 'settings.portfolio',
     order: 0,
+  },
+  'settings.portfolioComparablesTrades': {
+    id: 'settings.portfolioComparablesTrades',
+    title: 'Comparables trade markers',
+    summary:
+      'Choose whether Comparables upside and CAGR charts start with the Trades overlay on when ticked symbols have ledger trades.',
+    body: `## How it works
+
+When enabled, opening or refreshing a Comparables chart with eligible trades turns **Trades** on automatically. You can still toggle it off for that session on the chart.
+
+The preference is stored in the browser (not in export JSON).
+
+> See **Trade markers** under Comparables for dot colors, tooltips, and ticker matching.
+
+## How to interpret
+
+Use this when you usually compare execution timing against goal paths. Leave off if you prefer a clean chart unless you opt in each time.
+
+## Example
+
+You log buys often while screening comparables. Enable the default — tick **AAPL** and **MSFT**; both charts open with buy/sell dots without an extra click.
+`,
+    status: 'ready',
+    location: { tab: 'settings', anchor: 'settings.portfolioComparablesTrades' },
+    parentId: 'settings.portfolio',
+    order: 2,
   },
 
   'settings.feedback': {

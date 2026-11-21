@@ -280,6 +280,8 @@ describe('teachings registry', () => {
     expect(getGuide('comparables.upsideChart')?.status).toBe('ready')
     expect(isGuideReady('comparables.upsideChart')).toBe(true)
     expect(getGuide('comparables.upsideChart')?.body.toLowerCase()).toContain('upside')
+    expect(isGuideReady('comparables.tradeMarkers')).toBe(true)
+    expect(getGuide('comparables.tradeMarkers')?.body).toContain('Trades')
     expect(getGuide('projections.analyze')?.body).toContain('Investment thesis')
     const thesis = getGuide('projections.thesis')
     expect(thesis?.status).toBe('ready')
@@ -309,6 +311,7 @@ describe('teachings registry', () => {
     expect(comps.children.map((c) => c.guide.id)).toEqual([
       'comparables.cagrChart',
       'comparables.upsideChart',
+      'comparables.tradeMarkers',
     ])
   })
 
@@ -339,6 +342,7 @@ describe('teachings registry', () => {
     expect(listChildGuides('settings.portfolio').map((c) => c.id)).toEqual([
       'settings.portfolioCash',
       'settings.portfolioActuals',
+      'settings.portfolioComparablesTrades',
     ])
     const feedback = getGuide('settings.feedback')
     expect(feedback?.status).toBe('ready')
@@ -357,6 +361,7 @@ describe('teachings registry', () => {
     expect(portfolioNode?.children.map((c) => c.guide.id)).toEqual([
       'settings.portfolioCash',
       'settings.portfolioActuals',
+      'settings.portfolioComparablesTrades',
     ])
   })
 
