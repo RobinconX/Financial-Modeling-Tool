@@ -9,6 +9,11 @@ import type {
 import { actionTradePrice, getActions, newAction } from '../../lib/portfolio'
 import { formatMoney, formatPrice, parseMoney } from '../../lib/format'
 import { fromDisplay, toDisplay } from '../../lib/fx'
+import {
+  equityPricePerUnitSuffix,
+  equityShareCountLabel,
+  instrumentTypeForHolding,
+} from '../../lib/instrumentType'
 
 type Props = {
   portfolio: SavedPortfolio
@@ -31,6 +36,13 @@ export function HoldingActionsEditor({
   const allActions = getActions(portfolio)
   const actions = allActions.filter((a) => a.holdingId === holding.id)
   const scenariosById = new Map(scenarios.map((s) => [s.id, s]))
+  const linked = holding.scenarioId
+    ? (scenariosById.get(holding.scenarioId) ?? null)
+    : null
+  const symbolScenarios = scenarios.filter((sc) => sc.symbol === holding.symbol.toUpperCase())
+  const holdingInstrumentType = instrumentTypeForHolding(linked, symbolScenarios)
+  const shareCountLabel = equityShareCountLabel(holdingInstrumentType, holding.symbol)
+  const pricePerUnitSuffix = equityPricePerUnitSuffix(holdingInstrumentType, holding.symbol)
 
   function updateAction(id: string, patch: Partial<PortfolioAction>) {
     onChange({
@@ -60,7 +72,7 @@ export function HoldingActionsEditor({
     const cashDisp = toDisplay(dollars, displayCurrency, usdToChf)
     const pxDisp = toDisplay(px, displayCurrency, usdToChf)
     const auto = a.price == null || !(a.price > 0)
-    return `${sign}${formatMoney(cashDisp, displayCurrency)} cash · ${formatPrice(pxDisp, displayCurrency)}/sh${auto ? ' (auto)' : ''}`
+    return `${sign}${formatMoney(cashDisp, displayCurrency)} cash · ${formatPrice(pxDisp, displayCurrency)}/${pricePerUnitSuffix}${auto ? ' (auto)' : ''}`
   }
 
   return (
@@ -102,6 +114,8 @@ export function HoldingActionsEditor({
             preview={preview(a)}
             displayCurrency={displayCurrency}
             usdToChf={usdToChf}
+            shareCountLabel={shareCountLabel}
+            pricePerUnitSuffix={pricePerUnitSuffix}
             onCommit={(patch) => updateAction(a.id, patch)}
             onRemove={() => removeAction(a.id)}
           />
@@ -127,12 +141,16 @@ export function PortfolioActionRow({
   usdToChf,
   onCommit,
   onRemove,
+  shareCountLabel = 'Shares',
+  pricePerUnitSuffix = 'sh',
 }: {
   action: PortfolioAction
   minYear: number
   preview: string
   displayCurrency: DisplayCurrency
   usdToChf: number | null
+  shareCountLabel?: string
+  pricePerUnitSuffix?: string
   onCommit: (patch: Partial<PortfolioAction>) => void
   onRemove: () => void
 }) {
@@ -211,7 +229,7 @@ export function PortfolioActionRow({
         />
       </div>
       <div className="w-[5.5rem]">
-        <label className="label !mb-0.5 !text-[9px]">Shares</label>
+        <label className="label !mb-0.5 !text-[9px]">{shareCountLabel}</label>
         <input
           className="input !py-1 !text-xs tabular-nums"
           type="text"
@@ -235,7 +253,7 @@ export function PortfolioActionRow({
         />
       </div>
       <div className="w-[6.5rem]">
-        <label className="label !mb-0.5 !text-[9px]">Price / sh</label>
+        <label className="label !mb-0.5 !text-[9px]">Price / {pricePerUnitSuffix}</label>
         <input
           className="input !py-1 !text-xs tabular-nums"
           type="text"

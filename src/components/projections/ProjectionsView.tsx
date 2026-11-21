@@ -17,6 +17,7 @@ import {
   type ProjectionCandidate,
 } from '../../lib/projectionPack'
 import { ProjectionPanel } from './ProjectionPanel'
+import { ProjectionImportDropZone } from './ProjectionImportDropZone'
 import { ComparablesView } from './ComparablesView'
 import { ProjectionPickDialog } from './ProjectionPickDialog'
 import { ConfirmDialog } from '../common/ConfirmDialog'
@@ -24,6 +25,10 @@ import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { useGuideTeleport } from '../guides/useGuideTeleport'
 import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
 import { symbolMissingQuoteData, useQuoteHealth } from '../../context/QuoteHealthContext'
+import {
+  COMPARE_PANEL_B_HINT,
+  pickComparePanelBScenario,
+} from '../../lib/comparePanelSelection'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -338,7 +343,6 @@ export function ProjectionsView({
   const [selA, setSelA] = useState<string>(() => sorted[0]?.id ?? DRAFT)
   const [selB, setSelB] = useState<string>(DRAFT)
   const [openBasis, setOpenBasis] = useState<ComparableBasis | undefined>(undefined)
-  const importInputRef = useRef<HTMLInputElement>(null)
   const [importPick, setImportPick] = useState<ProjectionCandidate[] | null>(null)
   const [importChecked, setImportChecked] = useState<string[]>([])
   const [exportOpen, setExportOpen] = useState(false)
@@ -362,6 +366,16 @@ export function ProjectionsView({
 
   const scenarioA = selA === DRAFT ? null : (scenarios.find((s) => s.id === selA) ?? null)
   const scenarioB = selB === DRAFT ? null : (scenarios.find((s) => s.id === selB) ?? null)
+
+  function enableCompare() {
+    setCompare(true)
+    if (selB !== DRAFT) return
+    const nextB = pickComparePanelBScenario(scenarios, selA)
+    if (nextB) setSelB(nextB)
+  }
+
+  const showComparePanelBHint =
+    compare && selB === DRAFT && pickComparePanelBScenario(scenarios, selA) == null
 
   function applyImported(incoming: SavedScenario[]) {
     const result = importScenarios(incoming)
@@ -463,13 +477,7 @@ export function ProjectionsView({
         </div>
         </div>
         <div className="flex shrink-0 flex-wrap items-center gap-2 pb-1.5">
-          <button
-            type="button"
-            className="btn-ghost !py-1.5 !text-xs"
-            onClick={() => importInputRef.current?.click()}
-          >
-            Import
-          </button>
+          <ProjectionImportDropZone onFile={(f) => void handleImportFile(f)} />
           <button
             type="button"
             className="btn-ghost !py-1.5 !text-xs"
@@ -478,17 +486,6 @@ export function ProjectionsView({
           >
             Export
           </button>
-          <input
-            ref={importInputRef}
-            type="file"
-            accept="application/json,.json,text/json"
-            className="hidden"
-            onChange={(e) => {
-              const f = e.target.files?.[0]
-              e.target.value = ''
-              if (f) void handleImportFile(f)
-            }}
-          />
         </div>
       </div>
 
@@ -561,7 +558,7 @@ export function ProjectionsView({
           </button>
           <button
             type="button"
-            onClick={() => setCompare(true)}
+            onClick={enableCompare}
             className={`-mb-px border-b-2 px-3 py-1.5 text-sm font-medium transition ${
               compare
                 ? 'border-emerald-400 text-white'
@@ -572,6 +569,10 @@ export function ProjectionsView({
           </button>
         </div>
       </div>
+
+      {showComparePanelBHint ? (
+        <p className="text-sm text-white/50">{COMPARE_PANEL_B_HINT}</p>
+      ) : null}
 
       {storageError && (
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-300">

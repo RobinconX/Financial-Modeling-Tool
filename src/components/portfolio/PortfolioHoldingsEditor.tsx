@@ -48,6 +48,11 @@ import { portfolioHoldingDeleteDetail } from '../../lib/deleteUsage'
 import { SymbolQuoteFieldHint } from '../common/SymbolQuoteFieldHint'
 import { QuoteMissingBadge } from '../common/QuoteMissingBadge'
 import { symbolMissingQuoteData, useQuoteHealth } from '../../context/QuoteHealthContext'
+import {
+  equityShareCountAbbrev,
+  equityShareCountLabel,
+  instrumentTypeForHolding,
+} from '../../lib/instrumentType'
 
 export type PortfolioEditorPanel = 'cash' | 'positions' | 'growth' | 'all'
 
@@ -67,7 +72,7 @@ type Props = {
   /** Focus + select portfolio name (after New / Copy). */
   autoFocusName?: boolean
   onNameFocused?: () => void
-  /** Income/Cost scenarios for surplus-linked deposits (read-only). */
+  /** Budget scenarios for surplus-linked deposits (read-only). */
   incomeCostScenarios?: CashflowScenario[]
   incomeCostLines?: CashflowLine[]
   /** Other portfolios for “copy cash & positions to…” */
@@ -76,6 +81,10 @@ type Props = {
   /** One shared cash plan for every portfolio */
   sharedCashMode?: boolean
   sharedCashError?: string | null
+  /** From Chart value table → expand, scroll, highlight */
+  focusHoldingId?: string | null
+  focusOpeningCash?: boolean
+  focusGrowthRate?: boolean
 }
 
 const BASIS_OPTIONS: { id: ValuationBasis | 'easy'; label: string }[] = [
@@ -105,6 +114,9 @@ export function PortfolioHoldingsEditor({
   onUpdateOtherPortfolio,
   sharedCashMode = false,
   sharedCashError = null,
+  focusHoldingId = null,
+  focusOpeningCash = false,
+  focusGrowthRate = false,
 }: Props) {
   const { missingSymbols } = useQuoteHealth()
   const showConfig = panel === 'all'
@@ -211,6 +223,42 @@ export function PortfolioHoldingsEditor({
 
     knownHoldingIdsRef.current = new Set(ids)
   }, [holdingIds, portfolio.id])
+
+  useEffect(() => {
+    if (!focusHoldingId || !showPositions) return
+    setExpanded((prev) => ({ ...prev, [focusHoldingId]: true }))
+    const scroll = () => {
+      document
+        .querySelector(`[data-portfolio-holding="${focusHoldingId}"]`)
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+    const t = window.setTimeout(scroll, 80)
+    return () => window.clearTimeout(t)
+  }, [focusHoldingId, showPositions])
+
+  useEffect(() => {
+    if (!focusOpeningCash || !showCash) return
+    const scroll = () => {
+      document
+        .querySelector('[data-portfolio-focus="opening-cash"]')
+        ?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+    }
+    const t = window.setTimeout(scroll, 80)
+    return () => window.clearTimeout(t)
+  }, [focusOpeningCash, showCash])
+
+  useEffect(() => {
+    if (!focusGrowthRate || !showGrowth) return
+    const scroll = () => {
+      const el = document.querySelector(
+        '[data-portfolio-focus="growth-rate"]',
+      ) as HTMLElement | null
+      el?.scrollIntoView({ behavior: 'smooth', block: 'nearest' })
+      el?.focus()
+    }
+    const t = window.setTimeout(scroll, 80)
+    return () => window.clearTimeout(t)
+  }, [focusGrowthRate, showGrowth])
 
   const availableSymbols = [...new Set(scenarios.map((s) => s.symbol))].sort()
   const projectionOptions = [...scenarios].sort(
@@ -760,6 +808,7 @@ export function PortfolioHoldingsEditor({
             cashAfter={cashForYear(bookPortfolio, d.year)}
             canRemove={!d.isOpening}
             isOpening={!!d.isOpening}
+            highlighted={focusOpeningCash && !!d.isOpening}
             displayCurrency={displayCurrency}
             usdToChf={usdToChf}
             incomeCostScenarios={incomeCostScenarios}
@@ -821,7 +870,7 @@ export function PortfolioHoldingsEditor({
             perpetual?.source === 'surplus') &&
             usdToChf == null && (
             <p className="text-amber-300/90">
-              Surplus deposits need a USD/CHF rate to convert Income/Cost (CHF) into portfolio cash.
+              Surplus deposits need a USD/CHF rate to convert Budget net (CHF) into portfolio cash.
             </p>
           )}
         </div>
@@ -839,7 +888,10 @@ export function PortfolioHoldingsEditor({
           <div className="flex flex-wrap items-center gap-3">
             <div className="relative w-28">
               <input
-                className="input !py-2 !pr-7 !text-sm tabular-nums"
+                data-portfolio-focus="growth-rate"
+                className={`input !py-2 !pr-7 !text-sm tabular-nums ${
+                  focusGrowthRate ? 'ring-1 ring-amber-400/50 bg-amber-500/10' : ''
+                }`}
                 type="text"
                 inputMode="decimal"
                 value={
@@ -1036,9 +1088,29 @@ export function PortfolioHoldingsEditor({
           const holdingActions = allActions.filter((a) => a.holdingId === h.id)
           const actionCount = holdingActions.length
           const displayName = holdingDisplayName(h)
+          const holdingInstrumentType =
+            !h.manualOnly && !isOption
+              ? instrumentTypeForHolding(linked, symbolScenarios)
+              : null
+          const shareCountLabel =
+            !h.manualOnly && !isOption
+              ? equityShareCountLabel(holdingInstrumentType, h.symbol)
+              : null
+          const shareCountAbbrev =
+            !h.manualOnly && !isOption
+              ? equityShareCountAbbrev(holdingInstrumentType, h.symbol)
+              : null
+
+          const holdingHighlighted = focusHoldingId === h.id
 
           return (
-            <div key={h.id} className="py-2 first:pt-0 last:pb-0">
+            <div
+              key={h.id}
+              data-portfolio-holding={h.id}
+              className={`py-2 first:pt-0 last:pb-0 ${
+                holdingHighlighted ? 'rounded-lg bg-amber-500/10 ring-1 ring-inset ring-amber-400/50' : ''
+              }`}
+            >
               <div className="flex items-start gap-2">
                 <button
                   type="button"
@@ -1070,7 +1142,7 @@ export function PortfolioHoldingsEditor({
                           {h.sharesHeld.toLocaleString(undefined, {
                             maximumFractionDigits: 4,
                           })}{' '}
-                          {isOption ? 'contracts' : h.manualOnly ? 'units' : 'sh'}
+                          {isOption ? 'contracts' : h.manualOnly ? 'units' : shareCountAbbrev ?? 'sh'}
                         </span>
                       )}
                       {currentValue != null && (
@@ -1306,7 +1378,9 @@ export function PortfolioHoldingsEditor({
                           ) : null}
                         </div>
                         <div>
-                          <label className="label">Shares held</label>
+                          <label className="label">
+                            {shareCountLabel ? `${shareCountLabel} held` : 'Shares held'}
+                          </label>
                           <SignedQtyInput
                             value={h.sharesHeld}
                             min={0}
@@ -1749,7 +1823,7 @@ function PerpetualDepositRow({
                   }
                 >
                   <option value="" disabled>
-                    {orderedScenarios.length ? 'Scenario…' : 'No Income/Cost scenarios'}
+                    {orderedScenarios.length ? 'Scenario…' : 'No Budget scenarios'}
                   </option>
                   {orderedScenarios.map((s) => (
                     <option key={s.id} value={s.id}>
@@ -1816,6 +1890,7 @@ function DepositRow({
   cashAfter,
   canRemove,
   isOpening = false,
+  highlighted = false,
   displayCurrency,
   usdToChf,
   incomeCostScenarios,
@@ -1830,6 +1905,7 @@ function DepositRow({
   cashAfter: number
   canRemove: boolean
   isOpening?: boolean
+  highlighted?: boolean
   displayCurrency: DisplayCurrency
   usdToChf: number | null
   incomeCostScenarios: CashflowScenario[]
@@ -2044,9 +2120,10 @@ function DepositRow({
 
   return (
     <div
+      data-portfolio-focus={isOpening ? 'opening-cash' : undefined}
       className={`grid grid-cols-1 items-start gap-2 sm:grid-cols-[5.5rem_6.5rem_minmax(0,1fr)_auto_auto] sm:items-center ${
         isOpening ? 'rounded-lg border border-emerald-500/20 bg-emerald-500/[0.06] px-0.5 py-1' : ''
-      }`}
+      } ${highlighted ? 'ring-1 ring-amber-400/50 bg-amber-500/10' : ''}`}
     >
       {isOpening ? (
         <div className="px-2 text-sm tabular-nums text-white/70" title="Opening cash year">
@@ -2111,10 +2188,10 @@ function DepositRow({
                     surplusScenarioId: e.target.value || null,
                   })
                 }
-                aria-label="Income/Cost scenario for surplus"
+                aria-label="Budget scenario for surplus"
               >
                 <option value="" disabled>
-                  {orderedScenarios.length ? 'Scenario…' : 'No Income/Cost scenarios'}
+                  {orderedScenarios.length ? 'Scenario…' : 'No Budget scenarios'}
                 </option>
                 {orderedScenarios.map((s) => {
                   const net = scenarioTotals(incomeCostLines, s.id).netYearly
@@ -2164,7 +2241,7 @@ function DepositRow({
               </p>
             ) : (
               <p className="text-[10px] text-white/35">
-                Pick an Income/Cost scenario and % of yearly surplus (left over).
+                Pick a Budget scenario and % of its yearly net surplus.
               </p>
             )}
           </div>

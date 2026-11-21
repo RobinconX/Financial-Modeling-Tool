@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import type {
   ComparableBasis,
   EasyProjection,
@@ -36,6 +36,13 @@ import { SaveScenarioButton } from '../analyzer/SaveScenarioButton'
 import { MarketCapChart } from '../charts/MarketCapChart'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { MoneyInput } from '../common/MoneyInput'
+import {
+  hasInvestmentThesis,
+  INVESTMENT_THESIS_MAX_LENGTH,
+} from '../../lib/investmentThesis'
+import { AddThesisButton } from './AddThesisButton'
+import { InvestmentThesisModalLazy } from './investmentThesisModalLazy'
+import { ThesisDocumentIcon } from './ThesisDocumentIcon'
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -101,6 +108,8 @@ export function ProjectionPanel({
   /** Assumptions collapsed by default on saved scenarios; expand to edit. */
   const [easyOpen, setEasyOpen] = useState(isDraft)
   const [advancedOpen, setAdvancedOpen] = useState(false)
+  const [draftThesis, setDraftThesis] = useState('')
+  const [thesisModalOpen, setThesisModalOpen] = useState(false)
 
   // Reset draft when switching into draft mode
   useEffect(() => {
@@ -116,6 +125,8 @@ export function ProjectionPanel({
     setSelectedBasis('easy')
     setEasyOpen(true)
     setAdvancedOpen(false)
+    setDraftThesis('')
+    setThesisModalOpen(false)
   }, [isDraft, scenarioId])
 
   useEffect(() => {
@@ -128,6 +139,9 @@ export function ProjectionPanel({
   }, [scenario?.id, initialBasis]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const quote: Quote | null = isDraft ? draftQuote : scenario ? scenarioToQuote(scenario) : null
+  const investmentThesis = isDraft
+    ? draftThesis
+    : (scenario?.investmentThesis ?? '')
   const mcapOverride = isDraft ? draftMcapOverride : (scenario?.mcapOverride ?? null)
   const easyRows = isDraft ? draftEasy : (scenario?.easyRows ?? [])
   const advancedRows = isDraft ? draftAdvanced : (scenario?.advancedRows ?? [])
@@ -171,6 +185,20 @@ export function ProjectionPanel({
       return
     }
     if (scenarioId) onUpdateScenario(scenarioId, { easyRows: rows })
+  }
+
+  function setInvestmentThesis(next: string) {
+    const clipped =
+      next.length > INVESTMENT_THESIS_MAX_LENGTH
+        ? next.slice(0, INVESTMENT_THESIS_MAX_LENGTH)
+        : next
+    if (isDraft) {
+      setDraftThesis(clipped)
+      return
+    }
+    if (scenarioId) {
+      onUpdateScenario(scenarioId, { investmentThesis: clipped })
+    }
   }
 
   function setAdvancedRows(rows: YearProjection[]) {
@@ -343,24 +371,50 @@ export function ProjectionPanel({
     scenario != null &&
     symbolMissingQuoteData(missingSymbols, scenario.symbol)
 
+  const thesisSymbol = isDraft
+    ? (draftQuote?.symbol?.toUpperCase() ?? 'Draft')
+    : (scenario?.symbol ?? '')
+  const thesisScenarioName = isDraft ? 'New projection' : (scenario?.name ?? '')
+
   return (
     <section className="panel flex flex-col gap-5">
       <header className="flex flex-wrap items-start justify-between gap-3">
         <div className="min-w-0 flex-1">
           {title ? <p className="section-kicker">{title}</p> : null}
           {isDraft ? (
-            <h2 className="text-lg font-semibold tracking-tight text-white">New projection</h2>
+            <>
+              <h2 className="text-lg font-semibold tracking-tight text-white">New projection</h2>
+              <div className="mt-1 flex flex-wrap items-center gap-2">
+                {hasInvestmentThesis(investmentThesis) ? (
+                  <ThesisDocumentIcon
+                    label="Open investment thesis"
+                    onClick={() => setThesisModalOpen(true)}
+                  />
+                ) : (
+                  <AddThesisButton onClick={() => setThesisModalOpen(true)} />
+                )}
+              </div>
+            </>
           ) : (
             <>
               <p className="flex flex-wrap items-center gap-2 text-xs font-semibold uppercase tracking-[0.14em] text-emerald-400/80">
                 <span>{scenario!.symbol}</span>
                 {savedSymbolMissing ? <QuoteMissingBadge symbol={scenario!.symbol} /> : null}
               </p>
-              <h2 className="mt-0.5 text-xl font-bold tracking-tight text-white">
-                {scenario!.name}
-              </h2>
+              <div className="mt-0.5 flex flex-wrap items-center gap-2">
+                <h2 className="text-xl font-bold tracking-tight text-white">{scenario!.name}</h2>
+                {hasInvestmentThesis(investmentThesis) ? (
+                  <ThesisDocumentIcon
+                    label="Open investment thesis"
+                    onClick={() => setThesisModalOpen(true)}
+                  />
+                ) : null}
+              </div>
               {scenario!.companyName ? (
                 <p className="text-sm text-white/45">{scenario!.companyName}</p>
+              ) : null}
+              {!hasInvestmentThesis(investmentThesis) ? (
+                <AddThesisButton className="mt-1" onClick={() => setThesisModalOpen(true)} />
               ) : null}
             </>
           )}
@@ -382,6 +436,7 @@ export function ProjectionPanel({
               mcapOverride={draftMcapOverride}
               easyRows={draftEasy}
               advancedRows={draftAdvanced}
+              investmentThesis={draftThesis}
               onSave={handleSave}
               requireBaselineQuote
             />
@@ -392,12 +447,14 @@ export function ProjectionPanel({
                 mcapOverride={mcapOverride}
                 easyRows={easyRows}
                 advancedRows={advancedRows}
+                investmentThesis={scenario!.investmentThesis}
                 buttonLabel="Save as…"
                 defaultName={`Copy of ${scenario!.name}`}
                 onSave={(input) =>
                   onUpsertScenario({
                     ...input,
                     symbol: scenario!.symbol,
+                    investmentThesis: input.investmentThesis ?? scenario!.investmentThesis,
                   })
                 }
               />
@@ -597,6 +654,20 @@ export function ProjectionPanel({
           sharesOutstanding={sharesOutstanding}
         />
       </div>
+
+      <Suspense fallback={null}>
+        {thesisModalOpen ? (
+          <InvestmentThesisModalLazy
+            open={thesisModalOpen}
+            onClose={() => setThesisModalOpen(false)}
+            symbol={thesisSymbol}
+            scenarioName={thesisScenarioName}
+            value={investmentThesis}
+            onChange={setInvestmentThesis}
+            placeholder="Why you own it; what would make you add or trim."
+          />
+        ) : null}
+      </Suspense>
     </section>
   )
 }

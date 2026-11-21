@@ -11,6 +11,11 @@ import {
 } from '../../src/lib/teachings'
 
 describe('teachings registry', () => {
+  it('documents projection import as a header drop zone', () => {
+    expect(getGuide('projections')?.body).toContain('drop zone')
+    expect(getGuide('projections.comps')?.body).toContain('### Import projections')
+  })
+
   it('exposes a ready CAGR guide with a selective figure reference', () => {
     const g = getGuide('comparables.cagrChart')
     expect(g?.status).toBe('ready')
@@ -72,6 +77,7 @@ describe('teachings registry', () => {
       'portfolio.goal',
     ])
     expect(getGuideAncestors('portfolio.cash').map((g) => g.id)).toEqual(['portfolio'])
+    expect(getGuide('portfolio.positions')?.body).toContain('Units held')
   })
 
   it('exposes a ready contribution-effectiveness guide with a figure', () => {
@@ -263,12 +269,29 @@ describe('teachings registry', () => {
     expect(getGuide('comparables.upsideChart')?.status).toBe('ready')
     expect(isGuideReady('comparables.upsideChart')).toBe(true)
     expect(getGuide('comparables.upsideChart')?.body.toLowerCase()).toContain('upside')
+    expect(getGuide('projections.analyze')?.body).toContain('Investment thesis')
+    const thesis = getGuide('projections.thesis')
+    expect(thesis?.status).toBe('ready')
+    expect(thesis?.parentId).toBe('projections.analyze')
+    expect(thesis?.location).toEqual({
+      tab: 'projections',
+      view: 'analyze',
+      anchor: 'projections.thesis',
+    })
+    expect(isGuideReady('projections.thesis')).toBe(true)
+    expect(thesis?.body).toContain('4,000')
+    expect(thesis?.body).toContain('ThesisRail')
+    expect(thesis?.body).toContain('Add thesis')
+    expect(thesis?.body).toContain('Toolbar')
+    expect(thesis?.body).toContain('## Example')
     const projectionsTab = listGuideTree().find((t) => t.tab === 'projections')!
     const root = projectionsTab.roots.find((r) => r.guide.id === 'projections')!
     expect(root.children.map((c) => c.guide.id)).toEqual([
       'projections.analyze',
       'projections.comps',
     ])
+    const analyze = root.children.find((c) => c.guide.id === 'projections.analyze')!
+    expect(analyze.children.map((c) => c.guide.id)).toEqual(['projections.thesis'])
     const comps = root.children.find((c) => c.guide.id === 'projections.comps')!
     expect(comps.children.map((c) => c.guide.id)).toEqual([
       'comparables.cagrChart',
@@ -404,6 +427,12 @@ describe('teachings registry', () => {
     expect(getGuideAncestors('comparables.cagrChart').map((g) => g.id)).toEqual([
       'projections',
       'projections.comps',
+    ])
+    expect(getParentGuide('projections.thesis')?.id).toBe('projections.analyze')
+    expect(listChildGuides('projections.analyze').map((g) => g.id)).toEqual(['projections.thesis'])
+    expect(getGuideAncestors('projections.thesis').map((g) => g.id)).toEqual([
+      'projections',
+      'projections.analyze',
     ])
   })
 })

@@ -24,7 +24,10 @@ import {
   loadCachedPriceHistory,
   saveCachedPriceHistory,
 } from '../../lib/priceHistoryStorage'
+import { hasInvestmentThesis } from '../../lib/investmentThesis'
 import { groupScenariosByTicker } from '../../lib/storage'
+import { useThesisRail } from './ThesisRailProvider'
+import { ThesisDocumentIcon } from './ThesisDocumentIcon'
 import {
   cagrThresholdHints,
   loadCagrThresholds,
@@ -126,6 +129,7 @@ export function ComparablesView({
   deleteComparable,
   onOpenProjection,
 }: Props) {
+  const { openThesis } = useThesisRail()
   const [selectedId, setSelectedId] = useState<string | null>(() => readSelectedId(comparables))
   const [query, setQuery] = useState('')
   const [scenarioSearchOpen, setScenarioSearchOpen] = useState(false)
@@ -812,6 +816,21 @@ export function ComparablesView({
                               >
                                 {row.label}
                               </button>
+                              {sc && hasInvestmentThesis(sc.investmentThesis) ? (
+                                <ThesisDocumentIcon
+                                  data-guide-anchor="projections.thesis"
+                                  className="!h-6 !w-6"
+                                  label={`Read investment thesis for ${row.label}`}
+                                  onClick={(e) => {
+                                    e.stopPropagation()
+                                    openThesis({
+                                      symbol: sc.symbol,
+                                      scenarioName: sc.name,
+                                      thesis: sc.investmentThesis!.trim(),
+                                    })
+                                  }}
+                                />
+                              ) : null}
                               {bases.length > 1 ? (
                                 <select
                                   className="input !w-auto !py-0.5 !text-[10px]"

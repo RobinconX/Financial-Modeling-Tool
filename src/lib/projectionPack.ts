@@ -147,6 +147,33 @@ export function parseProjectionFile(
   return { candidates }
 }
 
+const JSON_IMPORT_MIMES = new Set(['application/json', 'text/json'])
+
+/** Validates extension/MIME for projection import (pack or full save JSON). */
+export function isJsonProjectionImportFile(file: File): boolean {
+  if (file.name.toLowerCase().endsWith('.json')) return true
+  const type = file.type.toLowerCase()
+  if (!type) return false
+  return JSON_IMPORT_MIMES.has(type)
+}
+
+/** True when the drag payload includes a file item with a known non-JSON MIME. */
+export function dragTransferHasInvalidProjectionImport(dt: DataTransfer): boolean {
+  const items = dt.items
+  if (!items?.length) return false
+  let sawFile = false
+  for (const item of items) {
+    if (item.kind !== 'file') continue
+    sawFile = true
+    const type = item.type.toLowerCase()
+    if (!type) continue
+    if (JSON_IMPORT_MIMES.has(type)) continue
+    if (type.endsWith('json')) continue
+    return true
+  }
+  return !sawFile
+}
+
 export async function readProjectionFileFromFile(
   file: File,
 ): Promise<{ candidates: ProjectionCandidate[] } | { error: string }> {

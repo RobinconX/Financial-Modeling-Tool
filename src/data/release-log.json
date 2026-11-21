@@ -1,5 +1,17 @@
 [
   {
+    "releasedAt": "2026-11-21",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Investment thesis editor, import drop zone & Analyze polish",
+    "notes": [
+      "Analyze and Comparables add optional per-save investment thesis notes — full-screen modal editor, read-only shelf on Comparables, and auto-save without breaking Enter/new lines.",
+      "Projections Import is a compact drop zone on Analyze and Comparables for JSON packs.",
+      "Compare turns on with Panel B pre-filled from your latest other save; Overview Runway remembers chart mode after Net worth compare; Portfolio chart fixes and ETF units-held labeling.",
+      "Portfolio growth chart table links open Cash, Positions, or Growth for a row; Budget copy and Overview compare tooltips sort by value."
+    ]
+  },
+  {
     "releasedAt": "2026-11-13",
     "prodSha": "ff2f5325d89965e59036cb557dd17dfeaa58f0a5",
     "headline": "Live quotes return market cap more reliably",

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
+import { normalizeInvestmentThesis } from '../lib/investmentThesis'
 import type { SavedScenario } from '../types'
 import { mergeImportedScenarios } from '../lib/projectionPack'
 import {
@@ -76,6 +77,10 @@ export function useSavedScenarios() {
           name,
           easyRows: sortEasyProjections(input.easyRows),
           advancedRows: sortYearProjections(input.advancedRows),
+          investmentThesis:
+            'investmentThesis' in input
+              ? normalizeInvestmentThesis(input.investmentThesis)
+              : existing.investmentThesis,
           createdAt: existing.createdAt,
           updatedAt: now,
         }
@@ -98,6 +103,7 @@ export function useSavedScenarios() {
         mcapOverride: input.mcapOverride,
         easyRows: sortEasyProjections(input.easyRows),
         advancedRows: sortYearProjections(input.advancedRows),
+        investmentThesis: normalizeInvestmentThesis(input.investmentThesis),
         createdAt: now,
         updatedAt: now,
       }
@@ -124,6 +130,9 @@ export function useSavedScenarios() {
         if (patch.easyRows) merged.easyRows = sortEasyProjections(patch.easyRows)
         if (patch.advancedRows) {
           merged.advancedRows = sortYearProjections(patch.advancedRows)
+        }
+        if ('investmentThesis' in patch) {
+          merged.investmentThesis = patch.investmentThesis
         }
         return merged
       })

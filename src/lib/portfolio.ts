@@ -25,7 +25,7 @@ import {
 import { buildAdvancedProjections } from './valuation'
 import { holdingMultiplier, optionLabel } from './optionContract'
 
-/** Context to resolve surplus-linked deposits (Income/Cost is CHF; portfolio book is USD). */
+/** Context to resolve surplus-linked deposits (Budget net is CHF; portfolio book is USD). */
 export type DepositResolveContext = {
   incomeCostLines: CashflowLine[]
   /** USD→CHF rate; required to convert surplus CHF into USD book amounts */
@@ -36,7 +36,7 @@ export type DepositResolveContext = {
  * Resolved USD deposit for cash math.
  * Fixed: amount in `currency` (default USD) → USD (CHF uses FX only at resolve time).
  * Surplus: max(0, scenario net yearly CHF) × percent / 100 → USD.
- * Does not mutate Income/Cost data or persisted deposit rows.
+ * Does not mutate Budget data or persisted deposit rows.
  */
 export function resolveDepositAmount(
   d: PortfolioDeposit,

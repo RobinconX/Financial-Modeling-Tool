@@ -15,6 +15,7 @@ import {
   type PortfolioValueTableSortDir,
   type PortfolioValueTableSortKey,
 } from '../../lib/portfolio'
+import { isPortfolioChartRowNavigable } from '../../lib/portfolioFocus'
 import { investedForRoiDisplay, simpleRoi } from '../../lib/portfolioContributions'
 import type {
   DisplayCurrency,
@@ -37,6 +38,8 @@ type Props = {
   usdToChf?: number | null
   contributions?: PortfolioContributionsState | null
   onChange?: (patch: Partial<SavedPortfolio>) => void
+  /** Chart table → Cash / Positions / Growth workspace tab */
+  onPositionNavigate?: (row: PortfolioGridRow) => void
 }
 
 /** Live "Now" values: opening cash + live holding values (matches chart Now bar). */
@@ -89,6 +92,7 @@ export function PortfolioValueTable({
   usdToChf = null,
   contributions = null,
   onChange,
+  onPositionNavigate,
 }: Props) {
   const currentYear = new Date().getFullYear()
   const showNow = portfolio != null
@@ -388,16 +392,29 @@ export function PortfolioValueTable({
                 }`}
               >
                 <td className="sticky left-0 z-10 bg-[#0f141b] px-3 py-2">
-                  <div
-                    className={
-                      row.kind === 'total' || row.kind === 'growth'
-                        ? 'text-emerald-300'
-                        : 'text-white/90'
-                    }
-                    title={row.label}
-                  >
-                    {row.label}
-                  </div>
+                  {onPositionNavigate && isPortfolioChartRowNavigable(row) ? (
+                    <button
+                      type="button"
+                      className={`max-w-full truncate text-left underline decoration-transparent decoration-1 underline-offset-2 transition hover:decoration-current ${
+                        row.kind === 'growth' ? 'text-emerald-300' : 'text-white/90'
+                      }`}
+                      title={`Open ${row.label} on its tab`}
+                      onClick={() => onPositionNavigate(row)}
+                    >
+                      {row.label}
+                    </button>
+                  ) : (
+                    <div
+                      className={
+                        row.kind === 'total' || row.kind === 'growth'
+                          ? 'text-emerald-300'
+                          : 'text-white/90'
+                      }
+                      title={row.label}
+                    >
+                      {row.label}
+                    </div>
+                  )}
                   {row.warning && (
                     <div className="text-[11px] text-amber-300/90">{row.warning}</div>
                   )}

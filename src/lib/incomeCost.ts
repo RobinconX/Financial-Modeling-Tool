@@ -180,7 +180,7 @@ export type MonthlyCashflowPoint = {
   income: number
   cost: number
   net: number
-  /** Cumulative IC working balance (budget lines only; no draws) */
+  /** Cumulative Budget working balance (budget lines only; no draws) */
   balance: number
   /** Sum of informative working-balance draws this month */
   draw: number

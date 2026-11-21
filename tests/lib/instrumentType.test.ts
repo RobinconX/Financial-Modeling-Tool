@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest'
 import {
+  equityPricePerUnitSuffix,
+  equityShareCountAbbrev,
   equityShareCountLabel,
+  instrumentTypeForHolding,
   isIndexSymbol,
   nasdaqAssetClassOrder,
   usesUnitLabel,
@@ -25,5 +28,21 @@ describe('instrumentType', () => {
 
   it('uses unit modeling for mutual funds', () => {
     expect(usesUnitLabel('MUTUALFUND', 'VFIAX')).toBe(true)
+  })
+
+  it('resolves holding instrument type from linked scenario or symbol saves', () => {
+    expect(
+      instrumentTypeForHolding({ instrumentType: 'ETF' }, [{ instrumentType: 'EQUITY' }]),
+    ).toBe('ETF')
+    expect(instrumentTypeForHolding(null, [{ instrumentType: 'MUTUALFUND' }])).toBe('MUTUALFUND')
+    expect(instrumentTypeForHolding(null, [])).toBeNull()
+  })
+
+  it('formats portfolio quantity and price suffixes from instrument type', () => {
+    expect(equityShareCountAbbrev('ETF', 'SPY')).toBe('units')
+    expect(equityShareCountAbbrev('EQUITY', 'AAPL')).toBe('sh')
+    expect(equityPricePerUnitSuffix('INDEX', '^GSPC')).toBe('unit')
+    expect(equityPricePerUnitSuffix('EQUITY', 'AAPL')).toBe('sh')
+    expect(`${equityShareCountLabel('ETF', 'SPY')} held`).toBe('Units held')
   })
 })

@@ -145,6 +145,10 @@ Treat scenarios as **labeled what-ifs**: same global data, different inclusion, 
 
 Timeline reads **From** and **To** calendar years (stored on the scenario). The X-axis is past years, **Now** (live), then projected years.
 
+### From / To range
+
+- **From** / **To** — chart span; years outside the supported window (20 years back, 80 years forward from today) are limited with a short note beside these fields
+
 ### Chart mode (Net worth tab)
 
 - **Bars** — stacked columns by enabled series
@@ -189,7 +193,7 @@ Each row is one **stack layer** on the Net worth chart. Drag **⋮⋮** on group
 
 - **Savings** group — every savings account appears here; toggle accounts or the whole group. **Cash** is permanent and stays included
 - **Portfolio** — links one portfolio book (USD converted at the Overview FX rate)
-- **Other** (manual) — flat **base CHF**, optional **annual rate**, **Year → Income/Cost → %** rows claiming Budget surplus for that calendar year
+- **Other** (manual) — flat **base CHF**, optional **annual rate**, **Year → Budget scenario → %** rows claiming net cash from that year’s Budget
 - **Leftover** (permanent) — receives Budget cash not claimed by manual **%** rows; optional **perpetual yearly CHF** after bindings end
 
 ### Common fields
@@ -197,7 +201,7 @@ Each row is one **stack layer** on the Net worth chart. Drag **⋮⋮** on group
 - **Compound until** / **Contribute until** — last year growth or additions apply (blank = no limit)
 - **Draw locked until** — Runway cannot tap this pile before that year (Runway tab)
 
-Manual **%** on a Budget year must sum with other claims; unclaimed income-cost net flows to **Leftover**.
+Manual **%** on a Budget year must sum with other claims; any unclaimed net from that Budget flows to **Leftover**.
 
 ## How to interpret
 
@@ -615,7 +619,7 @@ Portfolio **USD 100k** in **2024-11**, **Cash CHF 5k** in **2024-12**, rate **0.
 
 ### Import / Export
 
-Header **Import** / **Export** move projection JSON packs only (pick which saves to include). Import can rename collisions with “ (imported)”.
+Header **Import** is a compact drop zone (drag a file or click to browse) and **Export** downloads projection JSON packs only (pick which saves to include). Import can rename collisions with “ (imported)”.
 
 > Delete lists every **Portfolio** holding and **Comparables** row still linked — re-link on **Positions** or edit the set after removal.
 
@@ -651,7 +655,7 @@ Save **AAPL · Base case** in **Analyze**, then **Comparables → + New**, add t
 ### Layout
 
 - **Single** — one **ProjectionPanel**
-- **Compare** — **Panel A** and **Panel B** with independent pickers
+- **Compare** — **Panel A** and **Panel B** side by side; if **Panel B** is still **New projection**, turning **Compare** on fills **Panel B** with your most recently saved other projection (never overwrites a pick you already made)
 
 ### Assumptions
 
@@ -659,6 +663,10 @@ Save **AAPL · Base case** in **Analyze**, then **Comparables → + New**, add t
 - **Advanced** — per year: fundamentals × multiples for implied mcap (manual fund-level inputs for ETFs; no look-through). **Dilution** is that year’s extra shares or units (**1.05** = +5%) and compounds with earlier years; **1.0** = none. Leave unused bases blank.
 
 Toggle basis tabs (**Easy**, **P/S**, etc.) to drive the hero ROI, **Market cap** chart, and **Projection table**.
+
+### Investment thesis
+
+Optional notes per save — use **Add thesis** or the **document** icon under the scenario title (child guide **Guide** in the editor modal).
 
 ### Overrides & save
 
@@ -673,11 +681,76 @@ Table **ROI** and **CAGR** columns are versus spot (or override) through each st
 
 ## Example
 
-Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today → table shows multi-year ROI/CAGR to **2030**. Switch **Compare**, pick a second save, and contrast two assumption sets on the same ticker.
+Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today → table shows multi-year ROI/CAGR to **2030**. **Save as…** a second case, switch **Compare** — **Panel B** opens on that other save when you had not picked **Panel B** yet; contrast the two assumption sets on the same ticker.
 `,
     status: 'ready',
     location: { tab: 'projections', view: 'analyze', anchor: 'projections.analyze' },
     parentId: 'projections',
+    order: 1,
+  },
+  'projections.thesis': {
+    id: 'projections.thesis',
+    title: 'Investment thesis',
+    summary:
+      'Optional per-scenario notes for your story, key assumptions, and buy/sell criteria — rich-text editor in a large modal on **Analyze**, **4,000** characters. **Comparables** opens a read-only **ThesisRail** shelf.',
+    body: `## How it works
+
+On **Analyze**, thesis notes open in a centered modal (about **4xl** wide, most of the viewport height) — not inline under the assumptions.
+
+> Use it for the narrative behind the model — not duplicate every assumption row.
+
+### Opening the editor
+
+- **Add thesis** — outline button with document icon under the scenario title when there is no thesis yet (draft or saved); **Compare** has one control per panel
+- **Document** icon — appears next to the title once the save has thesis text; click to reopen the modal
+- **Guide** — in the modal header (same child guide as this article)
+
+### What to capture
+
+- **Story** — why this name fits your portfolio or watchlist
+- **Key assumptions** — what has to stay true for your valuation path
+- **Buy / sell criteria** — what would make you add, trim, or exit
+
+### Toolbar
+
+Formatting shows **immediately** in the editor.
+
+- **B** — bold
+- **I** — italic
+- **•** — bullet list
+- **H** — section heading (level 2)
+
+Pasting plain text with monospace segments is supported; there is no code button.
+
+### Length & persistence
+
+The counter tracks up to **4,000** characters. At the cap you can still delete or replace text; you cannot add more until you free space.
+
+On a **saved** scenario, thesis edits **auto-save** with the row. **Save** / **Save as…** includes the thesis (whitespace trimmed on save); **Save as…** copies it to the new name.
+
+Draft tickers keep thesis in memory until the first **Save**.
+
+### Comparables
+
+A filled-in save shows the same **document** icon beside the row name (click only). It opens the narrow **ThesisRail** side shelf — read-only, resizable, **Escape** or **Close** to dismiss.
+
+Click a row **name** on **Comparables** to land on **Analyze** and edit in the modal.
+
+## How to interpret
+
+> The thesis does not change ROI, CAGR, or chart math — it documents intent next to the numbers.
+
+## Example
+
+On **MSFT · Cloud bet**, open the modal, add a **Bull case** heading, bold **Azure**, and a bullet on margin — under **4,000** characters. After **Save**, the document icon appears on **Analyze** and **Comparables**; the shelf shows the same notes read-only.
+`,
+    status: 'ready',
+    location: {
+      tab: 'projections',
+      view: 'analyze',
+      anchor: 'projections.thesis',
+    },
+    parentId: 'projections.analyze',
     order: 1,
   },
   'projections.comps': {
@@ -686,6 +759,10 @@ Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today 
     summary:
       'Build named sets of saved projections, add year-end columns, and sort by a year’s ROI. Tick rows to chart remaining upside or CAGR to that row’s goal year; set Buy/Sell CAGR hints on sort columns.',
     body: `## How it works
+
+### Import projections
+
+- **Import** (header, same on **Analyze**) — drag a JSON projection pack or full save onto the control, or click to browse; only the first file is used if several are dropped
 
 ### Comparable sets
 
@@ -869,6 +946,8 @@ Past years use **Actuals → Portfolio value** (last month in each year). **Now*
 
 Grid of year columns for holdings, **Cash**, and totals.
 
+Click a **position** name in the first column to jump to **Positions**, **Cash**, or **Growth** (when the growth row appears). The target expands, scrolls into view, and highlights briefly. **Total** stays in place.
+
 ### Planned actions in the grid
 
 On each **position** row, year columns (not **Now**) support inline **buy/sell** editing:
@@ -946,7 +1025,7 @@ In **Settings → Portfolio cash**, choose **Separate per portfolio** (default) 
 ### Cash & deposits
 
 - **Opening row** — current cash (this calendar year); cannot be removed
-- **+ Deposit** — explicit year rows: **Fixed** amount or **% of Income/Cost surplus** from a Budget scenario (needs FX when surplus is CHF and book is USD)
+- **+ Deposit** — explicit year rows: **Fixed** amount or **% of net surplus** from a linked Budget scenario (needs FX when surplus is CHF and book is USD)
 - **Perpetual yearly** — after the last explicit deposit year, repeat a fixed or surplus-linked amount each year
 - **Copy cash…** — per-portfolio mode only: push opening + deposits + perpetual row to other books
 
@@ -980,7 +1059,7 @@ Opening **display currency 10k**, **2026** fixed deposit **5k**, perpetual **+2k
 
 ### Holdings list
 
-- **+ Add from projections…** — stock rows tied to **Projections → Analyze** saves (symbol, shares, **Saved projection** path)
+- **+ Add from projections…** — stock rows tied to **Projections → Analyze** saves (symbol, **Shares** or **Units held**, **Saved projection** path; ETFs, funds, and indexes use **Units**)
 - **+ Option**, manual / absolute marks — valued without a projection link
 - **Sort** — as added, A–Z, or by value (display order only)
 
@@ -991,7 +1070,7 @@ Opening **display currency 10k**, **2026** fixed deposit **5k**, perpetual **+2k
 
 > **Ticker** fields check live quotes. Wrong symbols show a warning and **No quote** on the row; use the provider’s format (e.g. **BRK-B**, **NESN.SW**). Manual marks skip quote checks.
 
-Expand a row to set shares, projection basis (**Easy mcap**, **P/S**, etc.), and **Actions** by calendar year (buy/sell quantities).
+Expand a row to set **Shares held** or **Units held**, projection basis (**Easy mcap**, **P/S**, etc.), and **Actions** by calendar year (buy/sell quantities).
 
 ### Copy holdings…
 
@@ -1003,7 +1082,7 @@ Perpetual **Growth** % on the **Growth** tab applies after the last year with ex
 
 ## How to interpret
 
-**Now** share counts drive the live **Chart** slice; year columns show simulated holdings after planned trades.
+**Now** share or unit counts drive the live **Chart** slice; year columns show simulated holdings after planned trades.
 
 Negative quantity or marks are allowed (shorts / liabilities).
 

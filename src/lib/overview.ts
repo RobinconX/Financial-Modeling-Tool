@@ -49,6 +49,8 @@ import {
 export const OVERVIEW_CURRENCY = 'CHF' as const
 export const OVERVIEW_DEFAULT_HORIZON_YEARS = 10
 export const OVERVIEW_MAX_HORIZON_YEARS = 80
+/** How many calendar years before the as-of year Overview allows for **From**. */
+export const OVERVIEW_RANGE_PAST_YEARS = 20
 
 export type OverviewYearKind = 'actual' | 'projected' | 'now'
 
@@ -432,7 +434,7 @@ export function assignOverviewSeriesColors(series: OverviewSeries[]): Map<string
 }
 
 /**
- * CHF of Income/Cost surplus claimed by surplus-linked deposits on the given
+ * CHF of Budget net surplus claimed by surplus-linked deposits on the given
  * portfolios (Overview-linked only) for a calendar year. Opening cash excluded.
  */
 export function allocatedSurplusChf(
@@ -471,7 +473,7 @@ export function allocatedSurplusChf(
 }
 
 /**
- * Yearly residual: IC net minus surplus deposits from the given portfolios only.
+ * Yearly residual: Budget net minus surplus deposits from the given portfolios only.
  */
 export function residualSurplusChf(
   lines: CashflowLine[],
@@ -486,9 +488,9 @@ export function residualSurplusChf(
 }
 
 /**
- * Available IC cash for a scenario in calendar year Y (CHF).
+ * Available net cash from a Budget scenario in calendar year Y (CHF).
  * With overview portfolios: residual after surplus deposits.
- * Without: full IC net.
+ * Without: full Budget net for that year.
  */
 export function availableIcCashChf(
   incomeCostScenarioId: string,
@@ -521,8 +523,8 @@ export function lastOverviewBindingYear(deps: OverviewBuildDeps): number | null 
 }
 
 /**
- * Gross pool for leftover in year Y = sum of available IC cash for every
- * distinct IC scenario bound that year (by manuals or leftover).
+ * Gross pool for leftover in year Y = sum of available Budget net for every
+ * distinct Budget scenario bound that year (by manuals or leftover).
  */
 export function grossIcPoolAtYear(year: number, deps: OverviewBuildDeps): number {
   const scenarioIds = new Set<string>()
@@ -538,7 +540,7 @@ export function grossIcPoolAtYear(year: number, deps: OverviewBuildDeps): number
 
 /**
  * Manual claim for year Y from year-scenario-% bindings.
- * If multiple manuals bind the same IC scenario, percents are applied in sortOrder
+ * If multiple manuals bind the same Budget scenario, percents are applied in sortOrder
  * and capped so total claim ≤ available.
  */
 export function manualYearlyAddition(
@@ -553,7 +555,7 @@ export function manualYearlyAddition(
   const allMine = getYearBindings(series)
   const myBindings = allMine.filter((b) => b.year === year)
   if (myBindings.length > 0) {
-    // Group all manual claims for this year by IC scenario for fair capping
+    // Group all manual claims for this year by Budget scenario for fair capping
     const manuals = (deps.overviewSeries ?? [])
       .filter((s) => s.enabled && s.type === 'manual')
       .sort((a, b) => a.sortOrder - b.sortOrder || a.id.localeCompare(b.id))
@@ -598,7 +600,7 @@ export function manualYearlyAddition(
 }
 
 /**
- * Leftover yearly addition = unclaimed IC cash for the year (after manual %),
+ * Leftover yearly addition = unclaimed Budget net for the year (after manual %),
  * or perpetual after the last binding year across the overview scenario.
  */
 export function leftoverNetYearlyAddition(
@@ -635,7 +637,7 @@ export function leftoverNetYearlyAddition(
   }
 
   // No bindings this year → perpetual after last binding year.
-  // If the scenario has no IC bindings at all, perpetual applies every year
+  // If the scenario has no Budget bindings at all, perpetual applies every year
   // (from baseYear onward via residualCashValueAtYear).
   const lastY = lastOverviewBindingYear(deps)
   if (lastY == null || year > lastY) {
@@ -681,7 +683,7 @@ export function residualCashValueAtYear(
 
 /**
  * Manual series: base at baseYear, then each year compounds and adds
- * year-binding % of IC available cash, then flat perpetual after the last
+ * year-binding % of available Budget net, then flat perpetual after the last
  * stated year for this series.
  */
 export function manualAccumulatedValueAtYear(
@@ -882,7 +884,7 @@ export function clampOverviewRange(
   let end = Math.floor(endYear)
   if (!Number.isFinite(start)) start = cy
   if (!Number.isFinite(end)) end = cy + OVERVIEW_DEFAULT_HORIZON_YEARS
-  const minY = cy - 20
+  const minY = cy - OVERVIEW_RANGE_PAST_YEARS
   const maxY = cy + OVERVIEW_MAX_HORIZON_YEARS
   start = Math.min(Math.max(start, minY), maxY)
   end = Math.min(Math.max(end, minY), maxY)
@@ -893,6 +895,55 @@ export function clampOverviewRange(
     end = t
   }
   return { startYear: start, endYear: end }
+}
+
+export type OverviewRangeClampNotice = {
+  fromLimited: boolean
+  toLimited: boolean
+  /** Calendar year the From field was limited to (before any range swap). */
+  fromLimitedToYear: number
+  /** Calendar year the To field was limited to (before any range swap). */
+  toLimitedToYear: number
+}
+
+/** Detect whether requested years fall outside the supported Overview window (before swap). */
+export function getOverviewRangeClampNotice(
+  requestedStartYear: number,
+  requestedEndYear: number,
+  asOf: Date = new Date(),
+): OverviewRangeClampNotice | null {
+  const cy = asOf.getFullYear()
+  let start = Math.floor(requestedStartYear)
+  let end = Math.floor(requestedEndYear)
+  if (!Number.isFinite(start)) start = cy
+  if (!Number.isFinite(end)) end = cy + OVERVIEW_DEFAULT_HORIZON_YEARS
+  const minY = cy - OVERVIEW_RANGE_PAST_YEARS
+  const maxY = cy + OVERVIEW_MAX_HORIZON_YEARS
+  const fromBefore = start
+  const toBefore = end
+  const fromLimitedToYear = Math.min(Math.max(start, minY), maxY)
+  const toLimitedToYear = Math.min(Math.max(end, minY), maxY)
+  const fromLimited = fromLimitedToYear !== fromBefore
+  const toLimited = toLimitedToYear !== toBefore
+  if (!fromLimited && !toLimited) return null
+  return { fromLimited, toLimited, fromLimitedToYear, toLimitedToYear }
+}
+
+export function formatOverviewRangeClampNotice(
+  requestedStartYear: number,
+  requestedEndYear: number,
+  asOf: Date = new Date(),
+): string | null {
+  const notice = getOverviewRangeClampNotice(requestedStartYear, requestedEndYear, asOf)
+  if (!notice) return null
+  const parts: string[] = []
+  if (notice.fromLimited) {
+    parts.push(`From limited to ${notice.fromLimitedToYear}`)
+  }
+  if (notice.toLimited) {
+    parts.push(`To limited to ${notice.toLimitedToYear}`)
+  }
+  return parts.join(' · ')
 }
 
 export function yearsInRange(
@@ -1522,6 +1573,20 @@ const COMPARE_LINE_COLORS = [
   '#e879f9',
   '#94a3b8',
 ]
+
+/** Tooltip rows: drop missing values, highest numeric value first (Recorded included). */
+export function sortOverviewCompareTooltipPayload<T extends { value?: unknown }>(
+  payload: readonly T[],
+): T[] {
+  return [...payload]
+    .filter((p) => {
+      const v = p.value
+      if (v == null || v === '') return false
+      const n = Number(v)
+      return Number.isFinite(n)
+    })
+    .sort((a, b) => Number(b.value) - Number(a.value))
+}
 
 export function assignScenarioCompareColors(scenarios: OverviewScenario[]): Map<string, string> {
   const ordered = sortedOverviewScenarios(scenarios)

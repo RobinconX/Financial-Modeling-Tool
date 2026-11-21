@@ -1,3 +1,4 @@
+import { normalizeInvestmentThesis } from './investmentThesis'
 import type { SavedScenario, StoragePayload } from '../types'
 import { queueAppDataChanged } from './linkedMirrorGate'
 import {
@@ -88,6 +89,7 @@ export function normalizeScenario(raw: unknown): SavedScenario | null {
     easyRows: sortEasyProjections(easyRows.length ? easyRows : [newEasyProjection()]),
     // Empty allowed — advanced is optional until the user adds it
     advancedRows: sortYearProjections(advancedRows),
+    investmentThesis: normalizeInvestmentThesis(raw.investmentThesis),
     createdAt: typeof raw.createdAt === 'string' ? raw.createdAt : now,
     updatedAt: typeof raw.updatedAt === 'string' ? raw.updatedAt : now,
   }

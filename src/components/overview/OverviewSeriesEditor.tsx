@@ -198,7 +198,9 @@ function YearBindingsEditor({
     <div className="sm:col-span-2 lg:col-span-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
         <label className="label !mb-0 !text-[10px]">
-          {withPercent ? 'Year → Income/Cost → % for this position' : 'Year → Income/Cost (feeds pool)'}
+          {withPercent
+            ? 'Year → Budget scenario → % for this position'
+            : 'Year → Budget scenario (feeds pool)'}
         </label>
         <button
           type="button"
@@ -226,8 +228,8 @@ function YearBindingsEditor({
       {bindings.length === 0 ? (
         <p className="text-[11px] text-white/40">
           {withPercent
-            ? 'Add year rows to allocate IC cash to this position (unclaimed % → leftover).'
-            : 'Optional: bind years so leftover receives IC residual not claimed by other series.'}
+            ? 'Add year rows to take a share of net cash from your Budget scenario (unclaimed % → leftover).'
+            : 'Optional: bind years so leftover receives any net cash from Budget not claimed by other series.'}
         </p>
       ) : (
         <div className="space-y-1.5">
@@ -838,7 +840,7 @@ export function OverviewSeriesEditor({
                       <>
                         <div className="sm:col-span-2 lg:col-span-3">
                           <p className="rounded-md bg-pink-500/10 px-2 py-1.5 text-[11px] text-pink-100/80">
-                            Permanent leftover: receives IC cash not claimed by other series
+                            Permanent leftover: receives net cash from your Budget not claimed by other series
                             {hasPortfolioSeries
                               ? ' (after portfolio surplus deposits).'
                               : '.'}{' '}
