@@ -96,7 +96,6 @@ export function ThesisRail() {
       className="fixed inset-y-0 right-0 z-[59] flex flex-col border-l border-white/10 bg-[#121820] shadow-2xl shadow-black/50"
       style={{ width }}
       aria-label="Investment thesis"
-      data-guide-anchor="projections.thesis"
     >
       <div
         role="separator"

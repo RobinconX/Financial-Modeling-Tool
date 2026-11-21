@@ -17,6 +17,7 @@
     "@types/react-dom": "^19.2.3",
     "@vitejs/plugin-react": "^6.0.3",
     "@vitest/coverage-v8": "^4.1.10",
+    "jsdom": "^26.1.0",
     "tailwindcss": "^4.3.2",
     "typescript": "~6.0.2",
     "vite": "^8.1.1",
@@ -24,8 +25,23 @@
   },
   "dependencies": {
     "@hcaptcha/react-hcaptcha": "^2.2.0",
+    "@tiptap/core": "^2.27.3",
+    "@tiptap/extension-bold": "^2.27.3",
+    "@tiptap/extension-bullet-list": "^2.27.3",
+    "@tiptap/extension-code": "^2.27.3",
+    "@tiptap/extension-document": "^2.27.3",
+    "@tiptap/extension-heading": "^2.27.3",
+    "@tiptap/extension-history": "^2.27.3",
+    "@tiptap/extension-italic": "^2.27.3",
+    "@tiptap/extension-list-item": "^2.27.3",
+    "@tiptap/extension-paragraph": "^2.27.3",
+    "@tiptap/extension-placeholder": "^2.27.3",
+    "@tiptap/extension-text": "^2.27.3",
+    "@tiptap/pm": "^2.27.3",
+    "@tiptap/react": "^2.27.3",
     "react": "^19.2.7",
     "react-dom": "^19.2.7",
-    "recharts": "^3.9.2"
+    "recharts": "^3.9.2",
+    "tiptap-markdown": "^0.8.10"
   }
 }

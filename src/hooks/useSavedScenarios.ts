@@ -77,6 +77,10 @@ export function useSavedScenarios() {
           name,
           easyRows: sortEasyProjections(input.easyRows),
           advancedRows: sortYearProjections(input.advancedRows),
+          investmentThesis:
+            'investmentThesis' in input
+              ? normalizeInvestmentThesis(input.investmentThesis)
+              : existing.investmentThesis,
           createdAt: existing.createdAt,
           updatedAt: now,
         }
@@ -128,7 +132,7 @@ export function useSavedScenarios() {
           merged.advancedRows = sortYearProjections(patch.advancedRows)
         }
         if ('investmentThesis' in patch) {
-          merged.investmentThesis = normalizeInvestmentThesis(patch.investmentThesis)
+          merged.investmentThesis = patch.investmentThesis
         }
         return merged
       })

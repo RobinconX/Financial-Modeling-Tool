@@ -133,3 +133,40 @@ button:disabled,
 .label {
   @apply mb-1 block text-xs font-medium uppercase tracking-wide text-white/50;
 }
+
+.thesis-prose h2 {
+  @apply mt-3 mb-1.5 border-l-2 border-emerald-400/70 pl-2 text-base font-semibold text-emerald-400/90 first:mt-0;
+}
+
+.thesis-prose h3 {
+  @apply mt-3 mb-1 text-xs font-semibold uppercase tracking-[0.08em] text-sky-300/85 first:mt-0;
+}
+
+.thesis-prose ul {
+  @apply mt-2 list-disc space-y-1.5 pl-5;
+}
+
+.thesis-prose li {
+  @apply leading-relaxed marker:text-emerald-400/55;
+}
+
+.thesis-prose p {
+  @apply mt-2 first:mt-0;
+}
+
+.thesis-prose p.is-editor-empty:first-child::before {
+  @apply float-left h-0 text-white/30 pointer-events-none;
+  content: attr(data-placeholder);
+}
+
+.thesis-prose code {
+  @apply rounded bg-white/10 px-1 py-0.5 font-mono text-[11px] text-white/85;
+}
+
+.thesis-prose strong {
+  @apply font-semibold text-white;
+}
+
+.thesis-prose em {
+  @apply text-white/90;
+}

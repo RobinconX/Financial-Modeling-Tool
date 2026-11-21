@@ -9,6 +9,11 @@ describe('normalizeInvestmentThesis', () => {
     expect(normalizeInvestmentThesis(undefined)).toBeUndefined()
   })
 
+  it('keeps internal newlines when trimming save text', () => {
+    expect(normalizeInvestmentThesis('line one\nline two')).toBe('line one\nline two')
+    expect(normalizeInvestmentThesis('  line one\n\nline two  ')).toBe('line one\n\nline two')
+  })
+
   it('clips overly long text', () => {
     const long = 'x'.repeat(5000)
     expect(normalizeInvestmentThesis(long)?.length).toBe(4000)

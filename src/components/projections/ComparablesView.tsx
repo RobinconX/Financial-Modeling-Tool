@@ -27,6 +27,7 @@ import {
 import { hasInvestmentThesis } from '../../lib/investmentThesis'
 import { groupScenariosByTicker } from '../../lib/storage'
 import { useThesisRail } from './ThesisRailProvider'
+import { ThesisDocumentIcon } from './ThesisDocumentIcon'
 import {
   cagrThresholdHints,
   loadCagrThresholds,
@@ -816,11 +817,10 @@ export function ComparablesView({
                                 {row.label}
                               </button>
                               {sc && hasInvestmentThesis(sc.investmentThesis) ? (
-                                <button
-                                  type="button"
+                                <ThesisDocumentIcon
                                   data-guide-anchor="projections.thesis"
-                                  className="inline-flex h-6 w-6 shrink-0 items-center justify-center rounded-md text-white/45 hover:bg-white/10 hover:text-emerald-300"
-                                  aria-label={`Read investment thesis for ${row.label}`}
+                                  className="!h-6 !w-6"
+                                  label={`Read investment thesis for ${row.label}`}
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     openThesis({
@@ -829,20 +829,7 @@ export function ComparablesView({
                                       thesis: sc.investmentThesis!.trim(),
                                     })
                                   }}
-                                >
-                                  <svg
-                                    width="14"
-                                    height="14"
-                                    viewBox="0 0 24 24"
-                                    fill="none"
-                                    stroke="currentColor"
-                                    strokeWidth="2"
-                                    aria-hidden
-                                  >
-                                    <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
-                                    <path d="M14 2v6h6M16 13H8M16 17H8M10 9H8" />
-                                  </svg>
-                                </button>
+                                />
                               ) : null}
                               {bases.length > 1 ? (
                                 <select
