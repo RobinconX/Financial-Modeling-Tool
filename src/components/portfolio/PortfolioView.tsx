@@ -1281,6 +1281,8 @@ export function PortfolioView({
                 tradesState={portfolioTrades}
                 tradesError={portfolioTradesError}
                 scenarios={scenarios}
+                displayCurrency={activeCurrency}
+                usdToChf={usdToChf}
                 onSaveTrade={onSaveTrade}
                 onDeleteTrade={onDeleteTrade}
                 logTradeSeed={logTradeSeed}

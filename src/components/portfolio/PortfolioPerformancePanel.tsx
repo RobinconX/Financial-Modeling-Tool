@@ -1,6 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
-import type { PortfolioTrade, PortfolioTradesState, SavedPortfolio, SavedScenario } from '../../types'
-import { formatMoney } from '../../lib/format'
+import { useCallback, useEffect, useMemo, useState } from 'react'
+import type {
+  DisplayCurrency,
+  PortfolioTrade,
+  PortfolioTradesState,
+  SavedPortfolio,
+  SavedScenario,
+} from '../../types'
+import { formatMoney, formatPrice } from '../../lib/format'
+import { toDisplay } from '../../lib/fx'
 import {
   computePortfolioPerformance,
   formatSnapshotMarkSummary,
@@ -42,6 +49,8 @@ type Props = {
   tradesState: PortfolioTradesState
   tradesError: string | null
   scenarios: SavedScenario[]
+  displayCurrency?: DisplayCurrency
+  usdToChf?: number | null
   onSaveTrade: (trade: PortfolioTrade) => boolean
   onDeleteTrade: (tradeId: string) => boolean
   logTradeSeed?: { symbol: string; holdingId?: string } | null
@@ -87,11 +96,23 @@ export function PortfolioPerformancePanel({
   tradesState,
   tradesError,
   scenarios,
+  displayCurrency = 'USD',
+  usdToChf = null,
   onSaveTrade,
   onDeleteTrade,
   logTradeSeed,
   onClearLogTradeSeed,
 }: Props) {
+  const fmt = useCallback(
+    (usd: number) =>
+      formatMoney(toDisplay(usd, displayCurrency, usdToChf), displayCurrency),
+    [displayCurrency, usdToChf],
+  )
+  const fmtPrice = useCallback(
+    (usd: number) =>
+      formatPrice(toDisplay(usd, displayCurrency, usdToChf), displayCurrency),
+    [displayCurrency, usdToChf],
+  )
   const portfolioTrades = useMemo(
     () => tradesForPortfolio(tradesState, portfolio.id),
     [tradesState, portfolio.id],
@@ -349,23 +370,23 @@ export function PortfolioPerformancePanel({
         label: 'Avg cost',
         value:
           holdingStats.averageCost != null
-            ? formatMoney(holdingStats.averageCost, 'USD')
+            ? fmtPrice(holdingStats.averageCost)
             : '—',
       },
       {
         label: 'Breakeven',
         value:
           holdingStats.breakeven != null
-            ? formatMoney(holdingStats.breakeven, 'USD')
+            ? fmtPrice(holdingStats.breakeven)
             : '—',
       },
       {
         label: 'Gross buys',
-        value: formatMoney(holdingStats.grossBuys, 'USD'),
+        value: fmt(holdingStats.grossBuys),
       },
       {
         label: 'Sell proceeds',
-        value: formatMoney(holdingStats.sellProceeds, 'USD'),
+        value: fmt(holdingStats.sellProceeds),
       },
       {
         label: '% sold',
@@ -373,13 +394,13 @@ export function PortfolioPerformancePanel({
       },
       {
         label: 'Open basis',
-        value: formatMoney(holdingStats.openCostBasis, 'USD'),
+        value: fmt(holdingStats.openCostBasis),
       },
       {
         label: 'Current value',
         value:
           holdingStats.currentValue != null
-            ? formatMoney(holdingStats.currentValue, 'USD')
+            ? fmt(holdingStats.currentValue)
             : 'No mark',
       },
       {
@@ -389,7 +410,7 @@ export function PortfolioPerformancePanel({
           : '—',
       },
     ]
-  }, [holdingStats, scopeSymbol, twrBySymbol])
+  }, [holdingStats, scopeSymbol, twrBySymbol, fmt, fmtPrice])
 
   return (
     <div className="space-y-5" data-guide-anchor="portfolio.performance">
@@ -456,6 +477,8 @@ export function PortfolioPerformancePanel({
             trades={scopedTrades}
             mode={returnChartMode}
             missingNote={returnMissingNote}
+            displayCurrency={displayCurrency}
+            usdToChf={usdToChf}
             onModeChange={setReturnChartMode}
           />
         </section>
@@ -479,13 +502,13 @@ export function PortfolioPerformancePanel({
             <span
               className={`text-2xl font-semibold tabular-nums ${pnlClass(summary.totalPnl)}`}
             >
-              {formatMoney(summary.totalPnl, 'USD')}
+              {fmt(summary.totalPnl)}
             </span>
             <span className="text-lg font-semibold tabular-nums text-white/90">
               {pct(summary.returnPct)}
             </span>
             <span className="text-xs text-white/40">
-              on {formatMoney(summary.grossBuys, 'USD')} invested
+              on {fmt(summary.grossBuys)} invested
             </span>
           </div>
           {snapshotMarkNote ? (
@@ -518,8 +541,8 @@ export function PortfolioPerformancePanel({
               }`}
             >
               {'isMoney' in card && card.isMoney
-                ? formatMoney(card.value as number, 'USD')
-                : formatMoney(card.value as number, 'USD')}
+                ? fmt(card.value as number)
+                : fmt(card.value as number)}
             </p>
           </div>
         ))}
@@ -566,7 +589,7 @@ export function PortfolioPerformancePanel({
                       <td
                         className={`px-2 py-2 text-right tabular-nums text-xs ${pnlClass(s.realizedPnl)}`}
                       >
-                        {formatMoney(s.realizedPnl, 'USD')}
+                        {fmt(s.realizedPnl)}
                       </td>
                       <td className="px-2 py-2 text-right text-xs tabular-nums text-white/80">
                         {pct(s.returnPct)}
@@ -648,10 +671,10 @@ export function PortfolioPerformancePanel({
                         {formatInputShares(t.shares)}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-white/80">
-                        {formatMoney(t.price, 'USD')}
+                        {fmtPrice(t.price)}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-white/50">
-                        {(t.fees ?? 0) > 0 ? formatMoney(t.fees!, 'USD') : '—'}
+                        {(t.fees ?? 0) > 0 ? fmt(t.fees!) : '—'}
                       </td>
                       <td className="px-3 py-2 text-right">
                         <button

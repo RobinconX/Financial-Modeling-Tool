@@ -1205,7 +1205,7 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
       'Log executed equity buys and sells by date and price for the selected portfolio book. Average-cost realized and unrealized P&L; full edit/delete in-app or bulk fill via save-file JSON.',
     body: `## How it works
 
-The **Performance** tab is an **executed trade ledger**. It does not change **Positions** share counts or **Chart** planned buy/sell actions.
+The **Performance** tab is an **executed trade ledger**. It does not change **Positions** share counts or **Chart** planned buy/sell actions. **$** amounts and the chart money axis follow the portfolio **USD** / **CHF** toggle (same live rate as elsewhere); **%** return is unchanged by currency.
 
 ### Adding trades
 

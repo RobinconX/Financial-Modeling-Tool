@@ -10,8 +10,9 @@ import {
   YAxis,
 } from 'recharts'
 import { formatMoney } from '../../lib/format'
+import { toDisplay } from '../../lib/fx'
 import type { ReturnProgressionPoint } from '../../lib/portfolioPerformanceStats'
-import type { PortfolioTrade } from '../../types'
+import type { DisplayCurrency, PortfolioTrade } from '../../types'
 
 export type ReturnChartMode = 'pct' | 'usd'
 
@@ -30,7 +31,18 @@ type Props = {
   trades?: PortfolioTrade[]
   mode: ReturnChartMode
   missingNote: string | null
+  displayCurrency?: DisplayCurrency
+  usdToChf?: number | null
   onModeChange: (mode: ReturnChartMode) => void
+}
+
+function pnlInDisplayUnits(
+  usd: number | null | undefined,
+  displayCurrency: DisplayCurrency,
+  usdToChf: number | null,
+): number | null {
+  if (usd == null || !Number.isFinite(usd)) return null
+  return toDisplay(usd, displayCurrency, usdToChf)
 }
 
 /** Y position on the return chart for each trade (on trade date), in current chart units. */
@@ -38,6 +50,8 @@ export function buildReturnChartTradeMarkers(
   trades: PortfolioTrade[],
   points: ReturnProgressionPoint[],
   mode: ReturnChartMode,
+  displayCurrency: DisplayCurrency = 'USD',
+  usdToChf: number | null = null,
 ): ReturnChartTradeMarker[] {
   const byDate = new Map(points.map((p) => [p.date, p]))
   const out: ReturnChartTradeMarker[] = []
@@ -49,7 +63,7 @@ export function buildReturnChartTradeMarkers(
         ? pt.returnPct != null
           ? pt.returnPct * 100
           : null
-        : pt.totalPnl
+        : pnlInDisplayUnits(pt.totalPnl, displayCurrency, usdToChf)
     if (y == null || !Number.isFinite(y)) continue
     out.push({
       id: t.id,
@@ -85,8 +99,9 @@ function returnProgressionSeriesLabel(mode: ReturnChartMode): string {
 function formatReturnProgressionValue(
   value: number,
   mode: ReturnChartMode,
+  displayCurrency: DisplayCurrency,
 ): string {
-  return mode === 'pct' ? `${value.toFixed(2)}%` : formatMoney(value, 'USD')
+  return mode === 'pct' ? `${value.toFixed(2)}%` : formatMoney(value, displayCurrency)
 }
 
 type ReturnProgressionTooltipProps = {
@@ -94,6 +109,7 @@ type ReturnProgressionTooltipProps = {
   payload?: ReadonlyArray<{ payload?: ChartRow }>
   label?: string | number
   mode: ReturnChartMode
+  displayCurrency: DisplayCurrency
 }
 
 /** One metric row; payload comes from the invisible `value` line (signed lines are tooltipType=none). */
@@ -102,6 +118,7 @@ export function ReturnProgressionTooltip({
   payload,
   label,
   mode,
+  displayCurrency,
 }: ReturnProgressionTooltipProps) {
   if (!active || !payload?.length) return null
   const row = payload[0]?.payload as ChartRow | undefined
@@ -117,7 +134,7 @@ export function ReturnProgressionTooltip({
   }
   const tone =
     row.value > 0 ? '#34d399' : row.value < 0 ? '#f87171' : 'rgba(255,255,255,0.45)'
-  const formatted = formatReturnProgressionValue(row.value, mode)
+  const formatted = formatReturnProgressionValue(row.value, mode, displayCurrency)
   return (
     <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
       <div className="mb-1.5 font-medium text-white/70">{dateLabel}</div>
@@ -156,6 +173,8 @@ function zeroCrossDate(dateA: string, vA: number, dateB: string, vB: number): st
 export function buildSignedReturnChartRows(
   points: ReturnProgressionPoint[],
   mode: ReturnChartMode,
+  displayCurrency: DisplayCurrency = 'USD',
+  usdToChf: number | null = null,
 ): ChartRow[] {
   const base: { date: string; value: number | null }[] = points.map((p) => {
     const value =
@@ -163,7 +182,7 @@ export function buildSignedReturnChartRows(
         ? p.returnPct != null
           ? p.returnPct * 100
           : null
-        : p.totalPnl
+        : pnlInDisplayUnits(p.totalPnl, displayCurrency, usdToChf)
     return { date: p.date, value }
   })
 
@@ -225,16 +244,26 @@ export function PortfolioReturnChart({
   trades = [],
   mode,
   missingNote,
+  displayCurrency = 'USD',
+  usdToChf = null,
   onModeChange,
 }: Props) {
   const [showTrades, setShowTrades] = useState(false)
+  const moneyModeLabel = displayCurrency === 'CHF' ? 'CHF' : '$'
   const data = useMemo(
-    () => buildSignedReturnChartRows(points, mode),
-    [points, mode],
+    () => buildSignedReturnChartRows(points, mode, displayCurrency, usdToChf),
+    [points, mode, displayCurrency, usdToChf],
   )
   const tradeMarkers = useMemo(
-    () => buildReturnChartTradeMarkers(trades, points, mode),
-    [trades, points, mode],
+    () =>
+      buildReturnChartTradeMarkers(
+        trades,
+        points,
+        mode,
+        displayCurrency,
+        usdToChf,
+      ),
+    [trades, points, mode, displayCurrency, usdToChf],
   )
 
   const hasValue = data.some((d) => d.value != null)
@@ -275,7 +304,7 @@ export function PortfolioReturnChart({
             {(
               [
                 { id: 'pct' as const, label: '%' },
-                { id: 'usd' as const, label: '$' },
+                { id: 'usd' as const, label: moneyModeLabel },
               ] as const
             ).map((opt) => (
               <button
@@ -311,13 +340,17 @@ export function PortfolioReturnChart({
               tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
               width={mode === 'pct' ? 44 : 52}
               tickFormatter={(v: number) =>
-                mode === 'pct' ? `${v.toFixed(0)}%` : formatMoney(v, 'USD')
+                mode === 'pct' ? `${v.toFixed(0)}%` : formatMoney(v, displayCurrency)
               }
             />
             <Tooltip
               cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
               content={(props) => (
-                <ReturnProgressionTooltip {...props} mode={mode} />
+                <ReturnProgressionTooltip
+                  {...props}
+                  mode={mode}
+                  displayCurrency={displayCurrency}
+                />
               )}
             />
             <Line

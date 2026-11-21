@@ -39,6 +39,14 @@ describe('buildSignedReturnChartRows', () => {
     ).toBe(true)
   })
 
+  it('scales USD P&L into CHF for money mode', () => {
+    const points: ReturnProgressionPoint[] = [
+      { date: '2024-01-01', totalPnl: 100, returnPct: 0.1 },
+    ]
+    const rows = buildSignedReturnChartRows(points, 'usd', 'CHF', 0.9)
+    expect(rows[0]!.value).toBeCloseTo(90, 4)
+  })
+
   it('does not assign both valuePos and valueNeg on positive-only days', () => {
     const points: ReturnProgressionPoint[] = [
       { date: '2024-01-01', totalPnl: 5, returnPct: 0.05 },
@@ -60,6 +68,7 @@ describe('ReturnProgressionTooltip', () => {
       active: true,
       label: '2024-01-02',
       mode: 'usd',
+      displayCurrency: 'USD',
       payload: [{ payload: { date: '2024-01-02', value: 1250.5, valuePos: 1250.5, valueNeg: null } }],
     })
     expect(el).not.toBeNull()
@@ -74,6 +83,7 @@ describe('ReturnProgressionTooltip', () => {
       active: true,
       label: '2024-01-01',
       mode: 'pct',
+      displayCurrency: 'USD',
       payload: [{ payload: { date: '2024-01-01', value: null, valuePos: null, valueNeg: null } }],
     })
     expect(el).not.toBeNull()
