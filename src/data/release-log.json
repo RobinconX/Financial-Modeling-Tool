@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-21",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "b9fbc9c1e548067f0ad6455144265f9b0dba8c92",
     "headline": "Investment thesis editor, import drop zone & Analyze polish",
     "notes": [
       "Analyze and Comparables add optional per-save investment thesis notes — full-screen WYSIWYG modal editor, read-only shelf on Comparables, and auto-save without breaking Enter/new lines.",
