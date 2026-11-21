@@ -162,10 +162,7 @@ describe('resolveReturnChartTooltipState', () => {
       valuePos: 10,
       valueNeg: null,
     }
-    const state = resolveReturnChartTooltipState(
-      [{ dataKey: 'value', payload: row }],
-      [row],
-    )
+    const state = resolveReturnChartTooltipState([{ dataKey: 'value', payload: row }])
     expect(state.row?.value).toBe(10)
   })
 })
@@ -204,7 +201,7 @@ describe('tradesForReturnTooltip', () => {
       valuePos: 10,
       valueNeg: null,
     }
-    expect(tradesForReturnTooltip(row, undefined, markers, null)).toHaveLength(0)
+    expect(tradesForReturnTooltip(row, undefined, markers)).toHaveLength(0)
   })
 
   it('returns only trades on the hovered calendar day', () => {
@@ -215,22 +212,11 @@ describe('tradesForReturnTooltip', () => {
       valuePos: 5,
       valueNeg: null,
     }
-    const onDay = tradesForReturnTooltip(row, undefined, markers, null)
+    const onDay = tradesForReturnTooltip(row, undefined, markers)
     expect(onDay).toHaveLength(1)
     expect(onDay[0]!.symbol).toBe('AAPL')
   })
 
-  it('prefers pinned dot trades', () => {
-    const row = {
-      date: '2024-01-02',
-      time: chartTimeForTradeDate('2024-01-02'),
-      value: 10,
-      valuePos: 10,
-      valueNeg: null,
-    }
-    const pinned = [markers[1]!]
-    expect(tradesForReturnTooltip(row, undefined, markers, pinned)).toEqual(pinned)
-  })
 })
 
 describe('chartTimeForTradeDate', () => {

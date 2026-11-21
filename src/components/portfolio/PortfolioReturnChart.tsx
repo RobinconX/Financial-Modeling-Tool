@@ -154,28 +154,21 @@ type ReturnProgressionTooltipProps = {
   trades?: ReturnChartTradeMarker[]
 }
 
-/** Line tooltip row only — trades come from date filter / dot hover, not Recharts payload. */
 export function resolveReturnChartTooltipState(
   payload: ReadonlyArray<TooltipPayloadItem> | undefined,
-  chartData: ChartRow[],
-  pinnedTradeDate?: string | null,
 ): { row: ChartRow | undefined } {
-  let row = payload?.find((p) => p.dataKey === 'value')?.payload as
+  const row = payload?.find((p) => p.dataKey === 'value')?.payload as
     | ChartRow
     | undefined
-  if (!row && pinnedTradeDate) {
-    row = chartData.find((d) => d.date === pinnedTradeDate)
-  }
   return { row }
 }
 
+/** Trades section only when the hovered line point’s calendar day has ledger trades. */
 export function tradesForReturnTooltip(
   row: ChartRow | undefined,
   label: string | number | undefined,
   tradeMarkers: ReturnChartTradeMarker[],
-  pinnedTrades: ReturnChartTradeMarker[] | null,
 ): ReturnChartTradeMarker[] {
-  if (pinnedTrades != null && pinnedTrades.length > 0) return pinnedTrades
   const day =
     row?.date ??
     (label != null && typeof label === 'number' && Number.isFinite(label)
@@ -297,9 +290,7 @@ type ReturnChartTooltipProps = {
   mode: ReturnChartMode
   displayCurrency: DisplayCurrency
   usdToChf: number | null
-  chartData: ChartRow[]
   tradeMarkers: ReturnChartTradeMarker[]
-  pinnedTrades: ReturnChartTradeMarker[] | null
 }
 
 function ReturnChartTooltip({
@@ -309,19 +300,11 @@ function ReturnChartTooltip({
   mode,
   displayCurrency,
   usdToChf,
-  chartData,
   tradeMarkers,
-  pinnedTrades,
 }: ReturnChartTooltipProps) {
   if (!active || !payload?.length) return null
-  const pinDate = pinnedTrades?.[0]?.tradeDate ?? null
-  const { row } = resolveReturnChartTooltipState(payload, chartData, pinDate)
-  const trades = tradesForReturnTooltip(
-    row,
-    label,
-    tradeMarkers,
-    pinnedTrades,
-  )
+  const { row } = resolveReturnChartTooltipState(payload)
+  const trades = tradesForReturnTooltip(row, label, tradeMarkers)
   return (
     <ReturnProgressionTooltip
       active={active}
@@ -424,34 +407,27 @@ export function buildSignedReturnChartRows(
   return rows
 }
 
-function renderTradeDot(
-  tradeMarkers: ReturnChartTradeMarker[],
-  onPinTrades: (trades: ReturnChartTradeMarker[] | null) => void,
-) {
-  return function TradeDot(props: {
-    cx?: number
-    cy?: number
-    payload?: ReturnChartTradeMarker
-  }) {
-    const { cx, cy, payload } = props
-    if (cx == null || cy == null || !payload) return null
-    return (
-      <circle
-        cx={cx}
-        cy={cy}
-        r={5}
-        fill={payload.side === 'buy' ? '#34d399' : '#f87171'}
-        stroke="#0b0f14"
-        strokeWidth={1.5}
-        onMouseEnter={() => {
-          onPinTrades(
-            tradeMarkers.filter((t) => t.tradeDate === payload.tradeDate),
-          )
-        }}
-        onMouseLeave={() => onPinTrades(null)}
-      />
-    )
-  }
+function renderTradeDot(props: {
+  cx?: number
+  cy?: number
+  payload?: ReturnChartTradeMarker
+}) {
+  const { cx, cy, payload } = props
+  if (cx == null || cy == null || !payload) return null
+  const side = payload.side === 'buy' ? 'Buy' : 'Sell'
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={5}
+      fill={payload.side === 'buy' ? '#34d399' : '#f87171'}
+      stroke="#0b0f14"
+      strokeWidth={1.5}
+      pointerEvents="none"
+    >
+      <title>{`${side} ${payload.shares} ${payload.symbol}`}</title>
+    </circle>
+  )
 }
 
 export function PortfolioReturnChart({
@@ -464,9 +440,6 @@ export function PortfolioReturnChart({
   onModeChange,
 }: Props) {
   const [showTrades, setShowTrades] = useState(false)
-  const [pinnedTrades, setPinnedTrades] = useState<ReturnChartTradeMarker[] | null>(
-    null,
-  )
   const moneyModeLabel = displayCurrency === 'CHF' ? 'CHF' : '$'
   const data = useMemo(
     () => buildSignedReturnChartRows(points, mode, displayCurrency, usdToChf),
@@ -544,10 +517,7 @@ export function PortfolioReturnChart({
       {missingNote ? (
         <p className="text-[11px] text-amber-200/75">{missingNote}</p>
       ) : null}
-      <div
-        className="h-48 w-full"
-        onMouseLeave={() => setPinnedTrades(null)}
-      >
+      <div className="h-48 w-full">
         <ResponsiveContainer width="100%" height="100%">
           <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
@@ -568,7 +538,6 @@ export function PortfolioReturnChart({
               }
             />
             <Tooltip
-              shared={false}
               cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
               content={(props) => (
                 <ReturnChartTooltip
@@ -578,9 +547,7 @@ export function PortfolioReturnChart({
                   mode={mode}
                   displayCurrency={displayCurrency}
                   usdToChf={usdToChf}
-                  chartData={data}
                   tradeMarkers={tradeMarkers}
-                  pinnedTrades={pinnedTrades}
                 />
               )}
             />
@@ -626,7 +593,7 @@ export function PortfolioReturnChart({
                 isAnimationActive={false}
                 legendType="none"
                 tooltipType="none"
-                shape={renderTradeDot(tradeMarkers, setPinnedTrades)}
+                shape={renderTradeDot}
               />
             ) : null}
           </ComposedChart>
