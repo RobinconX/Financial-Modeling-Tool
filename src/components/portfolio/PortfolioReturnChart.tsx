@@ -1,15 +1,15 @@
 import { useMemo, useState } from 'react'
 import {
   CartesianGrid,
+  ComposedChart,
   Line,
-  LineChart,
-  ReferenceDot,
   ResponsiveContainer,
+  Scatter,
   Tooltip,
   XAxis,
   YAxis,
 } from 'recharts'
-import { formatMoney } from '../../lib/format'
+import { formatMoney, formatPrice } from '../../lib/format'
 import { toDisplay } from '../../lib/fx'
 import type { ReturnProgressionPoint } from '../../lib/portfolioPerformanceStats'
 import type { DisplayCurrency, PortfolioTrade } from '../../types'
@@ -19,10 +19,12 @@ export type ReturnChartMode = 'pct' | 'usd'
 export type ReturnChartTradeMarker = {
   id: string
   tradeDate: string
+  time: number
   side: PortfolioTrade['side']
   symbol: string
   shares: number
   price: number
+  fees: number
   y: number
 }
 
@@ -92,10 +94,12 @@ export function buildReturnChartTradeMarkers(
     out.push({
       id: t.id,
       tradeDate: t.tradeDate,
+      time: chartTimeForTradeDate(t.tradeDate),
       side: t.side,
       symbol: t.symbol,
       shares: t.shares,
       price: t.price,
+      fees: t.fees ?? 0,
       y,
     })
   }
@@ -139,6 +143,85 @@ type ReturnProgressionTooltipProps = {
   label?: string | number
   mode: ReturnChartMode
   displayCurrency: DisplayCurrency
+}
+
+function isTradeMarkerPayload(
+  payload: unknown,
+): payload is ReturnChartTradeMarker {
+  if (!payload || typeof payload !== 'object') return false
+  const p = payload as ReturnChartTradeMarker
+  return typeof p.symbol === 'string' && typeof p.side === 'string' && 'time' in p
+}
+
+/** Trade dot hover — matches other chart tooltip chrome. */
+export function TradeMarkerTooltip({
+  marker,
+  displayCurrency,
+  usdToChf,
+}: {
+  marker: ReturnChartTradeMarker
+  displayCurrency: DisplayCurrency
+  usdToChf: number | null
+}) {
+  const sideLabel = marker.side === 'buy' ? 'Buy' : 'Sell'
+  const sideTone = marker.side === 'buy' ? '#34d399' : '#f87171'
+  const px = formatPrice(
+    toDisplay(marker.price, displayCurrency, usdToChf),
+    displayCurrency,
+  )
+  return (
+    <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
+      <div className="mb-1.5 font-medium text-white/70">{marker.tradeDate}</div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="font-medium text-white/85">{marker.symbol}</span>
+        <span style={{ color: sideTone }}>{sideLabel}</span>
+      </div>
+      <div className="mt-1.5 tabular-nums text-white/80">
+        {marker.shares} @ {px}
+      </div>
+      {marker.fees > 0 ? (
+        <div className="mt-1 text-white/50">
+          Fees: {formatMoney(toDisplay(marker.fees, displayCurrency, usdToChf), displayCurrency)}
+        </div>
+      ) : null}
+    </div>
+  )
+}
+
+type ReturnChartTooltipProps = ReturnProgressionTooltipProps & {
+  usdToChf: number | null
+}
+
+function ReturnChartTooltip({
+  active,
+  payload,
+  label,
+  mode,
+  displayCurrency,
+  usdToChf,
+}: ReturnChartTooltipProps) {
+  if (!active || !payload?.length) return null
+  const tradeHit = payload.find(
+    (p) => p?.payload != null && isTradeMarkerPayload(p.payload),
+  )
+  if (tradeHit?.payload && isTradeMarkerPayload(tradeHit.payload)) {
+    return (
+      <TradeMarkerTooltip
+        marker={tradeHit.payload}
+        displayCurrency={displayCurrency}
+        usdToChf={usdToChf}
+      />
+    )
+  }
+  return (
+    <ReturnProgressionTooltip
+      active={active}
+      payload={payload}
+      label={label}
+      mode={mode}
+      displayCurrency={displayCurrency}
+    />
+  )
 }
 
 /** One metric row; payload comes from the invisible `value` line (signed lines are tooltipType=none). */
@@ -274,6 +357,25 @@ export function buildSignedReturnChartRows(
   return rows
 }
 
+function renderTradeDot(props: {
+  cx?: number
+  cy?: number
+  payload?: ReturnChartTradeMarker
+}) {
+  const { cx, cy, payload } = props
+  if (cx == null || cy == null || !payload) return null
+  return (
+    <circle
+      cx={cx}
+      cy={cy}
+      r={5}
+      fill={payload.side === 'buy' ? '#34d399' : '#f87171'}
+      stroke="#0b0f14"
+      strokeWidth={1.5}
+    />
+  )
+}
+
 export function PortfolioReturnChart({
   points,
   trades = [],
@@ -363,7 +465,7 @@ export function PortfolioReturnChart({
       ) : null}
       <div className="h-48 w-full">
         <ResponsiveContainer width="100%" height="100%">
-          <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+          <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
               dataKey="time"
@@ -384,10 +486,11 @@ export function PortfolioReturnChart({
             <Tooltip
               cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
               content={(props) => (
-                <ReturnProgressionTooltip
+                <ReturnChartTooltip
                   {...props}
                   mode={mode}
                   displayCurrency={displayCurrency}
+                  usdToChf={usdToChf}
                 />
               )}
             />
@@ -425,21 +528,17 @@ export function PortfolioReturnChart({
               legendType="none"
               isAnimationActive={false}
             />
-            {showTrades
-              ? tradeMarkers.map((m) => (
-                  <ReferenceDot
-                    key={m.id}
-                    x={chartTimeForTradeDate(m.tradeDate)}
-                    y={m.y}
-                    r={5}
-                    fill={m.side === 'buy' ? '#34d399' : '#f87171'}
-                    stroke="#0b0f14"
-                    strokeWidth={1.5}
-                    ifOverflow="visible"
-                  />
-                ))
-              : null}
-          </LineChart>
+            {showTrades && tradeMarkers.length > 0 ? (
+              <Scatter
+                data={tradeMarkers}
+                dataKey="y"
+                name="Trade"
+                isAnimationActive={false}
+                legendType="none"
+                shape={renderTradeDot}
+              />
+            ) : null}
+          </ComposedChart>
         </ResponsiveContainer>
       </div>
     </div>

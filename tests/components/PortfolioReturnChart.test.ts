@@ -4,6 +4,7 @@ import {
   buildSignedReturnChartRows,
   chartTimeForTradeDate,
   ReturnProgressionTooltip,
+  TradeMarkerTooltip,
 } from '../../src/components/portfolio/PortfolioReturnChart'
 import type { PortfolioTrade } from '../../src/types'
 import type { ReturnProgressionPoint } from '../../src/lib/portfolioPerformanceStats'
@@ -111,6 +112,31 @@ describe('ReturnProgressionTooltip', () => {
     const text = JSON.stringify(el)
     expect(text).toContain('2024-01-01')
     expect(text).toContain('—')
+  })
+})
+
+describe('TradeMarkerTooltip', () => {
+  it('shows symbol, side, shares, and price', () => {
+    const el = TradeMarkerTooltip({
+      displayCurrency: 'USD',
+      usdToChf: null,
+      marker: {
+        id: '1',
+        tradeDate: '2024-03-01',
+        time: Date.parse('2024-03-01T12:00:00Z'),
+        side: 'buy',
+        symbol: 'AAPL',
+        shares: 10,
+        price: 150,
+        fees: 5,
+        y: 12,
+      },
+    })
+    const text = JSON.stringify(el)
+    expect(text).toContain('AAPL')
+    expect(text).toContain('Buy')
+    expect(text).toContain('2024-03-01')
+    expect(text).toContain('10')
   })
 })
 
