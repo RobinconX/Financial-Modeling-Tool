@@ -110,11 +110,11 @@ export function PortfolioTradeImportModal({
       <div
         className="flex max-h-[90vh] w-full max-w-2xl flex-col rounded-xl border border-white/10 bg-[#121820] shadow-2xl"
         role="dialog"
-        aria-label="Import trades"
+        aria-label="Import"
         onClick={(e) => e.stopPropagation()}
       >
         <div className="flex items-center justify-between border-b border-white/10 px-4 py-3">
-          <h3 className="text-sm font-semibold text-white">Import trades</h3>
+          <h3 className="text-sm font-semibold text-white">Import</h3>
           <button
             type="button"
             className="text-sm text-white/50 hover:text-white"
@@ -134,7 +134,9 @@ export function PortfolioTradeImportModal({
             placeholder='[{"symbol":"AAPL","side":"buy","tradeDate":"2024-01-10","shares":10,"price":185}]'
             value={draft}
             onChange={(e) => {
-              setDraft(e.target.value)
+              const v = e.target.value
+              setDraft(v)
+              if (/^symbol\s*,/i.test(v.trim())) setFormatHint('csv')
               setParseError(null)
             }}
           />
@@ -209,7 +211,7 @@ export function PortfolioTradeImportModal({
             disabled={!preview || importableCount === 0}
             onClick={handleImport}
           >
-            Import {importableCount} trade{importableCount === 1 ? '' : 's'}
+            Import
           </button>
         </div>
       </div>
