@@ -692,7 +692,7 @@ Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today 
     id: 'projections.thesis',
     title: 'Investment thesis',
     summary:
-      'Optional per-scenario notes for your story, key assumptions, and buy/sell criteria — rich-text editor in a large modal on **Analyze**, **4,000** characters. **Comparables** opens a read-only **ThesisRail** shelf.',
+      'Optional per-scenario notes for your story, key assumptions, and buy/sell criteria — rich-text editor in a large modal on **Analyze**, **4,000** characters. **Comparables** opens **ThesisRail** to read; **Edit** opens the same modal with auto-save.',
     body: `## How it works
 
 On **Analyze**, thesis notes open in a centered modal (about **4xl** wide, most of the viewport height) — not inline under the assumptions.
@@ -732,9 +732,12 @@ Draft tickers keep thesis in memory until the first **Save**.
 
 ### Comparables
 
-A filled-in save shows the same **document** icon beside the row name (click only). It opens the narrow **ThesisRail** side shelf — read-only, resizable, **Escape** or **Close** to dismiss.
+A filled-in save shows the same **document** icon beside the row name (click only). It opens the narrow **ThesisRail** side shelf — resizable, **Escape** or **Close** to dismiss.
 
-Click a row **name** on **Comparables** to land on **Analyze** and edit in the modal.
+- **Edit** (header, left of **Close**) — opens the same large thesis modal as **Analyze**; edits **auto-save** and the shelf refreshes
+- Row **name** — still jumps to **Analyze** for assumptions and charts
+
+Rows without thesis text have no document icon; start a thesis on **Analyze** first.
 
 ## How to interpret
 
@@ -742,7 +745,7 @@ Click a row **name** on **Comparables** to land on **Analyze** and edit in the m
 
 ## Example
 
-On **MSFT · Cloud bet**, open the modal, add a **Bull case** heading, bold **Azure**, and a bullet on margin — under **4,000** characters. After **Save**, the document icon appears on **Analyze** and **Comparables**; the shelf shows the same notes read-only.
+On **MSFT · Cloud bet**, open the modal on **Analyze**, add a **Bull case** heading, bold **Azure**, and a bullet on margin — under **4,000** characters. After **Save**, the document icon appears on **Analyze** and **Comparables**. On **Comparables**, open the shelf from the icon, tap **Edit**, tweak a line — the shelf updates without leaving the table.
 `,
     status: 'ready',
     location: {

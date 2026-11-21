@@ -1,10 +1,20 @@
 [
   {
     "releasedAt": "2026-11-21",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Edit investment thesis from Comparables shelf",
+    "notes": [
+      "Comparables ThesisRail adds Edit next to Close — same large investment thesis modal as Analyze, with auto-save and an updated shelf preview after edits.",
+      "Document icon on a comparable row still opens the read-only rail; Edit is the in-place path to change thesis text without jumping to Analyze."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-21",
     "prodSha": "b9fbc9c1e548067f0ad6455144265f9b0dba8c92",
     "headline": "Investment thesis editor, import drop zone & Analyze polish",
     "notes": [
-      "Analyze and Comparables add optional per-save investment thesis notes — full-screen modal editor, read-only shelf on Comparables, and auto-save without breaking Enter/new lines.",
+      "Analyze and Comparables add optional per-save investment thesis notes — full-screen WYSIWYG modal editor, read-only shelf on Comparables, and auto-save without breaking Enter/new lines.",
       "Projections Import is a compact drop zone on Analyze and Comparables for JSON packs.",
       "Compare turns on with Panel B pre-filled from your latest other save; Overview Runway remembers chart mode after Net worth compare; Portfolio chart fixes and ETF units-held labeling.",
       "Portfolio growth chart table links open Cash, Positions, or Growth for a row; Budget copy and Overview compare tooltips sort by value."

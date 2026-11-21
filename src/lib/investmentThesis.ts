@@ -12,3 +12,9 @@ export function normalizeInvestmentThesis(raw: unknown): string | undefined {
 export function hasInvestmentThesis(thesis: string | undefined | null): boolean {
   return Boolean(thesis?.trim())
 }
+
+export function clipInvestmentThesis(next: string): string {
+  return next.length > INVESTMENT_THESIS_MAX_LENGTH
+    ? next.slice(0, INVESTMENT_THESIS_MAX_LENGTH)
+    : next
+}
