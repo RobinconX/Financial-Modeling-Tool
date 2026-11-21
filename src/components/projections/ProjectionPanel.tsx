@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import type {
   ComparableBasis,
   EasyProjection,
@@ -40,11 +40,9 @@ import {
   hasInvestmentThesis,
   INVESTMENT_THESIS_MAX_LENGTH,
 } from '../../lib/investmentThesis'
+import { AddThesisButton } from './AddThesisButton'
+import { InvestmentThesisModalLazy } from './investmentThesisModalLazy'
 import { ThesisDocumentIcon } from './ThesisDocumentIcon'
-
-const InvestmentThesisModal = lazy(() =>
-  import('./InvestmentThesisModal').then((m) => ({ default: m.InvestmentThesisModal })),
-)
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -393,13 +391,7 @@ export function ProjectionPanel({
                     onClick={() => setThesisModalOpen(true)}
                   />
                 ) : (
-                  <button
-                    type="button"
-                    className="text-xs font-medium text-white/45 underline decoration-white/20 underline-offset-2 hover:text-emerald-300/90"
-                    onClick={() => setThesisModalOpen(true)}
-                  >
-                    Add thesis
-                  </button>
+                  <AddThesisButton onClick={() => setThesisModalOpen(true)} />
                 )}
               </div>
             </>
@@ -422,13 +414,7 @@ export function ProjectionPanel({
                 <p className="text-sm text-white/45">{scenario!.companyName}</p>
               ) : null}
               {!hasInvestmentThesis(investmentThesis) ? (
-                <button
-                  type="button"
-                  className="mt-1 text-xs font-medium text-white/45 underline decoration-white/20 underline-offset-2 hover:text-emerald-300/90"
-                  onClick={() => setThesisModalOpen(true)}
-                >
-                  Add thesis
-                </button>
+                <AddThesisButton className="mt-1" onClick={() => setThesisModalOpen(true)} />
               ) : null}
             </>
           )}
@@ -671,7 +657,7 @@ export function ProjectionPanel({
 
       <Suspense fallback={null}>
         {thesisModalOpen ? (
-          <InvestmentThesisModal
+          <InvestmentThesisModalLazy
             open={thesisModalOpen}
             onClose={() => setThesisModalOpen(false)}
             symbol={thesisSymbol}

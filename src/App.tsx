@@ -31,6 +31,7 @@ import { QuoteLoadingHint } from './components/common/QuoteLoadingHint'
 import { QuoteHealthProvider } from './context/QuoteHealthContext'
 import { FeatureGuideProvider } from './components/guides/FeatureGuideProvider'
 import { FeatureGuideRail } from './components/guides/FeatureGuideRail'
+import { scheduleInvestmentThesisModalIdlePreload } from './components/projections/investmentThesisModalLazy'
 import { ThesisRail } from './components/projections/ThesisRail'
 import { ThesisRailProvider } from './components/projections/ThesisRailProvider'
 import { GuidesHeaderButton } from './components/guides/GuidesHeaderButton'
@@ -214,6 +215,8 @@ export default function App() {
       /* ignore */
     }
   }, [tab])
+
+  useEffect(() => scheduleInvestmentThesisModalIdlePreload(), [])
 
   const {
     scenarios,
