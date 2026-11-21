@@ -1249,6 +1249,45 @@ Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** ove
 
 The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged buy (green dot) and sell (red dot) on the curve at that day’s return; the main tooltip follows the crosshair by date and adds trade details on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
 
+### Bulk import
+
+**Import** (beside **+ Trade**) opens a modal: paste JSON, or upload **.json** / **.csv**. Preview shows valid / invalid counts, book reassignment, and duplicates before you confirm. Import **appends** to the **current book** only.
+
+**JSON** — array of trades or \`{ "trades": [ … ] }\`:
+
+\`\`\`json
+[
+  {
+    "symbol": "AAPL",
+    "side": "buy",
+    "tradeDate": "2024-01-10",
+    "shares": 50,
+    "price": 185.2,
+    "fees": 1,
+    "note": "Broker fill"
+  }
+]
+\`\`\`
+
+**CSV** — header row; \`portfolioId\` optional (reassigned to this book):
+
+\`\`\`
+symbol,side,tradeDate,shares,price,fees,note
+AAPL,buy,2024-01-10,50,185.20,1.00,Open
+AAPL,sell,2025-03-01,10,210.00,,
+\`\`\`
+
+**Agent prompt** (copy to your assistant):
+
+\`\`\`
+Convert my broker export into Grok Lab portfolio trades for bulk import.
+Output CSV with columns: symbol,side,tradeDate,shares,price,fees,note
+Rules: side buy|sell; tradeDate YYYY-MM-DD; equity tickers only (e.g. AAPL);
+shares and price positive numbers; fees optional; omit portfolioId.
+\`\`\`
+
+Duplicates (same symbol, side, date, shares, price) can be skipped (default) or imported anyway.
+
 ### Save file / agents
 
 Trades live under \`portfolioTrades\` in **Export** / linked JSON. Invalid rows are dropped on import; missing \`id\` values are minted.

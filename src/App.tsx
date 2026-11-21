@@ -639,6 +639,7 @@ export default function App() {
                 portfolioTradesError={portfolioTrades.error}
                 onSaveTrade={portfolioTrades.saveTrade}
                 onDeleteTrade={portfolioTrades.deleteTrade}
+                onReplaceTrades={portfolioTrades.replace}
               />
             )}
 
