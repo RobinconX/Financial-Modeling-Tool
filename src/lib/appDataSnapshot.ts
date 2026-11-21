@@ -14,6 +14,7 @@ import type {
   PortfolioActualsState,
   PortfolioContributionsState,
   PortfolioSharedCashState,
+  PortfolioTradesState,
 } from '../types'
 import { emptyIncomeCostState } from './incomeCost'
 import { defaultOverviewState } from './overview'
@@ -68,6 +69,11 @@ import {
   loadPortfolioSharedCash,
   savePortfolioSharedCash,
 } from './portfolioSharedCashStorage'
+import { emptyPortfolioTrades, normalizePortfolioTrades } from './portfolioTrades'
+import {
+  loadPortfolioTrades,
+  savePortfolioTrades,
+} from './portfolioTradesStorage'
 
 export const APP_DATA_FILE_NAME = 'financial-model.json'
 export const APP_DATA_SNAPSHOT_VERSION = 1 as const
@@ -93,6 +99,8 @@ export type AppDataSnapshot = {
   portfolioActualsMode?: PortfolioActualsMode
   /** How the linked file auto-saves. File-level; optional on older saves. */
   linkedSaveMode?: LinkedSaveMode
+  /** Executed trade ledger (all books). Optional on older saves. */
+  portfolioTrades?: PortfolioTradesState
 }
 
 export function collectAppData(): AppDataSnapshot {
@@ -114,6 +122,7 @@ export function collectAppData(): AppDataSnapshot {
     portfolioCashMode: getPortfolioCashMode(),
     portfolioActualsMode: getPortfolioActualsMode(),
     linkedSaveMode: getLinkedSaveMode(),
+    portfolioTrades: loadPortfolioTrades(),
   }
 }
 
@@ -137,6 +146,7 @@ export function emptyAppData(): AppDataSnapshot {
     portfolioCashMode: 'perPortfolio',
     portfolioActualsMode: 'shared',
     linkedSaveMode: getLinkedSaveMode(),
+    portfolioTrades: emptyPortfolioTrades(),
   }
 }
 
@@ -202,6 +212,7 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
     portfolioCashMode: parsePortfolioCashMode(raw.portfolioCashMode),
     portfolioActualsMode: parsePortfolioActualsMode(raw.portfolioActualsMode),
     linkedSaveMode: parseLinkedSaveMode(raw.linkedSaveMode),
+    portfolioTrades: normalizePortfolioTrades(raw.portfolioTrades),
   }
 }
 
@@ -268,6 +279,11 @@ export function applyAppDataToLocalStorage(
     if (!r11.ok) return { ok: false, error: r11.error }
 
     if (snapshot.linkedSaveMode) applyLinkedSaveMode(snapshot.linkedSaveMode)
+
+    const r12 = savePortfolioTrades(
+      normalizePortfolioTrades(snapshot.portfolioTrades),
+    )
+    if (!r12.ok) return { ok: false, error: r12.error }
 
     return { ok: true }
   })

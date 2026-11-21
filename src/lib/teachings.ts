@@ -902,6 +902,7 @@ Same goal; a higher starting price shrinks the raw gap still required.
 - **Chart** — value timeline and **Value by year** for the selected book
 - **Actuals** — shared month-end **Portfolio value** and **Money in** (all books read the same history)
 - **Cash**, **Positions**, **Growth** — configure the selected book
+- **Performance** — executed buy/sell ledger and P&L (does not change Positions)
 - **Contribution effectiveness** — time-to-goal math for extra deposits
 
 ### Display currency
@@ -1193,6 +1194,58 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
       tab: 'portfolio',
       view: 'goal',
       anchor: 'portfolio.goal',
+    },
+    parentId: 'portfolio',
+    order: 7,
+  },
+  'portfolio.performance': {
+    id: 'portfolio.performance',
+    title: 'Performance',
+    summary:
+      'Log executed equity buys and sells by date and price for the selected portfolio book. Average-cost realized and unrealized P&L; full edit/delete in-app or bulk fill via save-file JSON.',
+    body: `## How it works
+
+The **Performance** tab is an **executed trade ledger**. It does not change **Positions** share counts or **Chart** planned buy/sell actions.
+
+### Adding trades
+
+- **+ Trade** opens a drawer: symbol, side, date (**Today** shortcut), shares, price, optional fees and note
+- **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
+
+> Symbols are normalized to uppercase on save. Equities only (standard tickers).
+
+### Editing
+
+Use **Edit** or **Delete** on any row in the trade log.
+
+### Save file / agents
+
+Trades live under \`portfolioTrades\` in **Export** / linked JSON. Invalid rows are dropped on import; missing \`id\` values are minted.
+
+- **version** — always \`1\`
+- **trades[]** — each row needs \`portfolioId\`, \`symbol\`, \`side\` (\`buy\` / \`sell\`), \`tradeDate\` (\`YYYY-MM-DD\`), \`shares\`, \`price\`; optional \`fees\`, \`note\`, \`id\`, \`holdingId\`
+
+See \`docs/portfolio-trades-schema.md\` in the repo for agent-oriented examples.
+
+## How to interpret
+
+P&L uses **average cost** on the ledger:
+
+- **Realized** — sells vs average basis (fees on buys add to basis; sell fees reduce proceeds)
+- **Unrealized** — open ledger shares × mark price − remaining cost basis
+- **Return on buys** — (realized + unrealized) ÷ gross buy notional
+
+> Marks come from the linked projection quote or manual position price when available; otherwise unrealized shows **No mark**.
+
+## Example
+
+Buy **10** \`MSFT\` @ **$400** fee **$5**; later sell **4** @ **$450**. Realized on those four uses average cost **$400.50**/sh; **6** shares stay open for unrealized vs today’s quote.
+`,
+    status: 'ready',
+    location: {
+      tab: 'portfolio',
+      view: 'performance',
+      anchor: 'portfolio.performance',
     },
     parentId: 'portfolio',
     order: 6,

@@ -562,6 +562,33 @@ export type PortfolioAction = {
   note?: string
 }
 
+/** Executed equity trade (ledger only — does not change Positions shares). */
+export type PortfolioTradeSide = 'buy' | 'sell'
+
+export type PortfolioTrade = {
+  id: string
+  /** Portfolio book this trade belongs to. */
+  portfolioId: string
+  /** Ticker symbol (equities). Normalized to uppercase on load. */
+  symbol: string
+  side: PortfolioTradeSide
+  /** Calendar execution date YYYY-MM-DD. */
+  tradeDate: string
+  shares: number
+  /** Per-share execution price (USD book). */
+  price: number
+  /** Trading fees / commission in USD. Default 0. */
+  fees?: number
+  note?: string
+  /** Optional link to a holding row (UI prefill only). */
+  holdingId?: string | null
+}
+
+export type PortfolioTradesState = {
+  version: 1
+  trades: PortfolioTrade[]
+}
+
 /** Display order of holdings on the Positions tab (does not reorder stored array). */
 export type PortfolioHoldingSort = 'manual' | 'symbol' | 'value'
 

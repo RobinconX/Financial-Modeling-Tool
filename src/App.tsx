@@ -13,6 +13,7 @@ import { HistoryView } from './components/history/HistoryView'
 import { useSavings } from './hooks/useSavings'
 import { useOverview } from './hooks/useOverview'
 import { usePortfolioContributions } from './hooks/usePortfolioContributions'
+import { usePortfolioTrades } from './hooks/usePortfolioTrades'
 import { usePortfolioActuals } from './hooks/usePortfolioActuals'
 import { usePortfolioSharedCash } from './hooks/usePortfolioSharedCash'
 import {
@@ -284,6 +285,7 @@ export default function App() {
   const savingsAccounts = savings.accounts
   const overview = useOverview()
   const portfolioContributions = usePortfolioContributions()
+  const portfolioTrades = usePortfolioTrades()
   const portfolioActuals = usePortfolioActuals()
   const {
     storageRecovery: portfolioActualsStorageRecovery,
@@ -633,6 +635,10 @@ export default function App() {
                 sharedCashError={portfolioSharedCash.error}
                 onSharedCashPatch={portfolioSharedCash.updateFromPortfolioPatch}
                 portfolioActualsMode={portfolioActualsMode}
+                portfolioTrades={portfolioTrades.trades}
+                portfolioTradesError={portfolioTrades.error}
+                onSaveTrade={portfolioTrades.saveTrade}
+                onDeleteTrade={portfolioTrades.deleteTrade}
               />
             )}
 

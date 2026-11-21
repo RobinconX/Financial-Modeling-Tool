@@ -56,6 +56,11 @@ describe('teachings registry', () => {
         { tab: 'portfolio', view: 'growth', anchor: 'portfolio.growth' },
         'portfolio',
       ],
+      [
+        'portfolio.performance',
+        { tab: 'portfolio', view: 'performance', anchor: 'portfolio.performance' },
+        'portfolio',
+      ],
     ] as const) {
       const g = getGuide(id)
       expect(g?.status, id).toBe('ready')
@@ -74,6 +79,7 @@ describe('teachings registry', () => {
       'portfolio.cash',
       'portfolio.positions',
       'portfolio.growth',
+      'portfolio.performance',
       'portfolio.goal',
     ])
     expect(getGuideAncestors('portfolio.cash').map((g) => g.id)).toEqual(['portfolio'])

@@ -85,6 +85,8 @@ type Props = {
   focusHoldingId?: string | null
   focusOpeningCash?: boolean
   focusGrowthRate?: boolean
+  /** Log an executed trade (ledger) for this equity holding. */
+  onLogTrade?: (symbol: string, holdingId: string) => void
 }
 
 const BASIS_OPTIONS: { id: ValuationBasis | 'easy'; label: string }[] = [
@@ -115,6 +117,7 @@ export function PortfolioHoldingsEditor({
   sharedCashMode = false,
   sharedCashError = null,
   focusHoldingId = null,
+  onLogTrade,
   focusOpeningCash = false,
   focusGrowthRate = false,
 }: Props) {
@@ -1194,6 +1197,15 @@ export function PortfolioHoldingsEditor({
 
               {isOpen && (
                 <div className="space-y-3 pb-2 pl-7 pt-2">
+                  {!isOption && onLogTrade && h.symbol.trim() ? (
+                    <button
+                      type="button"
+                      className="btn-ghost !py-1 !text-[11px]"
+                      onClick={() => onLogTrade(h.symbol.trim().toUpperCase(), h.id)}
+                    >
+                      Log trade
+                    </button>
+                  ) : null}
                   <div className="grid max-w-xs gap-1">
                     <label className="label">Type</label>
                     <select

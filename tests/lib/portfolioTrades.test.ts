@@ -1,0 +1,155 @@
+import { describe, expect, it } from 'vitest'
+import {
+  computeSymbolPerformance,
+  normalizePortfolioTrade,
+  normalizePortfolioTrades,
+  upsertTrade,
+} from '../../src/lib/portfolioTrades'
+import { parseAppDataSnapshot } from '../../src/lib/appDataSnapshot'
+import { APP_DATA_SNAPSHOT_VERSION } from '../../src/lib/appDataSnapshot'
+
+const PORT_ID = '11111111-1111-4111-8111-111111111111'
+
+describe('portfolioTrades', () => {
+  it('normalizes agent-written rows with missing id and mixed-case symbol', () => {
+    const t = normalizePortfolioTrade({
+      portfolioId: PORT_ID,
+      symbol: ' msft ',
+      side: 'buy',
+      tradeDate: '2024-06-01',
+      shares: 5,
+      price: 400,
+    })
+    expect(t).not.toBeNull()
+    expect(t!.symbol).toBe('MSFT')
+    expect(t!.id).toMatch(/^[0-9a-f-]{36}$/i)
+    expect(t!.fees).toBe(0)
+  })
+
+  it('drops invalid trades on bulk normalize', () => {
+    const state = normalizePortfolioTrades({
+      version: 1,
+      trades: [
+        {
+          portfolioId: PORT_ID,
+          symbol: 'AAPL',
+          side: 'buy',
+          tradeDate: '2024-01-01',
+          shares: 1,
+          price: 100,
+        },
+        { portfolioId: PORT_ID, symbol: 'BAD TICKER', side: 'buy', tradeDate: '2024-01-01', shares: 1, price: 1 },
+        { portfolioId: '', symbol: 'X', side: 'nope', tradeDate: '2024-13-40', shares: -1, price: 0 },
+      ],
+    })
+    expect(state.trades).toHaveLength(1)
+    expect(state.trades[0]!.symbol).toBe('AAPL')
+  })
+
+  it('computes average-cost realized and unrealized P&L', () => {
+    const trades = normalizePortfolioTrades({
+      version: 1,
+      trades: [
+        {
+          id: '1',
+          portfolioId: PORT_ID,
+          symbol: 'AAPL',
+          side: 'buy',
+          tradeDate: '2024-01-01',
+          shares: 10,
+          price: 100,
+          fees: 10,
+        },
+        {
+          id: '2',
+          portfolioId: PORT_ID,
+          symbol: 'AAPL',
+          side: 'sell',
+          tradeDate: '2024-06-01',
+          shares: 4,
+          price: 120,
+          fees: 2,
+        },
+      ],
+    }).trades
+    const perf = computeSymbolPerformance(trades, 130)!
+    expect(perf.ledgerShares).toBe(6)
+    expect(perf.realizedPnl).toBeCloseTo(4 * 120 - 2 - 4 * 101, 4)
+    expect(perf.unrealizedPnl).toBeCloseTo(6 * 130 - 6 * 101, 4)
+  })
+
+  it('upsert replaces by id', () => {
+    const base = normalizePortfolioTrades({
+      version: 1,
+      trades: [
+        {
+          id: 't1',
+          portfolioId: PORT_ID,
+          symbol: 'AAPL',
+          side: 'buy',
+          tradeDate: '2024-01-01',
+          shares: 1,
+          price: 1,
+        },
+      ],
+    })
+    const next = upsertTrade(base, {
+      id: 't1',
+      portfolioId: PORT_ID,
+      symbol: 'AAPL',
+      side: 'buy',
+      tradeDate: '2024-01-01',
+      shares: 2,
+      price: 1,
+    })
+    expect(next.trades).toHaveLength(1)
+    expect(next.trades[0]!.shares).toBe(2)
+  })
+})
+
+describe('portfolioTrades snapshot import', () => {
+  it('parses agent-written portfolioTrades from a save file', () => {
+    const parsed = parseAppDataSnapshot({
+      version: APP_DATA_SNAPSHOT_VERSION,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      scenarios: [],
+      portfolios: [
+        {
+          id: PORT_ID,
+          name: 'Main',
+          currentCash: 0,
+          deposits: [],
+          holdings: [],
+          actions: [],
+          createdAt: '2026-01-01T00:00:00.000Z',
+          updatedAt: '2026-01-01T00:00:00.000Z',
+        },
+      ],
+      incomeCost: { version: 3, scenarios: [], lines: [], draws: [] },
+      savings: { version: 1, accounts: [] },
+      overview: { version: 2, scenarios: [], selectedScenarioId: null },
+      portfolioTrades: {
+        version: 1,
+        trades: [
+          {
+            portfolioId: PORT_ID,
+            symbol: 'nvda',
+            side: 'buy',
+            tradeDate: '2025-05-20',
+            shares: 3,
+            price: 950,
+          },
+        ],
+      },
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed) return
+    expect(parsed.portfolioTrades?.trades).toHaveLength(1)
+    expect(parsed.portfolioTrades?.trades[0]).toMatchObject({
+      symbol: 'NVDA',
+      shares: 3,
+      portfolioId: PORT_ID,
+    })
+    expect(parsed.portfolioTrades?.trades[0]!.id).toMatch(/^[0-9a-f-]{36}$/i)
+  })
+})
