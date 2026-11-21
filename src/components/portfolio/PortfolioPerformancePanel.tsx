@@ -4,7 +4,9 @@ import { formatMoney } from '../../lib/format'
 import {
   computePortfolioPerformance,
   newPortfolioTrade,
+  tradedSymbolsFromTrades,
   tradesForPortfolio,
+  tradesMatchingSymbol,
 } from '../../lib/portfolioTrades'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { PortfolioTradeDrawer } from './PortfolioTradeDrawer'
@@ -47,9 +49,29 @@ export function PortfolioPerformancePanel({
     () => tradesForPortfolio(tradesState, portfolio.id),
     [tradesState, portfolio.id],
   )
+  const tradedSymbols = useMemo(
+    () => tradedSymbolsFromTrades(portfolioTrades),
+    [portfolioTrades],
+  )
+  const [scopeSymbol, setScopeSymbol] = useState<string | null>(null)
+
+  useEffect(() => {
+    setScopeSymbol(null)
+  }, [portfolio.id])
+
+  useEffect(() => {
+    if (scopeSymbol && !tradedSymbols.includes(scopeSymbol)) {
+      setScopeSymbol(null)
+    }
+  }, [scopeSymbol, tradedSymbols])
+
+  const scopedTrades = useMemo(
+    () => tradesMatchingSymbol(portfolioTrades, scopeSymbol),
+    [portfolioTrades, scopeSymbol],
+  )
   const summary = useMemo(
-    () => computePortfolioPerformance(portfolioTrades, portfolio, scenarios),
-    [portfolioTrades, portfolio, scenarios],
+    () => computePortfolioPerformance(scopedTrades, portfolio, scenarios),
+    [scopedTrades, portfolio, scenarios],
   )
 
   const [drawerOpen, setDrawerOpen] = useState(false)
@@ -86,22 +108,44 @@ export function PortfolioPerformancePanel({
   return (
     <div className="space-y-5" data-guide-anchor="portfolio.performance">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div>
-          <div className="flex items-center gap-1.5">
-            <h3 className="text-sm font-semibold text-white">Performance</h3>
-            <FeatureGuideButton id="portfolio.performance" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-2">
+            <div className="flex items-center gap-1.5">
+              <h3 className="text-sm font-semibold text-white">Performance</h3>
+              <FeatureGuideButton id="portfolio.performance" />
+            </div>
+            {tradedSymbols.length > 0 ? (
+              <select
+                className="input !w-auto max-w-[11rem] !py-1 !text-xs tabular-nums"
+                value={scopeSymbol ?? ''}
+                onChange={(e) => {
+                  const v = e.target.value
+                  setScopeSymbol(v ? v : null)
+                }}
+                aria-label="Performance scope"
+              >
+                <option value="">Whole portfolio</option>
+                {tradedSymbols.map((sym) => (
+                  <option key={sym} value={sym}>
+                    {sym}
+                  </option>
+                ))}
+              </select>
+            ) : null}
+            <button
+              type="button"
+              className="btn-primary !px-2.5 !py-1 !text-xs"
+              onClick={() => openNew(scopeSymbol ?? undefined)}
+            >
+              + Trade
+            </button>
           </div>
           <p className="mt-1 text-xs text-white/45">
-            Executed trades for this book only. Ledger does not change **Positions** share counts.
+            {scopeSymbol
+              ? `Trades and P&L for ${scopeSymbol} on this book.`
+              : 'All traded symbols on this book (incl. closed). Ledger does not change Positions.'}
           </p>
         </div>
-        <button
-          type="button"
-          className="btn-primary !text-xs"
-          onClick={() => openNew()}
-        >
-          + Trade
-        </button>
       </div>
 
       {tradesError ? (
@@ -193,7 +237,7 @@ export function PortfolioPerformancePanel({
         <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-300/80">
           Trade log
         </h4>
-        {portfolioTrades.length === 0 ? (
+        {scopedTrades.length === 0 ? (
           <p className="text-sm text-white/40">
             No trades yet. Use **+ Trade** or paste trades into your save file under{' '}
             <code className="text-emerald-300/80">portfolioTrades</code>.
@@ -204,7 +248,9 @@ export function PortfolioPerformancePanel({
               <thead className="text-xs uppercase tracking-wider text-white/45">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Date</th>
-                  <th className="px-3 py-2 text-left font-medium">Symbol</th>
+                  {!scopeSymbol ? (
+                    <th className="px-3 py-2 text-left font-medium">Symbol</th>
+                  ) : null}
                   <th className="px-3 py-2 text-left font-medium">Side</th>
                   <th className="px-3 py-2 text-right font-medium">Shares</th>
                   <th className="px-3 py-2 text-right font-medium">Price</th>
@@ -213,12 +259,14 @@ export function PortfolioPerformancePanel({
                 </tr>
               </thead>
               <tbody>
-                {[...portfolioTrades]
+                {[...scopedTrades]
                   .sort((a, b) => b.tradeDate.localeCompare(a.tradeDate))
                   .map((t) => (
                     <tr key={t.id} className="border-t border-white/5">
                       <td className="px-3 py-2 tabular-nums text-white/80">{t.tradeDate}</td>
-                      <td className="px-3 py-2 font-medium text-white">{t.symbol}</td>
+                      {!scopeSymbol ? (
+                        <td className="px-3 py-2 font-medium text-white">{t.symbol}</td>
+                      ) : null}
                       <td className="px-3 py-2 capitalize">
                         <span
                           className={

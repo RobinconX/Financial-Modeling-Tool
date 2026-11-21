@@ -1,10 +1,14 @@
 import { describe, expect, it } from 'vitest'
 import {
+  computePortfolioPerformance,
   computeSymbolPerformance,
   normalizePortfolioTrade,
   normalizePortfolioTrades,
+  tradedSymbolsFromTrades,
+  tradesMatchingSymbol,
   upsertTrade,
 } from '../../src/lib/portfolioTrades'
+import type { SavedPortfolio } from '../../src/types'
 import { parseAppDataSnapshot } from '../../src/lib/appDataSnapshot'
 import { APP_DATA_SNAPSHOT_VERSION } from '../../src/lib/appDataSnapshot'
 
@@ -76,6 +80,60 @@ describe('portfolioTrades', () => {
     expect(perf.ledgerShares).toBe(6)
     expect(perf.realizedPnl).toBeCloseTo(4 * 120 - 2 - 4 * 101, 4)
     expect(perf.unrealizedPnl).toBeCloseTo(6 * 130 - 6 * 101, 4)
+  })
+
+  it('lists traded symbols including fully closed positions', () => {
+    const trades = normalizePortfolioTrades({
+      version: 1,
+      trades: [
+        {
+          id: 'a',
+          portfolioId: PORT_ID,
+          symbol: 'AAPL',
+          side: 'buy',
+          tradeDate: '2024-01-01',
+          shares: 1,
+          price: 1,
+        },
+        {
+          id: 'b',
+          portfolioId: PORT_ID,
+          symbol: 'AAPL',
+          side: 'sell',
+          tradeDate: '2024-02-01',
+          shares: 1,
+          price: 2,
+        },
+        {
+          id: 'c',
+          portfolioId: PORT_ID,
+          symbol: 'XYZ',
+          side: 'buy',
+          tradeDate: '2024-01-01',
+          shares: 1,
+          price: 1,
+        },
+      ],
+    }).trades
+    expect(tradedSymbolsFromTrades(trades)).toEqual(['AAPL', 'XYZ'])
+    const onlyAapl = tradesMatchingSymbol(trades, 'AAPL')
+    expect(onlyAapl).toHaveLength(2)
+    const emptyBook: SavedPortfolio = {
+      id: PORT_ID,
+      name: 'T',
+      currentCash: 0,
+      deposits: [],
+      holdings: [],
+      actions: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const whole = computePortfolioPerformance(trades, emptyBook, [])
+    expect(whole.symbols).toHaveLength(2)
+    expect(whole.realizedPnl).toBeGreaterThan(0)
+    const scoped = computePortfolioPerformance(onlyAapl, emptyBook, [])
+    expect(scoped.symbols.map((s) => s.symbol)).toEqual(['AAPL'])
+    expect(scoped.realizedPnl).toBe(whole.symbols.find((s) => s.symbol === 'AAPL')!.realizedPnl)
   })
 
   it('upsert replaces by id', () => {

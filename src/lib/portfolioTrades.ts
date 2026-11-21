@@ -134,6 +134,23 @@ export function tradesForPortfolio(
   return state.trades.filter((t) => t.portfolioId === portfolioId)
 }
 
+/** Every symbol with at least one trade on this book (incl. closed / symbol-only). */
+export function tradedSymbolsFromTrades(trades: PortfolioTrade[]): string[] {
+  const set = new Set<string>()
+  for (const t of trades) set.add(t.symbol)
+  return [...set].sort((a, b) => a.localeCompare(b))
+}
+
+/** `symbol` null = all trades for the book. */
+export function tradesMatchingSymbol(
+  trades: PortfolioTrade[],
+  symbol: string | null,
+): PortfolioTrade[] {
+  if (!symbol) return trades
+  const sym = symbol.toUpperCase()
+  return trades.filter((t) => t.symbol === sym)
+}
+
 export function upsertTrade(
   state: PortfolioTradesState,
   trade: PortfolioTrade,

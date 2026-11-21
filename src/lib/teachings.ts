@@ -1218,6 +1218,15 @@ The **Performance** tab is an **executed trade ledger**. It does not change **Po
 
 Use **Edit** or **Delete** on any row in the trade log.
 
+### Scope
+
+The header **select** switches what you are viewing:
+
+- **Whole portfolio** — rollup across every symbol that has any logged trade on this book, including **closed** names (fully sold) and symbol-only trades you never sized in **Positions**
+- **One ticker** — summary cards, **By symbol**, and **Trade log** show only that symbol
+
+> Realized P&L on closed tickers still counts in the whole-portfolio rollup.
+
 ### Save file / agents
 
 Trades live under \`portfolioTrades\` in **Export** / linked JSON. Invalid rows are dropped on import; missing \`id\` values are minted.
