@@ -103,8 +103,13 @@ export function buildReturnChartTradeMarkers(
   return out
 }
 
+export function chartTimeForTradeDate(date: string): number {
+  return Date.parse(`${date}T12:00:00Z`)
+}
+
 type ChartRow = {
   date: string
+  time: number
   value: number | null
   valuePos: number | null
   valueNeg: number | null
@@ -147,7 +152,12 @@ export function ReturnProgressionTooltip({
   if (!active || !payload?.length) return null
   const row = payload[0]?.payload as ChartRow | undefined
   const seriesLabel = returnProgressionSeriesLabel(mode)
-  const dateLabel = label != null ? String(label) : ''
+  const dateLabel =
+    label != null
+      ? typeof label === 'number' && Number.isFinite(label)
+        ? formatTick(isoDateFromUtcMs(label))
+        : String(label)
+      : ''
   if (row?.value == null || !Number.isFinite(row.value)) {
     return (
       <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
@@ -184,13 +194,30 @@ function isoDateFromUtcMs(ms: number): string {
   return `${y}-${m}-${day}`
 }
 
-function zeroCrossDate(dateA: string, vA: number, dateB: string, vB: number): string {
+function zeroCrossTime(
+  dateA: string,
+  vA: number,
+  dateB: string,
+  vB: number,
+): number {
   const tA = Date.parse(`${dateA}T12:00:00Z`)
   const tB = Date.parse(`${dateB}T12:00:00Z`)
-  if (!Number.isFinite(tA) || !Number.isFinite(tB) || vA === vB) return dateB
+  if (!Number.isFinite(tA) || !Number.isFinite(tB) || vA === vB) {
+    return chartTimeForTradeDate(dateB)
+  }
   const frac = vA / (vA - vB)
-  const tCross = tA + frac * (tB - tA)
-  return isoDateFromUtcMs(tCross)
+  return tA + frac * (tB - tA)
+}
+
+function pushChartRow(
+  rows: ChartRow[],
+  date: string,
+  time: number,
+  value: number | null,
+  valuePos: number | null,
+  valueNeg: number | null,
+): void {
+  rows.push({ date, time, value, valuePos, valueNeg })
 }
 
 /** One value per day; split stroke masks for green/red (null when not on that side). */
@@ -219,47 +246,31 @@ export function buildSignedReturnChartRows(
       cur.value != null &&
       ((prev.value > 0 && cur.value < 0) || (prev.value < 0 && cur.value > 0))
     ) {
-      const crossDate = zeroCrossDate(prev.date, prev.value, cur.date, cur.value)
+      const crossTime = zeroCrossTime(prev.date, prev.value, cur.date, cur.value)
+      const crossDate = isoDateFromUtcMs(crossTime)
       // Two rows at the cross: end one series at 0, start the other at 0 — never both masks on one row.
       if (prev.value > 0) {
-        rows.push({
-          date: crossDate,
-          value: 0,
-          valuePos: 0,
-          valueNeg: null,
-        })
-        rows.push({
-          date: crossDate,
-          value: 0,
-          valuePos: null,
-          valueNeg: 0,
-        })
+        pushChartRow(rows, crossDate, crossTime, 0, 0, null)
+        pushChartRow(rows, crossDate, crossTime, 0, null, 0)
       } else {
-        rows.push({
-          date: crossDate,
-          value: 0,
-          valuePos: null,
-          valueNeg: 0,
-        })
-        rows.push({
-          date: crossDate,
-          value: 0,
-          valuePos: 0,
-          valueNeg: null,
-        })
+        pushChartRow(rows, crossDate, crossTime, 0, null, 0)
+        pushChartRow(rows, crossDate, crossTime, 0, 0, null)
       }
     }
 
     const v = cur.value
-    rows.push({
-      date: cur.date,
-      value: v,
-      valuePos: v == null ? null : v >= 0 ? v : null,
-      valueNeg: v == null ? null : v < 0 ? v : null,
-    })
+    const t = chartTimeForTradeDate(cur.date)
+    pushChartRow(
+      rows,
+      cur.date,
+      t,
+      v,
+      v == null ? null : v >= 0 ? v : null,
+      v == null ? null : v < 0 ? v : null,
+    )
   }
 
-  rows.sort((a, b) => a.date.localeCompare(b.date))
+  rows.sort((a, b) => a.time - b.time)
   return rows
 }
 
@@ -355,8 +366,11 @@ export function PortfolioReturnChart({
           <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
-              dataKey="date"
-              tickFormatter={formatTick}
+              dataKey="time"
+              type="number"
+              scale="time"
+              domain={['dataMin', 'dataMax']}
+              tickFormatter={(t: number) => formatTick(isoDateFromUtcMs(t))}
               tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
               minTickGap={48}
             />
@@ -415,7 +429,7 @@ export function PortfolioReturnChart({
               ? tradeMarkers.map((m) => (
                   <ReferenceDot
                     key={m.id}
-                    x={m.tradeDate}
+                    x={chartTimeForTradeDate(m.tradeDate)}
                     y={m.y}
                     r={5}
                     fill={m.side === 'buy' ? '#34d399' : '#f87171'}

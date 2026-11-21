@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildReturnChartTradeMarkers,
   buildSignedReturnChartRows,
+  chartTimeForTradeDate,
   ReturnProgressionTooltip,
 } from '../../src/components/portfolio/PortfolioReturnChart'
 import type { PortfolioTrade } from '../../src/types'
@@ -69,7 +70,17 @@ describe('ReturnProgressionTooltip', () => {
       label: '2024-01-02',
       mode: 'usd',
       displayCurrency: 'USD',
-      payload: [{ payload: { date: '2024-01-02', value: 1250.5, valuePos: 1250.5, valueNeg: null } }],
+      payload: [
+        {
+          payload: {
+            date: '2024-01-02',
+            time: chartTimeForTradeDate('2024-01-02'),
+            value: 1250.5,
+            valuePos: 1250.5,
+            valueNeg: null,
+          },
+        },
+      ],
     })
     expect(el).not.toBeNull()
     const text = JSON.stringify(el)
@@ -84,12 +95,30 @@ describe('ReturnProgressionTooltip', () => {
       label: '2024-01-01',
       mode: 'pct',
       displayCurrency: 'USD',
-      payload: [{ payload: { date: '2024-01-01', value: null, valuePos: null, valueNeg: null } }],
+      payload: [
+        {
+          payload: {
+            date: '2024-01-01',
+            time: chartTimeForTradeDate('2024-01-01'),
+            value: null,
+            valuePos: null,
+            valueNeg: null,
+          },
+        },
+      ],
     })
     expect(el).not.toBeNull()
     const text = JSON.stringify(el)
     expect(text).toContain('2024-01-01')
     expect(text).toContain('—')
+  })
+})
+
+describe('chartTimeForTradeDate', () => {
+  it('anchors trade x at noon UTC on the trade date', () => {
+    expect(chartTimeForTradeDate('2024-06-15')).toBe(
+      Date.parse('2024-06-15T12:00:00Z'),
+    )
   })
 })
 
