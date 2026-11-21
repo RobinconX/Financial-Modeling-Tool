@@ -1,4 +1,4 @@
-import { lazy, Suspense, useEffect, useMemo, useState } from 'react'
+import { Suspense, useEffect, useMemo, useState } from 'react'
 import type {
   ComparableBasis,
   EasyProjection,
@@ -41,11 +41,8 @@ import {
   INVESTMENT_THESIS_MAX_LENGTH,
 } from '../../lib/investmentThesis'
 import { AddThesisButton } from './AddThesisButton'
+import { InvestmentThesisModalLazy } from './investmentThesisModalLazy'
 import { ThesisDocumentIcon } from './ThesisDocumentIcon'
-
-const InvestmentThesisModal = lazy(() =>
-  import('./InvestmentThesisModal').then((m) => ({ default: m.InvestmentThesisModal })),
-)
 
 type SaveInput = Omit<SavedScenario, 'id' | 'createdAt' | 'updatedAt'> & { id?: string }
 
@@ -660,7 +657,7 @@ export function ProjectionPanel({
 
       <Suspense fallback={null}>
         {thesisModalOpen ? (
-          <InvestmentThesisModal
+          <InvestmentThesisModalLazy
             open={thesisModalOpen}
             onClose={() => setThesisModalOpen(false)}
             symbol={thesisSymbol}

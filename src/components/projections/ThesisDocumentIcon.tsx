@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react'
+import { investmentThesisModalWarmHandlers } from './investmentThesisModalLazy'
 
 export function ThesisDocumentGlyph({ className = '' }: { className?: string }) {
   return (
@@ -39,6 +40,7 @@ export function ThesisDocumentIcon({
       className={`inline-flex h-7 w-7 shrink-0 items-center justify-center rounded-md text-white/45 hover:bg-white/10 hover:text-emerald-300 ${className}`}
       aria-label={label}
       onClick={onClick}
+      {...investmentThesisModalWarmHandlers}
     >
       <ThesisDocumentGlyph />
     </button>

@@ -1,4 +1,5 @@
 import type { MouseEvent } from 'react'
+import { investmentThesisModalWarmHandlers } from './investmentThesisModalLazy'
 import { ThesisDocumentGlyph } from './ThesisDocumentIcon'
 
 type Props = {
@@ -13,6 +14,7 @@ export function AddThesisButton({ onClick, className = '' }: Props) {
       type="button"
       className={`btn-ghost gap-1.5 !py-1 !text-xs ${className}`}
       onClick={onClick}
+      {...investmentThesisModalWarmHandlers}
     >
       <ThesisDocumentGlyph className="text-white/55" />
       Add thesis
