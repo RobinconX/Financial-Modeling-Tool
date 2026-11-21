@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest'
 import {
   buildReturnChartTradeMarkers,
   buildSignedReturnChartRows,
+  ReturnProgressionTooltip,
 } from '../../src/components/portfolio/PortfolioReturnChart'
 import type { PortfolioTrade } from '../../src/types'
 import type { ReturnProgressionPoint } from '../../src/lib/portfolioPerformanceStats'
@@ -50,6 +51,35 @@ describe('buildSignedReturnChartRows', () => {
         expect(r.valueNeg).toBeNull()
       }
     }
+  })
+})
+
+describe('ReturnProgressionTooltip', () => {
+  it('renders a single formatted value from the value series payload', () => {
+    const el = ReturnProgressionTooltip({
+      active: true,
+      label: '2024-01-02',
+      mode: 'usd',
+      payload: [{ payload: { date: '2024-01-02', value: 1250.5, valuePos: 1250.5, valueNeg: null } }],
+    })
+    expect(el).not.toBeNull()
+    const text = JSON.stringify(el)
+    expect(text).toContain('2024-01-02')
+    expect(text).toContain('Total P&L')
+    expect(text).toContain('$1.25K')
+  })
+
+  it('shows one placeholder when value is missing', () => {
+    const el = ReturnProgressionTooltip({
+      active: true,
+      label: '2024-01-01',
+      mode: 'pct',
+      payload: [{ payload: { date: '2024-01-01', value: null, valuePos: null, valueNeg: null } }],
+    })
+    expect(el).not.toBeNull()
+    const text = JSON.stringify(el)
+    expect(text).toContain('2024-01-01')
+    expect(text).toContain('—')
   })
 })
 

@@ -78,6 +78,63 @@ function formatTick(date: string): string {
   return `${y}-${m}`
 }
 
+function returnProgressionSeriesLabel(mode: ReturnChartMode): string {
+  return mode === 'pct' ? 'Return on buys' : 'Total P&L'
+}
+
+function formatReturnProgressionValue(
+  value: number,
+  mode: ReturnChartMode,
+): string {
+  return mode === 'pct' ? `${value.toFixed(2)}%` : formatMoney(value, 'USD')
+}
+
+type ReturnProgressionTooltipProps = {
+  active?: boolean
+  payload?: ReadonlyArray<{ payload?: ChartRow }>
+  label?: string | number
+  mode: ReturnChartMode
+}
+
+/** One metric row; payload comes from the invisible `value` line (signed lines are tooltipType=none). */
+export function ReturnProgressionTooltip({
+  active,
+  payload,
+  label,
+  mode,
+}: ReturnProgressionTooltipProps) {
+  if (!active || !payload?.length) return null
+  const row = payload[0]?.payload as ChartRow | undefined
+  const seriesLabel = returnProgressionSeriesLabel(mode)
+  const dateLabel = label != null ? String(label) : ''
+  if (row?.value == null || !Number.isFinite(row.value)) {
+    return (
+      <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
+        <div className="mb-1.5 font-medium text-white/70">{dateLabel}</div>
+        <div className="tabular-nums text-white/50">—</div>
+      </div>
+    )
+  }
+  const tone =
+    row.value > 0 ? '#34d399' : row.value < 0 ? '#f87171' : 'rgba(255,255,255,0.45)'
+  const formatted = formatReturnProgressionValue(row.value, mode)
+  return (
+    <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
+      <div className="mb-1.5 font-medium text-white/70">{dateLabel}</div>
+      <div className="flex items-center justify-between gap-4">
+        <span className="flex items-center gap-1.5 text-white/60">
+          <span
+            className="inline-block h-1.5 w-1.5 rounded-sm"
+            style={{ background: tone }}
+          />
+          {seriesLabel}
+        </span>
+        <span className="tabular-nums text-white/85">{formatted}</span>
+      </div>
+    </div>
+  )
+}
+
 function isoDateFromUtcMs(ms: number): string {
   const d = new Date(ms)
   const y = d.getUTCFullYear()
@@ -258,40 +315,10 @@ export function PortfolioReturnChart({
               }
             />
             <Tooltip
-              contentStyle={{
-                background: '#121820',
-                border: '1px solid rgba(255,255,255,0.1)',
-                borderRadius: 8,
-                fontSize: 12,
-              }}
-              labelFormatter={(l) => String(l)}
-              content={({ active, payload, label }) => {
-                if (!active || !payload?.length) return null
-                const row = payload[0]!.payload as ChartRow
-                if (row.value == null || !Number.isFinite(row.value)) {
-                  return (
-                    <div className="px-2 py-1.5 text-xs text-white/85">
-                      <p className="text-white/55">{label}</p>
-                      <p>—</p>
-                    </div>
-                  )
-                }
-                const formatted =
-                  mode === 'pct'
-                    ? `${row.value.toFixed(2)}%`
-                    : formatMoney(row.value, 'USD')
-                const seriesLabel =
-                  mode === 'pct' ? 'Return on buys' : 'Total P&L'
-                return (
-                  <div className="px-2 py-1.5 text-xs text-white/85">
-                    <p className="text-white/55">{label}</p>
-                    <p>
-                      <span className="text-white/50">{seriesLabel}: </span>
-                      {formatted}
-                    </p>
-                  </div>
-                )
-              }}
+              cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
+              content={(props) => (
+                <ReturnProgressionTooltip {...props} mode={mode} />
+              )}
             />
             <Line
               type="monotone"
@@ -301,6 +328,7 @@ export function PortfolioReturnChart({
               dot={false}
               connectNulls={false}
               legendType="none"
+              tooltipType="none"
               isAnimationActive={false}
             />
             <Line
@@ -309,6 +337,19 @@ export function PortfolioReturnChart({
               stroke="#f87171"
               strokeWidth={2}
               dot={false}
+              connectNulls={false}
+              legendType="none"
+              tooltipType="none"
+              isAnimationActive={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="value"
+              name={returnProgressionSeriesLabel(mode)}
+              stroke="transparent"
+              strokeWidth={0}
+              dot={false}
+              activeDot={{ r: 4, strokeWidth: 0, fill: 'transparent' }}
               connectNulls={false}
               legendType="none"
               isAnimationActive={false}
