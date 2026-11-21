@@ -701,7 +701,7 @@ On **Analyze**, thesis notes open in a centered modal (about **4xl** wide, most 
 
 ### Opening the editor
 
-- **Add thesis** — subtle link under the scenario title when there is no thesis yet (draft or saved); **Compare** has one control per panel
+- **Add thesis** — outline button with document icon under the scenario title when there is no thesis yet (draft or saved); **Compare** has one control per panel
 - **Document** icon — appears next to the title once the save has thesis text; click to reopen the modal
 - **Guide** — in the modal header (same child guide as this article)
 
