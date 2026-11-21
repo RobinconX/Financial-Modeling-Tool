@@ -204,9 +204,26 @@ export type SymbolPerformance = {
   returnPct: number | null
 }
 
+/** Tradeable equity ticker for a position row (holding symbol or linked scenario). */
+export function holdingEquityTradeSymbol(
+  holding: PortfolioHolding,
+  scenarios: SavedScenario[] = [],
+): string | null {
+  if (holding.option) return null
+  const direct = holding.symbol.trim().toUpperCase()
+  if (direct) return direct
+  if (holding.scenarioId) {
+    const sc = scenarios.find((s) => s.id === holding.scenarioId)
+    const fromScenario = sc?.symbol?.trim().toUpperCase()
+    if (fromScenario) return fromScenario
+  }
+  return null
+}
+
 /** Equity holding on this book matching trade symbol and/or draft `holdingId` (no options). */
 export function equityHoldingForTradePrefill(
   portfolio: SavedPortfolio,
+  scenarios: SavedScenario[] = [],
   input: { symbol?: string; holdingId?: string | null },
 ): PortfolioHolding | null {
   if (input.holdingId) {
@@ -215,11 +232,12 @@ export function equityHoldingForTradePrefill(
   }
   const sym = (input.symbol ?? '').trim().toUpperCase()
   if (!sym) return null
-  return (
-    portfolio.holdings.find(
-      (h) => !h.option && h.symbol.toUpperCase() === sym,
-    ) ?? null
-  )
+  for (const h of portfolio.holdings) {
+    if (h.option) continue
+    const ticker = holdingEquityTradeSymbol(h, scenarios)
+    if (ticker === sym) return h
+  }
+  return null
 }
 
 export function positionPrefillFromHolding(

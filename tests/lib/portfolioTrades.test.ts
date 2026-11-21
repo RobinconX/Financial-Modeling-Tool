@@ -5,6 +5,7 @@ import {
   normalizePortfolioTrade,
   normalizePortfolioTrades,
   equityHoldingForTradePrefill,
+  holdingEquityTradeSymbol,
   positionPrefillFromHolding,
   resolveSymbolMark,
   tradedSymbolsFromTrades,
@@ -48,11 +49,11 @@ describe('portfolioTrades', () => {
       updatedAt: '2026-01-01T00:00:00.000Z',
     }
     expect(
-      equityHoldingForTradePrefill(book, { holdingId: 'h-eq' })?.id,
+      equityHoldingForTradePrefill(book, [], { holdingId: 'h-eq' })?.id,
     ).toBe('h-eq')
-    expect(equityHoldingForTradePrefill(book, { holdingId: 'h-opt' })).toBeNull()
+    expect(equityHoldingForTradePrefill(book, [], { holdingId: 'h-opt' })).toBeNull()
     expect(
-      equityHoldingForTradePrefill(book, { symbol: 'aapl' })?.sharesHeld,
+      equityHoldingForTradePrefill(book, [], { symbol: 'aapl' })?.sharesHeld,
     ).toBe(12)
     const prefill = positionPrefillFromHolding(holdingEquity, {
       price: 210,
@@ -60,6 +61,39 @@ describe('portfolioTrades', () => {
       asOfDate: null,
     })
     expect(prefill).toEqual({ shares: 12, price: 210, holdingId: 'h-eq' })
+  })
+
+  it('matches holding when ticker comes from linked scenario symbol', () => {
+    const book: SavedPortfolio = {
+      id: PORT_ID,
+      name: 'T',
+      currentCash: 0,
+      deposits: [],
+      holdings: [
+        {
+          ...holdingEquity,
+          id: 'h-scenario',
+          symbol: '',
+          scenarioId: 'sc-nvda',
+          manualOnly: false,
+        },
+      ],
+      actions: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const scenarios = [
+      {
+        id: 'sc-nvda',
+        symbol: 'NVDA',
+        name: 'Nvidia',
+        currentPrice: 500,
+      } as import('../../src/types').SavedScenario,
+    ]
+    expect(holdingEquityTradeSymbol(book.holdings[0]!, scenarios)).toBe('NVDA')
+    expect(
+      equityHoldingForTradePrefill(book, scenarios, { symbol: 'nvda' })?.id,
+    ).toBe('h-scenario')
   })
 
   it('normalizes agent-written rows with missing id and mixed-case symbol', () => {

@@ -9,6 +9,7 @@ import { formatInputNumber } from '../common/MoneyInput'
 import type { PriceHistoryPoint } from '../../lib/priceHistory'
 import {
   equityHoldingForTradePrefill,
+  holdingEquityTradeSymbol,
   normalizePortfolioTrade,
   positionPrefillFromHolding,
   resolveSymbolMark,
@@ -54,7 +55,15 @@ export function PortfolioTradeDrawer({
 
   useEffect(() => {
     if (!open || !draft) return
-    setSymbol(draft.symbol)
+    const byId = draft.holdingId
+      ? equityHoldingForTradePrefill(portfolio, scenarios, {
+          holdingId: draft.holdingId,
+        })
+      : null
+    const resolvedSymbol =
+      draft.symbol.trim().toUpperCase() ||
+      (byId ? holdingEquityTradeSymbol(byId, scenarios) ?? '' : '')
+    setSymbol(resolvedSymbol)
     setSide(draft.side)
     setTradeDate(draft.tradeDate)
     setShares(draft.shares > 0 ? formatInputNumber(draft.shares, 6) : '')
@@ -63,37 +72,37 @@ export function PortfolioTradeDrawer({
       draft.fees != null && draft.fees > 0 ? formatInputNumber(draft.fees, 2) : '',
     )
     setNote(draft.note ?? '')
-    setHoldingId(draft.holdingId ?? undefined)
+    setHoldingId(draft.holdingId ?? byId?.id)
     setError(null)
-  }, [open, draft])
+  }, [open, draft, portfolio, scenarios])
 
   const matchedHolding = useMemo(
     () =>
-      equityHoldingForTradePrefill(portfolio, {
+      equityHoldingForTradePrefill(portfolio, scenarios, {
         symbol,
         holdingId,
       }),
-    [portfolio, symbol, holdingId],
+    [portfolio, scenarios, symbol, holdingId],
   )
+
+  const matchedTicker = matchedHolding
+    ? holdingEquityTradeSymbol(matchedHolding, scenarios)
+    : null
 
   const applyPosition = useCallback(() => {
     if (!matchedHolding) return
-    const hist = historyBySymbol[matchedHolding.symbol.toUpperCase()] ?? []
-    const mark = resolveSymbolMark(
-      matchedHolding.symbol,
-      portfolio,
-      scenarios,
-      hist,
-      tradeDate,
-    )
+    const ticker =
+      holdingEquityTradeSymbol(matchedHolding, scenarios) ?? symbol.trim()
+    const hist = historyBySymbol[ticker.toUpperCase()] ?? []
+    const mark = resolveSymbolMark(ticker, portfolio, scenarios, hist, tradeDate)
     const prefill = positionPrefillFromHolding(matchedHolding, mark)
     setShares(prefill.shares > 0 ? formatInputNumber(prefill.shares, 6) : '')
     setHoldingId(prefill.holdingId)
     if (prefill.price != null) {
       setPrice(formatInputNumber(prefill.price, 4))
     }
-    if (!symbol.trim()) {
-      setSymbol(matchedHolding.symbol.toUpperCase())
+    if (!symbol.trim() && ticker) {
+      setSymbol(ticker.toUpperCase())
     }
     setError(null)
   }, [matchedHolding, historyBySymbol, portfolio, scenarios, tradeDate, symbol])
@@ -105,8 +114,7 @@ export function PortfolioTradeDrawer({
     const sharesN = Number(shares)
     const priceN = Number(price)
     const feesN = fees.trim() === '' ? 0 : Number(fees)
-    const linkId =
-      holdingId && matchedHolding?.id === holdingId ? holdingId : undefined
+    const linkId = matchedHolding?.id
     const candidate: PortfolioTrade = {
       ...draft,
       symbol: symbol.trim().toUpperCase(),
@@ -161,20 +169,28 @@ export function PortfolioTradeDrawer({
               className="input"
               value={symbol}
               onChange={(e) => {
-                setSymbol(e.target.value.toUpperCase())
-                setHoldingId(undefined)
+                const next = e.target.value.toUpperCase()
+                setSymbol(next)
+                const match = equityHoldingForTradePrefill(portfolio, scenarios, {
+                  symbol: next,
+                })
+                setHoldingId(match?.id)
               }}
               placeholder="e.g. AAPL"
               autoComplete="off"
               required
             />
-            {matchedHolding ? (
+            {matchedHolding && matchedTicker ? (
               <button
                 type="button"
-                className="mt-2 rounded-full border border-sky-400/35 bg-sky-500/10 px-3 py-1 text-[11px] font-medium text-sky-200 hover:bg-sky-500/20"
+                data-testid="use-position-chip"
+                className="mt-2 inline-flex items-center gap-1.5 rounded-full border border-sky-400/45 bg-sky-500/15 px-3 py-1.5 text-xs font-semibold text-sky-100 shadow-sm hover:bg-sky-500/25"
                 onClick={applyPosition}
               >
-                Use position · {matchedHolding.sharesHeld.toLocaleString()} sh
+                Use position
+                <span className="font-normal text-sky-200/90">
+                  {matchedTicker} · {matchedHolding.sharesHeld.toLocaleString()} sh
+                </span>
               </button>
             ) : null}
           </div>
