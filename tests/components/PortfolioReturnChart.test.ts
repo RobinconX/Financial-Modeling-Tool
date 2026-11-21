@@ -111,6 +111,21 @@ describe('buildReturnChartTradeMarkers', () => {
     }
   }
 
+  it('falls back to last known return when trade day has a progression gap', () => {
+    const points: ReturnProgressionPoint[] = [
+      { date: '2024-01-02', totalPnl: 0, returnPct: 0 },
+      { date: '2024-01-03', totalPnl: null, returnPct: null },
+      { date: '2024-01-04', totalPnl: 40, returnPct: 0.04 },
+    ]
+    const markers = buildReturnChartTradeMarkers(
+      [trade({ id: 't-gap', side: 'buy', tradeDate: '2024-01-03' })],
+      points,
+      'usd',
+    )
+    expect(markers).toHaveLength(1)
+    expect(markers[0]!.y).toBe(0)
+  })
+
   it('places markers at progression Y on trade dates', () => {
     const points: ReturnProgressionPoint[] = [
       { date: '2024-01-02', totalPnl: 0, returnPct: 0 },

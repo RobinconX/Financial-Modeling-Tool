@@ -45,6 +45,32 @@ function pnlInDisplayUnits(
   return toDisplay(usd, displayCurrency, usdToChf)
 }
 
+function progressionYOnDate(
+  date: string,
+  points: ReturnProgressionPoint[],
+  mode: ReturnChartMode,
+  displayCurrency: DisplayCurrency,
+  usdToChf: number | null,
+): number | null {
+  const yFromPoint = (p: ReturnProgressionPoint): number | null => {
+    if (mode === 'pct') {
+      return p.returnPct != null ? p.returnPct * 100 : null
+    }
+    return pnlInDisplayUnits(p.totalPnl, displayCurrency, usdToChf)
+  }
+  const byDate = new Map(points.map((p) => [p.date, p]))
+  const onDay = yFromPoint(byDate.get(date) ?? { date, totalPnl: null, returnPct: null })
+  if (onDay != null && Number.isFinite(onDay)) return onDay
+  const prior = [...points]
+    .filter((p) => p.date <= date)
+    .sort((a, b) => a.date.localeCompare(b.date))
+  for (let i = prior.length - 1; i >= 0; i--) {
+    const y = yFromPoint(prior[i]!)
+    if (y != null && Number.isFinite(y)) return y
+  }
+  return null
+}
+
 /** Y position on the return chart for each trade (on trade date), in current chart units. */
 export function buildReturnChartTradeMarkers(
   trades: PortfolioTrade[],
@@ -53,17 +79,15 @@ export function buildReturnChartTradeMarkers(
   displayCurrency: DisplayCurrency = 'USD',
   usdToChf: number | null = null,
 ): ReturnChartTradeMarker[] {
-  const byDate = new Map(points.map((p) => [p.date, p]))
   const out: ReturnChartTradeMarker[] = []
   for (const t of trades) {
-    const pt = byDate.get(t.tradeDate)
-    if (!pt) continue
-    const y =
-      mode === 'pct'
-        ? pt.returnPct != null
-          ? pt.returnPct * 100
-          : null
-        : pnlInDisplayUnits(pt.totalPnl, displayCurrency, usdToChf)
+    const y = progressionYOnDate(
+      t.tradeDate,
+      points,
+      mode,
+      displayCurrency,
+      usdToChf,
+    )
     if (y == null || !Number.isFinite(y)) continue
     out.push({
       id: t.id,
@@ -393,11 +417,11 @@ export function PortfolioReturnChart({
                     key={m.id}
                     x={m.tradeDate}
                     y={m.y}
-                    r={4}
+                    r={5}
                     fill={m.side === 'buy' ? '#34d399' : '#f87171'}
                     stroke="#0b0f14"
-                    strokeWidth={1.25}
-                    ifOverflow="discard"
+                    strokeWidth={1.5}
+                    ifOverflow="visible"
                   />
                 ))
               : null}
