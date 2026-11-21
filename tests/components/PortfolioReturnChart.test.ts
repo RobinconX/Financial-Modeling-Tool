@@ -5,6 +5,7 @@ import {
   chartTimeForTradeDate,
   resolveReturnChartTooltipState,
   ReturnProgressionTooltip,
+  tradesForReturnTooltip,
 } from '../../src/components/portfolio/PortfolioReturnChart'
 import type { PortfolioTrade } from '../../src/types'
 import type { ReturnProgressionPoint } from '../../src/lib/portfolioPerformanceStats'
@@ -153,7 +154,7 @@ describe('ReturnProgressionTooltip', () => {
 })
 
 describe('resolveReturnChartTooltipState', () => {
-  it('keeps trades empty when only the return line is hovered', () => {
+  it('resolves chart row from value series payload', () => {
     const row = {
       date: '2024-01-02',
       time: chartTimeForTradeDate('2024-01-02'),
@@ -165,35 +166,70 @@ describe('resolveReturnChartTooltipState', () => {
       [{ dataKey: 'value', payload: row }],
       [row],
     )
-    expect(state.trades).toHaveLength(0)
     expect(state.row?.value).toBe(10)
   })
+})
 
-  it('includes trade only from scatter hover payload', () => {
-    const trade = {
+describe('tradesForReturnTooltip', () => {
+  const markers = [
+    {
       id: '1',
       tradeDate: '2024-03-01',
       time: chartTimeForTradeDate('2024-03-01'),
+      side: 'buy' as const,
+      symbol: 'AAPL',
+      shares: 1,
+      price: 1,
+      fees: 0,
+      y: 0,
+    },
+    {
+      id: '2',
+      tradeDate: '2024-04-01',
+      time: chartTimeForTradeDate('2024-04-01'),
       side: 'sell' as const,
       symbol: 'MSFT',
-      shares: 2,
-      price: 300,
+      shares: 1,
+      price: 1,
       fees: 0,
-      y: 5,
+      y: 0,
+    },
+  ]
+
+  it('returns no trades on a day without ledger activity', () => {
+    const row = {
+      date: '2024-01-02',
+      time: chartTimeForTradeDate('2024-01-02'),
+      value: 10,
+      valuePos: 10,
+      valueNeg: null,
     }
+    expect(tradesForReturnTooltip(row, undefined, markers, null)).toHaveLength(0)
+  })
+
+  it('returns only trades on the hovered calendar day', () => {
     const row = {
       date: '2024-03-01',
-      time: trade.time,
+      time: chartTimeForTradeDate('2024-03-01'),
       value: 5,
       valuePos: 5,
       valueNeg: null,
     }
-    const state = resolveReturnChartTooltipState(
-      [{ dataKey: 'y', payload: trade }],
-      [row],
-    )
-    expect(state.trades).toHaveLength(1)
-    expect(state.row?.date).toBe('2024-03-01')
+    const onDay = tradesForReturnTooltip(row, undefined, markers, null)
+    expect(onDay).toHaveLength(1)
+    expect(onDay[0]!.symbol).toBe('AAPL')
+  })
+
+  it('prefers pinned dot trades', () => {
+    const row = {
+      date: '2024-01-02',
+      time: chartTimeForTradeDate('2024-01-02'),
+      value: 10,
+      valuePos: 10,
+      valueNeg: null,
+    }
+    const pinned = [markers[1]!]
+    expect(tradesForReturnTooltip(row, undefined, markers, pinned)).toEqual(pinned)
   })
 })
 
