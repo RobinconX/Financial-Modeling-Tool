@@ -1,8 +1,10 @@
 import { useMemo } from 'react'
+import { useState } from 'react'
 import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceDot,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -10,14 +12,58 @@ import {
 } from 'recharts'
 import { formatMoney } from '../../lib/format'
 import type { ReturnProgressionPoint } from '../../lib/portfolioPerformanceStats'
+import type { PortfolioTrade } from '../../types'
 
 export type ReturnChartMode = 'pct' | 'usd'
 
+export type ReturnChartTradeMarker = {
+  id: string
+  tradeDate: string
+  side: PortfolioTrade['side']
+  symbol: string
+  shares: number
+  price: number
+  y: number
+}
+
 type Props = {
   points: ReturnProgressionPoint[]
+  trades?: PortfolioTrade[]
   mode: ReturnChartMode
   missingNote: string | null
   onModeChange: (mode: ReturnChartMode) => void
+}
+
+/** Y position on the return chart for each trade (on trade date), in current chart units. */
+export function buildReturnChartTradeMarkers(
+  trades: PortfolioTrade[],
+  points: ReturnProgressionPoint[],
+  mode: ReturnChartMode,
+): ReturnChartTradeMarker[] {
+  const byDate = new Map(points.map((p) => [p.date, p]))
+  const out: ReturnChartTradeMarker[] = []
+  for (const t of trades) {
+    const pt = byDate.get(t.tradeDate)
+    if (!pt) continue
+    const y =
+      mode === 'pct'
+        ? pt.returnPct != null
+          ? pt.returnPct * 100
+          : null
+        : pt.totalPnl
+    if (y == null || !Number.isFinite(y)) continue
+    out.push({
+      id: t.id,
+      tradeDate: t.tradeDate,
+      side: t.side,
+      symbol: t.symbol,
+      shares: t.shares,
+      price: t.price,
+      y,
+    })
+  }
+  out.sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
+  return out
 }
 
 type ChartRow = {
@@ -75,12 +121,34 @@ export function buildSignedReturnChartRows(
       ((prev.value > 0 && cur.value < 0) || (prev.value < 0 && cur.value > 0))
     ) {
       const crossDate = zeroCrossDate(prev.date, prev.value, cur.date, cur.value)
-      rows.push({
-        date: crossDate,
-        value: 0,
-        valuePos: 0,
-        valueNeg: 0,
-      })
+      // Two rows at the cross: end one series at 0, start the other at 0 — never both masks on one row.
+      if (prev.value > 0) {
+        rows.push({
+          date: crossDate,
+          value: 0,
+          valuePos: 0,
+          valueNeg: null,
+        })
+        rows.push({
+          date: crossDate,
+          value: 0,
+          valuePos: null,
+          valueNeg: 0,
+        })
+      } else {
+        rows.push({
+          date: crossDate,
+          value: 0,
+          valuePos: null,
+          valueNeg: 0,
+        })
+        rows.push({
+          date: crossDate,
+          value: 0,
+          valuePos: 0,
+          valueNeg: null,
+        })
+      }
     }
 
     const v = cur.value
@@ -98,13 +166,19 @@ export function buildSignedReturnChartRows(
 
 export function PortfolioReturnChart({
   points,
+  trades = [],
   mode,
   missingNote,
   onModeChange,
 }: Props) {
+  const [showTrades, setShowTrades] = useState(false)
   const data = useMemo(
     () => buildSignedReturnChartRows(points, mode),
     [points, mode],
+  )
+  const tradeMarkers = useMemo(
+    () => buildReturnChartTradeMarkers(trades, points, mode),
+    [trades, points, mode],
   )
 
   const hasValue = data.some((d) => d.value != null)
@@ -210,7 +284,7 @@ export function PortfolioReturnChart({
               stroke="#34d399"
               strokeWidth={2}
               dot={false}
-              connectNulls
+              connectNulls={false}
               legendType="none"
               isAnimationActive={false}
             />
@@ -220,7 +294,7 @@ export function PortfolioReturnChart({
               stroke="#f87171"
               strokeWidth={2}
               dot={false}
-              connectNulls
+              connectNulls={false}
               legendType="none"
               isAnimationActive={false}
             />

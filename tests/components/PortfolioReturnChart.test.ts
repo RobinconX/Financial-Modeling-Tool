@@ -15,12 +15,36 @@ describe('buildSignedReturnChartRows', () => {
     expect(jan2).toMatchObject({ value: 20, valuePos: 20, valueNeg: null })
   })
 
-  it('inserts a zero crossing between sign changes', () => {
+  it('inserts asymmetric zero-cross rows (not both masks on one row)', () => {
     const points: ReturnProgressionPoint[] = [
       { date: '2024-01-01', totalPnl: 10, returnPct: 0.1 },
       { date: '2024-01-02', totalPnl: -10, returnPct: -0.1 },
     ]
     const rows = buildSignedReturnChartRows(points, 'usd')
-    expect(rows.filter((r) => r.value === 0)).toHaveLength(1)
+    const zeroRows = rows.filter((r) => r.value === 0)
+    expect(zeroRows).toHaveLength(2)
+    expect(zeroRows.some((r) => r.valuePos === 0 && r.valueNeg == null)).toBe(true)
+    expect(zeroRows.some((r) => r.valueNeg === 0 && r.valuePos == null)).toBe(true)
+    expect(
+      zeroRows.every(
+        (r) =>
+          (r.valuePos === 0 && r.valueNeg == null) ||
+          (r.valueNeg === 0 && r.valuePos == null),
+      ),
+    ).toBe(true)
+  })
+
+  it('does not assign both valuePos and valueNeg on positive-only days', () => {
+    const points: ReturnProgressionPoint[] = [
+      { date: '2024-01-01', totalPnl: 5, returnPct: 0.05 },
+      { date: '2024-01-02', totalPnl: 15, returnPct: 0.15 },
+    ]
+    const rows = buildSignedReturnChartRows(points, 'usd')
+    for (const r of rows) {
+      if (r.value != null && r.value > 0) {
+        expect(r.valuePos).toBe(r.value)
+        expect(r.valueNeg).toBeNull()
+      }
+    }
   })
 })
