@@ -1,6 +1,6 @@
 import type { PortfolioTrade } from '../types'
 import type { PriceHistoryPoint } from './priceHistory'
-import { todayIsoDate } from './portfolioTrades'
+import { latestHistoryClose, todayIsoDate } from './portfolioTrades'
 
 export type TradeActivityStats = {
   tradeCount: number
@@ -328,10 +328,24 @@ function addUtcDays(isoDate: string, days: number): string {
   return `${y}-${m}-${day}`
 }
 
+function closeForPnlOnDate(
+  points: PriceHistoryPoint[],
+  date: string,
+  asOfDate: string,
+): number | null {
+  const c = closeOnOrBefore(points, date)
+  if (c != null) return c
+  if (date === asOfDate) {
+    return latestHistoryClose(points, date)?.price ?? null
+  }
+  return null
+}
+
 function symbolPnlOnDate(
   trades: PortfolioTrade[],
   points: PriceHistoryPoint[],
   date: string,
+  asOfDate: string,
 ): { totalPnl: number | null; grossBuys: number } {
   const active = trades.some((t) => t.tradeDate <= date)
   if (!active) return { totalPnl: 0, grossBuys: 0 }
@@ -339,7 +353,7 @@ function symbolPnlOnDate(
   if (snap.shares <= 0) {
     return { totalPnl: snap.realizedPnl, grossBuys: snap.grossBuys }
   }
-  const close = closeOnOrBefore(points, date)
+  const close = closeForPnlOnDate(points, date, asOfDate)
   if (close == null) {
     return { totalPnl: null, grossBuys: snap.grossBuys }
   }
@@ -383,7 +397,12 @@ export function buildReturnProgression(
     for (const [symbol, trades] of entries) {
       if (!trades.some((t) => t.tradeDate <= date)) continue
       hadActivity = true
-      const symPnl = symbolPnlOnDate(trades, histories[symbol] ?? [], date)
+      const symPnl = symbolPnlOnDate(
+        trades,
+        histories[symbol] ?? [],
+        date,
+        asOfDate,
+      )
       grossBuys += symPnl.grossBuys
       if (symPnl.totalPnl == null) {
         totalPnl = null

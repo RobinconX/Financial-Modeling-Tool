@@ -5,6 +5,7 @@ import type {
   SavedPortfolio,
   SavedScenario,
 } from '../types'
+import type { PriceHistoryPoint } from './priceHistory'
 import { resolveCurrentPrice } from './portfolio'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
@@ -177,12 +178,23 @@ export function removeTrade(
   }
 }
 
+export type SymbolMarkSource = 'quote' | 'manual' | 'history'
+
+export type SymbolMark = {
+  price: number
+  source: SymbolMarkSource
+  /** Close date when source is history; null for live quote/manual. */
+  asOfDate: string | null
+}
+
 export type SymbolPerformance = {
   symbol: string
   tradeCount: number
   ledgerShares: number
   costBasis: number
   markPrice: number | null
+  markSource: SymbolMarkSource | null
+  markAsOfDate: string | null
   marketValue: number | null
   unrealizedPnl: number | null
   realizedPnl: number
@@ -191,11 +203,32 @@ export type SymbolPerformance = {
   returnPct: number | null
 }
 
-export function markPriceForSymbol(
+/** Latest historical close on or before `asOfDate` (no staleness cap — for marks). */
+export function latestHistoryClose(
+  points: PriceHistoryPoint[],
+  asOfDate: string = todayIsoDate(),
+): { price: number; date: string } | null {
+  let bestDate = ''
+  let best: number | null = null
+  for (const p of points) {
+    if (p.date <= asOfDate && p.close > 0 && p.date >= bestDate) {
+      bestDate = p.date
+      best = p.close
+    }
+  }
+  return best != null ? { price: best, date: bestDate } : null
+}
+
+/**
+ * Mark for open ledger: projection quote, manual holding price, then history close.
+ */
+export function resolveSymbolMark(
   symbol: string,
   portfolio: SavedPortfolio,
   scenarios: SavedScenario[],
-): number | null {
+  historyPoints: PriceHistoryPoint[] = [],
+  asOfDate: string = todayIsoDate(),
+): SymbolMark | null {
   const sym = symbol.toUpperCase()
   const holding = portfolio.holdings.find(
     (h) => !h.option && h.symbol.toUpperCase() === sym,
@@ -205,21 +238,57 @@ export function markPriceForSymbol(
       (holding.scenarioId
         ? scenarios.find((s) => s.id === holding.scenarioId)
         : null) ?? scenarios.find((s) => s.symbol.toUpperCase() === sym) ?? null
+    if (
+      holding.manualOnly === true &&
+      holding.manualCurrentPrice != null &&
+      holding.manualCurrentPrice > 0
+    ) {
+      return {
+        price: holding.manualCurrentPrice,
+        source: 'manual',
+        asOfDate: null,
+      }
+    }
     const p = resolveCurrentPrice(holding, scenario)
-    if (p != null && p > 0) return p
+    if (p != null && p > 0) {
+      return { price: p, source: 'quote', asOfDate: null }
+    }
   }
   const scenario = scenarios.find((s) => s.symbol.toUpperCase() === sym)
   if (scenario?.currentPrice != null && scenario.currentPrice > 0) {
-    return scenario.currentPrice
+    return { price: scenario.currentPrice, source: 'quote', asOfDate: null }
+  }
+  const hist = latestHistoryClose(historyPoints, asOfDate)
+  if (hist) {
+    return { price: hist.price, source: 'history', asOfDate: hist.date }
   }
   return null
+}
+
+/** @deprecated Prefer resolveSymbolMark */
+export function markPriceForSymbol(
+  symbol: string,
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[],
+): number | null {
+  return resolveSymbolMark(symbol, portfolio, scenarios)?.price ?? null
 }
 
 /** Average-cost ledger per symbol from executed trades. */
 export function computeSymbolPerformance(
   trades: PortfolioTrade[],
-  markPrice: number | null,
+  mark: SymbolMark | number | null,
 ): SymbolPerformance | null {
+  const markPrice =
+    mark == null
+      ? null
+      : typeof mark === 'number'
+        ? mark
+        : mark.price
+  const markSource =
+    mark != null && typeof mark !== 'number' ? mark.source : null
+  const markAsOfDate =
+    mark != null && typeof mark !== 'number' ? mark.asOfDate : null
   if (trades.length === 0) return null
   const symbol = trades[0]!.symbol
   let ledgerShares = 0
@@ -263,6 +332,8 @@ export function computeSymbolPerformance(
     ledgerShares,
     costBasis,
     markPrice,
+    markSource,
+    markAsOfDate,
     marketValue,
     unrealizedPnl,
     realizedPnl,
@@ -270,6 +341,27 @@ export function computeSymbolPerformance(
     totalPnl,
     returnPct,
   }
+}
+
+export function formatSymbolMarkLine(perf: SymbolPerformance): string | null {
+  if (perf.ledgerShares <= 0 || perf.markPrice == null) return null
+  if (perf.markSource === 'history' && perf.markAsOfDate) {
+    return `History close ${perf.markAsOfDate}`
+  }
+  if (perf.markSource === 'manual') return 'Manual mark'
+  if (perf.markSource === 'quote') return 'Live quote'
+  return null
+}
+
+export function formatSnapshotMarkSummary(symbols: SymbolPerformance[]): string | null {
+  const open = symbols.filter((s) => s.ledgerShares > 0 && s.markSource)
+  if (open.length === 0) return null
+  const parts = open.map((s) => {
+    const label = formatSymbolMarkLine(s)
+    return label ? `${s.symbol}: ${label}` : s.symbol
+  })
+  if (parts.length <= 2) return `Mark — ${parts.join('; ')}`
+  return `Mark — ${parts.slice(0, 2).join('; ')}; +${parts.length - 2} more`
 }
 
 export type PortfolioPerformanceSummary = {
@@ -285,6 +377,8 @@ export function computePortfolioPerformance(
   trades: PortfolioTrade[],
   portfolio: SavedPortfolio,
   scenarios: SavedScenario[],
+  historiesBySymbol: Record<string, PriceHistoryPoint[]> = {},
+  asOfDate: string = todayIsoDate(),
 ): PortfolioPerformanceSummary {
   const bySymbol = new Map<string, PortfolioTrade[]>()
   for (const t of trades) {
@@ -294,7 +388,13 @@ export function computePortfolioPerformance(
   }
   const symbols: SymbolPerformance[] = []
   for (const [sym, list] of bySymbol) {
-    const mark = markPriceForSymbol(sym, portfolio, scenarios)
+    const mark = resolveSymbolMark(
+      sym,
+      portfolio,
+      scenarios,
+      historiesBySymbol[sym] ?? [],
+      asOfDate,
+    )
     const perf = computeSymbolPerformance(list, mark)
     if (perf) symbols.push(perf)
   }

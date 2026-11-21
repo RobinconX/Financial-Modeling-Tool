@@ -1235,14 +1235,18 @@ The header **select** switches what you are viewing:
 
 Whole-portfolio view adds **By symbol** columns: status, **TWR**, return on buys, and **Concentration** (% of open ledger value).
 
+### Snapshot return
+
+A highlighted card shows **today’s** total return for the current scope: **$** and **%** = (realized + unrealized) ÷ **gross buys** (invested). When open shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date.
+
 ### Return progression
 
 Below **Activity**, a line chart (toggle **%** vs **$**) shows cumulative performance from the first trade through today for the current scope.
 
 - **$** — realized + unrealized P&L each day (ledger marks from daily closes when shares are open)
-- **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Return on buys**)
+- **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** %)
 
-Gaps appear when price history cannot mark an open position. **Trade log** stays collapsed until you save a new trade.
+The line is **green above zero** and **red below zero**. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
 
 ### Save file / agents
 
@@ -1261,7 +1265,7 @@ P&L uses **average cost** on the ledger:
 - **Unrealized** — open ledger shares × mark price − remaining cost basis
 - **Return on buys** — (realized + unrealized) ÷ gross buy notional
 
-> Marks come from the linked projection quote or manual position price when available; otherwise unrealized shows **No mark**.
+> Marks: linked projection quote or manual position price first; otherwise the latest **history close** (same cache as Comparables). Unrealized is **No mark** only when no quote and no history.
 
 ## Example
 

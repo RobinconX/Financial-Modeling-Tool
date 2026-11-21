@@ -4,6 +4,7 @@ import {
   computeSymbolPerformance,
   normalizePortfolioTrade,
   normalizePortfolioTrades,
+  resolveSymbolMark,
   tradedSymbolsFromTrades,
   tradesMatchingSymbol,
   upsertTrade,
@@ -48,6 +49,52 @@ describe('portfolioTrades', () => {
     })
     expect(state.trades).toHaveLength(1)
     expect(state.trades[0]!.symbol).toBe('AAPL')
+  })
+
+  it('uses history close when no quote for symbol-only open position', () => {
+    const emptyBook: SavedPortfolio = {
+      id: PORT_ID,
+      name: 'T',
+      currentCash: 0,
+      deposits: [],
+      holdings: [],
+      actions: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const trades = normalizePortfolioTrades({
+      version: 1,
+      trades: [
+        {
+          id: '1',
+          portfolioId: PORT_ID,
+          symbol: 'AAPL',
+          side: 'buy',
+          tradeDate: '2024-01-01',
+          shares: 10,
+          price: 100,
+        },
+      ],
+    }).trades
+    const asOf = '2024-06-20'
+    const mark = resolveSymbolMark(
+      'AAPL',
+      emptyBook,
+      [],
+      [{ date: '2024-06-15', close: 150 }],
+      asOf,
+    )
+    expect(mark).toMatchObject({ price: 150, source: 'history', asOfDate: '2024-06-15' })
+    const whole = computePortfolioPerformance(
+      trades,
+      emptyBook,
+      [],
+      { AAPL: [{ date: '2024-06-15', close: 150 }] },
+      asOf,
+    )
+    expect(whole.unrealizedPnl).toBeCloseTo(500, 4)
+    expect(whole.totalPnl).toBeCloseTo(500, 4)
+    expect(whole.returnPct).toBeCloseTo(0.5, 4)
   })
 
   it('computes average-cost realized and unrealized P&L', () => {

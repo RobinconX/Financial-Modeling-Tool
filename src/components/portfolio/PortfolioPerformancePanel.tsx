@@ -3,6 +3,7 @@ import type { PortfolioTrade, PortfolioTradesState, SavedPortfolio, SavedScenari
 import { formatMoney } from '../../lib/format'
 import {
   computePortfolioPerformance,
+  formatSnapshotMarkSummary,
   newPortfolioTrade,
   tradedSymbolsFromTrades,
   tradesForPortfolio,
@@ -117,9 +118,24 @@ export function PortfolioPerformancePanel({
     () => tradesMatchingSymbol(portfolioTrades, scopeSymbol),
     [portfolioTrades, scopeSymbol],
   )
+
+  const historyPoints = useMemo(() => {
+    const out: Record<string, { date: string; close: number }[]> = {}
+    for (const [k, v] of Object.entries(histories)) {
+      out[k] = v.points ?? []
+    }
+    return out
+  }, [histories])
+
   const summary = useMemo(
-    () => computePortfolioPerformance(scopedTrades, portfolio, scenarios),
-    [scopedTrades, portfolio, scenarios],
+    () =>
+      computePortfolioPerformance(
+        scopedTrades,
+        portfolio,
+        scenarios,
+        historyPoints,
+      ),
+    [scopedTrades, portfolio, scenarios, historyPoints],
   )
 
   const tradesBySymbol = useMemo(() => {
@@ -146,8 +162,8 @@ export function PortfolioPerformancePanel({
 
   const symbolsForHistory = useMemo(() => {
     if (scopeSymbol) return [scopeSymbol]
-    return summary.symbols.map((s) => s.symbol)
-  }, [scopeSymbol, summary.symbols])
+    return tradedSymbolsFromTrades(scopedTrades)
+  }, [scopeSymbol, scopedTrades])
 
   useEffect(() => {
     if (symbolsForHistory.length === 0) return
@@ -245,13 +261,10 @@ export function PortfolioPerformancePanel({
   const [tradeLogOpen, setTradeLogOpen] = useState(false)
   const [returnChartMode, setReturnChartMode] = useState<ReturnChartMode>('pct')
 
-  const historyPoints = useMemo(() => {
-    const out: Record<string, { date: string; close: number }[]> = {}
-    for (const [k, v] of Object.entries(histories)) {
-      out[k] = v.points ?? []
-    }
-    return out
-  }, [histories])
+  const snapshotMarkNote = useMemo(
+    () => formatSnapshotMarkSummary(summary.symbols),
+    [summary.symbols],
+  )
 
   const returnProgression = useMemo(
     () => buildReturnProgression(tradesBySymbol, historyPoints),
@@ -456,13 +469,37 @@ export function PortfolioPerformancePanel({
         </section>
       ) : null}
 
+      {scopedTrades.length > 0 ? (
+        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3">
+          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
+            Snapshot return (today)
+          </p>
+          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+            <span
+              className={`text-2xl font-semibold tabular-nums ${pnlClass(summary.totalPnl)}`}
+            >
+              {formatMoney(summary.totalPnl, 'USD')}
+            </span>
+            <span className="text-lg font-semibold tabular-nums text-white/90">
+              {pct(summary.returnPct)}
+            </span>
+            <span className="text-xs text-white/40">
+              on {formatMoney(summary.grossBuys, 'USD')} invested
+            </span>
+          </div>
+          {snapshotMarkNote ? (
+            <p className="mt-1.5 text-[11px] text-white/50">{snapshotMarkNote}</p>
+          ) : null}
+        </div>
+      ) : null}
+
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {(
           [
             { label: 'Realized P&L', value: summary.realizedPnl },
             { label: 'Unrealized P&L', value: summary.unrealizedPnl },
             { label: 'Total P&L', value: summary.totalPnl },
-            { label: 'Return on buys', value: summary.returnPct, isPct: true },
+            { label: 'Invested (gross buys)', value: summary.grossBuys, isMoney: true },
           ] as const
         ).map((card) => (
           <div
@@ -474,13 +511,13 @@ export function PortfolioPerformancePanel({
             </p>
             <p
               className={`mt-1 text-lg font-semibold tabular-nums ${
-                'isPct' in card && card.isPct
+                'isMoney' in card && card.isMoney
                   ? 'text-white'
                   : pnlClass(card.value as number)
               }`}
             >
-              {'isPct' in card && card.isPct
-                ? pct(card.value as number | null)
+              {'isMoney' in card && card.isMoney
+                ? formatMoney(card.value as number, 'USD')
                 : formatMoney(card.value as number, 'USD')}
             </p>
           </div>

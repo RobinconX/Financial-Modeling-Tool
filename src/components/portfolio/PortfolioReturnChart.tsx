@@ -2,6 +2,7 @@ import {
   CartesianGrid,
   Line,
   LineChart,
+  ReferenceLine,
   ResponsiveContainer,
   Tooltip,
   XAxis,
@@ -31,17 +32,23 @@ export function PortfolioReturnChart({
   missingNote,
   onModeChange,
 }: Props) {
-  const data = points.map((p) => ({
-    date: p.date,
-    value:
+  const data = points.map((p) => {
+    const raw =
       mode === 'pct'
         ? p.returnPct != null
           ? p.returnPct * 100
           : null
-        : p.totalPnl,
-  }))
+        : p.totalPnl
+    return {
+      date: p.date,
+      valuePos: raw == null ? null : Math.max(raw, 0),
+      valueNeg: raw == null ? null : Math.min(raw, 0),
+    }
+  })
 
-  const hasValue = data.some((d) => d.value != null)
+  const hasValue = data.some(
+    (d) => d.valuePos != null || d.valueNeg != null,
+  )
   if (!hasValue) {
     return (
       <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
@@ -89,6 +96,7 @@ export function PortfolioReturnChart({
         <ResponsiveContainer width="100%" height="100%">
           <LineChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
+            <ReferenceLine y={0} stroke="rgba(255,255,255,0.2)" strokeWidth={1} />
             <XAxis
               dataKey="date"
               tickFormatter={formatTick}
@@ -110,18 +118,35 @@ export function PortfolioReturnChart({
                 fontSize: 12,
               }}
               labelFormatter={(l) => String(l)}
-              formatter={(value) => {
-                const n = typeof value === 'number' ? value : Number(value)
-                if (!Number.isFinite(n)) return ['—', mode === 'pct' ? 'Return' : 'P&L']
+              formatter={(_, __, item) => {
+                const row = item?.payload as {
+                  valuePos: number | null
+                  valueNeg: number | null
+                }
+                const raw =
+                  row.valuePos != null && row.valuePos > 0
+                    ? row.valuePos
+                    : row.valueNeg != null && row.valueNeg < 0
+                      ? row.valueNeg
+                      : 0
+                if (!Number.isFinite(raw)) return ['—', 'Return']
                 return mode === 'pct'
-                  ? [`${n.toFixed(2)}%`, 'Return on buys']
-                  : [formatMoney(n, 'USD'), 'Total P&L']
+                  ? [`${raw.toFixed(2)}%`, 'Return on buys']
+                  : [formatMoney(raw, 'USD'), 'Total P&L']
               }}
             />
             <Line
               type="monotone"
-              dataKey="value"
+              dataKey="valuePos"
               stroke="#34d399"
+              strokeWidth={2}
+              dot={false}
+              connectNulls={false}
+            />
+            <Line
+              type="monotone"
+              dataKey="valueNeg"
+              stroke="#f87171"
               strokeWidth={2}
               dot={false}
               connectNulls={false}

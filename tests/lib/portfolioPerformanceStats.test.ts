@@ -94,6 +94,20 @@ describe('portfolioPerformanceStats', () => {
     expect(ledgerSnapshotAt(trades, '2024-01-02').grossBuys).toBe(100)
   })
 
+  it('uses latest history on as-of date when daily close is stale', () => {
+    const trades = [
+      trade({ side: 'buy', tradeDate: '2024-01-02', shares: 1, price: 100 }),
+    ]
+    const r = buildReturnProgression(
+      new Map([['TST', trades]]),
+      { TST: [{ date: '2024-01-02', close: 120 }] },
+      '2024-01-02',
+    )
+    const last = r.points.at(-1)!
+    expect(last.totalPnl).toBeCloseTo(20, 4)
+    expect(last.returnPct).toBeCloseTo(0.2, 4)
+  })
+
   it('marks gaps when history missing for open position', () => {
     const trades = [
       trade({ side: 'buy', tradeDate: '2024-01-02', shares: 1, price: 100 }),
