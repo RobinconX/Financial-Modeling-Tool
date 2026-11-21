@@ -902,6 +902,7 @@ Same goal; a higher starting price shrinks the raw gap still required.
 - **Chart** — value timeline and **Value by year** for the selected book
 - **Actuals** — shared month-end **Portfolio value** and **Money in** (all books read the same history)
 - **Cash**, **Positions**, **Growth** — configure the selected book
+- **Performance** — executed buy/sell ledger and P&L (does not change Positions)
 - **Contribution effectiveness** — time-to-goal math for extra deposits
 
 ### Display currency
@@ -1193,6 +1194,89 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
       tab: 'portfolio',
       view: 'goal',
       anchor: 'portfolio.goal',
+    },
+    parentId: 'portfolio',
+    order: 7,
+  },
+  'portfolio.performance': {
+    id: 'portfolio.performance',
+    title: 'Performance',
+    summary:
+      'Log executed equity buys and sells by date and price for the selected portfolio book. Average-cost realized and unrealized P&L; full edit/delete in-app or bulk fill via save-file JSON.',
+    body: `## How it works
+
+The **Performance** tab is an **executed trade ledger**. It does not change **Positions** share counts or **Chart** planned buy/sell actions. **$** amounts and the chart money axis follow the portfolio **USD** / **CHF** toggle (same live rate as elsewhere); **%** return is unchanged by currency.
+
+### Adding trades
+
+- **+ Trade** opens a drawer: symbol, side, date (**Today** shortcut), shares, price, optional fees and note
+- **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
+- When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history)
+
+> Symbols are normalized to uppercase on save. Equities only (standard tickers).
+
+### Editing
+
+Use **Edit** or **Delete** on any row in the trade log. When a trade was saved with a **holdingId** link, expand the log to see **Position** and jump to that row in **Positions**.
+
+### Scope
+
+The header **select** switches what you are viewing:
+
+- **Whole portfolio** — rollup across every symbol that has any logged trade on this book, including **closed** names (fully sold) and symbol-only trades you never sized in **Positions**
+- **One ticker** — summary cards, **By symbol**, and **Trade log** show only that symbol
+
+> Realized P&L on closed tickers still counts in the whole-portfolio rollup.
+
+### Stats blocks
+
+- **Activity** — trade, buy, and sell counts; first / last trade; holding period and open/closed **status** on one ticker; **open · closed symbol counts** on whole portfolio
+- **Position** (single ticker) — ledger shares, average cost / breakeven, gross buys, sell proceeds, % sold, open cost basis, current value
+- **TWR** — time-weighted return **per ticker** from daily price history (lazy fetch, shared cache with Comparables); shows **Unavailable** when history cannot cover the holding window
+
+Whole-portfolio **By symbol** lists **open** ledger rows first (status, **TWR**, return on buys, **Concentration**). Fully sold tickers sit under **Closed positions (N)** (collapsed by default); their realized P&L still rolls into snapshot cards and totals above.
+
+### Snapshot return
+
+A highlighted card shows **today’s** total return for the current scope: **$** and **%** = (realized + unrealized) ÷ **gross buys** (invested). When open shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date.
+
+### Return progression
+
+Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** overlay) shows cumulative performance from the first trade through today for the current scope.
+
+- **$** — realized + unrealized P&L each day (ledger marks from daily closes when shares are open)
+- **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** %)
+
+The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged buy (green dot) and sell (red dot) on the curve at that day’s return; the main tooltip follows the crosshair by date and adds trade details on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
+
+### Save file / agents
+
+Trades live under \`portfolioTrades\` in **Export** / linked JSON. Invalid rows are dropped on import; missing \`id\` values are minted.
+
+- **version** — always \`1\`
+- **trades[]** — each row needs \`portfolioId\`, \`symbol\`, \`side\` (\`buy\` / \`sell\`), \`tradeDate\` (\`YYYY-MM-DD\`), \`shares\`, \`price\`; optional \`fees\`, \`note\`, \`id\`, \`holdingId\`
+
+See \`docs/portfolio-trades-schema.md\` in the repo for agent-oriented examples.
+
+## How to interpret
+
+P&L uses **average cost** on the ledger:
+
+- **Realized** — sells vs average basis (fees on buys add to basis; sell fees reduce proceeds)
+- **Unrealized** — open ledger shares × mark price − remaining cost basis
+- **Return on buys** — (realized + unrealized) ÷ gross buy notional
+
+> Marks: linked projection quote or manual position price first; otherwise the latest **history close** (same cache as Comparables). Unrealized is **No mark** only when no quote and no history.
+
+## Example
+
+Buy **10** \`MSFT\` @ **$400** fee **$5**; later sell **4** @ **$450**. Realized on those four uses average cost **$400.50**/sh; **6** shares stay open for unrealized vs today’s quote.
+`,
+    status: 'ready',
+    location: {
+      tab: 'portfolio',
+      view: 'performance',
+      anchor: 'portfolio.performance',
     },
     parentId: 'portfolio',
     order: 6,

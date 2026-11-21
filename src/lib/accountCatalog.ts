@@ -170,6 +170,7 @@ export function isSnapshotPopulated(s: AppDataSnapshot): boolean {
   if ((s.comparables?.length ?? 0) > 0) return true
   if ((s.goals?.length ?? 0) > 0) return true
   if ((s.annotations?.length ?? 0) > 0) return true
+  if ((s.portfolioTrades?.trades?.length ?? 0) > 0) return true
   for (const acc of s.savings.accounts) {
     if (Object.values(acc.actuals).some((v) => Number(v) > 0)) return true
     if (acc.contribution > 0) return true

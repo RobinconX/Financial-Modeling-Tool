@@ -33,6 +33,7 @@ describe('appDataSnapshot', () => {
       deposits: [],
       perpetualYearlyDeposit: null,
     })
+    expect(parsed.portfolioTrades).toEqual({ version: 1, trades: [] })
   })
 
   it('keeps portfolio actuals mode on a snapshot', () => {

@@ -56,6 +56,11 @@ describe('teachings registry', () => {
         { tab: 'portfolio', view: 'growth', anchor: 'portfolio.growth' },
         'portfolio',
       ],
+      [
+        'portfolio.performance',
+        { tab: 'portfolio', view: 'performance', anchor: 'portfolio.performance' },
+        'portfolio',
+      ],
     ] as const) {
       const g = getGuide(id)
       expect(g?.status, id).toBe('ready')
@@ -74,10 +79,16 @@ describe('teachings registry', () => {
       'portfolio.cash',
       'portfolio.positions',
       'portfolio.growth',
+      'portfolio.performance',
       'portfolio.goal',
     ])
     expect(getGuideAncestors('portfolio.cash').map((g) => g.id)).toEqual(['portfolio'])
     expect(getGuide('portfolio.positions')?.body).toContain('Units held')
+    expect(getGuide('portfolio.performance')?.body).toContain('Whole portfolio')
+    expect(getGuide('portfolio.performance')?.body).toContain('TWR')
+    expect(getGuide('portfolio.performance')?.body).toContain('Return progression')
+    expect(getGuide('portfolio.performance')?.body).toContain('Use position')
+    expect(getGuide('portfolio.performance')?.body).toContain('Closed positions')
   })
 
   it('exposes a ready contribution-effectiveness guide with a figure', () => {
