@@ -1,3 +1,4 @@
+import { useMemo } from 'react'
 import {
   CartesianGrid,
   Line,
@@ -19,10 +20,80 @@ type Props = {
   onModeChange: (mode: ReturnChartMode) => void
 }
 
+type ChartRow = {
+  date: string
+  value: number | null
+  valuePos: number | null
+  valueNeg: number | null
+}
+
 function formatTick(date: string): string {
   const [y, m] = date.split('-')
   if (!m) return date
   return `${y}-${m}`
+}
+
+function isoDateFromUtcMs(ms: number): string {
+  const d = new Date(ms)
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function zeroCrossDate(dateA: string, vA: number, dateB: string, vB: number): string {
+  const tA = Date.parse(`${dateA}T12:00:00Z`)
+  const tB = Date.parse(`${dateB}T12:00:00Z`)
+  if (!Number.isFinite(tA) || !Number.isFinite(tB) || vA === vB) return dateB
+  const frac = vA / (vA - vB)
+  const tCross = tA + frac * (tB - tA)
+  return isoDateFromUtcMs(tCross)
+}
+
+/** One value per day; split stroke masks for green/red (null when not on that side). */
+export function buildSignedReturnChartRows(
+  points: ReturnProgressionPoint[],
+  mode: ReturnChartMode,
+): ChartRow[] {
+  const base: { date: string; value: number | null }[] = points.map((p) => {
+    const value =
+      mode === 'pct'
+        ? p.returnPct != null
+          ? p.returnPct * 100
+          : null
+        : p.totalPnl
+    return { date: p.date, value }
+  })
+
+  const rows: ChartRow[] = []
+  for (let i = 0; i < base.length; i++) {
+    const cur = base[i]!
+    const prev = i > 0 ? base[i - 1]! : null
+    if (
+      prev?.value != null &&
+      cur.value != null &&
+      ((prev.value > 0 && cur.value < 0) || (prev.value < 0 && cur.value > 0))
+    ) {
+      const crossDate = zeroCrossDate(prev.date, prev.value, cur.date, cur.value)
+      rows.push({
+        date: crossDate,
+        value: 0,
+        valuePos: 0,
+        valueNeg: 0,
+      })
+    }
+
+    const v = cur.value
+    rows.push({
+      date: cur.date,
+      value: v,
+      valuePos: v == null ? null : v >= 0 ? v : null,
+      valueNeg: v == null ? null : v < 0 ? v : null,
+    })
+  }
+
+  rows.sort((a, b) => a.date.localeCompare(b.date))
+  return rows
 }
 
 export function PortfolioReturnChart({
@@ -31,23 +102,12 @@ export function PortfolioReturnChart({
   missingNote,
   onModeChange,
 }: Props) {
-  const data = points.map((p) => {
-    const raw =
-      mode === 'pct'
-        ? p.returnPct != null
-          ? p.returnPct * 100
-          : null
-        : p.totalPnl
-    return {
-      date: p.date,
-      valuePos: raw == null ? null : Math.max(raw, 0),
-      valueNeg: raw == null ? null : Math.min(raw, 0),
-    }
-  })
-
-  const hasValue = data.some(
-    (d) => d.valuePos != null || d.valueNeg != null,
+  const data = useMemo(
+    () => buildSignedReturnChartRows(points, mode),
+    [points, mode],
   )
+
+  const hasValue = data.some((d) => d.value != null)
   if (!hasValue) {
     return (
       <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
@@ -116,21 +176,32 @@ export function PortfolioReturnChart({
                 fontSize: 12,
               }}
               labelFormatter={(l) => String(l)}
-              formatter={(_, __, item) => {
-                const row = item?.payload as {
-                  valuePos: number | null
-                  valueNeg: number | null
+              content={({ active, payload, label }) => {
+                if (!active || !payload?.length) return null
+                const row = payload[0]!.payload as ChartRow
+                if (row.value == null || !Number.isFinite(row.value)) {
+                  return (
+                    <div className="px-2 py-1.5 text-xs text-white/85">
+                      <p className="text-white/55">{label}</p>
+                      <p>—</p>
+                    </div>
+                  )
                 }
-                const raw =
-                  row.valuePos != null && row.valuePos > 0
-                    ? row.valuePos
-                    : row.valueNeg != null && row.valueNeg < 0
-                      ? row.valueNeg
-                      : 0
-                if (!Number.isFinite(raw)) return ['—', 'Return']
-                return mode === 'pct'
-                  ? [`${raw.toFixed(2)}%`, 'Return on buys']
-                  : [formatMoney(raw, 'USD'), 'Total P&L']
+                const formatted =
+                  mode === 'pct'
+                    ? `${row.value.toFixed(2)}%`
+                    : formatMoney(row.value, 'USD')
+                const seriesLabel =
+                  mode === 'pct' ? 'Return on buys' : 'Total P&L'
+                return (
+                  <div className="px-2 py-1.5 text-xs text-white/85">
+                    <p className="text-white/55">{label}</p>
+                    <p>
+                      <span className="text-white/50">{seriesLabel}: </span>
+                      {formatted}
+                    </p>
+                  </div>
+                )
               }}
             />
             <Line
@@ -139,7 +210,9 @@ export function PortfolioReturnChart({
               stroke="#34d399"
               strokeWidth={2}
               dot={false}
-              connectNulls={false}
+              connectNulls
+              legendType="none"
+              isAnimationActive={false}
             />
             <Line
               type="monotone"
@@ -147,7 +220,9 @@ export function PortfolioReturnChart({
               stroke="#f87171"
               strokeWidth={2}
               dot={false}
-              connectNulls={false}
+              connectNulls
+              legendType="none"
+              isAnimationActive={false}
             />
           </LineChart>
         </ResponsiveContainer>
