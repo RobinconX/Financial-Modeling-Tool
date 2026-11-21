@@ -36,10 +36,7 @@ import { SaveScenarioButton } from '../analyzer/SaveScenarioButton'
 import { MarketCapChart } from '../charts/MarketCapChart'
 import { FullscreenChart } from '../common/FullscreenChart'
 import { MoneyInput } from '../common/MoneyInput'
-import {
-  hasInvestmentThesis,
-  INVESTMENT_THESIS_MAX_LENGTH,
-} from '../../lib/investmentThesis'
+import { clipInvestmentThesis, hasInvestmentThesis } from '../../lib/investmentThesis'
 import { AddThesisButton } from './AddThesisButton'
 import { InvestmentThesisModalLazy } from './investmentThesisModalLazy'
 import { ThesisDocumentIcon } from './ThesisDocumentIcon'
@@ -188,10 +185,7 @@ export function ProjectionPanel({
   }
 
   function setInvestmentThesis(next: string) {
-    const clipped =
-      next.length > INVESTMENT_THESIS_MAX_LENGTH
-        ? next.slice(0, INVESTMENT_THESIS_MAX_LENGTH)
-        : next
+    const clipped = clipInvestmentThesis(next)
     if (isDraft) {
       setDraftThesis(clipped)
       return

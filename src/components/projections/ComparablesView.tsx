@@ -824,6 +824,7 @@ export function ComparablesView({
                                   onClick={(e) => {
                                     e.stopPropagation()
                                     openThesis({
+                                      scenarioId: row.scenarioId,
                                       symbol: sc.symbol,
                                       scenarioName: sc.name,
                                       thesis: sc.investmentThesis!.trim(),

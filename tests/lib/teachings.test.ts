@@ -281,6 +281,8 @@ describe('teachings registry', () => {
     expect(isGuideReady('projections.thesis')).toBe(true)
     expect(thesis?.body).toContain('4,000')
     expect(thesis?.body).toContain('ThesisRail')
+    expect(thesis?.body).toContain('**Edit**')
+    expect(thesis?.summary).toContain('auto-save')
     expect(thesis?.body).toContain('Add thesis')
     expect(thesis?.body).toContain('Toolbar')
     expect(thesis?.body).toContain('## Example')
