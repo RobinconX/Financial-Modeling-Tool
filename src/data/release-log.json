@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-21",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "7edae9a53b413d3047f5d812a92c241778dca0ba",
     "headline": "Edit investment thesis from Comparables shelf",
     "notes": [
       "Comparables ThesisRail adds Edit next to Close — same large investment thesis modal as Analyze, with auto-save and an updated shelf preview after edits.",
