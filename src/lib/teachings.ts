@@ -1235,6 +1235,15 @@ The header **select** switches what you are viewing:
 
 Whole-portfolio view adds **By symbol** columns: status, **TWR**, return on buys, and **Concentration** (% of open ledger value).
 
+### Return progression
+
+Below **Activity**, a line chart (toggle **%** vs **$**) shows cumulative performance from the first trade through today for the current scope.
+
+- **$** — realized + unrealized P&L each day (ledger marks from daily closes when shares are open)
+- **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Return on buys**)
+
+Gaps appear when price history cannot mark an open position. **Trade log** stays collapsed until you save a new trade.
+
 ### Save file / agents
 
 Trades live under \`portfolioTrades\` in **Export** / linked JSON. Invalid rows are dropped on import; missing \`id\` values are minted.

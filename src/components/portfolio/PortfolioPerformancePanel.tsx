@@ -9,6 +9,7 @@ import {
   tradesMatchingSymbol,
 } from '../../lib/portfolioTrades'
 import {
+  buildReturnProgression,
   computeHoldingCostStats,
   computePortfolioActivityRollup,
   computeTimeWeightedReturn,
@@ -18,6 +19,10 @@ import {
   type TwrResult,
   type TradeActivityStats,
 } from '../../lib/portfolioPerformanceStats'
+import {
+  PortfolioReturnChart,
+  type ReturnChartMode,
+} from './PortfolioReturnChart'
 import {
   fetchPriceHistoryClient,
   isHistoryFresh,
@@ -237,6 +242,32 @@ export function PortfolioPerformancePanel({
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [draft, setDraft] = useState<PortfolioTrade | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PortfolioTrade | null>(null)
+  const [tradeLogOpen, setTradeLogOpen] = useState(false)
+  const [returnChartMode, setReturnChartMode] = useState<ReturnChartMode>('pct')
+
+  const historyPoints = useMemo(() => {
+    const out: Record<string, { date: string; close: number }[]> = {}
+    for (const [k, v] of Object.entries(histories)) {
+      out[k] = v.points ?? []
+    }
+    return out
+  }, [histories])
+
+  const returnProgression = useMemo(
+    () => buildReturnProgression(tradesBySymbol, historyPoints),
+    [tradesBySymbol, historyPoints],
+  )
+
+  const returnMissingNote = useMemo(() => {
+    if (returnProgression.missingHistorySymbols.length === 0) return null
+    return `Return curve has gaps — price history missing for: ${returnProgression.missingHistorySymbols.join(', ')}.`
+  }, [returnProgression.missingHistorySymbols])
+
+  const handleSaveTrade = (trade: PortfolioTrade) => {
+    const ok = onSaveTrade(trade)
+    if (ok) setTradeLogOpen(true)
+    return ok
+  }
 
   const openNew = (symbol?: string, holdingId?: string) => {
     setDraft(
@@ -405,6 +436,17 @@ export function PortfolioPerformancePanel({
         </section>
       ) : null}
 
+      {returnProgression.points.length > 0 ? (
+        <section className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
+          <PortfolioReturnChart
+            points={returnProgression.points}
+            mode={returnChartMode}
+            missingNote={returnMissingNote}
+            onModeChange={setReturnChartMode}
+          />
+        </section>
+      ) : null}
+
       {scopeSymbol && holdingRows.length > 0 ? (
         <section className="space-y-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
           <h4 className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
@@ -506,15 +548,31 @@ export function PortfolioPerformancePanel({
       ) : null}
 
       <section className="space-y-2">
-        <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-300/80">
+        <button
+          type="button"
+          className="flex w-full items-center gap-2 text-left text-xs font-semibold uppercase tracking-wide text-sky-300/80 hover:text-sky-200"
+          aria-expanded={tradeLogOpen}
+          onClick={() => setTradeLogOpen((o) => !o)}
+        >
+          <span
+            className={`text-[10px] text-white/40 transition-transform ${tradeLogOpen ? 'rotate-90' : ''}`}
+            aria-hidden
+          >
+            ▸
+          </span>
           Trade log
-        </h4>
+          {scopedTrades.length > 0 ? (
+            <span className="font-normal normal-case tracking-normal text-white/40">
+              ({scopedTrades.length})
+            </span>
+          ) : null}
+        </button>
         {scopedTrades.length === 0 ? (
           <p className="text-sm text-white/40">
             No trades yet. Use **+ Trade** or paste trades into your save file under{' '}
             <code className="text-emerald-300/80">portfolioTrades</code>.
           </p>
-        ) : (
+        ) : tradeLogOpen ? (
           <div className="table-shell overflow-x-auto">
             <table className="min-w-full text-sm">
               <thead className="text-xs uppercase tracking-wider text-white/45">
@@ -578,6 +636,8 @@ export function PortfolioPerformancePanel({
               </tbody>
             </table>
           </div>
+        ) : (
+          <p className="text-[11px] text-white/35">Collapsed — expand to edit or delete trades.</p>
         )}
       </section>
 
@@ -588,7 +648,7 @@ export function PortfolioPerformancePanel({
           setDrawerOpen(false)
           setDraft(null)
         }}
-        onSave={onSaveTrade}
+        onSave={handleSaveTrade}
       />
 
       {pendingDelete ? (

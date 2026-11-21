@@ -267,3 +267,141 @@ export function formatHoldingPeriod(days: number | null): string {
   const years = (days / 365.25).toFixed(1)
   return `${years}y`
 }
+
+export type LedgerSnapshot = {
+  shares: number
+  costBasis: number
+  realizedPnl: number
+  grossBuys: number
+}
+
+/** Average-cost ledger after all trades with tradeDate <= asOfDate. */
+export function ledgerSnapshotAt(
+  trades: PortfolioTrade[],
+  asOfDate: string,
+): LedgerSnapshot {
+  let shares = 0
+  let costBasis = 0
+  let realizedPnl = 0
+  let grossBuys = 0
+  const ordered = [...trades]
+    .filter((t) => t.tradeDate <= asOfDate)
+    .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate) || a.id.localeCompare(b.id))
+  for (const t of ordered) {
+    if (t.side === 'buy') {
+      const notional = t.shares * t.price + (t.fees ?? 0)
+      grossBuys += notional
+      shares += t.shares
+      costBasis += notional
+    } else {
+      const sellShares = Math.min(t.shares, shares)
+      if (sellShares <= 0) continue
+      const avg = shares > 0 ? costBasis / shares : 0
+      const proceeds = sellShares * t.price - (t.fees ?? 0)
+      const costRemoved = avg * sellShares
+      realizedPnl += proceeds - costRemoved
+      shares -= sellShares
+      costBasis -= costRemoved
+    }
+  }
+  return { shares, costBasis, realizedPnl, grossBuys }
+}
+
+export type ReturnProgressionPoint = {
+  date: string
+  totalPnl: number | null
+  returnPct: number | null
+}
+
+export type ReturnProgressionResult = {
+  points: ReturnProgressionPoint[]
+  missingHistorySymbols: string[]
+}
+
+function addUtcDays(isoDate: string, days: number): string {
+  const t = Date.parse(`${isoDate}T12:00:00Z`)
+  if (!Number.isFinite(t)) return isoDate
+  const d = new Date(t + days * 86_400_000)
+  const y = d.getUTCFullYear()
+  const m = String(d.getUTCMonth() + 1).padStart(2, '0')
+  const day = String(d.getUTCDate()).padStart(2, '0')
+  return `${y}-${m}-${day}`
+}
+
+function symbolPnlOnDate(
+  trades: PortfolioTrade[],
+  points: PriceHistoryPoint[],
+  date: string,
+): { totalPnl: number | null; grossBuys: number } {
+  const active = trades.some((t) => t.tradeDate <= date)
+  if (!active) return { totalPnl: 0, grossBuys: 0 }
+  const snap = ledgerSnapshotAt(trades, date)
+  if (snap.shares <= 0) {
+    return { totalPnl: snap.realizedPnl, grossBuys: snap.grossBuys }
+  }
+  const close = closeOnOrBefore(points, date)
+  if (close == null) {
+    return { totalPnl: null, grossBuys: snap.grossBuys }
+  }
+  const unrealized = snap.shares * close - snap.costBasis
+  return { totalPnl: snap.realizedPnl + unrealized, grossBuys: snap.grossBuys }
+}
+
+/**
+ * Daily return progression for scoped trades (one or many symbols).
+ * returnPct = totalPnl / cumulative gross buys; gaps when open marks need missing history.
+ */
+export function buildReturnProgression(
+  tradesBySymbol: Map<string, PortfolioTrade[]>,
+  histories: Record<string, PriceHistoryPoint[]>,
+  asOfDate: string = todayIsoDate(),
+): ReturnProgressionResult {
+  const entries = [...tradesBySymbol.entries()].filter(([, tr]) => tr.length > 0)
+  if (entries.length === 0) {
+    return { points: [], missingHistorySymbols: [] }
+  }
+
+  let firstTrade: string | null = null
+  for (const [, trades] of entries) {
+    const f = [...trades].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))[0]!
+      .tradeDate
+    if (!firstTrade || f < firstTrade) firstTrade = f
+  }
+  if (!firstTrade || firstTrade > asOfDate) {
+    return { points: [], missingHistorySymbols: [] }
+  }
+
+  const missingHistory = new Set<string>()
+  const points: ReturnProgressionPoint[] = []
+
+  let date = firstTrade
+  while (date <= asOfDate) {
+    let totalPnl: number | null = 0
+    let grossBuys = 0
+    let hadActivity = false
+
+    for (const [symbol, trades] of entries) {
+      if (!trades.some((t) => t.tradeDate <= date)) continue
+      hadActivity = true
+      const symPnl = symbolPnlOnDate(trades, histories[symbol] ?? [], date)
+      grossBuys += symPnl.grossBuys
+      if (symPnl.totalPnl == null) {
+        totalPnl = null
+        const snap = ledgerSnapshotAt(trades, date)
+        if (snap.shares > 0) missingHistory.add(symbol)
+      } else if (totalPnl != null) {
+        totalPnl += symPnl.totalPnl
+      }
+    }
+
+    if (hadActivity) {
+      const returnPct =
+        totalPnl != null && grossBuys > 0 ? totalPnl / grossBuys : null
+      points.push({ date, totalPnl, returnPct })
+    }
+
+    date = addUtcDays(date, 1)
+  }
+
+  return { points, missingHistorySymbols: [...missingHistory].sort() }
+}
