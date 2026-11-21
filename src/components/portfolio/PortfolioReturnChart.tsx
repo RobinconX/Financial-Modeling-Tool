@@ -3,8 +3,8 @@ import {
   CartesianGrid,
   ComposedChart,
   Line,
+  ReferenceDot,
   ResponsiveContainer,
-  Scatter,
   Tooltip,
   XAxis,
   YAxis,
@@ -111,13 +111,15 @@ export function chartTimeForTradeDate(date: string): number {
   return Date.parse(`${date}T12:00:00Z`)
 }
 
-type ChartRow = {
+export type ReturnChartRow = {
   date: string
   time: number
   value: number | null
   valuePos: number | null
   valueNeg: number | null
 }
+
+type ChartRow = ReturnChartRow
 
 function formatTick(date: string): string {
   const [y, m] = date.split('-')
@@ -157,10 +159,43 @@ type ReturnProgressionTooltipProps = {
 export function resolveReturnChartTooltipState(
   payload: ReadonlyArray<TooltipPayloadItem> | undefined,
 ): { row: ChartRow | undefined } {
-  const row = payload?.find((p) => p.dataKey === 'value')?.payload as
-    | ChartRow
-    | undefined
-  return { row }
+  const hit = payload?.find((p) => p.dataKey === 'value')?.payload
+  if (hit && 'valuePos' in hit) return { row: hit as ChartRow }
+  return { row: undefined }
+}
+
+/** Nearest line point for the hovered time-scale x (cursor), not trade markers. */
+export function chartRowNearestToTime(
+  chartData: readonly ChartRow[],
+  timeMs: number,
+): ChartRow | undefined {
+  if (!chartData.length || !Number.isFinite(timeMs)) return undefined
+  let best: ChartRow | undefined
+  let bestDist = Infinity
+  for (const row of chartData) {
+    const d = Math.abs(row.time - timeMs)
+    if (d < bestDist) {
+      bestDist = d
+      best = row
+    } else if (d === bestDist && best) {
+      if (row.value != null && best.value == null) best = row
+    }
+  }
+  return best
+}
+
+export function resolveReturnChartTooltipRow(
+  chartData: readonly ChartRow[],
+  label: string | number | undefined,
+  payload?: ReadonlyArray<TooltipPayloadItem>,
+): ChartRow | undefined {
+  if (label != null && typeof label === 'number' && Number.isFinite(label)) {
+    const atTime = chartRowNearestToTime(chartData, label)
+    if (atTime) return atTime
+  }
+  const fromPayload = resolveReturnChartTooltipState(payload).row
+  if (fromPayload) return fromPayload
+  return undefined
 }
 
 /** Trades section only when the hovered line point’s calendar day has ledger trades. */
@@ -290,6 +325,7 @@ type ReturnChartTooltipProps = {
   mode: ReturnChartMode
   displayCurrency: DisplayCurrency
   usdToChf: number | null
+  chartData: readonly ChartRow[]
   tradeMarkers: ReturnChartTradeMarker[]
 }
 
@@ -300,10 +336,12 @@ function ReturnChartTooltip({
   mode,
   displayCurrency,
   usdToChf,
+  chartData,
   tradeMarkers,
 }: ReturnChartTooltipProps) {
-  if (!active || !payload?.length) return null
-  const { row } = resolveReturnChartTooltipState(payload)
+  if (!active) return null
+  const row = resolveReturnChartTooltipRow(chartData, label, payload)
+  if (!row) return null
   const trades = tradesForReturnTooltip(row, label, tradeMarkers)
   return (
     <ReturnProgressionTooltip
@@ -405,29 +443,6 @@ export function buildSignedReturnChartRows(
 
   rows.sort((a, b) => a.time - b.time)
   return rows
-}
-
-function renderTradeDot(props: {
-  cx?: number
-  cy?: number
-  payload?: ReturnChartTradeMarker
-}) {
-  const { cx, cy, payload } = props
-  if (cx == null || cy == null || !payload) return null
-  const side = payload.side === 'buy' ? 'Buy' : 'Sell'
-  return (
-    <circle
-      cx={cx}
-      cy={cy}
-      r={5}
-      fill={payload.side === 'buy' ? '#34d399' : '#f87171'}
-      stroke="#0b0f14"
-      strokeWidth={1.5}
-      pointerEvents="none"
-    >
-      <title>{`${side} ${payload.shares} ${payload.symbol}`}</title>
-    </circle>
-  )
 }
 
 export function PortfolioReturnChart({
@@ -538,6 +553,7 @@ export function PortfolioReturnChart({
               }
             />
             <Tooltip
+              filterNull={false}
               cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
               content={(props) => (
                 <ReturnChartTooltip
@@ -547,6 +563,7 @@ export function PortfolioReturnChart({
                   mode={mode}
                   displayCurrency={displayCurrency}
                   usdToChf={usdToChf}
+                  chartData={data}
                   tradeMarkers={tradeMarkers}
                 />
               )}
@@ -585,17 +602,20 @@ export function PortfolioReturnChart({
               legendType="none"
               isAnimationActive={false}
             />
-            {showTrades && tradeMarkers.length > 0 ? (
-              <Scatter
-                data={tradeMarkers}
-                dataKey="y"
-                name="Trade"
-                isAnimationActive={false}
-                legendType="none"
-                tooltipType="none"
-                shape={renderTradeDot}
-              />
-            ) : null}
+            {showTrades
+              ? tradeMarkers.map((m) => (
+                  <ReferenceDot
+                    key={m.id}
+                    x={m.time}
+                    y={m.y}
+                    r={5}
+                    fill={m.side === 'buy' ? '#34d399' : '#f87171'}
+                    stroke="#0b0f14"
+                    strokeWidth={1.5}
+                    ifOverflow="visible"
+                  />
+                ))
+              : null}
           </ComposedChart>
         </ResponsiveContainer>
       </div>

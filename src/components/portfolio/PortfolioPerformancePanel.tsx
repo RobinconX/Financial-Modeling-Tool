@@ -15,6 +15,7 @@ import {
   tradedSymbolsFromTrades,
   tradesForPortfolio,
   tradesMatchingSymbol,
+  type SymbolPerformance,
 } from '../../lib/portfolioTrades'
 import {
   buildReturnProgression,
@@ -23,6 +24,7 @@ import {
   computeTimeWeightedReturn,
   computeTradeActivity,
   formatHoldingPeriod,
+  partitionPerformanceSymbolsByOpen,
   type PortfolioActivityRollup,
   type TwrResult,
   type TradeActivityStats,
@@ -55,6 +57,7 @@ type Props = {
   onDeleteTrade: (tradeId: string) => boolean
   logTradeSeed?: { symbol: string; holdingId?: string } | null
   onClearLogTradeSeed?: () => void
+  onFocusHolding?: (holdingId: string) => void
 }
 
 function pct(v: number | null): string {
@@ -102,6 +105,7 @@ export function PortfolioPerformancePanel({
   onDeleteTrade,
   logTradeSeed,
   onClearLogTradeSeed,
+  onFocusHolding,
 }: Props) {
   const fmt = useCallback(
     (usd: number) =>
@@ -280,7 +284,72 @@ export function PortfolioPerformancePanel({
   const [draft, setDraft] = useState<PortfolioTrade | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PortfolioTrade | null>(null)
   const [tradeLogOpen, setTradeLogOpen] = useState(false)
+  const [closedSymbolsOpen, setClosedSymbolsOpen] = useState(false)
   const [returnChartMode, setReturnChartMode] = useState<ReturnChartMode>('pct')
+
+  const holdingsById = useMemo(() => {
+    const m = new Map<string, (typeof portfolio.holdings)[number]>()
+    for (const h of portfolio.holdings) m.set(h.id, h)
+    return m
+  }, [portfolio.holdings])
+
+  const tradeLogHasPositionLink = useMemo(
+    () => scopedTrades.some((t) => t.holdingId),
+    [scopedTrades],
+  )
+
+  const symbolsByLedgerOpen = useMemo(
+    () => partitionPerformanceSymbolsByOpen(summary.symbols),
+    [summary.symbols],
+  )
+
+  const renderSymbolPerformanceRow = (s: SymbolPerformance) => {
+    const holding = computeHoldingCostStats(
+      tradesBySymbol.get(s.symbol) ?? [],
+      s.ledgerShares,
+      s.costBasis,
+      s.grossBuys,
+      s.marketValue,
+      totalOpenMarketValue,
+    )
+    const twr = twrBySymbol.get(s.symbol)
+    const loading = histLoading.has(s.symbol)
+    return (
+      <tr key={s.symbol} className="border-t border-white/5">
+        <td className="px-2 py-2 font-medium text-white">{s.symbol}</td>
+        <td className="px-2 py-2 text-xs text-white/55">
+          {s.ledgerShares > 0 ? 'Open' : 'Closed'}
+        </td>
+        <td className="px-2 py-2 text-right text-xs tabular-nums text-white/80">
+          {loading ? '…' : twrLabel(twr)}
+        </td>
+        <td
+          className={`px-2 py-2 text-right tabular-nums text-xs ${pnlClass(s.realizedPnl)}`}
+        >
+          {fmt(s.realizedPnl)}
+        </td>
+        <td className="px-2 py-2 text-right text-xs tabular-nums text-white/80">
+          {pct(s.returnPct)}
+        </td>
+        <td className="px-2 py-2 text-right text-xs tabular-nums text-white/55">
+          {holding.concentration != null ? pct(holding.concentration) : '—'}
+        </td>
+      </tr>
+    )
+  }
+
+  const symbolTableHeader = (
+    <thead className="text-xs uppercase tracking-wider text-white/45">
+      <tr>
+        <th className="px-2 py-2 text-left font-medium">Symbol</th>
+        <th className="px-2 py-2 text-left font-medium">Status</th>
+        <th className="px-2 py-2 text-right font-medium">TWR</th>
+        <th className="px-2 py-2 text-right font-medium">Realized</th>
+        <th className="px-2 py-2 text-right font-medium">Return</th>
+        <th className="px-2 py-2 text-right font-medium">Conc.</th>
+      </tr>
+    </thead>
+  )
 
   const snapshotMarkNote = useMemo(
     () => formatSnapshotMarkSummary(summary.symbols),
@@ -553,58 +622,52 @@ export function PortfolioPerformancePanel({
           <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-300/80">
             By symbol
           </h4>
-          <div className="table-shell overflow-x-auto">
-            <table className="min-w-full text-sm">
-              <thead className="text-xs uppercase tracking-wider text-white/45">
-                <tr>
-                  <th className="px-2 py-2 text-left font-medium">Symbol</th>
-                  <th className="px-2 py-2 text-left font-medium">Status</th>
-                  <th className="px-2 py-2 text-right font-medium">TWR</th>
-                  <th className="px-2 py-2 text-right font-medium">Realized</th>
-                  <th className="px-2 py-2 text-right font-medium">Return</th>
-                  <th className="px-2 py-2 text-right font-medium">Conc.</th>
-                </tr>
-              </thead>
-              <tbody>
-                {summary.symbols.map((s) => {
-                  const holding = computeHoldingCostStats(
-                    tradesBySymbol.get(s.symbol) ?? [],
-                    s.ledgerShares,
-                    s.costBasis,
-                    s.grossBuys,
-                    s.marketValue,
-                    totalOpenMarketValue,
-                  )
-                  const twr = twrBySymbol.get(s.symbol)
-                  const loading = histLoading.has(s.symbol)
-                  return (
-                    <tr key={s.symbol} className="border-t border-white/5">
-                      <td className="px-2 py-2 font-medium text-white">{s.symbol}</td>
-                      <td className="px-2 py-2 text-xs text-white/55">
-                        {s.ledgerShares > 0 ? 'Open' : 'Closed'}
-                      </td>
-                      <td className="px-2 py-2 text-right text-xs tabular-nums text-white/80">
-                        {loading ? '…' : twrLabel(twr)}
-                      </td>
-                      <td
-                        className={`px-2 py-2 text-right tabular-nums text-xs ${pnlClass(s.realizedPnl)}`}
-                      >
-                        {fmt(s.realizedPnl)}
-                      </td>
-                      <td className="px-2 py-2 text-right text-xs tabular-nums text-white/80">
-                        {pct(s.returnPct)}
-                      </td>
-                      <td className="px-2 py-2 text-right text-xs tabular-nums text-white/55">
-                        {holding.concentration != null
-                          ? pct(holding.concentration)
-                          : '—'}
-                      </td>
-                    </tr>
-                  )
-                })}
-              </tbody>
-            </table>
-          </div>
+          {symbolsByLedgerOpen.open.length > 0 ? (
+            <div className="table-shell overflow-x-auto">
+              <table className="min-w-full text-sm">
+                {symbolTableHeader}
+                <tbody>
+                  {symbolsByLedgerOpen.open.map((s) => renderSymbolPerformanceRow(s))}
+                </tbody>
+              </table>
+            </div>
+          ) : (
+            <p className="text-sm text-white/40">No open ledger positions.</p>
+          )}
+          {symbolsByLedgerOpen.closed.length > 0 ? (
+            <div className="space-y-1">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 text-left text-xs font-semibold uppercase tracking-wide text-white/50 hover:text-white/75"
+                aria-expanded={closedSymbolsOpen}
+                onClick={() => setClosedSymbolsOpen((o) => !o)}
+              >
+                <span
+                  className={`text-[10px] text-white/40 transition-transform ${closedSymbolsOpen ? 'rotate-90' : ''}`}
+                  aria-hidden
+                >
+                  ▸
+                </span>
+                Closed positions ({symbolsByLedgerOpen.closed.length})
+              </button>
+              {closedSymbolsOpen ? (
+                <div className="table-shell overflow-x-auto">
+                  <table className="min-w-full text-sm">
+                    {symbolTableHeader}
+                    <tbody>
+                      {symbolsByLedgerOpen.closed.map((s) =>
+                        renderSymbolPerformanceRow(s),
+                      )}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-[11px] text-white/35">
+                  Collapsed — realized P&L still counts in totals above.
+                </p>
+              )}
+            </div>
+          ) : null}
         </section>
       ) : null}
 
@@ -646,6 +709,9 @@ export function PortfolioPerformancePanel({
                   <th className="px-3 py-2 text-right font-medium">Shares</th>
                   <th className="px-3 py-2 text-right font-medium">Price</th>
                   <th className="px-3 py-2 text-right font-medium">Fees</th>
+                  {tradeLogHasPositionLink ? (
+                    <th className="px-3 py-2 text-left font-medium">Position</th>
+                  ) : null}
                   <th className="px-3 py-2 text-right font-medium" />
                 </tr>
               </thead>
@@ -676,6 +742,21 @@ export function PortfolioPerformancePanel({
                       <td className="px-3 py-2 text-right tabular-nums text-white/50">
                         {(t.fees ?? 0) > 0 ? fmt(t.fees!) : '—'}
                       </td>
+                      {tradeLogHasPositionLink ? (
+                        <td className="px-3 py-2 text-xs text-white/55">
+                          {t.holdingId && onFocusHolding ? (
+                            <button
+                              type="button"
+                              className="text-sky-300/85 hover:text-sky-200"
+                              onClick={() => onFocusHolding(t.holdingId!)}
+                            >
+                              {holdingsById.get(t.holdingId)?.symbol ?? t.symbol}
+                            </button>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
+                      ) : null}
                       <td className="px-3 py-2 text-right">
                         <button
                           type="button"
@@ -705,6 +786,9 @@ export function PortfolioPerformancePanel({
       <PortfolioTradeDrawer
         open={drawerOpen}
         draft={draft}
+        portfolio={portfolio}
+        scenarios={scenarios}
+        historyBySymbol={historyPoints}
         onClose={() => {
           setDrawerOpen(false)
           setDraft(null)

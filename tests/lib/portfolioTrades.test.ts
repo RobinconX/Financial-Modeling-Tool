@@ -4,6 +4,8 @@ import {
   computeSymbolPerformance,
   normalizePortfolioTrade,
   normalizePortfolioTrades,
+  equityHoldingForTradePrefill,
+  positionPrefillFromHolding,
   resolveSymbolMark,
   tradedSymbolsFromTrades,
   tradesMatchingSymbol,
@@ -15,7 +17,51 @@ import { APP_DATA_SNAPSHOT_VERSION } from '../../src/lib/appDataSnapshot'
 
 const PORT_ID = '11111111-1111-4111-8111-111111111111'
 
+const holdingEquity = {
+  id: 'h-eq',
+  symbol: 'AAPL',
+  sharesHeld: 12,
+  scenarioId: null,
+  basis: 'easy' as const,
+  yearOverrides: [],
+  manualCurrentPrice: 200,
+  manualOnly: true,
+}
+
+const holdingOption = {
+  ...holdingEquity,
+  id: 'h-opt',
+  symbol: 'AAPL',
+  option: { occSymbol: 'AAPL260618C00180000', expiration: '2026-06-18', strike: 180, type: 'call' as const },
+}
+
 describe('portfolioTrades', () => {
+  it('matches equity holdings for trade prefill by id or symbol, not options', () => {
+    const book: SavedPortfolio = {
+      id: PORT_ID,
+      name: 'T',
+      currentCash: 0,
+      deposits: [],
+      holdings: [holdingEquity, holdingOption],
+      actions: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    expect(
+      equityHoldingForTradePrefill(book, { holdingId: 'h-eq' })?.id,
+    ).toBe('h-eq')
+    expect(equityHoldingForTradePrefill(book, { holdingId: 'h-opt' })).toBeNull()
+    expect(
+      equityHoldingForTradePrefill(book, { symbol: 'aapl' })?.sharesHeld,
+    ).toBe(12)
+    const prefill = positionPrefillFromHolding(holdingEquity, {
+      price: 210,
+      source: 'manual',
+      asOfDate: null,
+    })
+    expect(prefill).toEqual({ shares: 12, price: 210, holdingId: 'h-eq' })
+  })
+
   it('normalizes agent-written rows with missing id and mixed-case symbol', () => {
     const t = normalizePortfolioTrade({
       portfolioId: PORT_ID,

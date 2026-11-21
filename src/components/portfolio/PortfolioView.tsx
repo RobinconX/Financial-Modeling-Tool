@@ -1287,6 +1287,10 @@ export function PortfolioView({
                 onDeleteTrade={onDeleteTrade}
                 logTradeSeed={logTradeSeed}
                 onClearLogTradeSeed={() => setLogTradeSeed(null)}
+                onFocusHolding={(holdingId) => {
+                  setPanel('positions')
+                  setEditorFocus({ panel: 'positions', holdingId })
+                }}
               />
             )}
 

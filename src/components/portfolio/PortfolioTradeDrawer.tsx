@@ -1,11 +1,26 @@
-import { useEffect, useState, type ReactNode } from 'react'
-import type { PortfolioTrade, PortfolioTradeSide } from '../../types'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import type {
+  PortfolioTrade,
+  PortfolioTradeSide,
+  SavedPortfolio,
+  SavedScenario,
+} from '../../types'
 import { formatInputNumber } from '../common/MoneyInput'
-import { normalizePortfolioTrade, todayIsoDate } from '../../lib/portfolioTrades'
+import type { PriceHistoryPoint } from '../../lib/priceHistory'
+import {
+  equityHoldingForTradePrefill,
+  normalizePortfolioTrade,
+  positionPrefillFromHolding,
+  resolveSymbolMark,
+  todayIsoDate,
+} from '../../lib/portfolioTrades'
 
 type Props = {
   open: boolean
   draft: PortfolioTrade | null
+  portfolio: SavedPortfolio
+  scenarios: SavedScenario[]
+  historyBySymbol?: Record<string, PriceHistoryPoint[]>
   onClose: () => void
   onSave: (trade: PortfolioTrade) => boolean
 }
@@ -18,7 +33,15 @@ function FieldLabel({ children }: { children: ReactNode }) {
   )
 }
 
-export function PortfolioTradeDrawer({ open, draft, onClose, onSave }: Props) {
+export function PortfolioTradeDrawer({
+  open,
+  draft,
+  portfolio,
+  scenarios,
+  historyBySymbol = {},
+  onClose,
+  onSave,
+}: Props) {
   const [symbol, setSymbol] = useState('')
   const [side, setSide] = useState<PortfolioTradeSide>('buy')
   const [tradeDate, setTradeDate] = useState(todayIsoDate())
@@ -26,6 +49,7 @@ export function PortfolioTradeDrawer({ open, draft, onClose, onSave }: Props) {
   const [price, setPrice] = useState('')
   const [fees, setFees] = useState('')
   const [note, setNote] = useState('')
+  const [holdingId, setHoldingId] = useState<string | undefined>()
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -39,8 +63,40 @@ export function PortfolioTradeDrawer({ open, draft, onClose, onSave }: Props) {
       draft.fees != null && draft.fees > 0 ? formatInputNumber(draft.fees, 2) : '',
     )
     setNote(draft.note ?? '')
+    setHoldingId(draft.holdingId ?? undefined)
     setError(null)
   }, [open, draft])
+
+  const matchedHolding = useMemo(
+    () =>
+      equityHoldingForTradePrefill(portfolio, {
+        symbol,
+        holdingId,
+      }),
+    [portfolio, symbol, holdingId],
+  )
+
+  const applyPosition = useCallback(() => {
+    if (!matchedHolding) return
+    const hist = historyBySymbol[matchedHolding.symbol.toUpperCase()] ?? []
+    const mark = resolveSymbolMark(
+      matchedHolding.symbol,
+      portfolio,
+      scenarios,
+      hist,
+      tradeDate,
+    )
+    const prefill = positionPrefillFromHolding(matchedHolding, mark)
+    setShares(prefill.shares > 0 ? formatInputNumber(prefill.shares, 6) : '')
+    setHoldingId(prefill.holdingId)
+    if (prefill.price != null) {
+      setPrice(formatInputNumber(prefill.price, 4))
+    }
+    if (!symbol.trim()) {
+      setSymbol(matchedHolding.symbol.toUpperCase())
+    }
+    setError(null)
+  }, [matchedHolding, historyBySymbol, portfolio, scenarios, tradeDate, symbol])
 
   if (!open || !draft) return null
 
@@ -49,6 +105,8 @@ export function PortfolioTradeDrawer({ open, draft, onClose, onSave }: Props) {
     const sharesN = Number(shares)
     const priceN = Number(price)
     const feesN = fees.trim() === '' ? 0 : Number(fees)
+    const linkId =
+      holdingId && matchedHolding?.id === holdingId ? holdingId : undefined
     const candidate: PortfolioTrade = {
       ...draft,
       symbol: symbol.trim().toUpperCase(),
@@ -58,6 +116,7 @@ export function PortfolioTradeDrawer({ open, draft, onClose, onSave }: Props) {
       price: priceN,
       fees: feesN,
       note: note.trim() || undefined,
+      holdingId: linkId,
     }
     const normalized = normalizePortfolioTrade(candidate)
     if (!normalized) {
@@ -101,11 +160,23 @@ export function PortfolioTradeDrawer({ open, draft, onClose, onSave }: Props) {
             <input
               className="input"
               value={symbol}
-              onChange={(e) => setSymbol(e.target.value.toUpperCase())}
+              onChange={(e) => {
+                setSymbol(e.target.value.toUpperCase())
+                setHoldingId(undefined)
+              }}
               placeholder="e.g. AAPL"
               autoComplete="off"
               required
             />
+            {matchedHolding ? (
+              <button
+                type="button"
+                className="mt-2 rounded-full border border-sky-400/35 bg-sky-500/10 px-3 py-1 text-[11px] font-medium text-sky-200 hover:bg-sky-500/20"
+                onClick={applyPosition}
+              >
+                Use position · {matchedHolding.sharesHeld.toLocaleString()} sh
+              </button>
+            ) : null}
           </div>
 
           <div>

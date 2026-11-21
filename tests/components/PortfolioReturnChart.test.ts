@@ -2,7 +2,9 @@ import { describe, expect, it } from 'vitest'
 import {
   buildReturnChartTradeMarkers,
   buildSignedReturnChartRows,
+  chartRowNearestToTime,
   chartTimeForTradeDate,
+  resolveReturnChartTooltipRow,
   resolveReturnChartTooltipState,
   ReturnProgressionTooltip,
   tradesForReturnTooltip,
@@ -150,6 +152,55 @@ describe('ReturnProgressionTooltip', () => {
     const text = JSON.stringify(el)
     expect(text).toContain('2024-01-01')
     expect(text).toContain('—')
+  })
+})
+
+describe('chartRowNearestToTime', () => {
+  it('picks the line point closest to hovered time', () => {
+    const rows = buildSignedReturnChartRows(
+      [
+        { date: '2024-01-01', totalPnl: -10, returnPct: -0.1 },
+        { date: '2024-06-01', totalPnl: 50, returnPct: 0.5 },
+        { date: '2026-08-01', totalPnl: 100, returnPct: 1 },
+      ],
+      'pct',
+    )
+    const aug26 = chartTimeForTradeDate('2026-08-01')
+    const row = chartRowNearestToTime(rows, aug26 + 60_000)
+    expect(row?.date).toBe('2026-08-01')
+    expect(row?.value).toBeCloseTo(100, 4)
+  })
+})
+
+describe('resolveReturnChartTooltipRow', () => {
+  it('prefers time label over stale scatter-style payload', () => {
+    const rows = buildSignedReturnChartRows(
+      [
+        { date: '2025-04-21', totalPnl: -10, returnPct: -0.3662 },
+        { date: '2026-08-01', totalPnl: 100, returnPct: 1 },
+      ],
+      'pct',
+    )
+    const stalePayload = [
+      {
+        dataKey: 'y',
+        payload: {
+          id: 'trade-1',
+          tradeDate: '2025-04-21',
+          time: chartTimeForTradeDate('2025-04-21'),
+          side: 'buy' as const,
+          symbol: 'X',
+          shares: 1,
+          price: 1,
+          fees: 0,
+          y: -36.62,
+        },
+      },
+    ]
+    const hoverTime = chartTimeForTradeDate('2026-08-01')
+    const row = resolveReturnChartTooltipRow(rows, hoverTime, stalePayload)
+    expect(row?.date).toBe('2026-08-01')
+    expect(row?.value).toBeCloseTo(100, 4)
   })
 })
 

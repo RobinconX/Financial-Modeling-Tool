@@ -87,6 +87,8 @@ describe('teachings registry', () => {
     expect(getGuide('portfolio.performance')?.body).toContain('Whole portfolio')
     expect(getGuide('portfolio.performance')?.body).toContain('TWR')
     expect(getGuide('portfolio.performance')?.body).toContain('Return progression')
+    expect(getGuide('portfolio.performance')?.body).toContain('Use position')
+    expect(getGuide('portfolio.performance')?.body).toContain('Closed positions')
   })
 
   it('exposes a ready contribution-effectiveness guide with a figure', () => {

@@ -7,6 +7,7 @@ import {
   computeHoldingCostStats,
   computePortfolioActivityRollup,
   ledgerSnapshotAt,
+  partitionPerformanceSymbolsByOpen,
 } from '../../src/lib/portfolioPerformanceStats'
 
 const PORT_ID = '11111111-1111-4111-8111-111111111111'
@@ -119,6 +120,17 @@ describe('portfolioPerformanceStats', () => {
     )
     expect(r.missingHistorySymbols).toContain('TST')
     expect(r.points.some((p) => p.totalPnl == null)).toBe(true)
+  })
+
+  it('partitions symbol performance rows by open ledger shares', () => {
+    const rows = [
+      { symbol: 'A', ledgerShares: 5 },
+      { symbol: 'B', ledgerShares: 0 },
+      { symbol: 'C', ledgerShares: 1 },
+    ]
+    const { open, closed } = partitionPerformanceSymbolsByOpen(rows)
+    expect(open.map((r) => r.symbol)).toEqual(['A', 'C'])
+    expect(closed.map((r) => r.symbol)).toEqual(['B'])
   })
 
   it('marks TWR unavailable when history is missing', () => {

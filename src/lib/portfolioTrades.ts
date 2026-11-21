@@ -1,4 +1,5 @@
 import type {
+  PortfolioHolding,
   PortfolioTrade,
   PortfolioTradeSide,
   PortfolioTradesState,
@@ -201,6 +202,35 @@ export type SymbolPerformance = {
   grossBuys: number
   totalPnl: number | null
   returnPct: number | null
+}
+
+/** Equity holding on this book matching trade symbol and/or draft `holdingId` (no options). */
+export function equityHoldingForTradePrefill(
+  portfolio: SavedPortfolio,
+  input: { symbol?: string; holdingId?: string | null },
+): PortfolioHolding | null {
+  if (input.holdingId) {
+    const byId = portfolio.holdings.find((h) => h.id === input.holdingId)
+    if (byId && !byId.option) return byId
+  }
+  const sym = (input.symbol ?? '').trim().toUpperCase()
+  if (!sym) return null
+  return (
+    portfolio.holdings.find(
+      (h) => !h.option && h.symbol.toUpperCase() === sym,
+    ) ?? null
+  )
+}
+
+export function positionPrefillFromHolding(
+  holding: PortfolioHolding,
+  mark: SymbolMark | null,
+): { shares: number; price: number | null; holdingId: string } {
+  return {
+    shares: holding.sharesHeld,
+    price: mark != null && mark.price > 0 ? mark.price : null,
+    holdingId: holding.id,
+  }
 }
 
 /** Latest historical close on or before `asOfDate` (no staleness cap — for marks). */

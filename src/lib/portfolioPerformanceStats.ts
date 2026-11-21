@@ -424,3 +424,16 @@ export function buildReturnProgression(
 
   return { points, missingHistorySymbols: [...missingHistory].sort() }
 }
+
+/** Split performance symbol rows for whole-portfolio table (open vs fully sold). */
+export function partitionPerformanceSymbolsByOpen<
+  T extends { ledgerShares: number },
+>(symbols: readonly T[]): { open: T[]; closed: T[] } {
+  const open: T[] = []
+  const closed: T[] = []
+  for (const s of symbols) {
+    if (s.ledgerShares > 0) open.push(s)
+    else closed.push(s)
+  }
+  return { open, closed }
+}

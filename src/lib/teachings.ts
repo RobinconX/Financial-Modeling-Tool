@@ -1211,12 +1211,13 @@ The **Performance** tab is an **executed trade ledger**. It does not change **Po
 
 - **+ Trade** opens a drawer: symbol, side, date (**Today** shortcut), shares, price, optional fees and note
 - **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
+- When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history)
 
 > Symbols are normalized to uppercase on save. Equities only (standard tickers).
 
 ### Editing
 
-Use **Edit** or **Delete** on any row in the trade log.
+Use **Edit** or **Delete** on any row in the trade log. When a trade was saved with a **holdingId** link, expand the log to see **Position** and jump to that row in **Positions**.
 
 ### Scope
 
@@ -1233,7 +1234,7 @@ The header **select** switches what you are viewing:
 - **Position** (single ticker) — ledger shares, average cost / breakeven, gross buys, sell proceeds, % sold, open cost basis, current value
 - **TWR** — time-weighted return **per ticker** from daily price history (lazy fetch, shared cache with Comparables); shows **Unavailable** when history cannot cover the holding window
 
-Whole-portfolio view adds **By symbol** columns: status, **TWR**, return on buys, and **Concentration** (% of open ledger value).
+Whole-portfolio **By symbol** lists **open** ledger rows first (status, **TWR**, return on buys, **Concentration**). Fully sold tickers sit under **Closed positions (N)** (collapsed by default); their realized P&L still rolls into snapshot cards and totals above.
 
 ### Snapshot return
 
@@ -1246,7 +1247,7 @@ Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** ove
 - **$** — realized + unrealized P&L each day (ledger marks from daily closes when shares are open)
 - **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** %)
 
-The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged buy (green dot) and sell (red dot) on the curve at that day’s return; hover a dot for symbol, side, size, and price. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
+The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged buy (green dot) and sell (red dot) on the curve at that day’s return; the main tooltip follows the crosshair by date and adds trade details on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
 
 ### Save file / agents
 
