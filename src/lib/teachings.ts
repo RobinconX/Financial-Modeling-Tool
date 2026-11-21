@@ -666,7 +666,7 @@ Toggle basis tabs (**Easy**, **P/S**, etc.) to drive the hero ROI, **Market cap*
 
 ### Investment thesis
 
-Optional notes per save — see the **Investment thesis** child guide (**Guide** on that collapsible block).
+Optional notes per save — use **Add thesis** or the **document** icon under the scenario title (child guide **Guide** in the editor modal).
 
 ### Overrides & save
 
@@ -692,12 +692,18 @@ Fetch **MSFT**, set **Easy** **2030** mcap **$8T** with live mcap **$3T** today 
     id: 'projections.thesis',
     title: 'Investment thesis',
     summary:
-      'Optional per-scenario notes for your story, key assumptions, and buy/sell criteria — light markdown with a toolbar, live preview, and a 4,000-character cap. Saved with the projection; readable from **Comparables** in the right shelf.',
+      'Optional per-scenario notes for your story, key assumptions, and buy/sell criteria — WYSIWYG editor in a large modal on **Analyze**, stored as light markdown, **4,000** characters. **Comparables** opens a read-only **ThesisRail** shelf.',
     body: `## How it works
 
-The **Investment thesis** block sits on **Analyze** below quote warnings. Expand it to write; collapse it when you only need numbers.
+On **Analyze**, thesis notes open in a centered modal (about **4xl** wide, most of the viewport height) — not inline under the assumptions.
 
 > Use it for the narrative behind the model — not duplicate every assumption row.
+
+### Opening the editor
+
+- **Add thesis** — subtle link under the scenario title when there is no thesis yet (draft or saved); **Compare** has one control per panel
+- **Document** icon — appears next to the title once the save has thesis text; click to reopen the modal
+- **Guide** — in the modal header (same child guide as this article)
 
 ### What to capture
 
@@ -705,41 +711,38 @@ The **Investment thesis** block sits on **Analyze** below quote warnings. Expand
 - **Key assumptions** — what has to stay true for your valuation path
 - **Buy / sell criteria** — what would make you add, trim, or exit
 
-### Editor & toolbar
+### WYSIWYG toolbar
 
-- **B** — wrap selection in \`**bold**\`
-- **I** — wrap in \`*italic*\`
-- **•** — start or continue a \`-\` bullet line
-- **H** — insert a \`##\` section heading at the cursor
-- **Preview** — formatted read-only view below the box (only when text is non-empty)
+Formatting shows **immediately** in the editor — you do not type raw markdown syntax.
 
-Supported in **Preview**: \`##\` and \`###\` headings, \`-\` bullets, \`**bold**\`, \`*italic*\`, and inline \`code\`. No links, images, or tables.
+- **B** — bold
+- **I** — italic
+- **•** — bullet list
+- **H** — section heading (level 2, stored as \`##\` markdown)
+
+Paste can include inline \`code\`; there is no code button. Older saves with \`###\` headings still load correctly.
 
 ### Length & persistence
 
-Typed text is capped at **4,000** characters (counter under the box). Extra paste or toolbar edits are clipped to that limit.
+The counter tracks **serialized markdown** up to **4,000** characters. At the cap you can still delete or replace text; you cannot add more until you free space.
 
-On a **saved** scenario, thesis edits **auto-save** with the rest of the row. **Save** / **Save as…** includes the thesis; **Save as…** copies it verbatim to the new name.
+On a **saved** scenario, thesis edits **auto-save** with the row. **Save** / **Save as…** includes the thesis (whitespace trimmed on save); **Save as…** copies it to the new name.
 
-Draft (unsaved) tickers keep thesis in memory until the first **Save**.
+Draft tickers keep thesis in memory until the first **Save**.
 
 ### Comparables
 
-On **Comparables**, a filled-in save shows a small **document** icon beside the name (click only — not hover). It opens the **ThesisRail** side shelf: read-only rendered notes for that row’s scenario, resizable from the left edge; **Escape** or **Close** dismisses it.
+A filled-in save shows the same **document** icon beside the row name (click only). It opens the narrow **ThesisRail** side shelf — read-only, resizable, **Escape** or **Close** to dismiss.
 
-Opening **Analyze** from the name still loads the full editor for edits.
+Click a row **name** on **Comparables** to land on **Analyze** and edit in the modal.
 
 ## How to interpret
 
 > The thesis does not change ROI, CAGR, or chart math — it documents intent next to the numbers.
 
-Use **Preview** to sanity-check headings and lists before you rely on the shelf in a comp set.
-
 ## Example
 
-On save **MSFT · Cloud bet**, you might write a \`## Bull case\` section, bullets on **Azure** growth, then \`### Trim if\` with a P/E trigger — roughly 250 characters, far below **4,000**.
-
-After **Save**, **Comparables** lists the row with a document icon; open the shelf to review without leaving the table. **Save as…** copies the thesis text to the new scenario name unchanged.
+On **MSFT · Cloud bet**, open the modal, add a **## Bull case** heading, bold **Azure**, and a bullet on margin — under **4,000** characters. After **Save**, the document icon appears on **Analyze** and **Comparables**; the shelf shows the same content rendered.
 `,
     status: 'ready',
     location: {
