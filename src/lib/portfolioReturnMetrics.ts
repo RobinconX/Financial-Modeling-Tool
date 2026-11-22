@@ -7,6 +7,7 @@ import {
 } from './portfolioTrades'
 import {
   convertAmountToDisplay,
+  usdToChfForTradeFlow,
   type PerfDisplayContext,
 } from './portfolioTradeFx'
 import {
@@ -42,22 +43,38 @@ export type CapitalContributionStats = {
   grossBuys: number
 }
 
+export type PeakNetInvestedDayRow = {
+  date: string
+  events: string
+  flow: number
+  runningTotal: number
+  isPeak: boolean
+}
+
+function tradeFlowEventLabel(t: PortfolioTrade): string {
+  const ev = tradeEvent(t)
+  if (ev !== 'trade') return `${t.symbol} ${ev}`
+  return `${t.side} ${t.symbol}`
+}
+
 function feeInDisplay(
   t: PortfolioTrade,
   display: PerfDisplayContext['displayCurrency'],
-  usdToChf: number | null,
+  perfCtx?: PerfDisplayContext,
 ): number {
   const f = t.fees ?? 0
   if (f <= 0) return 0
   const feeCur = t.feesCurrency ?? t.currency ?? 'USD'
+  const usdToChf = usdToChfForTradeFlow(t.tradeDate, perfCtx)
   return convertAmountToDisplay(f, feeCur, display, usdToChf)
 }
 
 function priceInDisplay(
   t: PortfolioTrade,
   display: PerfDisplayContext['displayCurrency'],
-  usdToChf: number | null,
+  perfCtx?: PerfDisplayContext,
 ): number {
+  const usdToChf = usdToChfForTradeFlow(t.tradeDate, perfCtx)
   return convertAmountToDisplay(t.price, t.currency ?? 'USD', display, usdToChf)
 }
 
@@ -67,12 +84,11 @@ export function tradeBuyContribution(
   perfCtx?: PerfDisplayContext,
 ): number {
   const display = perfCtx?.displayCurrency ?? 'USD'
-  const usdToChf = perfCtx?.usdToChf ?? null
   if (tradeEvent(t) !== 'trade') return 0
   if (t.side !== 'buy') return 0
   const mult = tradeMultiplier(t)
-  const fees = feeInDisplay(t, display, usdToChf)
-  const px = priceInDisplay(t, display, usdToChf)
+  const fees = feeInDisplay(t, display, perfCtx)
+  const px = priceInDisplay(t, display, perfCtx)
   return t.shares * px * mult + fees
 }
 
@@ -82,12 +98,11 @@ export function tradeSellProceeds(
   perfCtx?: PerfDisplayContext,
 ): number {
   const display = perfCtx?.displayCurrency ?? 'USD'
-  const usdToChf = perfCtx?.usdToChf ?? null
   if (tradeEvent(t) !== 'trade') return 0
   if (t.side !== 'sell') return 0
   const mult = tradeMultiplier(t)
-  const fees = feeInDisplay(t, display, usdToChf)
-  const px = priceInDisplay(t, display, usdToChf)
+  const fees = feeInDisplay(t, display, perfCtx)
+  const px = priceInDisplay(t, display, perfCtx)
   return t.shares * px * mult - fees
 }
 
@@ -101,30 +116,79 @@ export function tradeInvestorCashFlow(
   return tradeSellProceeds(t, perfCtx)
 }
 
+function capitalTradesByDay(
+  trades: PortfolioTrade[],
+  asOfDate: string,
+): Map<string, PortfolioTrade[]> {
+  const expanded = withAutoExpireTrades(trades, asOfDate)
+  const byDate = new Map<string, PortfolioTrade[]>()
+  for (const t of expanded) {
+    if (t.tradeDate > asOfDate) continue
+    const list = byDate.get(t.tradeDate) ?? []
+    list.push(t)
+    byDate.set(t.tradeDate, list)
+  }
+  return byDate
+}
+
+export function buildPeakNetInvestedTimeline(
+  trades: PortfolioTrade[],
+  asOfDate: string = todayIsoDate(),
+  perfCtx?: PerfDisplayContext,
+): PeakNetInvestedDayRow[] {
+  const byDate = capitalTradesByDay(trades, asOfDate)
+  const dates = [...byDate.keys()].sort((a, b) => a.localeCompare(b))
+  let running = 0
+  let peak = 0
+  const rows: PeakNetInvestedDayRow[] = []
+  for (const date of dates) {
+    const dayTrades = byDate.get(date)!
+    let dayFlow = 0
+    const labels: string[] = []
+    for (const t of dayTrades) {
+      const buy = tradeBuyContribution(t, perfCtx)
+      const sell = tradeSellProceeds(t, perfCtx)
+      dayFlow += buy - sell
+      if (buy > 0 || sell > 0) {
+        labels.push(tradeFlowEventLabel(t))
+      }
+    }
+    running += dayFlow
+    peak = Math.max(peak, running)
+    rows.push({
+      date,
+      events: labels.length > 0 ? labels.join('; ') : '—',
+      flow: dayFlow,
+      runningTotal: running,
+      isPeak: false,
+    })
+  }
+  const peakRows = rows.filter((r) => Math.abs(r.runningTotal - peak) < 1e-6)
+  const markPeak = peakRows[peakRows.length - 1]
+  if (markPeak) markPeak.isPeak = true
+  return rows
+}
+
 export function computeCapitalContributionStats(
   trades: PortfolioTrade[],
   asOfDate: string = todayIsoDate(),
   perfCtx?: PerfDisplayContext,
 ): CapitalContributionStats {
-  const expanded = withAutoExpireTrades(trades, asOfDate)
-  const ordered = [...expanded]
-    .filter((t) => t.tradeDate <= asOfDate)
-    .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate) || a.id.localeCompare(b.id))
+  const byDate = capitalTradesByDay(trades, asOfDate)
+  const dates = [...byDate.keys()].sort((a, b) => a.localeCompare(b))
   let running = 0
   let peak = 0
   let grossBuys = 0
-  for (const t of ordered) {
-    const buy = tradeBuyContribution(t, perfCtx)
-    const sell = tradeSellProceeds(t, perfCtx)
-    if (buy > 0) {
-      running += buy
-      grossBuys += buy
-      peak = Math.max(peak, running)
+  for (const date of dates) {
+    let dayFlow = 0
+    for (const t of byDate.get(date)!) {
+      const buy = tradeBuyContribution(t, perfCtx)
+      const sell = tradeSellProceeds(t, perfCtx)
+      if (buy > 0) grossBuys += buy
+      dayFlow += buy - sell
     }
-    if (sell > 0) {
-      running -= sell
-      peak = Math.max(peak, running)
-    }
+    running += dayFlow
+    peak = Math.max(peak, running)
   }
   return { currentNet: running, peakNet: peak, grossBuys }
 }

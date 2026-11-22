@@ -1244,6 +1244,8 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
 
 The **Performance** tab is an **executed trade ledger** (equities and **listed options**). It does not change **Positions** counts or **Chart** planned actions. Each trade stores **USD** or **CHF** for **price** (premium) and optional **feesCurrency** for commissions. Options use **contracts** in the **shares** field with multiplier **100**. Short opens (sell with no position) are options-only. P&L converts into the portfolio **display currency** using the live USD/CHF rate.
 
+> **Trade cash flows** (net capital, peak net invested, MWR flows, ledger realized from premiums) use **ECB daily USD/CHF on each trade date** (cached locally). **Marks** and terminal NAV still use the **live** spot rate.
+
 ### Adding trades
 
 - **+ Trade** — choose **Equity** or **Option**; OCC or IB description (e.g. HIMS 16OCT26 25 P), contracts, USD premium, optional **CHF** fee currency, lifecycle **Event** (expire / assign)
@@ -1280,7 +1282,7 @@ Whole-portfolio **By symbol** lists **open** ledger rows first (status, **TWR**,
 A highlighted card shows **today’s** totals for the current scope:
 
 - **$** — realized + unrealized P&L (display currency)
-- **%** — total P&L ÷ **peak net invested capital** (most of your own money at work at any point; buys minus sell proceeds through today)
+- **%** — total P&L ÷ **peak net invested capital** (most of your own money at work at any point; one net step per calendar day from buy cash flows minus sell proceeds)
 - **Net capital** subtitle — **current** net contribution (buys minus sell proceeds now)
 - Tap any snapshot or stat **card** for a **detail drawer**: formula, inputs, per-symbol rows (equity vs option), and Chart vs Performance reconciliation on Total P/L and Net capital
 - **TWR** — time-weighted return on the **equity** ledger (equity curve; options excluded). Shows **n/a** with a short reason when price history cannot cover the window

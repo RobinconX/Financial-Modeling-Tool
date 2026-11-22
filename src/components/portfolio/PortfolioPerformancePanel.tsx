@@ -76,6 +76,11 @@ import {
   type PerformanceMetricId,
 } from '../../lib/portfolioPerformanceBreakdown'
 import { PerformanceMetricDrawer } from './PerformanceMetricDrawer'
+import {
+  collectTradeDates,
+  portfolioNeedsTradeDateFx,
+  prefetchUsdChfRatesForTradeDates,
+} from '../../lib/historicalFx'
 
 type Props = {
   portfolio: SavedPortfolio
@@ -128,16 +133,39 @@ function StatsCardButton({
   )
 }
 
-function CompactStats({ rows }: { rows: { label: string; value: string }[] }) {
+function CompactStats({
+  rows,
+}: {
+  rows: {
+    label: string
+    value: string
+    onClick?: () => void
+  }[]
+}) {
   if (rows.length === 0) return null
   return (
     <dl className="grid grid-cols-2 gap-x-4 gap-y-1.5 text-xs sm:grid-cols-3 lg:grid-cols-4">
       {rows.map((r) => (
         <div key={r.label}>
-          <dt className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
-            {r.label}
-          </dt>
-          <dd className="mt-0.5 tabular-nums text-white/85">{r.value}</dd>
+          {r.onClick ? (
+            <button
+              type="button"
+              className="w-full text-left transition hover:opacity-90"
+              onClick={r.onClick}
+            >
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
+                {r.label}
+              </dt>
+              <dd className="mt-0.5 tabular-nums text-white/85">{r.value}</dd>
+            </button>
+          ) : (
+            <>
+              <dt className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
+                {r.label}
+              </dt>
+              <dd className="mt-0.5 tabular-nums text-white/85">{r.value}</dd>
+            </>
+          )}
         </div>
       ))}
     </dl>
@@ -227,13 +255,44 @@ export function PortfolioPerformancePanel({
     return out
   }, [histories])
 
+  const capitalTrades = useMemo(
+    () => (scopeSymbol ? scopedTrades : portfolioTrades),
+    [scopeSymbol, scopedTrades, portfolioTrades],
+  )
+
+  const [usdToChfByTradeDate, setUsdToChfByTradeDate] = useState<
+    Record<string, number>
+  >({})
+  const [tradeFxWarnings, setTradeFxWarnings] = useState<string[]>([])
+
+  useEffect(() => {
+    if (!portfolioNeedsTradeDateFx(capitalTrades, displayCurrency)) {
+      setUsdToChfByTradeDate({})
+      setTradeFxWarnings([])
+      return
+    }
+    let cancelled = false
+    const dates = collectTradeDates(capitalTrades)
+    void prefetchUsdChfRatesForTradeDates(dates, usdToChf ?? null).then((res) => {
+      if (cancelled) return
+      setUsdToChfByTradeDate(res.ratesByDate)
+      setTradeFxWarnings(res.warnings)
+    })
+    return () => {
+      cancelled = true
+    }
+  }, [capitalTrades, displayCurrency, usdToChf])
+
   const perfCtx = useMemo(
     (): PerfDisplayContext => ({
       displayCurrency,
       usdToChf: usdToChf ?? null,
       quoteCurrencyBySymbol,
+      usdToChfByTradeDate:
+        Object.keys(usdToChfByTradeDate).length > 0 ? usdToChfByTradeDate : undefined,
+      fxWarnings: tradeFxWarnings.length > 0 ? tradeFxWarnings : undefined,
     }),
-    [displayCurrency, usdToChf, quoteCurrencyBySymbol],
+    [displayCurrency, usdToChf, quoteCurrencyBySymbol, usdToChfByTradeDate, tradeFxWarnings],
   )
 
   const asOfDate = todayIsoDate()
@@ -249,11 +308,6 @@ export function PortfolioPerformancePanel({
         perfCtx,
       ),
     [scopedTrades, portfolio, scenarios, historyPoints, perfCtx, asOfDate],
-  )
-
-  const capitalTrades = useMemo(
-    () => (scopeSymbol ? scopedTrades : portfolioTrades),
-    [scopeSymbol, scopedTrades, portfolioTrades],
   )
 
   const capitalStats = useMemo(
@@ -698,7 +752,7 @@ export function PortfolioPerformancePanel({
   }
 
   const activityRows = useMemo(() => {
-    const rows: { label: string; value: string }[] = [
+    const rows: { label: string; value: string; onClick?: () => void }[] = [
       { label: 'Trades', value: String(activityStats.tradeCount) },
       { label: 'Buys', value: String(activityStats.buyCount) },
       { label: 'Sells', value: String(activityStats.sellCount) },
@@ -727,15 +781,24 @@ export function PortfolioPerformancePanel({
       })
     }
     rows.push({
-      label: 'Peak net invested capital',
+      label: `Peak net invested capital (${displayCurrency})`,
       value: fmt(capitalStats.peakNet),
+      onClick: () => openMetric('peakNetInvested'),
     })
     rows.push({
       label: 'Peak portfolio value',
       value: fmt(peakPortfolio.peakValue),
     })
     return rows
-  }, [activityStats, scopeSymbol, capitalStats.peakNet, peakPortfolio.peakValue, fmt])
+  }, [
+    activityStats,
+    scopeSymbol,
+    capitalStats.peakNet,
+    peakPortfolio.peakValue,
+    fmt,
+    displayCurrency,
+    openMetric,
+  ])
 
   const holdingRows = useMemo(() => {
     if (!holdingStats) return []

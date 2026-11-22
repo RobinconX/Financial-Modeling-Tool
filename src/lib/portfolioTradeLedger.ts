@@ -1,7 +1,20 @@
-import type { DisplayCurrency, PortfolioTrade, PortfolioTradeEvent } from '../types'
+import type { PortfolioTrade, PortfolioTradeEvent } from '../types'
 import { optionIsExpired, parseOccSymbol } from './optionContract'
-import { convertAmountToDisplay } from './portfolioTradeFx'
+import { convertAmountToDisplay, usdToChfForTradeFlow } from './portfolioTradeFx'
 import type { PerfDisplayContext } from './portfolioTradeFx'
+
+/** Same calendar day: sells before buys, then stable id (cost basis). */
+export function compareTradesChronologically(
+  a: PortfolioTrade,
+  b: PortfolioTrade,
+): number {
+  const byDate = a.tradeDate.localeCompare(b.tradeDate)
+  if (byDate !== 0) return byDate
+  const sellFirst = (t: PortfolioTrade) => (t.side === 'sell' ? 0 : 1)
+  const bySide = sellFirst(a) - sellFirst(b)
+  if (bySide !== 0) return bySide
+  return a.id.localeCompare(b.id)
+}
 
 export function tradeInstrument(t: PortfolioTrade): 'equity' | 'option' {
   return t.instrument === 'option' ? 'option' : 'equity'
@@ -28,24 +41,20 @@ export function tradeUnderlying(t: PortfolioTrade): string | null {
   return t.symbol.toUpperCase()
 }
 
-function feeAmountDisplay(
-  t: PortfolioTrade,
-  displayCurrency: DisplayCurrency,
-  usdToChf: number | null,
-): number {
+function feeAmountDisplay(t: PortfolioTrade, perfCtx?: PerfDisplayContext): number {
   const f = t.fees ?? 0
   if (f <= 0) return 0
+  const display = perfCtx?.displayCurrency ?? 'USD'
   const feeCur = t.feesCurrency ?? t.currency ?? 'USD'
-  return convertAmountToDisplay(f, feeCur, displayCurrency, usdToChf)
+  const usdToChf = usdToChfForTradeFlow(t.tradeDate, perfCtx)
+  return convertAmountToDisplay(f, feeCur, display, usdToChf)
 }
 
-function premiumDisplay(
-  t: PortfolioTrade,
-  displayCurrency: DisplayCurrency,
-  usdToChf: number | null,
-): number {
+function premiumDisplay(t: PortfolioTrade, perfCtx?: PerfDisplayContext): number {
+  const display = perfCtx?.displayCurrency ?? 'USD'
   const book = t.currency ?? 'USD'
-  return convertAmountToDisplay(t.price, book, displayCurrency, usdToChf)
+  const usdToChf = usdToChfForTradeFlow(t.tradeDate, perfCtx)
+  return convertAmountToDisplay(t.price, book, display, usdToChf)
 }
 
 export type LedgerSnapshot = {
@@ -163,8 +172,6 @@ export function ledgerSnapshotAt(
   asOfDate: string,
   perfCtx?: PerfDisplayContext,
 ): LedgerSnapshot {
-  const display = perfCtx?.displayCurrency ?? 'USD'
-  const usdToChf = perfCtx?.usdToChf ?? null
   const instrument =
     trades.find((t) => tradeInstrument(t) === 'option') != null ? 'option' : 'equity'
 
@@ -179,13 +186,13 @@ export function ledgerSnapshotAt(
 
   const ordered = [...trades]
     .filter((t) => t.tradeDate <= asOfDate)
-    .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate) || a.id.localeCompare(b.id))
+    .sort(compareTradesChronologically)
 
   for (const t of ordered) {
     const inst = tradeInstrument(t)
     const mult = tradeMultiplier(t)
-    const fees = feeAmountDisplay(t, display, usdToChf)
-    const px = isLifecycleClose(t) ? 0 : premiumDisplay(t, display, usdToChf)
+    const fees = feeAmountDisplay(t, perfCtx)
+    const px = isLifecycleClose(t) ? 0 : premiumDisplay(t, perfCtx)
     if (isLifecycleClose(t)) {
       applyLifecycleRow(snap, t.shares, px, mult, fees)
       continue
