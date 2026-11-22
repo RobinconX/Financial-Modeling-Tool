@@ -11,6 +11,7 @@ import {
   returnDenominator,
   tradeInstrument,
   tradeMultiplier,
+  unrealizedPnlFromLedger,
   withAutoExpireTrades,
 } from './portfolioTradeLedger'
 
@@ -367,7 +368,8 @@ function symbolPnlOnDate(
     close = historyCloseInDisplay(close, symbol, perfCtx)
   }
   const mult = tradeMultiplier(trades[0]!)
-  const unrealized = snap.shares * close * mult - snap.costBasis
+  const marketValue = snap.shares * close * mult
+  const unrealized = unrealizedPnlFromLedger(snap.shares, snap.costBasis, marketValue)
   return { totalPnl: snap.realizedPnl + unrealized, grossBuys: denom }
 }
 

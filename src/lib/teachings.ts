@@ -1265,9 +1265,11 @@ The header **select** switches **equity** scope only (**Whole portfolio** or one
 
 > Realized P&L on closed tickers still counts in the whole-portfolio rollup. Whole-book **snapshot** cards still include options in total P&L.
 
+> **Peak portfolio value** uses **Cash tab** balances (cashAtYear: deposits + Position buy/sell flows) plus trade-ledger marks over time (year-level cash; marks on trade dates). **MWR** ends on the same Cash tab cash today plus all open marks (shorts count as liabilities).
+
 ### Stats blocks
 
-- **Activity** — trade, buy, and sell counts; first / last trade; holding period and open/closed **status** on one ticker; **open · closed symbol counts** on whole portfolio; **peak net capital** for the scope
+- **Activity** — trade, buy, and sell counts; first / last trade; holding period and open/closed **status** on one ticker; **open · closed symbol counts** on whole portfolio; **peak net invested capital** and **peak portfolio value** for the scope
 - **Position** (single ticker) — ledger shares, average cost / breakeven, gross buys, sell proceeds, % sold, open cost basis, current value
 - **TWR** — time-weighted return **per ticker** from daily price history (lazy fetch, shared cache with Comparables); shows **Unavailable** when history cannot cover the holding window
 
@@ -1278,8 +1280,9 @@ Whole-portfolio **By symbol** lists **open** ledger rows first (status, **TWR**,
 A highlighted card shows **today’s** totals for the current scope:
 
 - **$** — realized + unrealized P&L (display currency)
-- **%** — total P&L ÷ **peak net capital** (most of your own money at work at any point; buys minus sell proceeds through today)
+- **%** — total P&L ÷ **peak net invested capital** (most of your own money at work at any point; buys minus sell proceeds through today)
 - **Net capital** subtitle — **current** net contribution (buys minus sell proceeds now)
+- Tap any snapshot or stat **card** for a **detail drawer**: formula, inputs, per-symbol rows (equity vs option), and Chart vs Performance reconciliation on Total P/L and Net capital
 - **TWR** — time-weighted return on the **equity** ledger (equity curve; options excluded). Shows **n/a** with a short reason when price history cannot cover the window
 - **MWR** — money-weighted return (**XIRR**) from all **trade cash flows** in scope, including **options**, plus ending **mark-to-market** when positions are still open. Same **n/a** pattern when IRR cannot be solved
 - **Gross buys** — cumulative buy notionals (secondary line; includes rebuys funded from sales)
@@ -1364,7 +1367,7 @@ See \`docs/portfolio-trades-schema.md\` in the repo for agent-oriented examples.
 P&L uses **average cost** on the ledger:
 
 - **Realized** — sells vs average basis (fees on buys add to basis; sell fees reduce proceeds)
-- **Unrealized** — open ledger shares × mark price − remaining cost basis
+- **Unrealized** — long: mark × shares − basis; short option: premium credit + mark liability
 - **Return on buys** — (realized + unrealized) ÷ gross buy notional
 
 > Marks: linked projection quote or manual position price first; otherwise the latest **history close** (same cache as Comparables). Unrealized is **No mark** only when no quote and no history.
