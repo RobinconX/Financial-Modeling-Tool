@@ -1,116 +1,116 @@
 # Portfolio trades (`portfolioTrades`)
 
-Executed equity buys and sells for performance tracking. Stored at the **snapshot root** (not inside each `portfolios[]` book). Ledger-only: does not change `holdings[].sharesHeld` or planned `actions[]`.
+Executed **equity and option** trades for performance tracking. Stored at the **snapshot root** (not inside each `portfolios[]` book). Ledger-only: does not change `holdings[].sharesHeld` or planned `actions[]`.
 
 ## Shape
 
 ```json
 {
   "portfolioTrades": {
-    "version": 1,
+    "version": 2,
     "trades": []
   }
 }
 ```
+
+`version` **1** loads as equity-only legacy rows. Option rows bump storage to **2**.
 
 ## Trade object
 
 | Field | Required | Notes |
 | --- | --- | --- |
 | `portfolioId` | yes | UUID of a book in `portfolios[]` |
-| `symbol` | yes | Equity ticker; uppercased on import (e.g. `AAPL`) |
-| `side` | yes | `"buy"` or `"sell"` |
+| `symbol` | yes* | Equity ticker **or** OCC option symbol (normalized on import) |
+| `side` | yes** | `"buy"` or `"sell"` |
 | `tradeDate` | yes | ISO calendar date `YYYY-MM-DD` |
-| `shares` | yes | Positive number |
-| `price` | yes | Per-share execution price in `currency` |
-| `currency` | no | `"USD"` or `"CHF"`; defaults to **USD** when omitted (migration + import) |
-| `fees` | no | In `currency`; defaults to `0` |
+| `shares` | yes | Positive number — **contracts** when `instrument` is `option` |
+| `price` | yes* | Per-share premium/price in `currency` (USD per option share) |
+| `currency` | no | Premium denomination; default **USD** |
+| `fees` | no | Default `0` |
+| `feesCurrency` | no | Defaults to `currency` (use **CHF** for IB commissions) |
+| `instrument` | no | `equity` (default) or `option` |
+| `event` | no | `trade` (default), `expire`, `assign`, `exercise` |
+| `linkedTradeId` | no | Related equity trade id (e.g. assignment stock sale) |
+| `multiplier` | no | Option contracts only; default **100** |
+| `occSymbol` / `description` | import | IB `description` parsed in-app when `symbol` omitted |
+| `underlying`, `right`, `strike`, `expiry` | import | Optional; filled from OCC when omitted |
 | `note` | no | Short text |
 | `id` | no | UUID; generated if omitted |
-| `holdingId` | no | Optional Positions row link (UI only) |
+| `holdingId` | no | Equity UI link only |
 
-> **Stored vs displayed** — Price and fees are kept in the trade’s own `currency`. Performance math converts them to the portfolio **display currency** (USD/CHF toggle) using the live USD/CHF rate, and converts marks from quote/history currency the same way.
+\* Lifecycle rows (`expire`, `assign`, `exercise`) may use `price: 0`. Import accepts `description` instead of `symbol` for options.
+
+\** Lifecycle rows still carry a `side` for sorting; expire/assign often use the closing side.
+
+### Options behavior
+
+- **Sell with zero open contracts** opens a **short** (options only; equities stay long-only).
+- **Realized / unrealized** use `contracts × price × multiplier` (+ fees in `feesCurrency`).
+- **Return %** — longs: vs premium paid (`grossBuys`); shorts: vs **premium received** (shorts do not add to gross buys).
+- **Auto-expire**: day after `expiry` at $0 if still open and no explicit `expire` / `assign` / `exercise` row.
 
 ## Import behavior
 
-- Rows missing required fields or invalid tickers/dates are **dropped** (no import failure).
-- `symbol` is trimmed and uppercased.
-- `currency` omitted or empty → **USD**.
-- `fees` omitted or empty → `0`.
+- Invalid rows are **dropped** (no import failure).
+- Equities: `symbol` uppercased, standard tickers.
+- Options: `occSymbol`, OCC `symbol`, or IB **`description`** (`HIMS 16OCT26 25 P`).
+- `currency` / `feesCurrency` omitted → **USD** for that field.
 
-## Example (agent-filled)
+## JSON examples (agent)
+
+**Option trade (short premium)**
 
 ```json
 {
-  "version": 1,
-  "exportedAt": "2026-11-21T00:00:00.000Z",
-  "scenarios": [],
-  "portfolios": [
-    {
-      "id": "11111111-1111-4111-8111-111111111111",
-      "name": "Main",
-      "currentCash": 0,
-      "deposits": [],
-      "holdings": [],
-      "actions": [],
-      "createdAt": "2026-01-01T00:00:00.000Z",
-      "updatedAt": "2026-01-01T00:00:00.000Z"
-    }
-  ],
-  "incomeCost": { "version": 3, "scenarios": [], "lines": [], "draws": [] },
-  "savings": { "version": 1, "accounts": [] },
-  "overview": { "version": 2, "scenarios": [], "selectedScenarioId": null },
-  "portfolioTrades": {
-    "version": 1,
-    "trades": [
-      {
-        "portfolioId": "11111111-1111-4111-8111-111111111111",
-        "symbol": "aapl",
-        "side": "buy",
-        "tradeDate": "2024-01-10",
-        "shares": 50,
-        "price": 185.2,
-        "currency": "USD"
-      },
-      {
-        "portfolioId": "11111111-1111-4111-8111-111111111111",
-        "symbol": "AAPL",
-        "side": "sell",
-        "tradeDate": "2025-03-01",
-        "shares": 10,
-        "price": 210,
-        "currency": "USD",
-        "fees": 1.5,
-        "note": "Trim"
-      }
-    ]
-  }
+  "portfolioId": "11111111-1111-4111-8111-111111111111",
+  "instrument": "option",
+  "symbol": "HIMS261016P00025000",
+  "side": "sell",
+  "tradeDate": "2026-01-30",
+  "shares": 1,
+  "price": 5.43,
+  "currency": "USD",
+  "fees": 1.2,
+  "feesCurrency": "CHF",
+  "note": "STO"
 }
 ```
 
-After import, both rows normalize to symbol `AAPL`; the first row receives a generated `id` if none was provided.
+**Expire (worthless)**
 
-## Bulk import (Performance tab)
-
-**Import** on **Portfolio → Performance** appends to the **selected book** only:
-
-- **JSON:** `{ "trades": [ … ] }`, a bare `[ … ]` array, or full snapshot `portfolioTrades.trades`
-- **CSV:** header row plus data. Required columns: `symbol`, `side`, `tradeDate`, `shares`, `price`. Optional: `currency`, `fees`, `note`, `id`, `holdingId`, `portfolioId`
-- Rows with another `portfolioId` are **reassigned** to the current book (noted in preview)
-- `holdingId` is kept only when it matches a holding on the current book; otherwise stripped
-- **Duplicates** (same `symbol`, `side`, `tradeDate`, `shares`, `price`, `currency` as an existing trade or an earlier row in the file): preview offers **Skip duplicates** (default) or **Import anyway**
-- Invalid rows are listed with reasons; only valid rows are imported on confirm
-
-### Export
-
-**Export** downloads a JSON file for the **current book** in the same shape as import (`{ "version": 1, "exportedAt", "portfolioId", "trades": [ … ] }`). Export → Import round-trips the ledger including `currency`.
-
-**Clear** removes all trades on the current book after confirmation (use Export first for backup).
-
-### CSV example
-
-```csv
-symbol,side,tradeDate,shares,price,currency,fees,note
-AAPL,buy,2024-01-10,50,185.2,USD,1.00,Open
-AAPL,sell,2025-03-01,10,210,USD,,
+```json
+{
+  "portfolioId": "11111111-1111-4111-8111-111111111111",
+  "instrument": "option",
+  "event": "expire",
+  "symbol": "IREN260320P00030000",
+  "side": "buy",
+  "tradeDate": "2026-03-21",
+  "shares": 1,
+  "price": 0,
+  "currency": "USD"
+}
 ```
+
+**Assign (linked stock sale already in ledger)**
+
+```json
+{
+  "portfolioId": "11111111-1111-4111-8111-111111111111",
+  "instrument": "option",
+  "event": "assign",
+  "symbol": "PLTR250919C00047000",
+  "side": "buy",
+  "tradeDate": "2025-09-19",
+  "shares": 2,
+  "price": 0,
+  "currency": "USD",
+  "linkedTradeId": "existing-pltr-stock-sell-trade-uuid"
+}
+```
+
+## CSV columns
+
+`symbol,side,tradeDate,shares,price,currency,fees,feesCurrency,instrument,event,occSymbol,description,underlying,right,strike,expiry,multiplier,linkedTradeId,note`
+
+Omit unknown columns. `description` can stand in for option `symbol`.

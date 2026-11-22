@@ -475,10 +475,22 @@ export function GoalGapChart({
                       key={m.id}
                       x={m.chartDate}
                       y={m.y}
-                      r={m.side === 'buy' ? 5 : 4}
-                      fill={m.side === 'buy' ? '#34d399' : '#f87171'}
-                      stroke="#0b0f14"
-                      strokeWidth={1.5}
+                      r={m.instrument === 'option' ? 6 : m.side === 'buy' ? 5 : 4}
+                      fill={
+                        m.instrument === 'option'
+                          ? 'transparent'
+                          : m.side === 'buy'
+                            ? '#34d399'
+                            : '#f87171'
+                      }
+                      stroke={
+                        m.instrument === 'option'
+                          ? '#fbbf24'
+                          : m.side === 'buy'
+                            ? '#34d399'
+                            : '#f87171'
+                      }
+                      strokeWidth={m.instrument === 'option' ? 2.5 : 1.5}
                       ifOverflow="visible"
                     />
                   ))

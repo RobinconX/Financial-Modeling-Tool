@@ -1239,18 +1239,18 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
     id: 'portfolio.performance',
     title: 'Performance',
     summary:
-      'Log executed equity buys and sells by date and price for the selected portfolio book. Average-cost realized and unrealized P&L; full edit/delete in-app or bulk fill via save-file JSON.',
+      'Log executed equity and option trades by date and premium for the selected portfolio book. Average-cost realized and unrealized P&L (short options vs premium received); bulk JSON/CSV import with IB descriptions.',
     body: `## How it works
 
-The **Performance** tab is an **executed trade ledger**. It does not change **Positions** share counts or **Chart** planned buy/sell actions. Each trade stores its own **USD** or **CHF** denomination for **price** and **fees**. P&L, cost basis, and the return chart convert those amounts plus quote/history marks into the portfolio **display currency** using the **live** USD/CHF rate (same as elsewhere); **%** return is unchanged by display currency.
+The **Performance** tab is an **executed trade ledger** (equities and **listed options**). It does not change **Positions** counts or **Chart** planned actions. Each trade stores **USD** or **CHF** for **price** (premium) and optional **feesCurrency** for commissions. Options use **contracts** in the **shares** field with multiplier **100**. Short opens (sell with no position) are options-only. P&L converts into the portfolio **display currency** using the live USD/CHF rate.
 
 ### Adding trades
 
-- **+ Trade** opens a drawer: symbol, side, date (**Today** shortcut), **currency** (defaults from the symbol quote when known), shares, price, optional fees and note — price and fees are in the trade currency you pick, not rewritten when you toggle display currency
+- **+ Trade** — choose **Equity** or **Option**; OCC or IB description (e.g. HIMS 16OCT26 25 P), contracts, USD premium, optional **CHF** fee currency, lifecycle **Event** (expire / assign)
 - **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
 - When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history)
 
-> Symbols are normalized to uppercase on save. Equities only (standard tickers).
+> Equities: uppercase tickers. Options: OCC symbol or parsed IB description; scope filter includes **underlying rollups** and single contracts.
 
 ### Editing
 

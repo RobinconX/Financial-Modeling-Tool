@@ -64,7 +64,7 @@ describe('portfolioTradesImport', () => {
       new Set(),
     )
     expect(preview.duplicateExistingCount).toBeGreaterThan(0)
-    expect(tradeDuplicateKey(existing)).toBe('AAPL|buy|2024-01-02|1|10|USD')
+    expect(tradeDuplicateKey(existing)).toBe('equity|trade|AAPL|buy|2024-01-02|1|10|USD|')
     const skipped = appendPortfolioTrades(state, preview, BOOK, 'skip')
     expect(skipped.imported).toBe(0)
     const added = appendPortfolioTrades(state, preview, BOOK, 'import')

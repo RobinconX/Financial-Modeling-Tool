@@ -15,12 +15,16 @@ export function convertAmountToDisplay(
   return amountToDisplay(amount, amountCurrency, displayCurrency, usdToChf)
 }
 
-/** Shallow copy with price/fees expressed in display currency for ledger math. */
+/**
+ * Legacy shim for equity-only paths that pre-converted row currency.
+ * Option ledger math reads native `currency` / `feesCurrency` via `perfCtx`.
+ */
 export function tradeInDisplayCurrency(
   trade: PortfolioTrade,
   displayCurrency: DisplayCurrency,
   usdToChf: number | null,
 ): PortfolioTrade {
+  if (trade.instrument === 'option' || trade.feesCurrency != null) return trade
   const book = trade.currency ?? 'USD'
   return {
     ...trade,

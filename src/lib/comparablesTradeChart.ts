@@ -1,5 +1,6 @@
 import type { PortfolioTrade } from '../types'
 import type { GoalPathMetric, MergedUpsideRow, UpsidePoint } from './goalGap'
+import { tradeEvent, tradeInstrument, tradeUnderlying } from './portfolioTradeLedger'
 
 export type ComparablesChartSeriesRef = {
   key: string
@@ -20,6 +21,9 @@ export type ComparablesTradeMarker = {
   fees: number
   currency: PortfolioTrade['currency']
   y: number
+  instrument: 'equity' | 'option'
+  event: PortfolioTrade['event']
+  occSymbol?: string
 }
 
 /** Last series point on or before `tradeDate`, else first on/after. */
@@ -52,10 +56,13 @@ export function buildComparablesTradeMarkers(
   if (trades.length === 0 || series.length === 0) return []
   const out: ComparablesTradeMarker[] = []
   for (const t of trades) {
-    const sym = t.symbol.toUpperCase()
-    if (!overlaySymbols.has(sym)) continue
-    for (const s of series) {
-      if (s.symbol.toUpperCase() !== sym) continue
+    const isOption = tradeInstrument(t) === 'option'
+    const chartSym = isOption
+      ? (tradeUnderlying(t) ?? '').toUpperCase()
+      : t.symbol.toUpperCase()
+    if (!chartSym || !overlaySymbols.has(chartSym)) continue
+  for (const s of series) {
+      if (s.symbol.toUpperCase() !== chartSym) continue
       const chartDate = chartDateForTrade(t.tradeDate, s.points)
       if (!chartDate) continue
       const y = chartValueAtDate(s.points, chartDate)
@@ -65,13 +72,16 @@ export function buildComparablesTradeMarkers(
         tradeDate: t.tradeDate,
         chartDate,
         seriesKey: s.key,
-        symbol: sym,
+        symbol: chartSym,
         side: t.side,
         shares: t.shares,
         price: t.price,
         fees: t.fees ?? 0,
         currency: t.currency ?? 'USD',
         y,
+        instrument: isOption ? 'option' : 'equity',
+        event: tradeEvent(t),
+        occSymbol: isOption ? t.symbol : undefined,
       })
     }
   }

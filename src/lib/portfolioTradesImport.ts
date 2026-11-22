@@ -26,15 +26,29 @@ export type TradeImportPreview = {
 }
 
 export function tradeDuplicateKey(
-  t: Pick<PortfolioTrade, 'symbol' | 'side' | 'tradeDate' | 'shares' | 'price' | 'currency'>,
+  t: Pick<
+    PortfolioTrade,
+  | 'symbol'
+    | 'side'
+    | 'tradeDate'
+    | 'shares'
+    | 'price'
+    | 'currency'
+    | 'instrument'
+    | 'event'
+    | 'linkedTradeId'
+  >,
 ): string {
   return [
+    t.instrument ?? 'equity',
+    t.event ?? 'trade',
     t.symbol.toUpperCase(),
     t.side,
     t.tradeDate,
     String(t.shares),
     String(t.price),
     t.currency ?? 'USD',
+    t.linkedTradeId ?? '',
   ].join('|')
 }
 
@@ -88,6 +102,17 @@ export function parseCsvTradeRows(text: string): unknown[] {
       else if (key === 'holdingid') o.holdingId = val
       else if (key === 'portfolioid') o.portfolioId = val
       else if (key === 'currency') o.currency = val.toUpperCase()
+      else if (key === 'feescurrency') o.feesCurrency = val.toUpperCase()
+      else if (key === 'instrument') o.instrument = val.toLowerCase()
+      else if (key === 'event') o.event = val.toLowerCase()
+      else if (key === 'occsymbol') o.occSymbol = val.toUpperCase()
+      else if (key === 'description') o.description = val
+      else if (key === 'underlying') o.underlying = val.toUpperCase()
+      else if (key === 'right') o.right = val.toUpperCase()
+      else if (key === 'strike') o.strike = val
+      else if (key === 'expiry') o.expiry = val
+      else if (key === 'multiplier') o.multiplier = val
+      else if (key === 'linkedtradeid') o.linkedTradeId = val
     }
     rows.push(o)
   }
@@ -110,13 +135,23 @@ export function extractTradeRowsFromJson(text: string): unknown[] {
 export function describeTradeRowValidationFailure(raw: unknown): string {
   if (typeof raw !== 'object' || raw === null) return 'Not an object'
   const o = raw as Record<string, unknown>
-  if (!o.symbol || typeof o.symbol !== 'string' || !o.symbol.trim()) return 'Missing symbol'
-  if (o.side !== 'buy' && o.side !== 'sell') return 'Side must be buy or sell'
+  const hasSym =
+    (typeof o.symbol === 'string' && o.symbol.trim()) ||
+    (typeof o.occSymbol === 'string' && o.occSymbol.trim()) ||
+    (typeof o.description === 'string' && o.description.trim())
+  if (!hasSym) return 'Missing symbol, occSymbol, or description'
+  if (o.event !== 'expire' && o.event !== 'assign' && o.event !== 'exercise') {
+    if (o.side !== 'buy' && o.side !== 'sell') return 'Side must be buy or sell'
+  }
   if (!o.tradeDate || typeof o.tradeDate !== 'string') return 'Missing tradeDate (YYYY-MM-DD)'
   const shares = Number(o.shares)
   if (!Number.isFinite(shares) || shares <= 0) return 'Shares must be > 0'
   const price = Number(o.price)
-  if (!Number.isFinite(price) || price <= 0) return 'Price must be > 0'
+  if (!Number.isFinite(price)) return 'Price must be a number'
+  const event = o.event
+  if (event !== 'expire' && event !== 'assign' && event !== 'exercise' && price <= 0) {
+    return 'Price must be > 0'
+  }
   if (o.fees != null && o.fees !== '') {
     const f = Number(o.fees)
     if (!Number.isFinite(f) || f < 0) return 'Fees must be >= 0'

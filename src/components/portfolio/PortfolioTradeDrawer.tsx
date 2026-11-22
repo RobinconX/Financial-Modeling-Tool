@@ -2,10 +2,14 @@ import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react
 import type {
   DisplayCurrency,
   PortfolioTrade,
+  PortfolioTradeEvent,
+  PortfolioTradeInstrument,
   PortfolioTradeSide,
   SavedPortfolio,
   SavedScenario,
 } from '../../types'
+import { optionLabel, parseOccSymbol } from '../../lib/optionContract'
+import { parseIbOptionDescription } from '../../lib/portfolioOptionTradeParse'
 import { formatInputNumber } from '../common/MoneyInput'
 import type { PriceHistoryPoint } from '../../lib/priceHistory'
 import {
@@ -54,6 +58,9 @@ export function PortfolioTradeDrawer({
   const [price, setPrice] = useState('')
   const [fees, setFees] = useState('')
   const [currency, setCurrency] = useState<DisplayCurrency>('USD')
+  const [feesCurrency, setFeesCurrency] = useState<DisplayCurrency>('USD')
+  const [instrument, setInstrument] = useState<PortfolioTradeInstrument>('equity')
+  const [event, setEvent] = useState<PortfolioTradeEvent>('trade')
   const [note, setNote] = useState('')
   const [holdingId, setHoldingId] = useState<string | undefined>()
   const [error, setError] = useState<string | null>(null)
@@ -77,6 +84,9 @@ export function PortfolioTradeDrawer({
       draft.fees != null && draft.fees > 0 ? formatInputNumber(draft.fees, 2) : '',
     )
     setCurrency(draft.currency ?? defaultTradeCurrencyForSymbol(resolvedSymbol, quoteCurrencyBySymbol))
+    setFeesCurrency(draft.feesCurrency ?? draft.currency ?? 'USD')
+    setInstrument(draft.instrument === 'option' ? 'option' : 'equity')
+    setEvent(draft.event ?? 'trade')
     setNote(draft.note ?? '')
     setHoldingId(draft.holdingId ?? byId?.id)
     setError(null)
@@ -144,22 +154,34 @@ export function PortfolioTradeDrawer({
     const priceN = Number(price)
     const feesN = fees.trim() === '' ? 0 : Number(fees)
     const linkId = matchedHolding?.id
+    const symInput = symbol.trim()
+    const ib = instrument === 'option' ? parseIbOptionDescription(symInput) : null
     const candidate: PortfolioTrade = {
       ...draft,
-      symbol: symbol.trim().toUpperCase(),
+      symbol: ib?.occSymbol ?? symInput.toUpperCase(),
       side,
       tradeDate,
       shares: sharesN,
       price: priceN,
       currency,
       fees: feesN,
+      feesCurrency,
+      instrument,
+      event,
       note: note.trim() || undefined,
-      holdingId: linkId,
+      holdingId: instrument === 'equity' ? linkId : undefined,
+      underlying: ib?.underlying,
+      right: ib?.right,
+      strike: ib?.strike,
+      expiry: ib?.expiration,
+      multiplier: ib?.multiplier,
     }
     const normalized = normalizePortfolioTrade(candidate)
     if (!normalized) {
       setError(
-        'Check symbol (equity ticker), date (YYYY-MM-DD), shares, and price.',
+        instrument === 'option'
+          ? 'Check option symbol/description, date, contracts, and price.'
+          : 'Check symbol (equity ticker), date (YYYY-MM-DD), shares, and price.',
       )
       return
     }
@@ -194,7 +216,41 @@ export function PortfolioTradeDrawer({
 
         <form className="flex min-h-0 flex-1 flex-col gap-4 overflow-y-auto px-4 py-4" onSubmit={handleSubmit}>
           <div>
-            <FieldLabel>Symbol</FieldLabel>
+            <FieldLabel>Instrument</FieldLabel>
+            <div className="inline-flex gap-1" role="group" aria-label="Equity or option">
+              {(['equity', 'option'] as const).map((k) => (
+                <button
+                  key={k}
+                  type="button"
+                  className={`rounded-md px-3 py-1.5 text-xs font-medium capitalize ${
+                    instrument === k
+                      ? 'bg-emerald-500/25 text-emerald-200'
+                      : 'bg-white/5 text-white/55 hover:text-white'
+                  }`}
+                  onClick={() => setInstrument(k)}
+                >
+                  {k}
+                </button>
+              ))}
+            </div>
+          </div>
+          {instrument === 'option' ? (
+            <div>
+              <FieldLabel>Event</FieldLabel>
+              <select
+                className="input !py-1.5 !text-xs"
+                value={event}
+                onChange={(e) => setEvent(e.target.value as PortfolioTradeEvent)}
+              >
+                <option value="trade">Trade</option>
+                <option value="expire">Expire</option>
+                <option value="assign">Assign</option>
+                <option value="exercise">Exercise</option>
+              </select>
+            </div>
+          ) : null}
+          <div>
+            <FieldLabel>{instrument === 'option' ? 'OCC or IB description' : 'Symbol'}</FieldLabel>
             <input
               className="input"
               value={symbol}
@@ -206,7 +262,9 @@ export function PortfolioTradeDrawer({
                 })
                 setHoldingId(match?.id)
               }}
-              placeholder="e.g. AAPL"
+              placeholder={
+                instrument === 'option' ? 'e.g. HIMS 16OCT26 25 P' : 'e.g. AAPL'
+              }
               autoComplete="off"
               required
             />
@@ -222,6 +280,16 @@ export function PortfolioTradeDrawer({
                   {matchedTicker} · {matchedHolding.sharesHeld.toLocaleString()} sh
                 </span>
               </button>
+            ) : null}
+            {instrument === 'option' && symbol.trim() ? (
+              <p className="mt-1 text-[11px] text-white/45">
+                {(() => {
+                  const c =
+                    parseOccSymbol(symbol.trim().toUpperCase()) ??
+                    parseIbOptionDescription(symbol)
+                  return c ? optionLabel(c) : 'Parse description or enter OCC'
+                })()}
+              </p>
             ) : null}
           </div>
 
@@ -269,7 +337,7 @@ export function PortfolioTradeDrawer({
 
           <div className="grid grid-cols-2 gap-3">
             <div>
-              <FieldLabel>Shares</FieldLabel>
+              <FieldLabel>{instrument === 'option' ? 'Contracts' : 'Shares'}</FieldLabel>
               <input
                 className="input tabular-nums"
                 inputMode="decimal"
@@ -303,15 +371,30 @@ export function PortfolioTradeDrawer({
             />
           </div>
 
-          <div>
-            <FieldLabel>Fees ({currency}, optional)</FieldLabel>
-            <input
-              className="input tabular-nums"
-              inputMode="decimal"
-              value={fees}
-              onChange={(e) => setFees(e.target.value)}
-              placeholder="0"
-            />
+          <div className="grid grid-cols-2 gap-3">
+            <div>
+              <FieldLabel>Fees (optional)</FieldLabel>
+              <input
+                className="input tabular-nums"
+                inputMode="decimal"
+                value={fees}
+                onChange={(e) => setFees(e.target.value)}
+                placeholder="0"
+              />
+            </div>
+            <div>
+              <FieldLabel>Fee currency</FieldLabel>
+              <select
+                className="input"
+                value={feesCurrency}
+                onChange={(e) =>
+                  setFeesCurrency(e.target.value === 'CHF' ? 'CHF' : 'USD')
+                }
+              >
+                <option value="USD">USD</option>
+                <option value="CHF">CHF</option>
+              </select>
+            </div>
           </div>
 
           <div>
