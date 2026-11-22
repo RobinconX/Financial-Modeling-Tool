@@ -1,11 +1,10 @@
 [
   {
     "releasedAt": "2026-11-22",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "3949397126257faece1d41c32f658a5a1fb200f3",
     "headline": "Option trades on Portfolio Performance",
     "notes": [
-      "Log listed option trades alongside equities — short premium opens, OCC or IB description import, USD premium with CHF fee currency.",
+      "Log listed option trades alongside equities \u2014 short premium opens, OCC or IB description import, USD premium with CHF fee currency.",
       "Performance scope by underlying or single contract; expire and assign lifecycle rows; Comparables shows option activity on underlying charts.",
       "Import JSON/CSV with trade, expire, and assign examples in docs/portfolio-trades-schema.md."
     ]
@@ -17,7 +16,7 @@
     "notes": [
       "Each logged trade stores USD or CHF for price and fees; P&L, cost basis, and the return chart convert to your display currency at the live USD/CHF rate.",
       "Portfolio Performance adds Export (round-trip JSON for the current book) and Clear, with import preview showing currency and CSV/JSON currency column support.",
-      "Manual trade entry includes a currency picker; Comparables trade tooltips show the trade’s denomination instead of assuming USD."
+      "Manual trade entry includes a currency picker; Comparables trade tooltips show the trade\u2019s denomination instead of assuming USD."
     ]
   },
   {
@@ -27,9 +26,9 @@
     "notes": [
       "Portfolio adds a trade ledger with a Performance tab, return chart, and P&L by symbol; compare ledger vs position economics in charts.",
       "Comparables charts can show trade markers from the ledger; Settings includes a default to show markers when trades exist.",
-      "Portfolio Performance → Import accepts CSV/TSV bulk trade rows with validation before adding to the ledger.",
+      "Portfolio Performance \u2192 Import accepts CSV/TSV bulk trade rows with validation before adding to the ledger.",
       "Linked JSON files no longer block app boot when IndexedDB or File System Access hangs (timeouts, error boundary); header shows recovery status.",
-      "Allow file access is demoted — re-linking via Open / link file… is the primary fix (Brave, OneDrive placeholders); 10s timeout on post-grant file reads.",
+      "Allow file access is demoted \u2014 re-linking via Open / link file\u2026 is the primary fix (Brave, OneDrive placeholders); 10s timeout on post-grant file reads.",
       "Header Re-link file opens the picker with startIn on the remembered handle when the browser supports it."
     ]
   },
@@ -38,7 +37,7 @@
     "prodSha": "7edae9a53b413d3047f5d812a92c241778dca0ba",
     "headline": "Edit investment thesis from Comparables shelf",
     "notes": [
-      "Comparables ThesisRail adds Edit next to Close — same large investment thesis modal as Analyze, with auto-save and an updated shelf preview after edits.",
+      "Comparables ThesisRail adds Edit next to Close \u2014 same large investment thesis modal as Analyze, with auto-save and an updated shelf preview after edits.",
       "Document icon on a comparable row still opens the read-only rail; Edit is the in-place path to change thesis text without jumping to Analyze."
     ]
   },
@@ -47,7 +46,7 @@
     "prodSha": "b9fbc9c1e548067f0ad6455144265f9b0dba8c92",
     "headline": "Investment thesis editor, import drop zone & Analyze polish",
     "notes": [
-      "Analyze and Comparables add optional per-save investment thesis notes — full-screen WYSIWYG modal editor, read-only shelf on Comparables, and auto-save without breaking Enter/new lines.",
+      "Analyze and Comparables add optional per-save investment thesis notes \u2014 full-screen WYSIWYG modal editor, read-only shelf on Comparables, and auto-save without breaking Enter/new lines.",
       "Projections Import is a compact drop zone on Analyze and Comparables for JSON packs.",
       "Compare turns on with Panel B pre-filled from your latest other save; Overview Runway remembers chart mode after Net worth compare; Portfolio chart fixes and ETF units-held labeling.",
       "Portfolio growth chart table links open Cash, Positions, or Growth for a row; Budget copy and Overview compare tooltips sort by value."
@@ -69,7 +68,7 @@
     "headline": "ETFs in Analyze, Comparables chart guides & overlay errors",
     "notes": [
       "Analyze and Comparables treat ETFs and indexes (e.g. SPY, ^GSPC) with Units labeling, Nasdaq market-cap baselines, and synthetic unit sizing when shares are unavailable.",
-      "Comparables upside and CAGR guides teleport to visible empty-chart stubs with “Tick a row to see this chart.” when no rows are selected.",
+      "Comparables upside and CAGR guides teleport to visible empty-chart stubs with \u201cTick a row to see this chart.\u201d when no rows are selected.",
       "Multi-ticker overlay charts list per-symbol history failures in one compact banner while series with data still render."
     ]
   },
@@ -88,7 +87,7 @@
     "prodSha": "76536dd5ed12f8cb38e5839f30ec3eea0c54b111",
     "headline": "Portfolio settings, shared cash & actuals, savings migration fix",
     "notes": [
-      "Settings → Portfolio groups shared vs per-book cash plans and recorded actuals, with stash/restore when you switch modes.",
+      "Settings \u2192 Portfolio groups shared vs per-book cash plans and recorded actuals, with stash/restore when you switch modes.",
       "Legacy Savings one-off amounts keep a stable month when imported instead of shifting with the calendar.",
       "Data & backup is now Settings; portfolio cash and actuals mode confirmations offer restore or apply-to-all choices."
     ]
@@ -137,8 +136,8 @@
     "headline": "Guides, feedback privacy & Question type",
     "notes": [
       "Feature guides open above header modals without changing the current tab.",
-      "Removed section ⓘ hints in favor of Guides; feedback adds Question and clearer privacy copy.",
-      "Send bug reports, ideas, and questions from the header — no name, email, or account data."
+      "Removed section \u24d8 hints in favor of Guides; feedback adds Question and clearer privacy copy.",
+      "Send bug reports, ideas, and questions from the header \u2014 no name, email, or account data."
     ]
   },
   {
@@ -146,7 +145,7 @@
     "prodSha": "b0c7c89d3de672f7a2f792a173951ad80285edb3",
     "headline": "In-app feedback & release log",
     "notes": [
-      "Send anonymous bug reports and ideas from the header — no name or email.",
+      "Send anonymous bug reports and ideas from the header \u2014 no name or email.",
       "Browse past production changes from Release log at the bottom of the sidebar."
     ]
   },
@@ -293,7 +292,7 @@
     "prodSha": "12b5d91",
     "headline": "Budget tab (Income / Cost)",
     "notes": [
-      "The Income / Cost workspace became the Budget tab — income streams and cost positions by year in CHF."
+      "The Income / Cost workspace became the Budget tab \u2014 income streams and cost positions by year in CHF."
     ]
   }
 ]
