@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-22",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "bffdd7cdae6be35eeef1a86bde4c951a16a243d8",
     "headline": "Trade currency, export & clear on Performance",
     "notes": [
       "Each logged trade stores USD or CHF for price and fees; P&L, cost basis, and the return chart convert to your display currency at the live USD/CHF rate.",
