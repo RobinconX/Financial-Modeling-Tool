@@ -25,13 +25,16 @@ export type TradeImportPreview = {
   reassignedCount: number
 }
 
-export function tradeDuplicateKey(t: Pick<PortfolioTrade, 'symbol' | 'side' | 'tradeDate' | 'shares' | 'price'>): string {
+export function tradeDuplicateKey(
+  t: Pick<PortfolioTrade, 'symbol' | 'side' | 'tradeDate' | 'shares' | 'price' | 'currency'>,
+): string {
   return [
     t.symbol.toUpperCase(),
     t.side,
     t.tradeDate,
     String(t.shares),
     String(t.price),
+    t.currency ?? 'USD',
   ].join('|')
 }
 
@@ -84,6 +87,7 @@ export function parseCsvTradeRows(text: string): unknown[] {
       else if (key === 'id') o.id = val
       else if (key === 'holdingid') o.holdingId = val
       else if (key === 'portfolioid') o.portfolioId = val
+      else if (key === 'currency') o.currency = val.toUpperCase()
     }
     rows.push(o)
   }

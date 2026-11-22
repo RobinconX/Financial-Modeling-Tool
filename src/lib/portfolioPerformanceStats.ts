@@ -1,6 +1,11 @@
 import type { PortfolioTrade } from '../types'
 import type { PriceHistoryPoint } from './priceHistory'
 import { latestHistoryClose, todayIsoDate } from './portfolioTrades'
+import {
+  historyCloseInDisplay,
+  tradesInDisplayCurrency,
+  type PerfDisplayContext,
+} from './portfolioTradeFx'
 
 export type TradeActivityStats = {
   tradeCount: number
@@ -183,11 +188,28 @@ export function computeTimeWeightedReturn(
   trades: PortfolioTrade[],
   points: PriceHistoryPoint[],
   asOfDate: string = todayIsoDate(),
+  perfCtx?: PerfDisplayContext,
+  symbol?: string,
 ): TwrResult {
   if (trades.length === 0) return { twr: null, status: 'na' }
   if (!points.length) return { twr: null, status: 'unavailable' }
 
-  const ordered = [...trades].sort(
+  const sym = symbol ?? trades[0]?.symbol ?? ''
+  const ledgerTrades = perfCtx
+    ? tradesInDisplayCurrency(
+        trades,
+        perfCtx.displayCurrency,
+        perfCtx.usdToChf,
+      )
+    : trades
+  const closeAt = (date: string): number | null => {
+    const raw = closeOnOrBefore(points, date)
+    if (raw == null) return null
+    if (!perfCtx || !sym) return raw
+    return historyCloseInDisplay(raw, sym, perfCtx)
+  }
+
+  const ordered = [...ledgerTrades].sort(
     (a, b) => a.tradeDate.localeCompare(b.tradeDate) || a.id.localeCompare(b.id),
   )
 
@@ -222,8 +244,8 @@ export function computeTimeWeightedReturn(
     const dayTrades = byDate.get(date) ?? []
 
     if (prevDate != null && prevDate < date) {
-      const c0 = closeOnOrBefore(points, prevDate)
-      const c1 = closeOnOrBefore(points, date)
+      const c0 = closeAt(prevDate)
+      const c1 = closeAt(date)
       if (c0 == null || c1 == null) return { twr: null, status: 'unavailable' }
       if (shares > 0) {
         linked *= c1 / c0
@@ -231,7 +253,7 @@ export function computeTimeWeightedReturn(
     }
 
     if (dayTrades.length > 0) {
-      const c = closeOnOrBefore(points, date)
+      const c = closeAt(date)
       if (c == null) return { twr: null, status: 'unavailable' }
       const bmv = shares * c
       let cf = 0
@@ -346,6 +368,8 @@ function symbolPnlOnDate(
   points: PriceHistoryPoint[],
   date: string,
   asOfDate: string,
+  perfCtx?: PerfDisplayContext,
+  symbol?: string,
 ): { totalPnl: number | null; grossBuys: number } {
   const active = trades.some((t) => t.tradeDate <= date)
   if (!active) return { totalPnl: 0, grossBuys: 0 }
@@ -353,9 +377,12 @@ function symbolPnlOnDate(
   if (snap.shares <= 0) {
     return { totalPnl: snap.realizedPnl, grossBuys: snap.grossBuys }
   }
-  const close = closeForPnlOnDate(points, date, asOfDate)
+  let close = closeForPnlOnDate(points, date, asOfDate)
   if (close == null) {
     return { totalPnl: null, grossBuys: snap.grossBuys }
+  }
+  if (perfCtx && symbol) {
+    close = historyCloseInDisplay(close, symbol, perfCtx)
   }
   const unrealized = snap.shares * close - snap.costBasis
   return { totalPnl: snap.realizedPnl + unrealized, grossBuys: snap.grossBuys }
@@ -369,6 +396,7 @@ export function buildReturnProgression(
   tradesBySymbol: Map<string, PortfolioTrade[]>,
   histories: Record<string, PriceHistoryPoint[]>,
   asOfDate: string = todayIsoDate(),
+  perfCtx?: PerfDisplayContext,
 ): ReturnProgressionResult {
   const entries = [...tradesBySymbol.entries()].filter(([, tr]) => tr.length > 0)
   if (entries.length === 0) {
@@ -397,16 +425,25 @@ export function buildReturnProgression(
     for (const [symbol, trades] of entries) {
       if (!trades.some((t) => t.tradeDate <= date)) continue
       hadActivity = true
+      const ledgerTrades = perfCtx
+        ? tradesInDisplayCurrency(
+            trades,
+            perfCtx.displayCurrency,
+            perfCtx.usdToChf,
+          )
+        : trades
       const symPnl = symbolPnlOnDate(
-        trades,
+        ledgerTrades,
         histories[symbol] ?? [],
         date,
         asOfDate,
+        perfCtx,
+        symbol,
       )
       grossBuys += symPnl.grossBuys
       if (symPnl.totalPnl == null) {
         totalPnl = null
-        const snap = ledgerSnapshotAt(trades, date)
+        const snap = ledgerSnapshotAt(ledgerTrades, date)
         if (snap.shares > 0) missingHistory.add(symbol)
       } else if (totalPnl != null) {
         totalPnl += symPnl.totalPnl

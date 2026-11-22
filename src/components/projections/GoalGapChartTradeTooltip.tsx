@@ -70,7 +70,7 @@ export function GoalGapChartTradeTooltip({
           </p>
           {trades.map((m) => {
             const sideTone = m.side === 'buy' ? '#34d399' : '#f87171'
-            const px = formatPrice(m.price, 'USD')
+            const px = formatPrice(m.price, m.currency ?? 'USD')
             return (
               <div key={m.id} className="flex flex-col gap-0.5">
                 <div className="flex items-center justify-between gap-3">

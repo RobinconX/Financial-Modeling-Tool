@@ -44,9 +44,9 @@ describe('buildSignedReturnChartRows', () => {
     ).toBe(true)
   })
 
-  it('scales USD P&L into CHF for money mode', () => {
+  it('uses progression P&L as-is in money mode (already in display currency)', () => {
     const points: ReturnProgressionPoint[] = [
-      { date: '2024-01-01', totalPnl: 100, returnPct: 0.1 },
+      { date: '2024-01-01', totalPnl: 90, returnPct: 0.1 },
     ]
     const rows = buildSignedReturnChartRows(points, 'usd', 'CHF', 0.9)
     expect(rows[0]!.value).toBeCloseTo(90, 4)
@@ -119,6 +119,7 @@ describe('ReturnProgressionTooltip', () => {
           shares: 1,
           price: 50,
           fees: 0,
+          currency: 'USD' as const,
           y: 100,
         },
       ],
@@ -193,6 +194,7 @@ describe('resolveReturnChartTooltipRow', () => {
           shares: 1,
           price: 1,
           fees: 0,
+          currency: 'USD' as const,
           y: -36.62,
         },
       },
@@ -229,6 +231,7 @@ describe('tradesForReturnTooltip', () => {
       shares: 1,
       price: 1,
       fees: 0,
+      currency: 'USD' as const,
       y: 0,
     },
     {
@@ -240,6 +243,7 @@ describe('tradesForReturnTooltip', () => {
       shares: 1,
       price: 1,
       fees: 0,
+      currency: 'USD' as const,
       y: 0,
     },
   ]

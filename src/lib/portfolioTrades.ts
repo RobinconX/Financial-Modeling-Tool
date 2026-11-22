@@ -1,4 +1,5 @@
 import type {
+  DisplayCurrency,
   PortfolioHolding,
   PortfolioTrade,
   PortfolioTradeSide,
@@ -6,6 +7,12 @@ import type {
   SavedPortfolio,
   SavedScenario,
 } from '../types'
+import {
+  convertAmountToDisplay,
+  quoteToDisplayCurrency,
+  tradesInDisplayCurrency,
+  type PerfDisplayContext,
+} from './portfolioTradeFx'
 import type { PriceHistoryPoint } from './priceHistory'
 import { resolveCurrentPrice } from './portfolio'
 
@@ -34,6 +41,11 @@ function normalizeSymbol(raw: unknown): string | null {
   const sym = raw.trim().toUpperCase()
   if (!sym || !EQUITY_SYMBOL.test(sym)) return null
   return sym
+}
+
+function normalizeTradeCurrency(raw: unknown): DisplayCurrency {
+  if (raw === 'CHF' || raw === 'USD') return raw
+  return 'USD'
 }
 
 function normalizeDate(raw: unknown): string | null {
@@ -86,6 +98,7 @@ export function normalizePortfolioTrade(raw: unknown): PortfolioTrade | null {
     tradeDate,
     shares,
     price,
+    currency: normalizeTradeCurrency(o.currency),
     fees,
     note,
     holdingId,
@@ -113,7 +126,7 @@ export function normalizePortfolioTrades(raw: unknown): PortfolioTradesState {
 export function newPortfolioTrade(
   portfolioId: string,
   partial?: Partial<
-    Pick<PortfolioTrade, 'symbol' | 'side' | 'tradeDate' | 'holdingId'>
+    Pick<PortfolioTrade, 'symbol' | 'side' | 'tradeDate' | 'holdingId' | 'currency'>
   >,
 ): PortfolioTrade {
   return {
@@ -124,9 +137,19 @@ export function newPortfolioTrade(
     tradeDate: partial?.tradeDate ?? todayIsoDate(),
     shares: 0,
     price: 0,
+    currency: partial?.currency ?? 'USD',
     fees: 0,
     holdingId: partial?.holdingId,
   }
+}
+
+/** Default manual-entry currency from cached quote/history metadata when known. */
+export function defaultTradeCurrencyForSymbol(
+  symbol: string,
+  quoteCurrencyBySymbol: Record<string, DisplayCurrency> = {},
+): DisplayCurrency {
+  const c = quoteCurrencyBySymbol[symbol.trim().toUpperCase()]
+  return c === 'CHF' ? 'CHF' : 'USD'
 }
 
 export function tradesForPortfolio(
@@ -183,6 +206,8 @@ export type SymbolMarkSource = 'quote' | 'manual' | 'history'
 
 export type SymbolMark = {
   price: number
+  /** Quote / history denomination before display conversion in perf math. */
+  currency: DisplayCurrency
   source: SymbolMarkSource
   /** Close date when source is history; null for live quote/manual. */
   asOfDate: string | null
@@ -276,7 +301,11 @@ export function resolveSymbolMark(
   scenarios: SavedScenario[],
   historyPoints: PriceHistoryPoint[] = [],
   asOfDate: string = todayIsoDate(),
+  historyQuoteCurrency?: string,
 ): SymbolMark | null {
+  const quoteCur = quoteToDisplayCurrency(historyQuoteCurrency)
+  const scenarioQuoteCur = (sc: SavedScenario | null | undefined): DisplayCurrency =>
+    quoteToDisplayCurrency(sc?.currency)
   const sym = symbol.toUpperCase()
   const holding = portfolio.holdings.find(
     (h) => !h.option && h.symbol.toUpperCase() === sym,
@@ -293,24 +322,52 @@ export function resolveSymbolMark(
     ) {
       return {
         price: holding.manualCurrentPrice,
+        currency: scenarioQuoteCur(scenario),
         source: 'manual',
         asOfDate: null,
       }
     }
     const p = resolveCurrentPrice(holding, scenario)
     if (p != null && p > 0) {
-      return { price: p, source: 'quote', asOfDate: null }
+      return { price: p, currency: scenarioQuoteCur(scenario), source: 'quote', asOfDate: null }
     }
   }
   const scenario = scenarios.find((s) => s.symbol.toUpperCase() === sym)
   if (scenario?.currentPrice != null && scenario.currentPrice > 0) {
-    return { price: scenario.currentPrice, source: 'quote', asOfDate: null }
+    return {
+      price: scenario.currentPrice,
+      currency: scenarioQuoteCur(scenario),
+      source: 'quote',
+      asOfDate: null,
+    }
   }
   const hist = latestHistoryClose(historyPoints, asOfDate)
   if (hist) {
-    return { price: hist.price, source: 'history', asOfDate: hist.date }
+    return {
+      price: hist.price,
+      currency: quoteCur,
+      source: 'history',
+      asOfDate: hist.date,
+    }
   }
   return null
+}
+
+export function symbolMarkInDisplay(
+  mark: SymbolMark,
+  displayCurrency: DisplayCurrency,
+  usdToChf: number | null,
+): SymbolMark {
+  return {
+    ...mark,
+    price: convertAmountToDisplay(
+      mark.price,
+      mark.currency,
+      displayCurrency,
+      usdToChf,
+    ),
+    currency: displayCurrency,
+  }
 }
 
 /** @deprecated Prefer resolveSymbolMark */
@@ -427,22 +484,35 @@ export function computePortfolioPerformance(
   scenarios: SavedScenario[],
   historiesBySymbol: Record<string, PriceHistoryPoint[]> = {},
   asOfDate: string = todayIsoDate(),
+  perfCtx?: PerfDisplayContext,
 ): PortfolioPerformanceSummary {
+  const display = perfCtx?.displayCurrency ?? 'USD'
+  const usdToChf = perfCtx?.usdToChf ?? null
+  const ledgerTrades = perfCtx
+    ? tradesInDisplayCurrency(trades, display, usdToChf)
+  : trades
+
   const bySymbol = new Map<string, PortfolioTrade[]>()
-  for (const t of trades) {
+  for (const t of ledgerTrades) {
     const list = bySymbol.get(t.symbol) ?? []
     list.push(t)
     bySymbol.set(t.symbol, list)
   }
   const symbols: SymbolPerformance[] = []
   for (const [sym, list] of bySymbol) {
-    const mark = resolveSymbolMark(
+    const histCur = perfCtx?.quoteCurrencyBySymbol[sym]
+    const markRaw = resolveSymbolMark(
       sym,
       portfolio,
       scenarios,
       historiesBySymbol[sym] ?? [],
       asOfDate,
+      histCur === 'CHF' ? 'CHF' : histCur === 'USD' ? 'USD' : undefined,
     )
+    const mark =
+      markRaw && perfCtx
+        ? symbolMarkInDisplay(markRaw, display, usdToChf)
+        : markRaw
     const perf = computeSymbolPerformance(list, mark)
     if (perf) symbols.push(perf)
   }

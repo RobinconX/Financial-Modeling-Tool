@@ -18,6 +18,7 @@ export type ComparablesTradeMarker = {
   shares: number
   price: number
   fees: number
+  currency: PortfolioTrade['currency']
   y: number
 }
 
@@ -69,6 +70,7 @@ export function buildComparablesTradeMarkers(
         shares: t.shares,
         price: t.price,
         fees: t.fees ?? 0,
+        currency: t.currency ?? 'USD',
         y,
       })
     }

@@ -10,7 +10,7 @@ import {
   YAxis,
 } from 'recharts'
 import { formatMoney, formatPrice } from '../../lib/format'
-import { toDisplay } from '../../lib/fx'
+import { amountToDisplay } from '../../lib/fx'
 import type { ReturnProgressionPoint } from '../../lib/portfolioPerformanceStats'
 import type { DisplayCurrency, PortfolioTrade } from '../../types'
 
@@ -25,6 +25,7 @@ export type ReturnChartTradeMarker = {
   shares: number
   price: number
   fees: number
+  currency: PortfolioTrade['currency']
   y: number
 }
 
@@ -38,27 +39,24 @@ type Props = {
   onModeChange: (mode: ReturnChartMode) => void
 }
 
-function pnlInDisplayUnits(
-  usd: number | null | undefined,
-  displayCurrency: DisplayCurrency,
-  usdToChf: number | null,
-): number | null {
-  if (usd == null || !Number.isFinite(usd)) return null
-  return toDisplay(usd, displayCurrency, usdToChf)
+/** Progression amounts are already in display currency from the perf pipeline. */
+function progressionMoneyValue(value: number | null | undefined): number | null {
+  if (value == null || !Number.isFinite(value)) return null
+  return value
 }
 
 function progressionYOnDate(
   date: string,
   points: ReturnProgressionPoint[],
   mode: ReturnChartMode,
-  displayCurrency: DisplayCurrency,
-  usdToChf: number | null,
+  _displayCurrency: DisplayCurrency,
+  _usdToChf: number | null,
 ): number | null {
   const yFromPoint = (p: ReturnProgressionPoint): number | null => {
     if (mode === 'pct') {
       return p.returnPct != null ? p.returnPct * 100 : null
     }
-    return pnlInDisplayUnits(p.totalPnl, displayCurrency, usdToChf)
+    return progressionMoneyValue(p.totalPnl)
   }
   const byDate = new Map(points.map((p) => [p.date, p]))
   const onDay = yFromPoint(byDate.get(date) ?? { date, totalPnl: null, returnPct: null })
@@ -100,6 +98,7 @@ export function buildReturnChartTradeMarkers(
       shares: t.shares,
       price: t.price,
       fees: t.fees ?? 0,
+      currency: t.currency ?? 'USD',
       y,
     })
   }
@@ -231,7 +230,7 @@ function TradeTooltipRows({
       {trades.map((m) => {
         const sideTone = m.side === 'buy' ? '#34d399' : '#f87171'
         const px = formatPrice(
-          toDisplay(m.price, displayCurrency, usdToChf),
+          amountToDisplay(m.price, m.currency ?? 'USD', displayCurrency, usdToChf),
           displayCurrency,
         )
         return (
@@ -245,7 +244,10 @@ function TradeTooltipRows({
             <div className="tabular-nums text-white/75">
               {m.shares} @ {px}
               {m.fees > 0
-                ? ` · fees ${formatMoney(toDisplay(m.fees, displayCurrency, usdToChf), displayCurrency)}`
+                ? ` · fees ${formatMoney(
+                    amountToDisplay(m.fees, m.currency ?? 'USD', displayCurrency, usdToChf),
+                    displayCurrency,
+                  )}`
                 : ''}
             </div>
           </div>
@@ -395,8 +397,8 @@ function pushChartRow(
 export function buildSignedReturnChartRows(
   points: ReturnProgressionPoint[],
   mode: ReturnChartMode,
-  displayCurrency: DisplayCurrency = 'USD',
-  usdToChf: number | null = null,
+  _displayCurrency: DisplayCurrency = 'USD',
+  _usdToChf: number | null = null,
 ): ChartRow[] {
   const base: { date: string; value: number | null }[] = points.map((p) => {
     const value =
@@ -404,7 +406,7 @@ export function buildSignedReturnChartRows(
         ? p.returnPct != null
           ? p.returnPct * 100
           : null
-        : pnlInDisplayUnits(p.totalPnl, displayCurrency, usdToChf)
+        : progressionMoneyValue(p.totalPnl)
     return { date: p.date, value }
   })
 
