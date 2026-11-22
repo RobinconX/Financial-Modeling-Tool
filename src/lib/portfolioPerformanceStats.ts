@@ -6,6 +6,13 @@ import {
   tradesInDisplayCurrency,
   type PerfDisplayContext,
 } from './portfolioTradeFx'
+import {
+  ledgerSnapshotAt,
+  returnDenominator,
+  tradeInstrument,
+  tradeMultiplier,
+  withAutoExpireTrades,
+} from './portfolioTradeLedger'
 
 export type TradeActivityStats = {
   tradeCount: number
@@ -109,7 +116,7 @@ export function computePortfolioActivityRollup(
   let closedSymbolCount = 0
   for (const s of symbolsTrades) {
     if (s.trades.length === 0) continue
-    if (s.ledgerShares > 0) openSymbolCount += 1
+    if (s.ledgerShares !== 0) openSymbolCount += 1
     else closedSymbolCount += 1
   }
   const sorted =
@@ -192,6 +199,7 @@ export function computeTimeWeightedReturn(
   symbol?: string,
 ): TwrResult {
   if (trades.length === 0) return { twr: null, status: 'na' }
+  if (tradeInstrument(trades[0]!) === 'option') return { twr: null, status: 'na' }
   if (!points.length) return { twr: null, status: 'unavailable' }
 
   const sym = symbol ?? trades[0]?.symbol ?? ''
@@ -290,44 +298,9 @@ export function formatHoldingPeriod(days: number | null): string {
   return `${years}y`
 }
 
-export type LedgerSnapshot = {
-  shares: number
-  costBasis: number
-  realizedPnl: number
-  grossBuys: number
-}
+export type LedgerSnapshot = import('./portfolioTradeLedger').LedgerSnapshot
 
-/** Average-cost ledger after all trades with tradeDate <= asOfDate. */
-export function ledgerSnapshotAt(
-  trades: PortfolioTrade[],
-  asOfDate: string,
-): LedgerSnapshot {
-  let shares = 0
-  let costBasis = 0
-  let realizedPnl = 0
-  let grossBuys = 0
-  const ordered = [...trades]
-    .filter((t) => t.tradeDate <= asOfDate)
-    .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate) || a.id.localeCompare(b.id))
-  for (const t of ordered) {
-    if (t.side === 'buy') {
-      const notional = t.shares * t.price + (t.fees ?? 0)
-      grossBuys += notional
-      shares += t.shares
-      costBasis += notional
-    } else {
-      const sellShares = Math.min(t.shares, shares)
-      if (sellShares <= 0) continue
-      const avg = shares > 0 ? costBasis / shares : 0
-      const proceeds = sellShares * t.price - (t.fees ?? 0)
-      const costRemoved = avg * sellShares
-      realizedPnl += proceeds - costRemoved
-      shares -= sellShares
-      costBasis -= costRemoved
-    }
-  }
-  return { shares, costBasis, realizedPnl, grossBuys }
-}
+export { ledgerSnapshotAt } from './portfolioTradeLedger'
 
 export type ReturnProgressionPoint = {
   date: string
@@ -373,19 +346,22 @@ function symbolPnlOnDate(
 ): { totalPnl: number | null; grossBuys: number } {
   const active = trades.some((t) => t.tradeDate <= date)
   if (!active) return { totalPnl: 0, grossBuys: 0 }
-  const snap = ledgerSnapshotAt(trades, date)
-  if (snap.shares <= 0) {
-    return { totalPnl: snap.realizedPnl, grossBuys: snap.grossBuys }
+  const expanded = withAutoExpireTrades(trades, asOfDate)
+  const snap = ledgerSnapshotAt(expanded, date, perfCtx)
+  const denom = returnDenominator(snap)
+  if (snap.shares === 0) {
+    return { totalPnl: snap.realizedPnl, grossBuys: denom }
   }
   let close = closeForPnlOnDate(points, date, asOfDate)
   if (close == null) {
-    return { totalPnl: null, grossBuys: snap.grossBuys }
+    return { totalPnl: null, grossBuys: denom }
   }
   if (perfCtx && symbol) {
     close = historyCloseInDisplay(close, symbol, perfCtx)
   }
-  const unrealized = snap.shares * close - snap.costBasis
-  return { totalPnl: snap.realizedPnl + unrealized, grossBuys: snap.grossBuys }
+  const mult = tradeMultiplier(trades[0]!)
+  const unrealized = snap.shares * close * mult - snap.costBasis
+  return { totalPnl: snap.realizedPnl + unrealized, grossBuys: denom }
 }
 
 /**
@@ -425,15 +401,8 @@ export function buildReturnProgression(
     for (const [symbol, trades] of entries) {
       if (!trades.some((t) => t.tradeDate <= date)) continue
       hadActivity = true
-      const ledgerTrades = perfCtx
-        ? tradesInDisplayCurrency(
-            trades,
-            perfCtx.displayCurrency,
-            perfCtx.usdToChf,
-          )
-        : trades
       const symPnl = symbolPnlOnDate(
-        ledgerTrades,
+        trades,
         histories[symbol] ?? [],
         date,
         asOfDate,
@@ -443,8 +412,12 @@ export function buildReturnProgression(
       grossBuys += symPnl.grossBuys
       if (symPnl.totalPnl == null) {
         totalPnl = null
-        const snap = ledgerSnapshotAt(ledgerTrades, date)
-        if (snap.shares > 0) missingHistory.add(symbol)
+        const snap = ledgerSnapshotAt(
+          withAutoExpireTrades(trades, asOfDate),
+          date,
+          perfCtx,
+        )
+        if (snap.shares !== 0) missingHistory.add(symbol)
       } else if (totalPnl != null) {
         totalPnl += symPnl.totalPnl
       }
@@ -469,7 +442,7 @@ export function partitionPerformanceSymbolsByOpen<
   const open: T[] = []
   const closed: T[] = []
   for (const s of symbols) {
-    if (s.ledgerShares > 0) open.push(s)
+    if (s.ledgerShares !== 0) open.push(s)
     else closed.push(s)
   }
   return { open, closed }

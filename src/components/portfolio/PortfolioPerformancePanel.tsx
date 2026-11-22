@@ -19,11 +19,13 @@ import {
   formatSnapshotMarkSummary,
   newPortfolioTrade,
   todayIsoDate,
+  performanceScopeKeys,
   tradedSymbolsFromTrades,
   tradesForPortfolio,
-  tradesMatchingSymbol,
+  tradesForPerformanceScope,
   type SymbolPerformance,
 } from '../../lib/portfolioTrades'
+import { optionLabel, parseOccSymbol } from '../../lib/optionContract'
 import {
   buildReturnProgression,
   computeHoldingCostStats,
@@ -141,27 +143,27 @@ export function PortfolioPerformancePanel({
     () => tradesForPortfolio(tradesState, portfolio.id),
     [tradesState, portfolio.id],
   )
-  const tradedSymbols = useMemo(
-    () => tradedSymbolsFromTrades(portfolioTrades),
+  const scopeOptions = useMemo(
+    () => performanceScopeKeys(portfolioTrades),
     [portfolioTrades],
   )
-  const [scopeSymbol, setScopeSymbol] = useState<string | null>(null)
+  const [scopeKey, setScopeKey] = useState<string | null>(null)
   const [histories, setHistories] = useState<Record<string, CachedPriceHistory>>({})
   const [histLoading, setHistLoading] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    setScopeSymbol(null)
+    setScopeKey(null)
   }, [portfolio.id])
 
   useEffect(() => {
-    if (scopeSymbol && !tradedSymbols.includes(scopeSymbol)) {
-      setScopeSymbol(null)
+    if (scopeKey && !scopeOptions.some((o) => o.key === scopeKey)) {
+      setScopeKey(null)
     }
-  }, [scopeSymbol, tradedSymbols])
+  }, [scopeKey, scopeOptions])
 
   const scopedTrades = useMemo(
-    () => tradesMatchingSymbol(portfolioTrades, scopeSymbol),
-    [portfolioTrades, scopeSymbol],
+    () => tradesForPerformanceScope(portfolioTrades, scopeKey),
+    [portfolioTrades, scopeKey],
   )
 
   const historyPoints = useMemo(() => {
@@ -225,9 +227,16 @@ export function PortfolioPerformancePanel({
   }, [summary.symbols])
 
   const symbolsForHistory = useMemo(() => {
-    if (scopeSymbol) return [scopeSymbol]
-    return tradedSymbolsFromTrades(scopedTrades)
-  }, [scopeSymbol, scopedTrades])
+    const syms = new Set<string>()
+    for (const t of scopedTrades) {
+      syms.add(t.symbol)
+      if (t.instrument === 'option') {
+        const u = t.underlying ?? parseOccSymbol(t.symbol)?.underlying
+        if (u) syms.add(u)
+      }
+    }
+    return [...syms]
+  }, [scopedTrades])
 
   useEffect(() => {
     if (symbolsForHistory.length === 0) return
@@ -291,11 +300,24 @@ export function PortfolioPerformancePanel({
     return out
   }, [summary.symbols, tradesBySymbol, histories, perfCtx])
 
+  const scopeLabel = useMemo(
+    () => scopeOptions.find((o) => o.key === scopeKey)?.label ?? scopeKey,
+    [scopeOptions, scopeKey],
+  )
+
   const activityStats = useMemo((): TradeActivityStats | PortfolioActivityRollup => {
-    if (scopeSymbol) {
+    if (scopeKey && summary.symbols.length === 1) {
       const sym = summary.symbols[0]
-      const trades = tradesBySymbol.get(scopeSymbol) ?? scopedTrades
+      const trades = tradesBySymbol.get(sym!.symbol) ?? scopedTrades
       return computeTradeActivity(trades, sym?.ledgerShares ?? 0)
+    }
+    if (scopeKey) {
+      return computePortfolioActivityRollup(
+        summary.symbols.map((s) => ({
+          trades: tradesBySymbol.get(s.symbol) ?? [],
+          ledgerShares: s.ledgerShares,
+        })),
+      )
     }
     return computePortfolioActivityRollup(
       summary.symbols.map((s) => ({
@@ -303,10 +325,10 @@ export function PortfolioPerformancePanel({
         ledgerShares: s.ledgerShares,
       })),
     )
-  }, [scopeSymbol, summary.symbols, tradesBySymbol, scopedTrades])
+  }, [scopeKey, summary.symbols, tradesBySymbol, scopedTrades])
 
   const holdingStats = useMemo(() => {
-    if (!scopeSymbol || !summary.symbols[0]) return null
+    if (!scopeKey || summary.symbols.length !== 1 || !summary.symbols[0]) return null
     const s = summary.symbols[0]
     const trades = tradesInDisplayCurrency(
       tradesBySymbol.get(s.symbol) ?? [],
@@ -322,7 +344,7 @@ export function PortfolioPerformancePanel({
       totalOpenMarketValue,
     )
   }, [
-    scopeSymbol,
+    scopeKey,
     summary.symbols,
     tradesBySymbol,
     totalOpenMarketValue,
@@ -466,7 +488,7 @@ export function PortfolioPerformancePanel({
         value: activityStats.lastTradeDate ?? '—',
       },
     ]
-    if (scopeSymbol) {
+    if (scopeKey) {
       rows.push({
         label: 'Holding period',
         value: formatHoldingPeriod(activityStats.holdingPeriodDays),
@@ -482,7 +504,7 @@ export function PortfolioPerformancePanel({
       })
     }
     return rows
-  }, [activityStats, scopeSymbol])
+  }, [activityStats, scopeKey])
 
   const holdingRows = useMemo(() => {
     if (!holdingStats) return []
@@ -527,12 +549,13 @@ export function PortfolioPerformancePanel({
       },
       {
         label: 'TWR',
-        value: scopeSymbol
-          ? twrLabel(twrBySymbol.get(scopeSymbol))
-          : '—',
+        value:
+          scopeKey && summary.symbols[0]
+            ? twrLabel(twrBySymbol.get(summary.symbols[0]!.symbol))
+            : '—',
       },
     ]
-  }, [holdingStats, scopeSymbol, twrBySymbol, fmt, displayCurrency])
+  }, [holdingStats, scopeKey, twrBySymbol, fmt, displayCurrency])
 
   return (
     <div className="space-y-5" data-guide-anchor="portfolio.performance">
@@ -543,20 +566,20 @@ export function PortfolioPerformancePanel({
               <h3 className="text-sm font-semibold text-white">Performance</h3>
               <FeatureGuideButton id="portfolio.performance" />
             </div>
-            {tradedSymbols.length > 0 ? (
+            {scopeOptions.length > 0 ? (
               <select
-                className="input !w-auto max-w-[11rem] !py-1 !text-xs tabular-nums"
-                value={scopeSymbol ?? ''}
+                className="input !w-auto max-w-[14rem] !py-1 !text-xs tabular-nums"
+                value={scopeKey ?? ''}
                 onChange={(e) => {
                   const v = e.target.value
-                  setScopeSymbol(v ? v : null)
+                  setScopeKey(v ? v : null)
                 }}
                 aria-label="Performance scope"
               >
                 <option value="">Whole portfolio</option>
-                {tradedSymbols.map((sym) => (
-                  <option key={sym} value={sym}>
-                    {sym}
+                {scopeOptions.map((opt) => (
+                  <option key={opt.key} value={opt.key}>
+                    {opt.label}
                   </option>
                 ))}
               </select>
@@ -593,14 +616,14 @@ export function PortfolioPerformancePanel({
             <button
               type="button"
               className="btn-primary !px-2.5 !py-1 !text-xs"
-              onClick={() => openNew(scopeSymbol ?? undefined)}
+              onClick={() => openNew(scopeKey ?? undefined)}
             >
               + Trade
             </button>
           </div>
           <p className="mt-1 text-xs text-white/45">
-            {scopeSymbol
-              ? `Trades and P&L for ${scopeSymbol} on this book.`
+            {scopeKey
+              ? `Trades and P&L for ${scopeLabel ?? scopeKey} on this book.`
               : 'All traded symbols on this book (incl. closed). Ledger does not change Positions.'}
           </p>
         </div>
@@ -635,7 +658,7 @@ export function PortfolioPerformancePanel({
         </section>
       ) : null}
 
-      {scopeSymbol && holdingRows.length > 0 ? (
+      {scopeKey && holdingRows.length > 0 ? (
         <section className="space-y-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
           <h4 className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
             Position
@@ -699,7 +722,7 @@ export function PortfolioPerformancePanel({
         ))}
       </div>
 
-      {summary.symbols.length > 0 && !scopeSymbol ? (
+      {summary.symbols.length > 0 && !scopeKey ? (
         <section className="space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-300/80">
             By symbol
@@ -784,7 +807,7 @@ export function PortfolioPerformancePanel({
               <thead className="text-xs uppercase tracking-wider text-white/45">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Date</th>
-                  {!scopeSymbol ? (
+                  {!scopeKey ? (
                     <th className="px-3 py-2 text-left font-medium">Symbol</th>
                   ) : null}
                   <th className="px-3 py-2 text-left font-medium">Side</th>
@@ -804,16 +827,27 @@ export function PortfolioPerformancePanel({
                   .map((t) => (
                     <tr key={t.id} className="border-t border-white/5">
                       <td className="px-3 py-2 tabular-nums text-white/80">{t.tradeDate}</td>
-                      {!scopeSymbol ? (
-                        <td className="px-3 py-2 font-medium text-white">{t.symbol}</td>
+                      {!scopeKey ? (
+                        <td className="px-3 py-2 font-medium text-white">
+                          {t.instrument === 'option'
+                            ? (() => {
+                                const c = parseOccSymbol(t.symbol)
+                                return c ? optionLabel(c) : t.symbol
+                              })()
+                            : t.symbol}
+                        </td>
                       ) : null}
                       <td className="px-3 py-2 capitalize">
                         <span
                           className={
-                            t.side === 'buy' ? 'text-emerald-300/85' : 'text-red-300/85'
+                            t.event && t.event !== 'trade'
+                              ? 'text-amber-300/85'
+                              : t.side === 'buy'
+                                ? 'text-emerald-300/85'
+                                : 'text-red-300/85'
                           }
                         >
-                          {t.side}
+                          {t.event && t.event !== 'trade' ? t.event : t.side}
                         </span>
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-white/80">
@@ -827,7 +861,7 @@ export function PortfolioPerformancePanel({
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-white/50">
                         {(t.fees ?? 0) > 0
-                          ? fmtStoredMoney(t.fees!, t.currency)
+                          ? fmtStoredMoney(t.fees!, t.feesCurrency ?? t.currency)
                           : '—'}
                       </td>
                       {tradeLogHasPositionLink ? (

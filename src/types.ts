@@ -562,32 +562,58 @@ export type PortfolioAction = {
   note?: string
 }
 
-/** Executed equity trade (ledger only — does not change Positions shares). */
+/** Executed equity or option trade (ledger only — does not change Positions shares). */
 export type PortfolioTradeSide = 'buy' | 'sell'
+
+export type PortfolioTradeInstrument = 'equity' | 'option'
+
+/** Lifecycle row for options (worthless expiry, assignment, exercise). */
+export type PortfolioTradeEvent = 'trade' | 'expire' | 'assign' | 'exercise'
 
 export type PortfolioTrade = {
   id: string
   /** Portfolio book this trade belongs to. */
   portfolioId: string
-  /** Ticker symbol (equities). Normalized to uppercase on load. */
+  /**
+   * Equity ticker or OCC option symbol. For options, normalized OCC on load.
+   * `shares` counts **contracts** when `instrument` is `option`.
+   */
   symbol: string
   side: PortfolioTradeSide
   /** Calendar execution date YYYY-MM-DD. */
   tradeDate: string
+  /** Equity shares or option contracts (always positive). */
   shares: number
-  /** Per-share execution price in `currency` (native denomination). */
+  /**
+   * Per-share execution price in `currency` (option premium per share).
+   * Lifecycle events may use `0` (expire, assign without cash).
+   */
   price: number
-  /** Trade and fee denomination. Default USD when omitted in stored JSON. */
+  /** Premium / trade price denomination. Default USD when omitted. */
   currency?: DisplayCurrency
-  /** Trading fees / commission in `currency`. Default 0. */
+  /** Commission / fees in `feesCurrency` (defaults to `currency`). */
   fees?: number
+  feesCurrency?: DisplayCurrency
   note?: string
   /** Optional link to a holding row (UI prefill only). */
   holdingId?: string | null
+  /** `equity` default; `option` enables short opens and contract multiplier. */
+  instrument?: PortfolioTradeInstrument
+  /** `trade` default; option lifecycle rows close open contracts. */
+  event?: PortfolioTradeEvent
+  /** Optional link to a related equity trade (e.g. assignment stock sale). */
+  linkedTradeId?: string | null
+  /** Shares per contract for options. Default 100. */
+  multiplier?: number
+  /** Denormalized OCC fields (filled from symbol when omitted). */
+  underlying?: string
+  right?: 'C' | 'P'
+  strike?: number
+  expiry?: string
 }
 
 export type PortfolioTradesState = {
-  version: 1
+  version: 1 | 2
   trades: PortfolioTrade[]
 }
 

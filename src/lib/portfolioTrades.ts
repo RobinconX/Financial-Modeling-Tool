@@ -2,6 +2,8 @@ import type {
   DisplayCurrency,
   PortfolioHolding,
   PortfolioTrade,
+  PortfolioTradeEvent,
+  PortfolioTradeInstrument,
   PortfolioTradeSide,
   PortfolioTradesState,
   SavedPortfolio,
@@ -10,15 +12,30 @@ import type {
 import {
   convertAmountToDisplay,
   quoteToDisplayCurrency,
-  tradesInDisplayCurrency,
   type PerfDisplayContext,
 } from './portfolioTradeFx'
 import type { PriceHistoryPoint } from './priceHistory'
 import { resolveCurrentPrice } from './portfolio'
+import { isOccSymbol, optionIsExpired, parseOccSymbol } from './optionContract'
+import { contractFieldsFromOcc, resolveOptionSymbolFromRow } from './portfolioOptionTradeParse'
+import {
+  computeLedgerPerformance,
+  tradeInstrument,
+  withAutoExpireTrades,
+} from './portfolioTradeLedger'
 
 const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
 /** Conservative equity ticker (no options / OCC symbols). */
 const EQUITY_SYMBOL = /^[A-Z][A-Z0-9.-]{0,11}$/
+
+function normalizeInstrument(raw: unknown): PortfolioTradeInstrument {
+  return raw === 'option' ? 'option' : 'equity'
+}
+
+function normalizeEvent(raw: unknown): PortfolioTradeEvent {
+  if (raw === 'expire' || raw === 'assign' || raw === 'exercise') return raw
+  return 'trade'
+}
 
 export function emptyPortfolioTrades(): PortfolioTradesState {
   return { version: 1, trades: [] }
@@ -36,11 +53,24 @@ function normalizeSide(raw: unknown): PortfolioTradeSide | null {
   return raw === 'buy' || raw === 'sell' ? raw : null
 }
 
-function normalizeSymbol(raw: unknown): string | null {
+function normalizeEquitySymbol(raw: unknown): string | null {
   if (typeof raw !== 'string') return null
   const sym = raw.trim().toUpperCase()
   if (!sym || !EQUITY_SYMBOL.test(sym)) return null
   return sym
+}
+
+function normalizeTradeSymbol(
+  o: Record<string, unknown>,
+  instrument: PortfolioTradeInstrument,
+): string | null {
+  if (instrument === 'option') {
+    const occ = resolveOptionSymbolFromRow(o)
+    return occ
+  }
+  const symRaw = o.symbol
+  if (typeof symRaw === 'string' && isOccSymbol(symRaw)) return null
+  return normalizeEquitySymbol(symRaw)
 }
 
 function normalizeTradeCurrency(raw: unknown): DisplayCurrency {
@@ -67,16 +97,26 @@ export function normalizePortfolioTrade(raw: unknown): PortfolioTrade | null {
   const o = raw as Record<string, unknown>
   const portfolioId = typeof o.portfolioId === 'string' ? o.portfolioId.trim() : ''
   if (!portfolioId) return null
-  const symbol = normalizeSymbol(o.symbol)
+  let instrument = normalizeInstrument(o.instrument)
+  if (o.occSymbol != null || (typeof o.description === 'string' && o.description.trim())) {
+    instrument = 'option'
+  }
+  if (instrument !== 'option' && typeof o.symbol === 'string' && isOccSymbol(o.symbol)) {
+    instrument = 'option'
+  }
+  const symbol = normalizeTradeSymbol(o, instrument)
   if (!symbol) return null
+  const event = normalizeEvent(o.event)
   const side = normalizeSide(o.side)
-  if (!side) return null
+  if (!side && event === 'trade') return null
   const tradeDate = normalizeDate(o.tradeDate)
   if (!tradeDate) return null
   const shares = Number(o.shares)
   if (!Number.isFinite(shares) || shares <= 0) return null
   const price = Number(o.price)
-  if (!Number.isFinite(price) || price <= 0) return null
+  if (!Number.isFinite(price)) return null
+  if (event === 'trade' && price <= 0) return null
+  if (event !== 'trade' && price < 0) return null
   let fees = 0
   if (o.fees != null && o.fees !== '') {
     const f = Number(o.fees)
@@ -90,18 +130,45 @@ export function normalizePortfolioTrade(raw: unknown): PortfolioTrade | null {
     typeof o.holdingId === 'string' && o.holdingId.trim()
       ? o.holdingId.trim()
       : undefined
+  const currency = normalizeTradeCurrency(o.currency)
+  const feesCurrency =
+    o.feesCurrency === 'CHF' || o.feesCurrency === 'USD'
+      ? o.feesCurrency
+      : currency
+  const contract = instrument === 'option' ? contractFieldsFromOcc(symbol) : null
+  const multiplier =
+    instrument === 'option'
+      ? (() => {
+          const m = Number(o.multiplier)
+          if (Number.isFinite(m) && m > 0) return m
+          return contract?.multiplier ?? 100
+        })()
+      : undefined
+  const linkedTradeId =
+    typeof o.linkedTradeId === 'string' && o.linkedTradeId.trim()
+      ? o.linkedTradeId.trim()
+      : undefined
   return {
     id,
     portfolioId,
     symbol,
-    side,
+    side: side ?? (event === 'expire' ? 'sell' : 'buy'),
     tradeDate,
     shares,
     price,
-    currency: normalizeTradeCurrency(o.currency),
+    currency,
     fees,
+    feesCurrency,
     note,
     holdingId,
+    instrument,
+    event,
+    linkedTradeId,
+    multiplier,
+    underlying: contract?.underlying ?? (typeof o.underlying === 'string' ? o.underlying.trim().toUpperCase() : undefined),
+    right: contract?.right ?? (o.right === 'C' || o.right === 'P' ? o.right : undefined),
+    strike: contract?.strike ?? (Number.isFinite(Number(o.strike)) ? Number(o.strike) : undefined),
+    expiry: contract?.expiration ?? (typeof o.expiry === 'string' ? o.expiry : undefined),
   }
 }
 
@@ -120,7 +187,13 @@ export function normalizePortfolioTrades(raw: unknown): PortfolioTradesState {
       a.symbol.localeCompare(b.symbol) ||
       a.id.localeCompare(b.id),
   )
-  return { version: 1, trades }
+  const version =
+    typeof o.version === 'number' && o.version === 2
+      ? 2
+      : trades.some((t) => t.instrument === 'option')
+        ? 2
+        : 1
+  return { version, trades }
 }
 
 export function newPortfolioTrade(
@@ -215,6 +288,7 @@ export type SymbolMark = {
 
 export type SymbolPerformance = {
   symbol: string
+  instrument: PortfolioTradeInstrument
   tradeCount: number
   ledgerShares: number
   costBasis: number
@@ -225,8 +299,10 @@ export type SymbolPerformance = {
   unrealizedPnl: number | null
   realizedPnl: number
   grossBuys: number
+  grossPremiumReceived: number
   totalPnl: number | null
   returnPct: number | null
+  underlying?: string
 }
 
 /** Tradeable equity ticker for a position row (holding symbol or linked scenario). */
@@ -295,6 +371,23 @@ export function latestHistoryClose(
 /**
  * Mark for open ledger: projection quote, manual holding price, then history close.
  */
+function intrinsicOptionMark(
+  parsed: NonNullable<ReturnType<typeof parseOccSymbol>>,
+  underlyingMark: SymbolMark,
+): SymbolMark {
+  const uPx = underlyingMark.price
+  const intrinsic =
+    parsed.right === 'C'
+      ? Math.max(0, uPx - parsed.strike)
+      : Math.max(0, parsed.strike - uPx)
+  return {
+    price: intrinsic,
+    currency: underlyingMark.currency,
+    source: 'manual',
+    asOfDate: null,
+  }
+}
+
 export function resolveSymbolMark(
   symbol: string,
   portfolio: SavedPortfolio,
@@ -304,6 +397,51 @@ export function resolveSymbolMark(
   historyQuoteCurrency?: string,
 ): SymbolMark | null {
   const quoteCur = quoteToDisplayCurrency(historyQuoteCurrency)
+  if (isOccSymbol(symbol)) {
+    const parsed = parseOccSymbol(symbol)
+    if (parsed && optionIsExpired(parsed.expiration, new Date(`${asOfDate}T12:00:00Z`))) {
+      return { price: 0, currency: quoteCur, source: 'manual', asOfDate: null }
+    }
+    const optHolding = portfolio.holdings.find(
+      (h) => h.option?.occSymbol.toUpperCase() === symbol.toUpperCase(),
+    )
+    if (optHolding?.manualCurrentPrice != null && optHolding.manualCurrentPrice >= 0) {
+      return {
+        price: optHolding.manualCurrentPrice,
+        currency: 'USD',
+        source: 'manual',
+        asOfDate: null,
+      }
+    }
+    if (optHolding) {
+      const px = resolveCurrentPrice(optHolding, null)
+      if (px != null && px >= 0) {
+        return { price: px, currency: 'USD', source: 'quote', asOfDate: null }
+      }
+    }
+    const hist = latestHistoryClose(historyPoints, asOfDate)
+    if (hist) {
+      return {
+        price: hist.price,
+        currency: quoteCur,
+        source: 'history',
+        asOfDate: hist.date,
+      }
+    }
+    if (parsed) {
+      const uHist = historyPoints.length ? null : null
+      void uHist
+      const uMark = resolveSymbolMark(
+        parsed.underlying,
+        portfolio,
+        scenarios,
+        [],
+        asOfDate,
+      )
+      if (uMark) return intrinsicOptionMark(parsed, uMark)
+    }
+    return null
+  }
   const scenarioQuoteCur = (sc: SavedScenario | null | undefined): DisplayCurrency =>
     quoteToDisplayCurrency(sc?.currency)
   const sym = symbol.toUpperCase()
@@ -383,7 +521,11 @@ export function markPriceForSymbol(
 export function computeSymbolPerformance(
   trades: PortfolioTrade[],
   mark: SymbolMark | number | null,
+  asOfDate: string = todayIsoDate(),
+  perfCtx?: PerfDisplayContext,
 ): SymbolPerformance | null {
+  if (trades.length === 0) return null
+  const expanded = withAutoExpireTrades(trades, asOfDate)
   const markPrice =
     mark == null
       ? null
@@ -394,57 +536,33 @@ export function computeSymbolPerformance(
     mark != null && typeof mark !== 'number' ? mark.source : null
   const markAsOfDate =
     mark != null && typeof mark !== 'number' ? mark.asOfDate : null
-  if (trades.length === 0) return null
   const symbol = trades[0]!.symbol
-  let ledgerShares = 0
-  let costBasis = 0
-  let realizedPnl = 0
-  let grossBuys = 0
+  const instrument = tradeInstrument(trades[0]!)
+  const markInDisplay =
+    mark != null && typeof mark !== 'number' && perfCtx
+      ? symbolMarkInDisplay(mark, perfCtx.displayCurrency, perfCtx.usdToChf).price
+      : markPrice
 
-  const ordered = [...trades].sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
-
-  for (const t of ordered) {
-    if (t.side === 'buy') {
-      const notional = t.shares * t.price + (t.fees ?? 0)
-      grossBuys += notional
-      ledgerShares += t.shares
-      costBasis += notional
-    } else {
-      const sellShares = Math.min(t.shares, ledgerShares)
-      if (sellShares <= 0) continue
-      const avg = ledgerShares > 0 ? costBasis / ledgerShares : 0
-      const proceeds = sellShares * t.price - (t.fees ?? 0)
-      const costRemoved = avg * sellShares
-      realizedPnl += proceeds - costRemoved
-      ledgerShares -= sellShares
-      costBasis -= costRemoved
-    }
-  }
-
-  const marketValue =
-    markPrice != null && ledgerShares > 0 ? ledgerShares * markPrice : null
-  const unrealizedPnl =
-    marketValue != null && ledgerShares > 0 ? marketValue - costBasis : ledgerShares > 0 ? null : 0
-
-  const totalPnl =
-    unrealizedPnl != null ? realizedPnl + unrealizedPnl : realizedPnl || null
-  const returnPct =
-    grossBuys > 0 && totalPnl != null ? totalPnl / grossBuys : null
+  const ledger = computeLedgerPerformance(expanded, markInDisplay, perfCtx)
+  const underlying = parseOccSymbol(symbol)?.underlying
 
   return {
     symbol,
+    instrument,
     tradeCount: trades.length,
-    ledgerShares,
-    costBasis,
-    markPrice,
+    ledgerShares: ledger.shares,
+    costBasis: ledger.costBasis,
+    markPrice: markInDisplay,
     markSource,
     markAsOfDate,
-    marketValue,
-    unrealizedPnl,
-    realizedPnl,
-    grossBuys,
-    totalPnl,
-    returnPct,
+    marketValue: ledger.marketValue,
+    unrealizedPnl: ledger.unrealizedPnl,
+    realizedPnl: ledger.realizedPnl,
+    grossBuys: ledger.grossBuys,
+    grossPremiumReceived: ledger.grossPremiumReceived,
+    totalPnl: ledger.totalPnl,
+    returnPct: ledger.returnPct,
+    underlying,
   }
 }
 
@@ -459,7 +577,7 @@ export function formatSymbolMarkLine(perf: SymbolPerformance): string | null {
 }
 
 export function formatSnapshotMarkSummary(symbols: SymbolPerformance[]): string | null {
-  const open = symbols.filter((s) => s.ledgerShares > 0 && s.markSource)
+  const open = symbols.filter((s) => s.ledgerShares !== 0 && s.markSource)
   if (open.length === 0) return null
   const parts = open.map((s) => {
     const label = formatSymbolMarkLine(s)
@@ -488,12 +606,9 @@ export function computePortfolioPerformance(
 ): PortfolioPerformanceSummary {
   const display = perfCtx?.displayCurrency ?? 'USD'
   const usdToChf = perfCtx?.usdToChf ?? null
-  const ledgerTrades = perfCtx
-    ? tradesInDisplayCurrency(trades, display, usdToChf)
-  : trades
 
   const bySymbol = new Map<string, PortfolioTrade[]>()
-  for (const t of ledgerTrades) {
+  for (const t of trades) {
     const list = bySymbol.get(t.symbol) ?? []
     list.push(t)
     bySymbol.set(t.symbol, list)
@@ -513,7 +628,7 @@ export function computePortfolioPerformance(
       markRaw && perfCtx
         ? symbolMarkInDisplay(markRaw, display, usdToChf)
         : markRaw
-    const perf = computeSymbolPerformance(list, mark)
+    const perf = computeSymbolPerformance(list, mark, asOfDate, perfCtx)
     if (perf) symbols.push(perf)
   }
   symbols.sort((a, b) => a.symbol.localeCompare(b.symbol))
@@ -521,12 +636,17 @@ export function computePortfolioPerformance(
   let realizedPnl = 0
   let unrealizedPnl = 0
   let grossBuys = 0
+  let premiumDenom = 0
   for (const s of symbols) {
     realizedPnl += s.realizedPnl
     unrealizedPnl += s.unrealizedPnl ?? 0
     grossBuys += s.grossBuys
+    premiumDenom += s.grossPremiumReceived
   }
   const totalPnl = realizedPnl + unrealizedPnl
-  const returnPct = grossBuys > 0 ? totalPnl / grossBuys : null
+  const denom = grossBuys + premiumDenom
+  const returnPct = denom > 0 ? totalPnl / denom : null
   return { realizedPnl, unrealizedPnl, totalPnl, grossBuys, returnPct, symbols }
 }
+
+export { performanceScopeKeys, tradesForPerformanceScope } from './portfolioTradeLedger'
