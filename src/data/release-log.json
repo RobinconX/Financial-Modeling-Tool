@@ -1,6 +1,17 @@
 [
   {
     "releasedAt": "2026-11-22",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Trade currency, export & clear on Performance",
+    "notes": [
+      "Each logged trade stores USD or CHF for price and fees; P&L, cost basis, and the return chart convert to your display currency at the live USD/CHF rate.",
+      "Portfolio Performance adds Export (round-trip JSON for the current book) and Clear, with import preview showing currency and CSV/JSON currency column support.",
+      "Manual trade entry includes a currency picker; Comparables trade tooltips show the trade’s denomination instead of assuming USD."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-22",
     "prodSha": "d6fccf3b45a69dcd2be49d7a7516e821eff9a3b0",
     "headline": "Portfolio trade ledger, linked-file resilience & re-link UX",
     "notes": [
