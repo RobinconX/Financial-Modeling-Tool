@@ -1,5 +1,10 @@
 import { Fragment, useEffect, useMemo, useRef, useState } from 'react'
-import type { ComparableBasis, SavedComparable, SavedScenario } from '../../types'
+import type {
+  ComparableBasis,
+  PortfolioTradesState,
+  SavedComparable,
+  SavedScenario,
+} from '../../types'
 import {
   availableBases,
   buildComparableTable,
@@ -108,6 +113,7 @@ type Props = {
   updateComparable: (id: string, patch: Partial<SavedComparable>) => boolean
   deleteComparable: (id: string) => boolean
   onOpenProjection?: (scenarioId: string, basis: ComparableBasis) => void
+  tradesState: PortfolioTradesState
 }
 
 function readSelectedId(list: SavedComparable[]): string | null {
@@ -128,6 +134,7 @@ export function ComparablesView({
   updateComparable,
   deleteComparable,
   onOpenProjection,
+  tradesState,
 }: Props) {
   const { openThesis } = useThesisRail()
   const [selectedId, setSelectedId] = useState<string | null>(() => readSelectedId(comparables))
@@ -930,6 +937,7 @@ export function ComparablesView({
                   histories={histories}
                   loadingSymbols={histLoading}
                   errors={histErrors}
+                  tradesState={tradesState}
                 />
               )}
             </div>

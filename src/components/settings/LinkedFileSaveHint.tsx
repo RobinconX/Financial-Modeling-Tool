@@ -18,21 +18,25 @@ function formatSaveTime(ms: number): string {
 
 type Props = {
   onOpenDataSettings?: () => void
+  /** Opens the file picker to re-attach the linked JSON (same user gesture rules as Settings). */
+  onRelinkFile?: () => void
 }
 
 /**
  * Permanent, subtle save status (Excel Online–style) for the linked data file.
  * Always visible in the app chrome — not a transient toast.
  */
-export function LinkedFileSaveHint({ onOpenDataSettings }: Props) {
+export function LinkedFileSaveHint({ onOpenDataSettings, onRelinkFile }: Props) {
   const [event, setEvent] = useState<LinkedFileSaveEvent>(() =>
     getLastLinkedFileSaveEvent(),
   )
+  const [relinkSuggested, setRelinkSuggested] = useState(false)
 
   useEffect(() => {
     const unsub = subscribeLinkedFileSave(setEvent)
     void (async () => {
       const s = await getLinkedFileStatus()
+      setRelinkSuggested(s.linked && s.permission !== 'granted')
       if (s.linked) {
         const mtime = await getLinkedFileLastModified()
         const savedAt = mtime ?? getLastLinkedFileSaveEvent().savedAt ?? Date.now()
@@ -72,6 +76,9 @@ export function LinkedFileSaveHint({ onOpenDataSettings }: Props) {
       ? formatSaveTime(event.savedAt)
       : null
 
+  const showRelink =
+    event.status === 'load-failed' || relinkSuggested
+
   let label: string
   let tone = 'text-white/40'
   let showSpinner = false
@@ -90,9 +97,11 @@ export function LinkedFileSaveHint({ onOpenDataSettings }: Props) {
       secondary = timeLabel ? `last ${timeLabel}` : event.fileName ?? null
       break
     case 'saved':
-      label = 'Saved'
-      tone = 'text-white/40'
-      secondary = [timeLabel, event.fileName].filter(Boolean).join(' · ') || null
+      label = showRelink ? 'Re-link file' : 'Saved'
+      tone = showRelink ? 'text-amber-200/90' : 'text-white/40'
+      secondary = showRelink
+        ? 'Pick the same JSON again'
+        : [timeLabel, event.fileName].filter(Boolean).join(' · ') || null
       break
     case 'error':
       label = 'Couldn’t save'
@@ -100,9 +109,10 @@ export function LinkedFileSaveHint({ onOpenDataSettings }: Props) {
       secondary = event.message
       break
     case 'load-failed':
-      label = 'Couldn’t load file'
+      label = 'Re-link file'
       tone = 'text-amber-200/90'
-      secondary = event.message
+      secondary =
+        'Pick the same JSON again (recommended on Brave / OneDrive)'
       break
     default:
       label = 'No linked file'
@@ -110,9 +120,13 @@ export function LinkedFileSaveHint({ onOpenDataSettings }: Props) {
       secondary = null
   }
 
+  if (showRelink && event.status === 'saved') {
+    secondary = secondary ?? 'Pick the same JSON again'
+  }
+
   const fullTitle =
-    event.status === 'error' || event.status === 'load-failed'
-      ? event.message
+    event.status === 'error' || event.status === 'load-failed' || showRelink
+      ? [label, event.message, event.fileName].filter(Boolean).join(' — ')
       : [
           label,
           timeLabel ? `at ${timeLabel}` : null,
@@ -121,9 +135,11 @@ export function LinkedFileSaveHint({ onOpenDataSettings }: Props) {
           .filter(Boolean)
           .join(' ')
 
+  const relinkAction = onRelinkFile ?? onOpenDataSettings
+
   return (
     <div
-      className={`flex max-w-[min(100%,20rem)] items-center justify-end gap-1.5 text-right text-[11px] leading-snug ${tone}`}
+      className={`flex max-w-[min(100%,22rem)] items-center justify-end gap-1.5 text-right text-[11px] leading-snug ${tone}`}
       role="status"
       aria-live="polite"
       title={fullTitle}
@@ -133,31 +149,41 @@ export function LinkedFileSaveHint({ onOpenDataSettings }: Props) {
           className="inline-block h-2.5 w-2.5 shrink-0 animate-spin rounded-full border border-white/25 border-t-white/70"
           aria-hidden
         />
-      ) : event.status === 'saved' ? (
+      ) : event.status === 'saved' && !showRelink ? (
         <span className="text-[10px] text-emerald-400/50" aria-hidden>
           ✓
         </span>
-      ) : event.status === 'load-failed' ? (
+      ) : showRelink || event.status === 'load-failed' ? (
         <span className="text-[10px] text-amber-300/70" aria-hidden>
           !
         </span>
       ) : null}
       <span className="min-w-0 truncate">
         <span className="font-medium">{label}</span>
-        {secondary && event.status !== 'error' && event.status !== 'load-failed' ? (
-          <span className="text-white/25"> · {secondary}</span>
+        {secondary && event.status !== 'error' ? (
+          <span
+            className={`block truncate text-[10px] ${
+              showRelink || event.status === 'load-failed'
+                ? 'opacity-90'
+                : 'text-white/25'
+            }`}
+          >
+            {event.status !== 'load-failed' && !showRelink && event.status !== 'saved'
+              ? ` · ${secondary}`
+              : secondary}
+          </span>
         ) : null}
-        {(event.status === 'error' || event.status === 'load-failed') && secondary ? (
+        {event.status === 'error' && secondary ? (
           <span className="block truncate text-[10px] opacity-90">{secondary}</span>
         ) : null}
       </span>
-      {event.status === 'load-failed' && onOpenDataSettings ? (
+      {showRelink && relinkAction ? (
         <button
           type="button"
-          className="shrink-0 rounded border border-amber-400/35 bg-amber-500/10 px-1.5 py-0.5 text-[10px] font-medium text-amber-100/95 hover:bg-amber-500/20"
-          onClick={onOpenDataSettings}
+          className="shrink-0 rounded border border-emerald-400/40 bg-emerald-500/15 px-1.5 py-0.5 text-[10px] font-medium text-emerald-100 hover:bg-emerald-500/25"
+          onClick={() => relinkAction()}
         >
-          Settings
+          Re-link file
         </button>
       ) : null}
     </div>

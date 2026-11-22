@@ -56,6 +56,11 @@ describe('teachings registry', () => {
         { tab: 'portfolio', view: 'growth', anchor: 'portfolio.growth' },
         'portfolio',
       ],
+      [
+        'portfolio.performance',
+        { tab: 'portfolio', view: 'performance', anchor: 'portfolio.performance' },
+        'portfolio',
+      ],
     ] as const) {
       const g = getGuide(id)
       expect(g?.status, id).toBe('ready')
@@ -74,10 +79,17 @@ describe('teachings registry', () => {
       'portfolio.cash',
       'portfolio.positions',
       'portfolio.growth',
+      'portfolio.performance',
       'portfolio.goal',
     ])
     expect(getGuideAncestors('portfolio.cash').map((g) => g.id)).toEqual(['portfolio'])
     expect(getGuide('portfolio.positions')?.body).toContain('Units held')
+    expect(getGuide('portfolio.performance')?.body).toContain('Whole portfolio')
+    expect(getGuide('portfolio.performance')?.body).toContain('TWR')
+    expect(getGuide('portfolio.performance')?.body).toContain('Return progression')
+    expect(getGuide('portfolio.performance')?.body).toContain('Use position')
+    expect(getGuide('portfolio.performance')?.body).toContain('Closed positions')
+    expect(getGuide('portfolio.performance')?.body).toContain('Bulk import')
   })
 
   it('exposes a ready contribution-effectiveness guide with a figure', () => {
@@ -269,6 +281,8 @@ describe('teachings registry', () => {
     expect(getGuide('comparables.upsideChart')?.status).toBe('ready')
     expect(isGuideReady('comparables.upsideChart')).toBe(true)
     expect(getGuide('comparables.upsideChart')?.body.toLowerCase()).toContain('upside')
+    expect(isGuideReady('comparables.tradeMarkers')).toBe(true)
+    expect(getGuide('comparables.tradeMarkers')?.body).toContain('Trades')
     expect(getGuide('projections.analyze')?.body).toContain('Investment thesis')
     const thesis = getGuide('projections.thesis')
     expect(thesis?.status).toBe('ready')
@@ -298,6 +312,7 @@ describe('teachings registry', () => {
     expect(comps.children.map((c) => c.guide.id)).toEqual([
       'comparables.cagrChart',
       'comparables.upsideChart',
+      'comparables.tradeMarkers',
     ])
   })
 
@@ -311,6 +326,9 @@ describe('teachings registry', () => {
     expect(g?.body).toContain('## Example')
     expect(g?.body.toLowerCase()).toContain('browser storage')
     expect(g?.body.toLowerCase()).toContain('export')
+    expect(g?.body).toMatch(/Re-link file/i)
+    expect(g?.body).toMatch(/Brave/i)
+    expect(g?.body).toMatch(/Open \/ link file/i)
     expect(g?.body).toContain('skipped')
     expect(getGuide('settings.browser')).toBeUndefined()
     expect(getGuide('settings.linkedFile')).toBeUndefined()
@@ -328,6 +346,7 @@ describe('teachings registry', () => {
     expect(listChildGuides('settings.portfolio').map((c) => c.id)).toEqual([
       'settings.portfolioCash',
       'settings.portfolioActuals',
+      'settings.portfolioComparablesTrades',
     ])
     const feedback = getGuide('settings.feedback')
     expect(feedback?.status).toBe('ready')
@@ -346,6 +365,7 @@ describe('teachings registry', () => {
     expect(portfolioNode?.children.map((c) => c.guide.id)).toEqual([
       'settings.portfolioCash',
       'settings.portfolioActuals',
+      'settings.portfolioComparablesTrades',
     ])
   })
 

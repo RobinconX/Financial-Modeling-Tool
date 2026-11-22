@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useState } from 'react'
 import type { FeatureGuideId } from '../../lib/teachings'
-import type { SavedScenario } from '../../types'
+import type { PortfolioTradesState, SavedScenario } from '../../types'
+import {
+  buildComparablesTradeMarkers,
+  type ComparablesChartSeriesRef,
+} from '../../lib/comparablesTradeChart'
+import { readComparablesChartTradesDefault } from '../../lib/comparablesChartTradesPrefs'
 import type { CachedPriceHistory } from '../../lib/priceHistory'
 import {
   formatOverlayHistoryErrors,
@@ -87,6 +92,7 @@ type Props = {
   histories: Record<string, CachedPriceHistory>
   loadingSymbols: Set<string>
   errors: Record<string, string>
+  tradesState: PortfolioTradesState
 }
 
 export function GoalGapSection({
@@ -98,9 +104,11 @@ export function GoalGapSection({
   histories,
   loadingSymbols,
   errors,
+  tradesState,
 }: Props) {
   const [chartYear, setChartYear] = useState<number | null>(null)
   const [metric, setMetric] = useState<GoalPathMetric>('upside')
+  const [showTrades, setShowTrades] = useState(readComparablesChartTradesDefault)
   const [targetDraft, setTargetDraft] = useState(readTargetCagrPct)
   const targetCagr = parseTargetCagrPct(targetDraft)
   const { open, pane, activeId } = useFeatureGuide()
@@ -169,10 +177,30 @@ export function GoalGapSection({
   }, [overlayRows, scenarios, effectiveChartYear, histories, metric])
 
   const loading = overlayRows.some((r) => loadingSymbols.has(r.symbol.toUpperCase()))
-  const overlaySymbols = useMemo(
-    () => [...new Set(overlayRows.map((r) => r.symbol.toUpperCase()))],
+  const overlaySymbolSet = useMemo(
+    () => new Set(overlayRows.map((r) => r.symbol.toUpperCase())),
     [overlayRows],
   )
+  const overlaySymbols = useMemo(
+    () => [...overlaySymbolSet],
+    [overlaySymbolSet],
+  )
+
+  const tradeMarkers = useMemo(() => {
+    const refs: ComparablesChartSeriesRef[] = chartSeries.map((s) => {
+      const row = overlayRows.find((r) => r.scenarioId === s.key)
+      return {
+        key: s.key,
+        symbol: row?.symbol.toUpperCase() ?? '',
+        points: s.points,
+      }
+    })
+    return buildComparablesTradeMarkers(
+      tradesState.trades,
+      overlaySymbolSet,
+      refs.filter((r) => r.symbol),
+    )
+  }, [tradesState.trades, overlaySymbolSet, chartSeries, overlayRows])
   const error = useMemo(
     () => formatOverlayHistoryErrors(overlaySymbols, errors),
     [overlaySymbols, errors],
@@ -195,6 +223,26 @@ export function GoalGapSection({
           </h3>
           <FeatureGuideButton id={guideId} />
         </div>
+        {tradeMarkers.length > 0 ? (
+          <div
+            className="flex items-center gap-1.5"
+            data-guide-anchor="comparables.tradeMarkers"
+          >
+            <button
+              type="button"
+              className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${
+                showTrades
+                  ? 'border-sky-400/40 bg-sky-500/15 text-sky-200'
+                  : 'border-white/10 text-white/45 hover:text-white/75'
+              }`}
+              aria-pressed={showTrades}
+              onClick={() => setShowTrades((v) => !v)}
+            >
+              Trades
+            </button>
+            <FeatureGuideButton id="comparables.tradeMarkers" />
+          </div>
+        ) : null}
         <div
           className="inline-flex gap-1 border-b border-white/10"
           role="group"
@@ -269,6 +317,8 @@ export function GoalGapSection({
           goalYear={effectiveChartYear}
           loading={loading && chartSeries.every((s) => s.points.length < 2)}
           error={error}
+          tradeMarkers={tradeMarkers}
+          showTrades={showTrades}
         />
       </FullscreenChart>
     </div>

@@ -1,5 +1,19 @@
 [
   {
+    "releasedAt": "2026-11-22",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Portfolio trade ledger, linked-file resilience & re-link UX",
+    "notes": [
+      "Portfolio adds a trade ledger with a Performance tab, return chart, and P&L by symbol; compare ledger vs position economics in charts.",
+      "Comparables charts can show trade markers from the ledger; Settings includes a default to show markers when trades exist.",
+      "Portfolio Performance → Import accepts CSV/TSV bulk trade rows with validation before adding to the ledger.",
+      "Linked JSON files no longer block app boot when IndexedDB or File System Access hangs (timeouts, error boundary); header shows recovery status.",
+      "Allow file access is demoted — re-linking via Open / link file… is the primary fix (Brave, OneDrive placeholders); 10s timeout on post-grant file reads.",
+      "Header Re-link file opens the picker with startIn on the remembered handle when the browser supports it."
+    ]
+  },
+  {
     "releasedAt": "2026-11-21",
     "prodSha": "7edae9a53b413d3047f5d812a92c241778dca0ba",
     "headline": "Edit investment thesis from Comparables shelf",

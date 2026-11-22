@@ -4,6 +4,11 @@
  * Registry: parent guide `settings.portfolio`; child guides under `settings.portfolio*`.
  */
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
+import {
+  readComparablesChartTradesDefault,
+  writeComparablesChartTradesDefault,
+} from '../../lib/comparablesChartTradesPrefs'
+import { useState } from 'react'
 import type { PortfolioActualsMode } from '../../lib/portfolioActualsMode'
 import type { PortfolioCashMode } from '../../lib/portfolioCashMode'
 import type {
@@ -37,6 +42,10 @@ export function SettingsPortfolioSection({
   portfolioContributions,
   actualsModeError,
 }: Props) {
+  const [comparablesTradesDefault, setComparablesTradesDefault] = useState(
+    readComparablesChartTradesDefault,
+  )
+
   return (
     <section className="panel space-y-5" data-guide-anchor="settings.portfolio">
       <div className="space-y-1">
@@ -147,6 +156,36 @@ export function SettingsPortfolioSection({
         {actualsModeError ? (
           <p className="text-sm text-amber-300/90">{actualsModeError}</p>
         ) : null}
+      </div>
+
+      <div
+        className="space-y-3 border-t border-white/[0.08] pt-4"
+        data-guide-anchor="settings.portfolioComparablesTrades"
+      >
+        <div className="flex items-center gap-1.5">
+          <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-300/80">
+            Comparables charts
+          </h4>
+          <FeatureGuideButton id="settings.portfolioComparablesTrades" />
+        </div>
+        <p className="text-sm text-white/50">
+          When tickers on a Comparables chart have logged trades, start with trade markers on by
+          default.
+        </p>
+        <label className="flex cursor-pointer items-center gap-2 text-sm text-white/75">
+          <input
+            type="checkbox"
+            className="accent-sky-400"
+            checked={comparablesTradesDefault}
+            disabled={busy}
+            onChange={(e) => {
+              const on = e.target.checked
+              setComparablesTradesDefault(on)
+              writeComparablesChartTradesDefault(on)
+            }}
+          />
+          Show Trades on Comparables charts by default
+        </label>
       </div>
     </section>
   )

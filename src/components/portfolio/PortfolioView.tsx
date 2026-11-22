@@ -6,6 +6,8 @@ import type {
   PortfolioContributionsState,
   PortfolioActualsState,
   PortfolioSharedCashState,
+  PortfolioTrade,
+  PortfolioTradesState,
   SavedPortfolio,
   SavedScenario,
   PortfolioGridRow,
@@ -31,6 +33,7 @@ import {
   persistSelectedPortfolioId,
 } from '../../lib/portfolioStorage'
 import { GoalSpeedPanel } from './GoalSpeedPanel'
+import { PortfolioPerformancePanel } from './PortfolioPerformancePanel'
 import {
   PortfolioHoldingsEditor,
   type PortfolioEditorPanel,
@@ -59,7 +62,7 @@ const CASH_INVESTED_KEY = 'grok-lab-portfolio-cash-invested'
 const SHOW_ROI_KEY = 'grok-lab-portfolio-show-roi'
 const SHOW_TARGET_KEY = 'grok-lab-portfolio-show-target'
 
-type WorkspaceTab = 'chart' | 'actuals' | 'goal' | PortfolioEditorPanel
+type WorkspaceTab = 'chart' | 'actuals' | 'goal' | 'performance' | PortfolioEditorPanel
 
 const TABS: { id: WorkspaceTab; label: string; short: string }[] = [
   { id: 'chart', label: 'Chart', short: 'Chart' },
@@ -67,6 +70,7 @@ const TABS: { id: WorkspaceTab; label: string; short: string }[] = [
   { id: 'cash', label: 'Cash', short: 'Cash' },
   { id: 'positions', label: 'Positions', short: 'Pos.' },
   { id: 'growth', label: 'Growth', short: 'Growth' },
+  { id: 'performance', label: 'Performance', short: 'Perf.' },
   { id: 'goal', label: 'Contribution effectiveness', short: 'Effect.' },
 ]
 
@@ -94,6 +98,7 @@ function readPanel(): WorkspaceTab {
       v === 'cash' ||
       v === 'positions' ||
       v === 'growth' ||
+      v === 'performance' ||
       v === 'goal'
     )
       return v
@@ -165,6 +170,11 @@ type Props = {
     perpetualYearlyDeposit?: PortfolioSharedCashState['perpetualYearlyDeposit']
   }) => boolean
   portfolioActualsMode: PortfolioActualsMode
+  portfolioTrades: PortfolioTradesState
+  portfolioTradesError: string | null
+  onSaveTrade: (trade: PortfolioTrade) => boolean
+  onDeleteTrade: (tradeId: string) => boolean
+  onReplaceTrades: (next: PortfolioTradesState) => boolean
 }
 
 export function PortfolioView({
@@ -191,6 +201,11 @@ export function PortfolioView({
   sharedCashError,
   onSharedCashPatch,
   portfolioActualsMode,
+  portfolioTrades,
+  portfolioTradesError,
+  onSaveTrade,
+  onDeleteTrade,
+  onReplaceTrades,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     readSelectedPortfolioId(portfolios),
@@ -209,6 +224,7 @@ export function PortfolioView({
       tab === 'cash' ||
       tab === 'positions' ||
       tab === 'growth' ||
+      tab === 'performance' ||
       tab === 'goal'
     ) {
       setPanel(tab)
@@ -272,6 +288,10 @@ export function PortfolioView({
     return portfolioScenarioUsage(pendingDelete.id, loadOverview().scenarios)
   }, [pendingDelete])
   const [dragOverId, setDragOverId] = useState<string | null>(null)
+  const [logTradeSeed, setLogTradeSeed] = useState<{
+    symbol: string
+    holdingId?: string
+  } | null>(null)
   const pickerRef = useRef<HTMLDivElement>(null)
   const manageRef = useRef<HTMLDivElement>(null)
   const renameRef = useRef<HTMLInputElement>(null)
@@ -1257,6 +1277,26 @@ export function PortfolioView({
               </div>
             )}
 
+            {selected && panel === 'performance' && (
+              <PortfolioPerformancePanel
+                portfolio={selected}
+                tradesState={portfolioTrades}
+                tradesError={portfolioTradesError}
+                scenarios={scenarios}
+                displayCurrency={activeCurrency}
+                usdToChf={usdToChf}
+                onSaveTrade={onSaveTrade}
+                onDeleteTrade={onDeleteTrade}
+                onReplaceTrades={onReplaceTrades}
+                logTradeSeed={logTradeSeed}
+                onClearLogTradeSeed={() => setLogTradeSeed(null)}
+                onFocusHolding={(holdingId) => {
+                  setPanel('positions')
+                  setEditorFocus({ panel: 'positions', holdingId })
+                }}
+              />
+            )}
+
             {selected && panel === 'goal' && (
               <GoalSpeedPanel
                 portfolio={selectedForCash ?? selected}
@@ -1296,6 +1336,10 @@ export function PortfolioView({
                 focusOpeningCash={
                   editorFocus?.panel === 'cash' && editorFocus.focus === 'opening-cash'
                 }
+                onLogTrade={(symbol, holdingId) => {
+                  setLogTradeSeed({ symbol, holdingId })
+                  setPanel('performance')
+                }}
                 focusGrowthRate={
                   editorFocus?.panel === 'growth' && editorFocus.focus === 'growth-rate'
                 }

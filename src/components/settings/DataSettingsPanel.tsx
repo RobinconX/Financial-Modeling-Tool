@@ -28,9 +28,14 @@ import {
   getFileLinkingSupport,
   getLinkedFileStatus,
   isFileSystemAccessSupported,
+  getLastLinkedFileSaveEvent,
   linkDataFile,
+  preloadLinkedFileHandle,
+  relinkLinkedDataFile,
   requestLinkedFileAccess,
+  startLinkedFilePermissionRequest,
   unlinkDataFile,
+  type LinkedFileGesturePermission,
   writeLinkedSnapshot,
   getLinkedSaveMode,
   setLinkedSaveMode,
@@ -99,6 +104,7 @@ export function DataSettingsPanel({
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [allowRelinkHint, setAllowRelinkHint] = useState(false)
   const [pendingImport, setPendingImport] = useState<
     | { kind: 'snapshot'; parsed: Extract<ParsedSaveFile, { kind: 'snapshot' }>; name: string }
     | { kind: 'catalog'; parsed: Extract<ParsedSaveFile, { kind: 'catalog' }> }
@@ -125,6 +131,7 @@ export function DataSettingsPanel({
   }, [])
 
   useEffect(() => {
+    preloadLinkedFileHandle()
     void refreshStatus()
   }, [refreshStatus])
 
@@ -132,7 +139,7 @@ export function DataSettingsPanel({
     setBusy(true)
     setError(null)
     setMessage(null)
-    const result = await linkDataFile()
+    const result = needsRelink ? await relinkLinkedDataFile() : await linkDataFile()
     setBusy(false)
     if (!result.ok) {
       if (result.error !== 'Cancelled') setError(result.error)
@@ -163,24 +170,34 @@ export function DataSettingsPanel({
     await refreshStatus()
   }
 
-  async function handleAllowAccess() {
+  async function completeAllowFileAccess(gesture: LinkedFileGesturePermission) {
+    if (!gesture.ok) {
+      setError(gesture.error)
+      setAllowRelinkHint(Boolean(gesture.suggestRelink))
+      return
+    }
     setBusy(true)
     setError(null)
+    setAllowRelinkHint(false)
     setMessage(null)
-    const result = await requestLinkedFileAccess({ reloadFromFile: true })
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error)
+    try {
+      const result = await requestLinkedFileAccess({ reloadFromFile: true }, gesture)
+      if (!result.ok) {
+        setError(result.error)
+        setAllowRelinkHint(Boolean(result.suggestRelink))
+        await refreshStatus()
+        return
+      }
       await refreshStatus()
-      return
+      if (result.reloaded) {
+        setMessage(`Access granted — loaded ${result.fileName}.`)
+        remountApp()
+        return
+      }
+      setMessage(`Access granted for ${result.fileName}.`)
+    } finally {
+      setBusy(false)
     }
-    await refreshStatus()
-    if (result.reloaded) {
-      setMessage(`Access granted — loaded ${result.fileName}.`)
-      remountApp()
-      return
-    }
-    setMessage(`Access granted for ${result.fileName}.`)
   }
 
   async function handleUnlink() {
@@ -288,6 +305,8 @@ export function DataSettingsPanel({
   const linking = getFileLinkingSupport()
   const needsAccess =
     status?.linked === true && status.permission !== 'granted'
+  const needsRelink =
+    needsAccess || getLastLinkedFileSaveEvent().status === 'load-failed'
   // On mobile without continuous link, Export/Import is the primary backup path
   const exportPrimary = !fsa
 
@@ -514,36 +533,59 @@ export function DataSettingsPanel({
                 <span className="text-white/40">Not linked</span>
               )}
             </p>
-            {needsAccess && (
+            {needsRelink && (
               <p className="text-sm text-amber-200/80">
-                This session must re-allow the file (normal after a refresh). Use Allow file
-                access — you should not need to pick the file again.
+                Pick the same JSON again with <strong className="font-medium text-amber-50">Open /
+                link file…</strong> (recommended on Brave and OneDrive). The picker may open
+                near your last file when the browser allows.
               </p>
             )}
-            {status?.lastError && status.permission === 'granted' && (
+            {needsAccess && status?.lastError ? (
               <p className="text-sm text-amber-200/80">{status.lastError}</p>
-            )}
+            ) : null}
+            {status?.lastError && status.permission === 'granted' ? (
+              <p className="text-sm text-amber-200/80">{status.lastError}</p>
+            ) : null}
+            {needsAccess && error ? (
+              <div className="space-y-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                <p>{error}</p>
+                {allowRelinkHint ? (
+                  <button
+                    type="button"
+                    className="btn-ghost !py-1 !text-xs"
+                    disabled={busy}
+                    onClick={() => void handleLink()}
+                  >
+                    Open / link file…
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
-              {needsAccess && (
-                <button
-                  type="button"
-                  className="btn-primary !py-1.5 !text-xs"
-                  disabled={busy}
-                  onClick={() => void handleAllowAccess()}
-                >
-                  Allow file access…
-                </button>
-              )}
               <button
                 type="button"
                 className={
-                  needsAccess ? 'btn-ghost !py-1.5 !text-xs' : 'btn-primary !py-1.5 !text-xs'
+                  needsRelink ? 'btn-primary !py-1.5 !text-xs' : 'btn-primary !py-1.5 !text-xs'
                 }
                 disabled={busy}
                 onClick={() => void handleLink()}
               >
-                Open / link file…
+                {needsRelink ? 'Re-link file…' : 'Open / link file…'}
               </button>
+              {needsAccess ? (
+                <button
+                  type="button"
+                  className="btn-ghost !py-1.5 !text-xs text-white/55"
+                  disabled={busy}
+                  title="Often unreliable in Brave — prefer Re-link file"
+                  onClick={() => {
+                    const gesture = startLinkedFilePermissionRequest()
+                    void completeAllowFileAccess(gesture)
+                  }}
+                >
+                  Try Allow file access…
+                </button>
+              ) : null}
               <button
                 type="button"
                 className="btn-ghost !py-1.5 !text-xs"

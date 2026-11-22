@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import type {
   ComparableBasis,
+  PortfolioTradesState,
   SavedComparable,
   SavedPortfolio,
   SavedScenario,
@@ -54,6 +55,7 @@ type Props = {
   createComparable: (name?: string) => SavedComparable | null
   updateComparable: (id: string, patch: Partial<SavedComparable>) => boolean
   deleteComparable: (id: string) => boolean
+  tradesState: PortfolioTradesState
 }
 
 function readMode(): PageMode {
@@ -322,6 +324,7 @@ export function ProjectionsView({
   createComparable,
   updateComparable,
   deleteComparable,
+  tradesState,
 }: Props) {
   const sorted = useMemo(() => sortScenariosByTicker(scenarios), [scenarios])
 
@@ -507,6 +510,7 @@ export function ProjectionsView({
           createComparable={createComparable}
           updateComparable={updateComparable}
           deleteComparable={deleteComparable}
+          tradesState={tradesState}
           onOpenProjection={(id, basis) => {
             setSelA(id)
             setOpenBasis(basis)

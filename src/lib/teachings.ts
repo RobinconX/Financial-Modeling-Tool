@@ -887,6 +887,43 @@ Same goal; a higher starting price shrinks the raw gap still required.
     parentId: 'projections.comps',
     order: 4,
   },
+  'comparables.tradeMarkers': {
+    id: 'comparables.tradeMarkers',
+    title: 'Trade markers',
+    summary:
+      'Overlay buy and sell dots from the portfolio trade ledger on ticked Comparables upside and CAGR charts (ticker match only).',
+    body: `## How it works
+
+When at least one ticked row has trades in the **portfolio trade ledger**, a **Trades** toggle appears above the chart (same place for **Upside %** and **CAGR %**).
+
+- **Green circle** — buy
+- **Red square** — sell
+
+Dots sit at the chart value for that ticker on the trade date (or the nearest prior price-history date). Only symbols you ticked for the overlay are shown — no extra tickers.
+
+> Trade ledger data is workspace-wide: any logged buy/sell for that ticker counts, not just one portfolio book.
+
+Hover the line: the tooltip shows the usual series values for that date; when **Trades** is on, it also lists matching trades that share the chart anchor date.
+
+## How to interpret
+
+Markers are timing context, not recalculated returns. **Y** is the implied upside or CAGR **on that history date**, not P&L from the trade.
+
+Compare when you bought or sold against the path the ticker needed to reach your comparables goal.
+
+## Example
+
+You tick **MSFT** and toggle **Trades**. A buy logged on a dip appears below prior implied CAGR; a later sell near goal sits closer to 0% remaining upside on the upside chart.
+`,
+    status: 'ready',
+    location: {
+      tab: 'projections',
+      view: 'comps',
+      anchor: 'comparables.tradeMarkers',
+    },
+    parentId: 'projections.comps',
+    order: 5,
+  },
 
   portfolio: {
     id: 'portfolio',
@@ -902,6 +939,7 @@ Same goal; a higher starting price shrinks the raw gap still required.
 - **Chart** — value timeline and **Value by year** for the selected book
 - **Actuals** — shared month-end **Portfolio value** and **Money in** (all books read the same history)
 - **Cash**, **Positions**, **Growth** — configure the selected book
+- **Performance** — executed buy/sell ledger and P&L (does not change Positions)
 - **Contribution effectiveness** — time-to-goal math for extra deposits
 
 ### Display currency
@@ -1195,6 +1233,128 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
       anchor: 'portfolio.goal',
     },
     parentId: 'portfolio',
+    order: 7,
+  },
+  'portfolio.performance': {
+    id: 'portfolio.performance',
+    title: 'Performance',
+    summary:
+      'Log executed equity buys and sells by date and price for the selected portfolio book. Average-cost realized and unrealized P&L; full edit/delete in-app or bulk fill via save-file JSON.',
+    body: `## How it works
+
+The **Performance** tab is an **executed trade ledger**. It does not change **Positions** share counts or **Chart** planned buy/sell actions. **$** amounts and the chart money axis follow the portfolio **USD** / **CHF** toggle (same live rate as elsewhere); **%** return is unchanged by currency.
+
+### Adding trades
+
+- **+ Trade** opens a drawer: symbol, side, date (**Today** shortcut), shares, price, optional fees and note
+- **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
+- When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history)
+
+> Symbols are normalized to uppercase on save. Equities only (standard tickers).
+
+### Editing
+
+Use **Edit** or **Delete** on any row in the trade log. When a trade was saved with a **holdingId** link, expand the log to see **Position** and jump to that row in **Positions**.
+
+### Scope
+
+The header **select** switches what you are viewing:
+
+- **Whole portfolio** — rollup across every symbol that has any logged trade on this book, including **closed** names (fully sold) and symbol-only trades you never sized in **Positions**
+- **One ticker** — summary cards, **By symbol**, and **Trade log** show only that symbol
+
+> Realized P&L on closed tickers still counts in the whole-portfolio rollup.
+
+### Stats blocks
+
+- **Activity** — trade, buy, and sell counts; first / last trade; holding period and open/closed **status** on one ticker; **open · closed symbol counts** on whole portfolio
+- **Position** (single ticker) — ledger shares, average cost / breakeven, gross buys, sell proceeds, % sold, open cost basis, current value
+- **TWR** — time-weighted return **per ticker** from daily price history (lazy fetch, shared cache with Comparables); shows **Unavailable** when history cannot cover the holding window
+
+Whole-portfolio **By symbol** lists **open** ledger rows first (status, **TWR**, return on buys, **Concentration**). Fully sold tickers sit under **Closed positions (N)** (collapsed by default); their realized P&L still rolls into snapshot cards and totals above.
+
+### Snapshot return
+
+A highlighted card shows **today’s** total return for the current scope: **$** and **%** = (realized + unrealized) ÷ **gross buys** (invested). When open shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date.
+
+### Return progression
+
+Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** overlay) shows cumulative performance from the first trade through today for the current scope.
+
+- **$** — realized + unrealized P&L each day (ledger marks from daily closes when shares are open)
+- **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** %)
+
+The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged buy (green dot) and sell (red dot) on the curve at that day’s return; the main tooltip follows the crosshair by date and adds trade details on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
+
+### Bulk import
+
+**Import** (beside **+ Trade**) opens a modal: paste JSON, or upload **.json** / **.csv**. Preview shows valid / invalid counts, book reassignment, and duplicates before you confirm. Import **appends** to the **current book** only.
+
+**JSON** — array of trades or \`{ "trades": [ … ] }\`:
+
+\`\`\`json
+[
+  {
+    "symbol": "AAPL",
+    "side": "buy",
+    "tradeDate": "2024-01-10",
+    "shares": 50,
+    "price": 185.2,
+    "fees": 1,
+    "note": "Broker fill"
+  }
+]
+\`\`\`
+
+**CSV** — header row; \`portfolioId\` optional (reassigned to this book):
+
+\`\`\`
+symbol,side,tradeDate,shares,price,fees,note
+AAPL,buy,2024-01-10,50,185.20,1.00,Open
+AAPL,sell,2025-03-01,10,210.00,,
+\`\`\`
+
+**Agent prompt** (copy to your assistant):
+
+\`\`\`
+Convert my broker export into Grok Lab portfolio trades for bulk import.
+Output CSV with columns: symbol,side,tradeDate,shares,price,fees,note
+Rules: side buy|sell; tradeDate YYYY-MM-DD; equity tickers only (e.g. AAPL);
+shares and price positive numbers; fees optional; omit portfolioId.
+\`\`\`
+
+Duplicates (same symbol, side, date, shares, price) can be skipped (default) or imported anyway.
+
+### Save file / agents
+
+Trades live under \`portfolioTrades\` in **Export** / linked JSON. Invalid rows are dropped on import; missing \`id\` values are minted.
+
+- **version** — always \`1\`
+- **trades[]** — each row needs \`portfolioId\`, \`symbol\`, \`side\` (\`buy\` / \`sell\`), \`tradeDate\` (\`YYYY-MM-DD\`), \`shares\`, \`price\`; optional \`fees\`, \`note\`, \`id\`, \`holdingId\`
+
+See \`docs/portfolio-trades-schema.md\` in the repo for agent-oriented examples.
+
+## How to interpret
+
+P&L uses **average cost** on the ledger:
+
+- **Realized** — sells vs average basis (fees on buys add to basis; sell fees reduce proceeds)
+- **Unrealized** — open ledger shares × mark price − remaining cost basis
+- **Return on buys** — (realized + unrealized) ÷ gross buy notional
+
+> Marks: linked projection quote or manual position price first; otherwise the latest **history close** (same cache as Comparables). Unrealized is **No mark** only when no quote and no history.
+
+## Example
+
+Buy **10** \`MSFT\` @ **$400** fee **$5**; later sell **4** @ **$450**. Realized on those four uses average cost **$400.50**/sh; **6** shares stay open for unrealized vs today’s quote.
+`,
+    status: 'ready',
+    location: {
+      tab: 'portfolio',
+      view: 'performance',
+      anchor: 'portfolio.performance',
+    },
+    parentId: 'portfolio',
     order: 6,
   },
 
@@ -1226,12 +1386,15 @@ Always active — a fast mirror of the **current account** while you edit.
 
 Desktop **Chrome** or **Edge** can link a JSON file (File System Access API):
 
-- **Open / link file…** or **Create new file…**
-- **Allow file access…** after refresh when the browser asks again
+- **Open / link file…** / **Re-link file…** — pick (or re-pick) the JSON on this computer
+- **Create new file…** — start an empty linked file
+- **Try Allow file access…** — optional; often fails on **Brave** (prefer re-link)
 - **Auto-save** — **Edits + periodic** (~4s idle plus at least every 30s while editing) or **Edits only** (~4s idle)
 - **Save now** / **Unlink** when linked
 
 Link or create the JSON in a **cloud-synced folder** (Dropbox, iCloud Drive, Google Drive, OneDrive, etc.) — the app writes to that file on this machine, and your sync client copies updates outward. On another **desktop Chrome/Edge** PC, **Open / link file…** to the same synced file for continuous save there too. **iPhone/iPad** cannot continuous-link — use **Export / Import** below.
+
+> If the header says **Re-link file**, the app still runs from **browser storage**. Click **Re-link file** in the header or use **Re-link file…** / **Open / link file…** in Settings to pick the same JSON again (recommended on **Brave** and **OneDrive** placeholders). **Try Allow file access…** is secondary and often does not work in Brave.
 
 **Accounts** (same panel) — switch, rename, add, or remove accounts in the catalog; each account has its own data slice in the JSON snapshot.
 
@@ -1273,6 +1436,8 @@ Open **Settings** and find the **Portfolio** section near the top.
 - **Actuals** — shared vs separate value actuals and money-in (**settings.portfolioActuals** guide)
 
 > New portfolio-wide settings belong in this section: implement them in **SettingsPortfolioSection** with their own **data-guide-anchor** and child guide id under **settings.portfolio***.
+
+**Comparables charts** — optional default to show trade markers when tickers have ledger trades (**settings.portfolioComparablesTrades**).
 
 Each subsection has its own **Guide** button for detail.
 
@@ -1354,6 +1519,32 @@ Books **Growth** and **Conservative** each had different deposits. You enable **
     location: { tab: 'settings', anchor: 'settings.portfolioCash' },
     parentId: 'settings.portfolio',
     order: 0,
+  },
+  'settings.portfolioComparablesTrades': {
+    id: 'settings.portfolioComparablesTrades',
+    title: 'Comparables trade markers',
+    summary:
+      'Choose whether Comparables upside and CAGR charts start with the Trades overlay on when ticked symbols have ledger trades.',
+    body: `## How it works
+
+When enabled, opening or refreshing a Comparables chart with eligible trades turns **Trades** on automatically. You can still toggle it off for that session on the chart.
+
+The preference is stored in the browser (not in export JSON).
+
+> See **Trade markers** under Comparables for dot colors, tooltips, and ticker matching.
+
+## How to interpret
+
+Use this when you usually compare execution timing against goal paths. Leave off if you prefer a clean chart unless you opt in each time.
+
+## Example
+
+You log buys often while screening comparables. Enable the default — tick **AAPL** and **MSFT**; both charts open with buy/sell dots without an extra click.
+`,
+    status: 'ready',
+    location: { tab: 'settings', anchor: 'settings.portfolioComparablesTrades' },
+    parentId: 'settings.portfolio',
+    order: 2,
   },
 
   'settings.feedback': {
