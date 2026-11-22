@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import type {
   DisplayCurrency,
   PortfolioContributionsState,
@@ -79,7 +79,9 @@ import { PerformanceMetricDrawer } from './PerformanceMetricDrawer'
 import {
   collectTradeDates,
   portfolioNeedsTradeDateFx,
+  parseTradeFxPrefetchKey,
   prefetchUsdChfRatesForTradeDates,
+  tradeFxPrefetchKey,
 } from '../../lib/historicalFx'
 
 type Props = {
@@ -260,20 +262,43 @@ export function PortfolioPerformancePanel({
     [scopeSymbol, scopedTrades, portfolioTrades],
   )
 
+  const capitalTradeFxFingerprint = useMemo(
+    () =>
+      capitalTrades
+        .map(
+          (t) =>
+            `${t.id}\t${t.tradeDate}\t${t.currency ?? ''}\t${t.feesCurrency ?? ''}\t${t.fees ?? 0}`,
+        )
+        .sort()
+        .join('\n'),
+    [capitalTrades],
+  )
+
+  const tradeFxPrefetchKeyValue = useMemo(() => {
+    if (!portfolioNeedsTradeDateFx(capitalTrades, displayCurrency)) return ''
+    return tradeFxPrefetchKey(collectTradeDates(capitalTrades), displayCurrency)
+  }, [displayCurrency, capitalTradeFxFingerprint, capitalTrades])
+
   const [usdToChfByTradeDate, setUsdToChfByTradeDate] = useState<
     Record<string, number>
   >({})
   const [tradeFxWarnings, setTradeFxWarnings] = useState<string[]>([])
 
+  const usdToChfForTradeFxRef = useRef(usdToChf)
+  usdToChfForTradeFxRef.current = usdToChf
+
   useEffect(() => {
-    if (!portfolioNeedsTradeDateFx(capitalTrades, displayCurrency)) {
+    if (!tradeFxPrefetchKeyValue) {
       setUsdToChfByTradeDate({})
       setTradeFxWarnings([])
       return
     }
     let cancelled = false
-    const dates = collectTradeDates(capitalTrades)
-    void prefetchUsdChfRatesForTradeDates(dates, usdToChf ?? null).then((res) => {
+    const dates = parseTradeFxPrefetchKey(tradeFxPrefetchKeyValue)?.dates ?? []
+    void prefetchUsdChfRatesForTradeDates(
+      dates,
+      usdToChfForTradeFxRef.current ?? null,
+    ).then((res) => {
       if (cancelled) return
       setUsdToChfByTradeDate(res.ratesByDate)
       setTradeFxWarnings(res.warnings)
@@ -281,7 +306,7 @@ export function PortfolioPerformancePanel({
     return () => {
       cancelled = true
     }
-  }, [capitalTrades, displayCurrency, usdToChf])
+  }, [tradeFxPrefetchKeyValue])
 
   const perfCtx = useMemo(
     (): PerfDisplayContext => ({
