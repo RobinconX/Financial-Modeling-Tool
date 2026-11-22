@@ -17,6 +17,7 @@ import {
   LINKED_SAVE_MODE_KEY,
   type LinkedSaveMode,
 } from './linkedSaveMode'
+import { PromiseTimeoutError, withTimeout } from './promiseTimeout'
 
 export { getLinkedSaveMode, LINKED_SAVE_MODE_KEY, type LinkedSaveMode }
 
@@ -36,6 +37,34 @@ type FsFileHandle = {
 const IDB_NAME = 'fmt-meta-handles'
 const IDB_STORE = 'handles'
 const IDB_KEY = 'dataFile'
+
+/** Per FS / IDB step during boot (ms). */
+export const LINKED_FILE_BOOT_STEP_TIMEOUT_MS = 2000
+/** Overall ceiling before first React paint (ms). */
+export const LINKED_FILE_BOOT_PRERENDER_DEADLINE_MS = 2000
+
+export function linkedFileAccessUnavailableMessage(detail?: string): string {
+  const base =
+    'File access unavailable — open Settings and use Allow file access or Open / link file… to reconnect.'
+  const braveHint =
+    'In Brave, File System Access is off by default (see brave://settings → Extensions).'
+  if (detail) return `${base} ${braveHint} (${detail})`
+  return `${base} ${braveHint}`
+}
+
+type LinkedStepOptions = {
+  stepTimeoutMs?: number
+}
+
+async function runWithStepTimeout<T>(
+  label: string,
+  opts: LinkedStepOptions | undefined,
+  fn: () => Promise<T>,
+): Promise<T> {
+  const ms = opts?.stepTimeoutMs
+  if (!ms) return fn()
+  return withTimeout(fn(), ms, label)
+}
 
 /** Session access to the remembered handle (Chromium resets this each load). */
 export type LinkedFilePermission = 'none' | 'granted' | 'prompt' | 'denied'
@@ -119,20 +148,23 @@ function openMetaDb(): Promise<IDBDatabase> {
   })
 }
 
-async function idbGetHandle(): Promise<FsFileHandle | null> {
+async function idbGetHandle(opts?: LinkedStepOptions): Promise<FsFileHandle | null> {
   try {
-    const db = await openMetaDb()
-    return await new Promise((resolve, reject) => {
-      const tx = db.transaction(IDB_STORE, 'readonly')
-      const store = tx.objectStore(IDB_STORE)
-      const req = store.get(IDB_KEY)
-      req.onsuccess = () => {
-        const v = req.result
-        resolve((v as FsFileHandle) ?? null)
-      }
-      req.onerror = () => reject(req.error)
+    return await runWithStepTimeout('idbGetHandle', opts, async () => {
+      const db = await runWithStepTimeout('openMetaDb', opts, () => openMetaDb())
+      return await new Promise((resolve, reject) => {
+        const tx = db.transaction(IDB_STORE, 'readonly')
+        const store = tx.objectStore(IDB_STORE)
+        const req = store.get(IDB_KEY)
+        req.onsuccess = () => {
+          const v = req.result
+          resolve((v as FsFileHandle) ?? null)
+        }
+        req.onerror = () => reject(req.error)
+      })
     })
-  } catch {
+  } catch (e) {
+    if (e instanceof PromiseTimeoutError) throw e
     return null
   }
 }
@@ -161,6 +193,11 @@ async function ensurePermission(
 
 let cachedHandle: FsFileHandle | null = null
 let lastError: string | null = null
+
+/** Best-effort file name without awaiting hung FS calls (boot / UI). */
+export function getBootLinkedFileName(): string | null {
+  return cachedHandle?.name ?? null
+}
 
 /**
  * Query-only status. Does not call requestPermission (that needs a user gesture
@@ -193,8 +230,24 @@ export async function getLinkedFileStatus(): Promise<LinkedFileStatus> {
       lastError: null,
     }
   }
+  const stepOpts: LinkedStepOptions = { stepTimeoutMs: LINKED_FILE_BOOT_STEP_TIMEOUT_MS }
   if (!cachedHandle) {
-    cachedHandle = await idbGetHandle()
+    try {
+      cachedHandle = await idbGetHandle(stepOpts)
+    } catch (e) {
+      if (e instanceof PromiseTimeoutError) {
+        return {
+          supported: true,
+          linked: Boolean(cachedHandle),
+          permission: 'prompt',
+          fileName: cachedHandle?.name ?? null,
+          lastError:
+            lastError ??
+            linkedFileAccessUnavailableMessage('reconnect in Settings'),
+        }
+      }
+      cachedHandle = null
+    }
   }
   if (!cachedHandle) {
     return {
@@ -206,7 +259,23 @@ export async function getLinkedFileStatus(): Promise<LinkedFileStatus> {
     }
   }
 
-  const permission = await queryPermissionState(cachedHandle, 'readwrite')
+  let permission: LinkedFilePermission
+  try {
+    permission = await queryPermissionState(cachedHandle, 'readwrite', stepOpts)
+  } catch (e) {
+    if (e instanceof PromiseTimeoutError) {
+      return {
+        supported: true,
+        linked: true,
+        permission: 'prompt',
+        fileName: cachedHandle.name,
+        lastError:
+          lastError ??
+          linkedFileAccessUnavailableMessage('reconnect in Settings'),
+      }
+    }
+    permission = 'prompt'
+  }
   if (permission === 'granted') {
     return {
       supported: true,
@@ -233,14 +302,20 @@ export async function getLinkedFileStatus(): Promise<LinkedFileStatus> {
 async function queryPermissionState(
   handle: FsFileHandle,
   mode: FsPermissionMode,
+  opts?: LinkedStepOptions,
 ): Promise<LinkedFilePermission> {
   if (!handle.queryPermission) return 'prompt'
   try {
-    const state = await handle.queryPermission({ mode })
+    const state = await runWithStepTimeout(
+      `queryPermission-${mode}`,
+      opts,
+      () => handle.queryPermission!({ mode }),
+    )
     if (state === 'granted') return 'granted'
     if (state === 'denied') return 'denied'
     return 'prompt'
-  } catch {
+  } catch (e) {
+    if (e instanceof PromiseTimeoutError) throw e
     return 'prompt'
   }
 }
@@ -521,27 +596,34 @@ export async function writeLinkedSnapshot(
 
 async function linkedSnapshotGranted(
   handle: FsFileHandle,
-  opts: { requestPermission: boolean },
+  opts: { requestPermission: boolean; stepTimeoutMs?: number },
 ): Promise<boolean> {
+  const stepOpts: LinkedStepOptions | undefined = opts.stepTimeoutMs
+    ? { stepTimeoutMs: opts.stepTimeoutMs }
+    : undefined
   if (opts.requestPermission) {
     let canRead = await ensurePermission(handle, 'readwrite')
     if (!canRead) canRead = await ensurePermission(handle, 'read')
     return canRead
   }
-  const rw = await queryPermissionState(handle, 'readwrite')
-  const r = await queryPermissionState(handle, 'read')
+  const rw = await queryPermissionState(handle, 'readwrite', stepOpts)
+  const r = await queryPermissionState(handle, 'read', stepOpts)
   return rw === 'granted' || r === 'granted'
 }
 
 async function linkedSnapshotAccessError(
   handle: FsFileHandle,
   requestPermission: boolean,
+  stepTimeoutMs?: number,
 ): Promise<{ error: string }> {
   if (requestPermission) {
     return { error: 'Read permission denied — re-link the data file' }
   }
-  const rw = await queryPermissionState(handle, 'readwrite')
-  const r = await queryPermissionState(handle, 'read')
+  const stepOpts: LinkedStepOptions | undefined = stepTimeoutMs
+    ? { stepTimeoutMs: stepTimeoutMs }
+    : undefined
+  const rw = await queryPermissionState(handle, 'readwrite', stepOpts)
+  const r = await queryPermissionState(handle, 'read', stepOpts)
   if (rw === 'denied' || r === 'denied') {
     return {
       error: 'File access denied — open Settings to link the file again',
@@ -558,29 +640,57 @@ export type ReadLinkedSnapshotOptions = {
    * so the header can steer users to Settings without a second browser prompt.
    */
   requestPermission?: boolean
+  /** When set, bound each IDB/permission/read step (boot safety). */
+  stepTimeoutMs?: number
 }
 
 export async function readLinkedSnapshot(
   options?: ReadLinkedSnapshotOptions,
 ): Promise<ParsedSaveFile | { error: string } | null> {
   const requestPermission = options?.requestPermission !== false
+  const stepOpts: LinkedStepOptions | undefined = options?.stepTimeoutMs
+    ? { stepTimeoutMs: options.stepTimeoutMs }
+    : undefined
   if (!cachedHandle) {
-    cachedHandle = await idbGetHandle()
+    try {
+      cachedHandle = await idbGetHandle(stepOpts)
+    } catch (e) {
+      if (e instanceof PromiseTimeoutError) {
+        return {
+          error: linkedFileAccessUnavailableMessage('reconnect in Settings'),
+        }
+      }
+      cachedHandle = null
+    }
   }
   if (!cachedHandle) return null
   try {
-    const canRead = await linkedSnapshotGranted(cachedHandle, { requestPermission })
+    const canRead = await linkedSnapshotGranted(cachedHandle, {
+      requestPermission,
+      stepTimeoutMs: options?.stepTimeoutMs,
+    })
     if (!canRead) {
-      return await linkedSnapshotAccessError(cachedHandle, requestPermission)
+      return await linkedSnapshotAccessError(
+        cachedHandle,
+        requestPermission,
+        options?.stepTimeoutMs,
+      )
     }
-    const file = await cachedHandle.getFile()
-    const text = await file.text()
+    const file = await runWithStepTimeout('getFile', stepOpts, () =>
+      cachedHandle!.getFile(),
+    )
+    const text = await runWithStepTimeout('readFileText', stepOpts, () => file.text())
     if (!text.trim()) {
       // Empty new file — treat as no data yet
       return null
     }
     return parseSaveFile(JSON.parse(text))
   } catch (e) {
+    if (e instanceof PromiseTimeoutError) {
+      return {
+        error: linkedFileAccessUnavailableMessage('reconnect in Settings'),
+      }
+    }
     return {
       error: e instanceof Error ? e.message : 'Failed to read data file',
     }
@@ -588,8 +698,13 @@ export async function readLinkedSnapshot(
 }
 
 /** Boot-time read — query permission only (see ReadLinkedSnapshotOptions). */
-export function readLinkedSnapshotForStartup(): ReturnType<typeof readLinkedSnapshot> {
-  return readLinkedSnapshot({ requestPermission: false })
+export function readLinkedSnapshotForStartup(
+  options?: Omit<ReadLinkedSnapshotOptions, 'requestPermission'>,
+): ReturnType<typeof readLinkedSnapshot> {
+  return readLinkedSnapshot({
+    ...options,
+    requestPermission: false,
+  })
 }
 
 let writeTimer: ReturnType<typeof setTimeout> | null = null

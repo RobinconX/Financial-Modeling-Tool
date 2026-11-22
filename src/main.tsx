@@ -2,45 +2,13 @@ import { StrictMode } from 'react'
 import { createRoot, type Root } from 'react-dom/client'
 import App from './App'
 import './index.css'
-import { hydrateOnStartup } from './lib/accountCatalog'
-import { maybeSeedExample } from './lib/exampleSeed'
 import { registerAppRemount } from './lib/appRemount'
+import { AppErrorBoundary } from './components/common/AppErrorBoundary'
+import { maybeSeedExample } from './lib/exampleSeed'
 import {
-  getLinkedFileStatus,
-  readLinkedSnapshotForStartup,
-  reportLinkedFileStartupHydrateFailure,
-  syncPeriodicLinkedSaves,
-} from './lib/linkedDataFile'
-
-/**
- * If a data file is linked and readable, load it into localStorage before React
- * so hooks pick up the file as the source of truth on first paint.
- *
- * Permission may still be "prompt" until the user allows — then Settings can
- * call requestLinkedFileAccess from a button (user gesture).
- */
-async function hydrateFromLinkedFile(): Promise<void> {
-  try {
-    const snap = await readLinkedSnapshotForStartup()
-    if (snap == null) return
-    const status = await getLinkedFileStatus()
-    const fileName = status.fileName ?? undefined
-    if ('error' in snap) {
-      console.warn('[data] Linked file not loaded:', snap.error)
-      reportLinkedFileStartupHydrateFailure(snap.error, fileName)
-      return
-    }
-    const result = hydrateOnStartup(snap)
-    if (!result.ok) {
-      console.warn('[data] Failed to apply linked file:', result.error)
-      reportLinkedFileStartupHydrateFailure(result.error, fileName)
-      return
-    }
-    syncPeriodicLinkedSaves()
-  } catch (e) {
-    console.warn('[data] Hydrate skipped', e)
-  }
-}
+  runPreRenderBootHydrate,
+  schedulePostRenderBootHydrate,
+} from './lib/linkedFileBoot'
 
 let root: Root | null = null
 let remountGeneration = 0
@@ -53,7 +21,9 @@ function renderApp(): void {
   const gen = remountGeneration
   root.render(
     <StrictMode>
-      <App key={gen} />
+      <AppErrorBoundary>
+        <App key={gen} />
+      </AppErrorBoundary>
     </StrictMode>,
   )
 }
@@ -62,8 +32,16 @@ registerAppRemount(() => {
   renderApp()
 })
 
-void hydrateFromLinkedFile()
-  .then(() => maybeSeedExample())
+let prerenderHydrateOutcome: Awaited<ReturnType<typeof runPreRenderBootHydrate>> = {
+  status: 'none',
+}
+
+void runPreRenderBootHydrate()
+  .then((outcome) => {
+    prerenderHydrateOutcome = outcome
+    return maybeSeedExample()
+  })
   .finally(() => {
     renderApp()
+    schedulePostRenderBootHydrate(prerenderHydrateOutcome)
   })
