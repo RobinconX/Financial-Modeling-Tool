@@ -1,6 +1,17 @@
 [
   {
     "releasedAt": "2026-11-22",
+    "prodSha": null,
+    "pending": true,
+    "headline": "Option trades on Portfolio Performance",
+    "notes": [
+      "Log listed option trades alongside equities — short premium opens, OCC or IB description import, USD premium with CHF fee currency.",
+      "Performance scope by underlying or single contract; expire and assign lifecycle rows; Comparables shows option activity on underlying charts.",
+      "Import JSON/CSV with trade, expire, and assign examples in docs/portfolio-trades-schema.md."
+    ]
+  },
+  {
+    "releasedAt": "2026-11-22",
     "prodSha": "bffdd7cdae6be35eeef1a86bde4c951a16a243d8",
     "headline": "Trade currency, export & clear on Performance",
     "notes": [

@@ -20,7 +20,6 @@ import {
   newPortfolioTrade,
   todayIsoDate,
   performanceScopeKeys,
-  tradedSymbolsFromTrades,
   tradesForPortfolio,
   tradesForPerformanceScope,
   type SymbolPerformance,
