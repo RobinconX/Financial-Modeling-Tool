@@ -1,6 +1,7 @@
-import { useCallback, useEffect, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type {
   DisplayCurrency,
+  PortfolioContributionsState,
   PortfolioTrade,
   PortfolioTradesState,
   SavedPortfolio,
@@ -47,6 +48,8 @@ import {
   computeCapitalContributionStats,
   computeEquityBookTimeWeightedReturn,
   computeMoneyWeightedReturn,
+  computePeakPortfolioValue,
+  computePortfolioTerminalNav,
   mwrReasonLabel,
   twrReasonLabel,
 } from '../../lib/portfolioReturnMetrics'
@@ -67,6 +70,12 @@ import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { PortfolioTradeDrawer } from './PortfolioTradeDrawer'
 import { PortfolioTradeImportModal } from './PortfolioTradeImportModal'
 import { ConfirmDialog } from '../common/ConfirmDialog'
+import { cashTabBalanceDisplayAsOf } from '../../lib/portfolioCashTab'
+import {
+  buildPerformanceMetricBreakdown,
+  type PerformanceMetricId,
+} from '../../lib/portfolioPerformanceBreakdown'
+import { PerformanceMetricDrawer } from './PerformanceMetricDrawer'
 
 type Props = {
   portfolio: SavedPortfolio
@@ -81,6 +90,8 @@ type Props = {
   onClearLogTradeSeed?: () => void
   onFocusHolding?: (holdingId: string) => void
   onReplaceTrades: (next: PortfolioTradesState) => boolean
+  contributions?: PortfolioContributionsState | null
+  currentYear?: number
 }
 
 function pct(v: number | null): string {
@@ -99,6 +110,22 @@ function twrLabel(r: TwrResult | undefined): string {
   if (r.status === 'unavailable') return 'Unavailable'
   if (r.twr == null) return '—'
   return pct(r.twr)
+}
+
+function StatsCardButton({
+  className,
+  onClick,
+  children,
+}: {
+  className?: string
+  onClick: () => void
+  children: ReactNode
+}) {
+  return (
+    <button type="button" className={`${className ?? ''} cursor-pointer transition hover:border-white/20`} onClick={onClick}>
+      {children}
+    </button>
+  )
 }
 
 function CompactStats({ rows }: { rows: { label: string; value: string }[] }) {
@@ -130,6 +157,8 @@ export function PortfolioPerformancePanel({
   onClearLogTradeSeed,
   onFocusHolding,
   onReplaceTrades,
+  contributions = null,
+  currentYear = new Date().getFullYear(),
 }: Props) {
   const fmt = useCallback(
     (amount: number) => formatMoney(amount, displayCurrency),
@@ -162,6 +191,7 @@ export function PortfolioPerformancePanel({
   const [scopeSymbol, setScopeSymbol] = useState<string | null>(null)
   const [histories, setHistories] = useState<Record<string, CachedPriceHistory>>({})
   const [histLoading, setHistLoading] = useState<Set<string>>(new Set())
+  const [metricDetailId, setMetricDetailId] = useState<PerformanceMetricId | null>(null)
 
   useEffect(() => {
     setScopeSymbol(null)
@@ -231,13 +261,45 @@ export function PortfolioPerformancePanel({
     [capitalTrades, asOfDate, perfCtx],
   )
 
-  const terminalNav = useMemo(() => {
-    let nav = 0
-    for (const s of summary.symbols) {
-      if (s.marketValue != null) nav += s.marketValue
-    }
-    return nav
-  }, [summary.symbols])
+  const cashTabToday = useMemo(
+    () =>
+      cashTabBalanceDisplayAsOf(
+        portfolio,
+        scenarios,
+        asOfDate,
+        displayCurrency,
+        usdToChf ?? null,
+        currentYear,
+      ),
+    [portfolio, scenarios, asOfDate, displayCurrency, usdToChf, currentYear],
+  )
+
+  const terminalNav = useMemo(
+    () => computePortfolioTerminalNav(summary, cashTabToday.amount),
+    [summary, cashTabToday.amount],
+  )
+
+  const peakPortfolio = useMemo(
+    () =>
+      computePeakPortfolioValue(
+        capitalTrades,
+        portfolio,
+        scenarios,
+        historyPoints,
+        asOfDate,
+        perfCtx,
+        currentYear,
+      ),
+    [
+      capitalTrades,
+      portfolio,
+      scenarios,
+      historyPoints,
+      asOfDate,
+      perfCtx,
+      currentYear,
+    ],
+  )
 
   const snapshotReturnPct = useMemo(() => {
     if (capitalStats.peakNet > 0 && Number.isFinite(summary.totalPnl)) {
@@ -322,6 +384,56 @@ export function PortfolioPerformancePanel({
       ),
     [portfolioTrades, portfolio, scenarios, historyPoints, perfCtx],
   )
+
+  const breakdownContext = useMemo(
+    () => ({
+      trades: capitalTrades,
+      portfolio,
+      scenarios,
+      histories: historyPoints,
+      asOfDate,
+      perfCtx,
+      currentYear,
+      contributions,
+      summary,
+      capitalStats,
+      peakPortfolio,
+      optionsAggregate: optionsAggregate ?? null,
+      scopeSymbol,
+      snapshotReturnPct,
+      snapshotTwr,
+      snapshotMwr,
+      equityTradesBySymbol,
+    }),
+    [
+      capitalTrades,
+      portfolio,
+      scenarios,
+      historyPoints,
+      asOfDate,
+      perfCtx,
+      currentYear,
+      contributions,
+      summary,
+      capitalStats,
+      peakPortfolio,
+      optionsAggregate,
+      scopeSymbol,
+      snapshotReturnPct,
+      snapshotTwr,
+      snapshotMwr,
+      equityTradesBySymbol,
+    ],
+  )
+
+  const metricBreakdown = useMemo(() => {
+    if (!metricDetailId) return null
+    return buildPerformanceMetricBreakdown(metricDetailId, breakdownContext)
+  }, [metricDetailId, breakdownContext])
+
+  const openMetric = useCallback((id: PerformanceMetricId) => {
+    setMetricDetailId(id)
+  }, [])
 
   const totalOpenMarketValue = useMemo(() => {
     let sum = 0
@@ -615,11 +727,15 @@ export function PortfolioPerformancePanel({
       })
     }
     rows.push({
-      label: 'Peak net capital',
+      label: 'Peak net invested capital',
       value: fmt(capitalStats.peakNet),
     })
+    rows.push({
+      label: 'Peak portfolio value',
+      value: fmt(peakPortfolio.peakValue),
+    })
     return rows
-  }, [activityStats, scopeSymbol, capitalStats.peakNet, fmt])
+  }, [activityStats, scopeSymbol, capitalStats.peakNet, peakPortfolio.peakValue, fmt])
 
   const holdingRows = useMemo(() => {
     if (!holdingStats) return []
@@ -782,11 +898,31 @@ export function PortfolioPerformancePanel({
           <h4 className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/85">
             Options P/L (whole book)
           </h4>
+          <div className="grid gap-2 sm:grid-cols-3">
+            <StatsCardButton
+              className="rounded-lg border border-amber-500/20 bg-black/20 px-2.5 py-2 text-left"
+              onClick={() => openMetric('optionsRealized')}
+            >
+              <p className="text-[10px] uppercase text-white/45">Realized</p>
+              <p className="tabular-nums text-white">{fmt(optionsAggregate.realizedPnl)}</p>
+            </StatsCardButton>
+            <StatsCardButton
+              className="rounded-lg border border-amber-500/20 bg-black/20 px-2.5 py-2 text-left"
+              onClick={() => openMetric('optionsUnrealized')}
+            >
+              <p className="text-[10px] uppercase text-white/45">Unrealized</p>
+              <p className="tabular-nums text-white">{fmt(optionsAggregate.unrealizedPnl)}</p>
+            </StatsCardButton>
+            <StatsCardButton
+              className="rounded-lg border border-amber-500/20 bg-black/20 px-2.5 py-2 text-left"
+              onClick={() => openMetric('optionsTotal')}
+            >
+              <p className="text-[10px] uppercase text-white/45">Total</p>
+              <p className="tabular-nums text-white">{fmt(optionsAggregate.totalPnl)}</p>
+            </StatsCardButton>
+          </div>
           <CompactStats
             rows={[
-              { label: 'Realized', value: fmt(optionsAggregate.realizedPnl) },
-              { label: 'Unrealized', value: fmt(optionsAggregate.unrealizedPnl) },
-              { label: 'Total', value: fmt(optionsAggregate.totalPnl) },
               { label: 'Premium received', value: fmt(optionsAggregate.premiumReceived) },
               { label: 'Premium paid', value: fmt(optionsAggregate.premiumPaid) },
               { label: 'Open contracts', value: String(optionsAggregate.openContracts) },
@@ -856,7 +992,10 @@ export function PortfolioPerformancePanel({
       ) : null}
 
       {scopedTrades.length > 0 ? (
-        <div className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3">
+        <StatsCardButton
+          className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3 text-left"
+          onClick={() => openMetric('totalPnl')}
+        >
           <p className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
             Snapshot return (today)
           </p>
@@ -866,54 +1005,96 @@ export function PortfolioPerformancePanel({
             >
               {fmt(summary.totalPnl)}
             </span>
-            <span className="text-lg font-semibold tabular-nums text-white/90">
+            <button
+              type="button"
+              className="text-lg font-semibold tabular-nums text-white/90 underline decoration-white/20 hover:decoration-white/50"
+              onClick={(e) => {
+                e.stopPropagation()
+                openMetric('snapshotReturn')
+              }}
+            >
               {pct(snapshotReturnPct)}
-            </span>
-            <span className="text-xs text-white/40">
+            </button>
+            <button
+              type="button"
+              className="text-xs text-white/40 underline decoration-white/10 hover:text-white/60"
+              onClick={(e) => {
+                e.stopPropagation()
+                openMetric('netCapital')
+              }}
+            >
               on {fmt(capitalStats.currentNet)} net capital
-            </span>
+            </button>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-white/70">
-            <span>
+            <button
+              type="button"
+              className="hover:text-white"
+              onClick={(e) => {
+                e.stopPropagation()
+                openMetric('twr')
+              }}
+            >
               <span className="text-white/45">TWR </span>
               {twrReasonLabel(snapshotTwr)}
-            </span>
-            <span>
+            </button>
+            <button
+              type="button"
+              className="hover:text-white"
+              onClick={(e) => {
+                e.stopPropagation()
+                openMetric('mwr')
+              }}
+            >
               <span className="text-white/45">MWR </span>
               {mwrReasonLabel(snapshotMwr)}
-            </span>
-            <span className="text-white/40">
+            </button>
+            <button
+              type="button"
+              className="text-white/40 hover:text-white/70"
+              onClick={(e) => {
+                e.stopPropagation()
+                openMetric('grossBuys')
+              }}
+            >
               gross buys {fmt(capitalStats.grossBuys)}
-            </span>
+            </button>
           </div>
           {snapshotMarkNote ? (
             <p className="mt-1.5 text-[11px] text-white/50">{snapshotMarkNote}</p>
           ) : null}
-        </div>
+        </StatsCardButton>
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
         {(
           [
-            { label: 'Realized P&L', value: summary.realizedPnl },
-            { label: 'Unrealized P&L', value: summary.unrealizedPnl },
-            { label: 'Total P&L', value: summary.totalPnl },
+            { id: 'realized' as const, label: 'Realized P&L', value: summary.realizedPnl },
             {
+              id: 'unrealized' as const,
+              label: 'Unrealized P&L',
+              value: summary.unrealizedPnl,
+            },
+            { id: 'totalPnl' as const, label: 'Total P&L', value: summary.totalPnl },
+            {
+              id: 'netCapital' as const,
               label: 'Net capital (current)',
               value: capitalStats.currentNet,
               isMoney: true,
               sub: `Gross buys ${fmt(capitalStats.grossBuys)}`,
             },
           ] as Array<{
+            id: PerformanceMetricId
             label: string
             value: number
             isMoney?: boolean
             sub?: string
           }>
         ).map((card) => (
-          <div
+          <StatsCardButton
             key={card.label}
-            className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5"
+            className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5 text-left"
+            onClick={() => openMetric(card.id)}
           >
             <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
               {card.label}
@@ -928,7 +1109,7 @@ export function PortfolioPerformancePanel({
             {card.sub ? (
               <p className="mt-0.5 text-[10px] text-white/40">{card.sub}</p>
             ) : null}
-          </div>
+          </StatsCardButton>
         ))}
       </div>
 
@@ -1179,6 +1360,13 @@ export function PortfolioPerformancePanel({
           </p>
         </ConfirmDialog>
       ) : null}
+
+      <PerformanceMetricDrawer
+        open={metricDetailId != null}
+        breakdown={metricBreakdown}
+        displayCurrency={displayCurrency}
+        onClose={() => setMetricDetailId(null)}
+      />
     </div>
   )
 }

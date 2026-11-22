@@ -1279,12 +1279,14 @@ export function PortfolioView({
 
             {selected && panel === 'performance' && (
               <PortfolioPerformancePanel
-                portfolio={selected}
+                portfolio={selectedForCash ?? selected}
                 tradesState={portfolioTrades}
                 tradesError={portfolioTradesError}
                 scenarios={scenarios}
                 displayCurrency={activeCurrency}
                 usdToChf={usdToChf}
+                contributions={contributionsForSelected}
+                currentYear={currentYear}
                 onSaveTrade={onSaveTrade}
                 onDeleteTrade={onDeleteTrade}
                 onReplaceTrades={onReplaceTrades}

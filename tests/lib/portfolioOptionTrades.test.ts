@@ -12,6 +12,26 @@ describe('portfolio option trades', () => {
     expect(c?.underlying).toBe('HIMS')
   })
 
+  it('marks open short unrealized positive when OTM', () => {
+    const open = normalizePortfolioTrade({
+      portfolioId: PORT_ID,
+      instrument: 'option',
+      symbol: 'LMND271219P00045000',
+      side: 'sell',
+      tradeDate: '2026-01-30',
+      shares: 1,
+      price: 3,
+      currency: 'USD',
+    })
+    const perf = computeSymbolPerformance(
+      [open!],
+      { price: 1.5, currency: 'USD', source: 'quote', asOfDate: null },
+      '2026-06-01',
+    )
+    expect(perf?.ledgerShares).toBe(-1)
+    expect(perf?.unrealizedPnl).toBeGreaterThan(0)
+  })
+
   it('opens short premium and closes with return on premium received', () => {
     const open = normalizePortfolioTrade({
       portfolioId: PORT_ID,

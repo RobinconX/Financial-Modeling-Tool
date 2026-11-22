@@ -199,6 +199,17 @@ export function ledgerSnapshotAt(
   return snap
 }
 
+/** Open-position unrealized from ledger snapshot and mark value (long or short). */
+export function unrealizedPnlFromLedger(
+  shares: number,
+  costBasis: number,
+  marketValue: number,
+): number {
+  if (shares > 0) return marketValue - costBasis
+  if (shares < 0) return costBasis + marketValue
+  return 0
+}
+
 export function returnDenominator(snap: LedgerSnapshot): number {
   if (snap.shares < 0) return snap.grossPremiumReceived
   if (snap.shares === 0 && snap.grossPremiumReceived > snap.grossBuys) {
@@ -249,7 +260,7 @@ export function computeLedgerPerformance(
   let unrealizedPnl: number | null = null
   if (snap.shares !== 0 && markPricePerShare != null) {
     marketValue = snap.shares * markPricePerShare * mult
-    unrealizedPnl = marketValue - snap.costBasis
+    unrealizedPnl = unrealizedPnlFromLedger(snap.shares, snap.costBasis, marketValue)
   } else if (snap.shares === 0) {
     unrealizedPnl = 0
   }

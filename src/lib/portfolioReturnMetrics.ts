@@ -1,5 +1,10 @@
-import type { PortfolioTrade } from '../types'
+import type { PortfolioTrade, SavedPortfolio, SavedScenario } from '../types'
 import type { PriceHistoryPoint } from './priceHistory'
+import { cashTabBalanceDisplayAsOf } from './portfolioCashTab'
+import {
+  computePortfolioPerformance,
+  type PortfolioPerformanceSummary,
+} from './portfolioTrades'
 import {
   convertAmountToDisplay,
   type PerfDisplayContext,
@@ -416,4 +421,117 @@ export function computeEquityBookTimeWeightedReturn(
     return { twr: null, status: 'unavailable', reason: 'could not link periods' }
   }
   return { twr: linked - 1, status: 'ok' }
+}
+
+export type PeakPortfolioValueStats = {
+  peakValue: number
+  peakDate: string | null
+  valueAsOf: number
+}
+
+function timelineDatesForPeak(
+  trades: PortfolioTrade[],
+  asOfDate: string,
+): string[] {
+  const set = new Set<string>()
+  let first: string | null = null
+  for (const t of trades) {
+    if (t.tradeDate > asOfDate) continue
+    set.add(t.tradeDate)
+    if (!first || t.tradeDate < first) first = t.tradeDate
+  }
+  set.add(asOfDate)
+  if (first) {
+    const y0 = Math.floor(Number(first.slice(0, 4)))
+    const y1 = Math.floor(Number(asOfDate.slice(0, 4)))
+    if (Number.isFinite(y0) && Number.isFinite(y1)) {
+      for (let y = y0; y <= y1; y++) {
+        set.add(`${y}-01-01`)
+      }
+    }
+  }
+  return [...set].sort()
+}
+
+function portfolioMarkedNavOnDate(
+  trades: PortfolioTrade[],
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[],
+  histories: Record<string, PriceHistoryPoint[]>,
+  date: string,
+  perfCtx: PerfDisplayContext,
+  currentYear: number,
+): number {
+  const cash = cashTabBalanceDisplayAsOf(
+    portfolio,
+    scenarios,
+    date,
+    perfCtx.displayCurrency,
+    perfCtx.usdToChf,
+    currentYear,
+  ).amount
+  const summary = computePortfolioPerformance(
+    trades,
+    portfolio,
+    scenarios,
+    histories,
+    date,
+    perfCtx,
+  )
+  let nav = cash
+  for (const s of summary.symbols) {
+    if (s.marketValue != null && Number.isFinite(s.marketValue)) {
+      nav += s.marketValue
+    }
+  }
+  return nav
+}
+
+/** Running peak of Cash-tab cash plus trade-ledger marks (year-level cash; trade-dated marks). */
+export function computePeakPortfolioValue(
+  trades: PortfolioTrade[],
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[],
+  histories: Record<string, PriceHistoryPoint[]>,
+  asOfDate: string = todayIsoDate(),
+  perfCtx?: PerfDisplayContext,
+  currentYear = new Date().getFullYear(),
+): PeakPortfolioValueStats {
+  if (!perfCtx || trades.length === 0) {
+    return { peakValue: 0, peakDate: null, valueAsOf: 0 }
+  }
+  let peak = 0
+  let peakDate: string | null = null
+  let asOf = 0
+  for (const date of timelineDatesForPeak(trades, asOfDate)) {
+    const nav = portfolioMarkedNavOnDate(
+      trades,
+      portfolio,
+      scenarios,
+      histories,
+      date,
+      perfCtx,
+      currentYear,
+    )
+    if (date === asOfDate) asOf = nav
+    if (nav > peak) {
+      peak = nav
+      peakDate = date
+    }
+  }
+  return { peakValue: peak, peakDate, valueAsOf: asOf }
+}
+
+/** Ending NAV for MWR: Cash-tab cash today + all ledger market values (incl. short liabilities). */
+export function computePortfolioTerminalNav(
+  summary: PortfolioPerformanceSummary,
+  cashTabCashDisplay: number,
+): number {
+  let nav = cashTabCashDisplay
+  for (const s of summary.symbols) {
+    if (s.marketValue != null && Number.isFinite(s.marketValue)) {
+      nav += s.marketValue
+    }
+  }
+  return nav
 }
