@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-22",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "d6fccf3b45a69dcd2be49d7a7516e821eff9a3b0",
     "headline": "Portfolio trade ledger, linked-file resilience & re-link UX",
     "notes": [
       "Portfolio adds a trade ledger with a Performance tab, return chart, and P&L by symbol; compare ledger vs position economics in charts.",
