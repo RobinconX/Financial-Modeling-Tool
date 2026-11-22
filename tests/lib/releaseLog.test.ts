@@ -12,6 +12,7 @@ describe('releaseLog', () => {
     expect(entries.length).toBe(34)
     expect(entries[0]?.pending).toBeUndefined()
     expect(entries[0]?.headline).toMatch(/snapshot TWR|MWR|trade links/i)
+    expect(entries[0]?.prodSha).toBe('d06ae8330237b0e981be4c5f48507e0725ce7a05')
     expect(entries[1]?.pending).toBeUndefined()
     expect(entries[1]?.headline).toMatch(/Option trades/i)
     expect(entries[1]?.prodSha).toBe('4dfd58d433ce01f33f2ca6e7f062367d5756bfe8')
