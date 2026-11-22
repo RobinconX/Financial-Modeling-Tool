@@ -52,13 +52,13 @@ export function linkedFileReadTimeoutMessage(): string {
   return (
     "Couldn't read the linked file in time. If it lives on OneDrive, right-click it in " +
     "File Explorer and choose Always keep on this device, then use Open / link file… or " +
-    "Allow file access again."
+    "Re-link file again."
   )
 }
 
 export function linkedFileAccessUnavailableMessage(detail?: string): string {
   const base =
-    'File access unavailable — open Settings and use Allow file access or Open / link file… to reconnect.'
+    'File access unavailable — use Re-link file or Open / link file… in Settings to pick the same JSON again.'
   const braveHint =
     'In Brave, File System Access is off by default (see brave://settings → Extensions).'
   if (detail) return `${base} ${braveHint} (${detail})`
@@ -493,7 +493,39 @@ export async function requestLinkedFileAccess(
  * - Empty file → seed with current browser data.
  * createWritable() truncates immediately, so we must read before any write.
  */
-export async function linkDataFile(): Promise<
+export type LinkDataFileOptions = {
+  /** When true, open the picker from the remembered handle if the browser allows. */
+  startFromCachedHandle?: boolean
+}
+
+function buildOpenFilePickerOptions(
+  startFromCachedHandle: boolean,
+): Record<string, unknown> {
+  const base = {
+    multiple: false,
+    types: [
+      {
+        description: 'Financial model JSON',
+        accept: { 'application/json': ['.json'] },
+      },
+    ],
+  }
+  if (startFromCachedHandle && cachedHandle) {
+    return { ...base, startIn: cachedHandle }
+  }
+  return base
+}
+
+/** Re-open the picker to attach the same (or a replacement) linked file. */
+export async function relinkLinkedDataFile(): Promise<
+  ReturnType<typeof linkDataFile>
+> {
+  return linkDataFile({ startFromCachedHandle: true })
+}
+
+export async function linkDataFile(
+  options?: LinkDataFileOptions,
+): Promise<
   | { ok: true; fileName: string; action: 'loaded' | 'seeded' }
   | { ok: false; error: string }
 > {
@@ -506,33 +538,53 @@ export async function linkDataFile(): Promise<
   try {
     cancelPendingLinkedWrite()
 
-    let handle: FsFileHandle
+    let handle: FsFileHandle | undefined
     const w = window as FsWindow
+    const startFromCached = options?.startFromCachedHandle !== false
+    const pickOpen = async (useStartIn: boolean) => {
+      const [h] = await w.showOpenFilePicker!(
+        buildOpenFilePickerOptions(useStartIn) as never,
+      )
+      return h
+    }
     try {
-      const [h] = await w.showOpenFilePicker!({
-        multiple: false,
-        types: [
-          {
-            description: 'Financial model JSON',
-            accept: { 'application/json': ['.json'] },
-          },
-        ],
-      })
-      handle = h
+      handle = await pickOpen(startFromCached)
     } catch (openErr) {
       if (openErr instanceof DOMException && openErr.name === 'AbortError') {
         return { ok: false, error: 'Cancelled' }
       }
-      // Fallback: create new file
-      handle = await w.showSaveFilePicker!({
-        suggestedName: APP_DATA_FILE_NAME,
-        types: [
-          {
-            description: 'Financial model JSON',
-            accept: { 'application/json': ['.json'] },
-          },
-        ],
-      })
+      if (startFromCached && cachedHandle) {
+        try {
+          handle = await pickOpen(false)
+        } catch (retryErr) {
+          if (retryErr instanceof DOMException && retryErr.name === 'AbortError') {
+            return { ok: false, error: 'Cancelled' }
+          }
+          openErr = retryErr
+        }
+      }
+      if (!handle) {
+        try {
+          handle = await w.showSaveFilePicker!({
+            suggestedName: cachedHandle?.name ?? APP_DATA_FILE_NAME,
+            types: [
+              {
+                description: 'Financial model JSON',
+                accept: { 'application/json': ['.json'] },
+              },
+            ],
+          })
+        } catch (saveErr) {
+          if (saveErr instanceof DOMException && saveErr.name === 'AbortError') {
+            return { ok: false, error: 'Cancelled' }
+          }
+          throw openErr
+        }
+      }
+    }
+
+    if (!handle) {
+      return { ok: false, error: 'No file selected' }
     }
 
     const canWrite = await ensurePermissionQueryFirst(handle, 'readwrite')

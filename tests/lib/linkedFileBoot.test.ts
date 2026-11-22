@@ -74,6 +74,6 @@ describe('linkedFileAccessUnavailableMessage', () => {
     const msg = linkedFileAccessUnavailableMessage()
     expect(msg).toMatch(/File access unavailable/i)
     expect(msg).toMatch(/Brave/i)
-    expect(msg).toMatch(/Allow file access/i)
+    expect(msg).toMatch(/Re-link file/i)
   })
 })
