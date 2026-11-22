@@ -480,7 +480,6 @@ export function GoalGapChart({
                       stroke="#0b0f14"
                       strokeWidth={1.5}
                       ifOverflow="visible"
-                      isFront
                     />
                   ))
               : null}
