@@ -83,3 +83,22 @@ Executed equity buys and sells for performance tracking. Stored at the **snapsho
 ```
 
 After import, both rows normalize to symbol `AAPL`; the first row receives a generated `id` if none was provided.
+
+## Bulk import (Performance tab)
+
+**Import** on **Portfolio → Performance** appends to the **selected book** only:
+
+- **JSON:** `{ "trades": [ … ] }`, a bare `[ … ]` array, or full snapshot `portfolioTrades.trades`
+- **CSV:** header row plus data. Required columns: `symbol`, `side`, `tradeDate`, `shares`, `price`. Optional: `fees`, `note`, `id`, `holdingId`, `portfolioId`
+- Rows with another `portfolioId` are **reassigned** to the current book (noted in preview)
+- `holdingId` is kept only when it matches a holding on the current book; otherwise stripped
+- **Duplicates** (same `symbol`, `side`, `tradeDate`, `shares`, `price` as an existing trade or an earlier row in the file): preview offers **Skip duplicates** (default) or **Import anyway**
+- Invalid rows are listed with reasons; only valid rows are imported on confirm
+
+### CSV example
+
+```csv
+symbol,side,tradeDate,shares,price,fees,note
+AAPL,buy,2024-01-10,50,185.2,1.00,Open
+AAPL,sell,2025-03-01,10,210,,
+```

@@ -174,6 +174,7 @@ type Props = {
   portfolioTradesError: string | null
   onSaveTrade: (trade: PortfolioTrade) => boolean
   onDeleteTrade: (tradeId: string) => boolean
+  onReplaceTrades: (next: PortfolioTradesState) => boolean
 }
 
 export function PortfolioView({
@@ -204,6 +205,7 @@ export function PortfolioView({
   portfolioTradesError,
   onSaveTrade,
   onDeleteTrade,
+  onReplaceTrades,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     readSelectedPortfolioId(portfolios),
@@ -1285,6 +1287,7 @@ export function PortfolioView({
                 usdToChf={usdToChf}
                 onSaveTrade={onSaveTrade}
                 onDeleteTrade={onDeleteTrade}
+                onReplaceTrades={onReplaceTrades}
                 logTradeSeed={logTradeSeed}
                 onClearLogTradeSeed={() => setLogTradeSeed(null)}
                 onFocusHolding={(holdingId) => {

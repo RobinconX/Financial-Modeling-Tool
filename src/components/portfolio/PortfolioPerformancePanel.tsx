@@ -44,6 +44,7 @@ import {
 } from '../../lib/priceHistoryStorage'
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { PortfolioTradeDrawer } from './PortfolioTradeDrawer'
+import { PortfolioTradeImportModal } from './PortfolioTradeImportModal'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 
 type Props = {
@@ -58,6 +59,7 @@ type Props = {
   logTradeSeed?: { symbol: string; holdingId?: string } | null
   onClearLogTradeSeed?: () => void
   onFocusHolding?: (holdingId: string) => void
+  onReplaceTrades: (next: PortfolioTradesState) => boolean
 }
 
 function pct(v: number | null): string {
@@ -106,6 +108,7 @@ export function PortfolioPerformancePanel({
   logTradeSeed,
   onClearLogTradeSeed,
   onFocusHolding,
+  onReplaceTrades,
 }: Props) {
   const fmt = useCallback(
     (usd: number) =>
@@ -281,6 +284,7 @@ export function PortfolioPerformancePanel({
   }, [scopeSymbol, summary.symbols, tradesBySymbol, totalOpenMarketValue])
 
   const [drawerOpen, setDrawerOpen] = useState(false)
+  const [importOpen, setImportOpen] = useState(false)
   const [draft, setDraft] = useState<PortfolioTrade | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PortfolioTrade | null>(null)
   const [tradeLogOpen, setTradeLogOpen] = useState(false)
@@ -508,6 +512,13 @@ export function PortfolioPerformancePanel({
                 ))}
               </select>
             ) : null}
+            <button
+              type="button"
+              className="btn-ghost !px-2.5 !py-1 !text-xs"
+              onClick={() => setImportOpen(true)}
+            >
+              Import
+            </button>
             <button
               type="button"
               className="btn-primary !px-2.5 !py-1 !text-xs"
@@ -794,6 +805,18 @@ export function PortfolioPerformancePanel({
           setDraft(null)
         }}
         onSave={handleSaveTrade}
+      />
+
+      <PortfolioTradeImportModal
+        open={importOpen}
+        portfolio={portfolio}
+        tradesState={tradesState}
+        onClose={() => setImportOpen(false)}
+        onApply={(next) => {
+          const ok = onReplaceTrades(next)
+          if (ok) setTradeLogOpen(true)
+          return ok
+        }}
       />
 
       {pendingDelete ? (
