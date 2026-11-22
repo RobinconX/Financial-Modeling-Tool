@@ -1,14 +1,13 @@
 [
   {
     "releasedAt": "2026-11-22",
-    "prodSha": "pending",
+    "prodSha": "d06ae8330237b0e981be4c5f48507e0725ce7a05",
     "headline": "Performance options rollup, snapshot TWR/MWR & trade links",
     "notes": [
       "Whole-book Options P/L panel with premium paid/received; equity return curve stays stock-only with amber option markers on the timeline.",
       "Snapshot return shows TWR (equity), MWR (XIRR, options included), net capital with peak-based %, and gross buys; Activity adds peak net capital.",
       "Equity imports and saves auto-link to a position when exactly one ticker match; backfill on load applies the same rule (options never link)."
-    ],
-    "pending": true
+    ]
   },
   {
     "releasedAt": "2026-11-22",
