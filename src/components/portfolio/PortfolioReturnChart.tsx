@@ -12,26 +12,20 @@ import {
 import { formatMoney, formatPrice } from '../../lib/format'
 import { amountToDisplay } from '../../lib/fx'
 import type { ReturnProgressionPoint } from '../../lib/portfolioPerformanceStats'
+import { progressionYOnDate } from '../../lib/returnChartMarkerY'
+import type {
+  ReturnChartOptionMarker,
+  ReturnChartTradeMarker,
+} from '../../lib/returnChartMarkers'
 import type { DisplayCurrency, PortfolioTrade } from '../../types'
 
 export type ReturnChartMode = 'pct' | 'usd'
-
-export type ReturnChartTradeMarker = {
-  id: string
-  tradeDate: string
-  time: number
-  side: PortfolioTrade['side']
-  symbol: string
-  shares: number
-  price: number
-  fees: number
-  currency: PortfolioTrade['currency']
-  y: number
-}
+export type { ReturnChartTradeMarker } from '../../lib/returnChartMarkers'
 
 type Props = {
   points: ReturnProgressionPoint[]
   trades?: PortfolioTrade[]
+  optionMarkers?: ReturnChartOptionMarker[]
   mode: ReturnChartMode
   missingNote: string | null
   displayCurrency?: DisplayCurrency
@@ -43,32 +37,6 @@ type Props = {
 function progressionMoneyValue(value: number | null | undefined): number | null {
   if (value == null || !Number.isFinite(value)) return null
   return value
-}
-
-function progressionYOnDate(
-  date: string,
-  points: ReturnProgressionPoint[],
-  mode: ReturnChartMode,
-  _displayCurrency: DisplayCurrency,
-  _usdToChf: number | null,
-): number | null {
-  const yFromPoint = (p: ReturnProgressionPoint): number | null => {
-    if (mode === 'pct') {
-      return p.returnPct != null ? p.returnPct * 100 : null
-    }
-    return progressionMoneyValue(p.totalPnl)
-  }
-  const byDate = new Map(points.map((p) => [p.date, p]))
-  const onDay = yFromPoint(byDate.get(date) ?? { date, totalPnl: null, returnPct: null })
-  if (onDay != null && Number.isFinite(onDay)) return onDay
-  const prior = [...points]
-    .filter((p) => p.date <= date)
-    .sort((a, b) => a.date.localeCompare(b.date))
-  for (let i = prior.length - 1; i >= 0; i--) {
-    const y = yFromPoint(prior[i]!)
-    if (y != null && Number.isFinite(y)) return y
-  }
-  return null
 }
 
 /** Y position on the return chart for each trade (on trade date), in current chart units. */
@@ -99,7 +67,9 @@ export function buildReturnChartTradeMarkers(
       price: t.price,
       fees: t.fees ?? 0,
       currency: t.currency ?? 'USD',
+      feesCurrency: t.feesCurrency,
       y,
+      instrument: 'equity',
     })
   }
   out.sort((a, b) => a.tradeDate.localeCompare(b.tradeDate))
@@ -202,6 +172,7 @@ export function tradesForReturnTooltip(
   row: ChartRow | undefined,
   label: string | number | undefined,
   tradeMarkers: ReturnChartTradeMarker[],
+  optionMarkers: ReturnChartTradeMarker[] = [],
 ): ReturnChartTradeMarker[] {
   const day =
     row?.date ??
@@ -209,7 +180,7 @@ export function tradesForReturnTooltip(
       ? isoDateFromUtcMs(label)
       : null)
   if (!day) return []
-  return tradeMarkers.filter((t) => t.tradeDate === day)
+  return [...tradeMarkers, ...optionMarkers].filter((t) => t.tradeDate === day)
 }
 
 function TradeTooltipRows({
@@ -228,24 +199,38 @@ function TradeTooltipRows({
         Trades
       </p>
       {trades.map((m) => {
-        const sideTone = m.side === 'buy' ? '#34d399' : '#f87171'
+        const isOpt = m.instrument === 'option'
+        const sideTone = isOpt
+          ? '#fbbf24'
+          : m.side === 'buy'
+            ? '#34d399'
+            : '#f87171'
         const px = formatPrice(
           amountToDisplay(m.price, m.currency ?? 'USD', displayCurrency, usdToChf),
           displayCurrency,
         )
+        const feeCur = m.feesCurrency ?? m.currency ?? 'USD'
+        const action =
+          isOpt && m.event && m.event !== 'trade'
+            ? m.event
+            : m.side === 'buy'
+              ? 'Buy'
+              : 'Sell'
         return (
           <div key={m.id} className="flex flex-col gap-0.5">
             <div className="flex items-center justify-between gap-3">
-              <span className="font-medium text-white/85">{m.symbol}</span>
-              <span style={{ color: sideTone }}>
-                {m.side === 'buy' ? 'Buy' : 'Sell'}
+              <span className="font-medium text-white/85">
+                {m.label ?? m.symbol}
+              </span>
+              <span style={{ color: sideTone }} className="capitalize">
+                {action}
               </span>
             </div>
             <div className="tabular-nums text-white/75">
-              {m.shares} @ {px}
+              {m.shares} ct @ {px}
               {m.fees > 0
                 ? ` · fees ${formatMoney(
-                    amountToDisplay(m.fees, m.currency ?? 'USD', displayCurrency, usdToChf),
+                    amountToDisplay(m.fees, feeCur, displayCurrency, usdToChf),
                     displayCurrency,
                   )}`
                 : ''}
@@ -329,6 +314,7 @@ type ReturnChartTooltipProps = {
   usdToChf: number | null
   chartData: readonly ChartRow[]
   tradeMarkers: ReturnChartTradeMarker[]
+  optionMarkers: ReturnChartOptionMarker[]
 }
 
 function ReturnChartTooltip({
@@ -340,11 +326,12 @@ function ReturnChartTooltip({
   usdToChf,
   chartData,
   tradeMarkers,
+  optionMarkers,
 }: ReturnChartTooltipProps) {
   if (!active) return null
   const row = resolveReturnChartTooltipRow(chartData, label, payload)
   if (!row) return null
-  const trades = tradesForReturnTooltip(row, label, tradeMarkers)
+  const trades = tradesForReturnTooltip(row, label, tradeMarkers, optionMarkers)
   return (
     <ReturnProgressionTooltip
       active={active}
@@ -450,6 +437,7 @@ export function buildSignedReturnChartRows(
 export function PortfolioReturnChart({
   points,
   trades = [],
+  optionMarkers = [],
   mode,
   missingNote,
   displayCurrency = 'USD',
@@ -473,6 +461,7 @@ export function PortfolioReturnChart({
       ),
     [trades, points, mode, displayCurrency, usdToChf],
   )
+  const hasAnyMarkers = tradeMarkers.length > 0 || optionMarkers.length > 0
 
   const hasValue = data.some((d) => d.value != null)
   if (!hasValue) {
@@ -490,7 +479,7 @@ export function PortfolioReturnChart({
           Return progression
         </h4>
         <div className="flex flex-wrap items-center gap-2">
-          {tradeMarkers.length > 0 ? (
+          {hasAnyMarkers ? (
             <button
               type="button"
               className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${
@@ -567,6 +556,7 @@ export function PortfolioReturnChart({
                   usdToChf={usdToChf}
                   chartData={data}
                   tradeMarkers={tradeMarkers}
+                  optionMarkers={optionMarkers}
                 />
               )}
             />
@@ -614,6 +604,20 @@ export function PortfolioReturnChart({
                     fill={m.side === 'buy' ? '#34d399' : '#f87171'}
                     stroke="#0b0f14"
                     strokeWidth={1.5}
+                    ifOverflow="visible"
+                  />
+                ))
+              : null}
+            {showTrades
+              ? optionMarkers.map((m) => (
+                  <ReferenceDot
+                    key={m.id}
+                    x={m.time}
+                    y={m.y}
+                    r={6}
+                    fill="transparent"
+                    stroke="#fbbf24"
+                    strokeWidth={2.5}
                     ifOverflow="visible"
                   />
                 ))

@@ -19,12 +19,18 @@ import {
   formatSnapshotMarkSummary,
   newPortfolioTrade,
   todayIsoDate,
-  performanceScopeKeys,
   tradesForPortfolio,
-  tradesForPerformanceScope,
   type SymbolPerformance,
 } from '../../lib/portfolioTrades'
 import { optionLabel, parseOccSymbol } from '../../lib/optionContract'
+import { tradeInstrument } from '../../lib/portfolioTradeLedger'
+import {
+  computeOptionsPerformanceAggregate,
+  optionTradesForReturnMarkers,
+  tradedEquitySymbolsFromTrades,
+  tradesMatchingPerformanceScope,
+} from '../../lib/portfolioOptionsPerformance'
+import { buildReturnChartOptionMarkers } from '../../lib/returnChartOptionMarkers'
 import {
   buildReturnProgression,
   computeHoldingCostStats,
@@ -37,6 +43,13 @@ import {
   type TwrResult,
   type TradeActivityStats,
 } from '../../lib/portfolioPerformanceStats'
+import {
+  computeCapitalContributionStats,
+  computeEquityBookTimeWeightedReturn,
+  computeMoneyWeightedReturn,
+  mwrReasonLabel,
+  twrReasonLabel,
+} from '../../lib/portfolioReturnMetrics'
 import {
   PortfolioReturnChart,
   type ReturnChartMode,
@@ -142,27 +155,30 @@ export function PortfolioPerformancePanel({
     () => tradesForPortfolio(tradesState, portfolio.id),
     [tradesState, portfolio.id],
   )
-  const scopeOptions = useMemo(
-    () => performanceScopeKeys(portfolioTrades),
+  const tradedEquitySymbols = useMemo(
+    () => tradedEquitySymbolsFromTrades(portfolioTrades),
     [portfolioTrades],
   )
-  const [scopeKey, setScopeKey] = useState<string | null>(null)
+  const [scopeSymbol, setScopeSymbol] = useState<string | null>(null)
   const [histories, setHistories] = useState<Record<string, CachedPriceHistory>>({})
   const [histLoading, setHistLoading] = useState<Set<string>>(new Set())
 
   useEffect(() => {
-    setScopeKey(null)
+    setScopeSymbol(null)
   }, [portfolio.id])
 
   useEffect(() => {
-    if (scopeKey && !scopeOptions.some((o) => o.key === scopeKey)) {
-      setScopeKey(null)
+    if (scopeSymbol && !tradedEquitySymbols.includes(scopeSymbol)) {
+      setScopeSymbol(null)
     }
-  }, [scopeKey, scopeOptions])
+  }, [scopeSymbol, tradedEquitySymbols])
 
   const scopedTrades = useMemo(
-    () => tradesForPerformanceScope(portfolioTrades, scopeKey),
-    [portfolioTrades, scopeKey],
+    () =>
+      scopeSymbol
+        ? tradesMatchingPerformanceScope(portfolioTrades, scopeSymbol)
+        : portfolioTrades,
+    [portfolioTrades, scopeSymbol],
   )
 
   const historyPoints = useMemo(() => {
@@ -190,6 +206,8 @@ export function PortfolioPerformancePanel({
     [displayCurrency, usdToChf, quoteCurrencyBySymbol],
   )
 
+  const asOfDate = todayIsoDate()
+
   const summary = useMemo(
     () =>
       computePortfolioPerformance(
@@ -197,11 +215,36 @@ export function PortfolioPerformancePanel({
         portfolio,
         scenarios,
         historyPoints,
-        todayIsoDate(),
+        asOfDate,
         perfCtx,
       ),
-    [scopedTrades, portfolio, scenarios, historyPoints, perfCtx],
+    [scopedTrades, portfolio, scenarios, historyPoints, perfCtx, asOfDate],
   )
+
+  const capitalTrades = useMemo(
+    () => (scopeSymbol ? scopedTrades : portfolioTrades),
+    [scopeSymbol, scopedTrades, portfolioTrades],
+  )
+
+  const capitalStats = useMemo(
+    () => computeCapitalContributionStats(capitalTrades, asOfDate, perfCtx),
+    [capitalTrades, asOfDate, perfCtx],
+  )
+
+  const terminalNav = useMemo(() => {
+    let nav = 0
+    for (const s of summary.symbols) {
+      if (s.marketValue != null) nav += s.marketValue
+    }
+    return nav
+  }, [summary.symbols])
+
+  const snapshotReturnPct = useMemo(() => {
+    if (capitalStats.peakNet > 0 && Number.isFinite(summary.totalPnl)) {
+      return summary.totalPnl / capitalStats.peakNet
+    }
+    return null
+  }, [capitalStats.peakNet, summary.totalPnl])
 
   const tradesBySymbol = useMemo(() => {
     const m = new Map<string, PortfolioTrade[]>()
@@ -212,6 +255,73 @@ export function PortfolioPerformancePanel({
     }
     return m
   }, [scopedTrades])
+
+  const equityTradesBySymbol = useMemo(() => {
+    const m = new Map<string, PortfolioTrade[]>()
+    for (const t of scopedTrades) {
+      if (tradeInstrument(t) === 'option') continue
+      const list = m.get(t.symbol) ?? []
+      list.push(t)
+      m.set(t.symbol, list)
+    }
+    return m
+  }, [scopedTrades])
+
+  const equityTradesForChart = useMemo(() => {
+    const out: PortfolioTrade[] = []
+    for (const list of equityTradesBySymbol.values()) out.push(...list)
+    return out
+  }, [equityTradesBySymbol])
+
+  const snapshotTwr = useMemo(() => {
+    if (scopeSymbol) {
+      const trades = equityTradesBySymbol.get(scopeSymbol) ?? []
+      const hist = histories[scopeSymbol]
+      return computeTimeWeightedReturn(
+        trades,
+        hist?.points ?? [],
+        asOfDate,
+        perfCtx,
+        scopeSymbol,
+      )
+    }
+    return computeEquityBookTimeWeightedReturn(
+      equityTradesBySymbol,
+      historyPoints,
+      asOfDate,
+      perfCtx,
+    )
+  }, [
+    scopeSymbol,
+    equityTradesBySymbol,
+    histories,
+    historyPoints,
+    asOfDate,
+    perfCtx,
+  ])
+
+  const snapshotMwr = useMemo(
+    () => computeMoneyWeightedReturn(capitalTrades, terminalNav, asOfDate, perfCtx),
+    [capitalTrades, terminalNav, asOfDate, perfCtx],
+  )
+
+  const optionTradesForChart = useMemo(
+    () => optionTradesForReturnMarkers(portfolioTrades, scopeSymbol),
+    [portfolioTrades, scopeSymbol],
+  )
+
+  const optionsAggregate = useMemo(
+    () =>
+      computeOptionsPerformanceAggregate(
+        portfolioTrades,
+        portfolio,
+        scenarios,
+        historyPoints,
+        todayIsoDate(),
+        perfCtx,
+      ),
+    [portfolioTrades, portfolio, scenarios, historyPoints, perfCtx],
+  )
 
   const totalOpenMarketValue = useMemo(() => {
     let sum = 0
@@ -226,16 +336,13 @@ export function PortfolioPerformancePanel({
   }, [summary.symbols])
 
   const symbolsForHistory = useMemo(() => {
-    const syms = new Set<string>()
-    for (const t of scopedTrades) {
-      syms.add(t.symbol)
-      if (t.instrument === 'option') {
-        const u = t.underlying ?? parseOccSymbol(t.symbol)?.underlying
-        if (u) syms.add(u)
-      }
+    const syms = new Set<string>(tradedEquitySymbolsFromTrades(portfolioTrades))
+    if (scopeSymbol) syms.add(scopeSymbol)
+    for (const t of portfolioTrades) {
+      if (tradeInstrument(t) === 'option') syms.add(t.symbol)
     }
     return [...syms]
-  }, [scopedTrades])
+  }, [portfolioTrades, scopeSymbol])
 
   useEffect(() => {
     if (symbolsForHistory.length === 0) return
@@ -299,24 +406,11 @@ export function PortfolioPerformancePanel({
     return out
   }, [summary.symbols, tradesBySymbol, histories, perfCtx])
 
-  const scopeLabel = useMemo(
-    () => scopeOptions.find((o) => o.key === scopeKey)?.label ?? scopeKey,
-    [scopeOptions, scopeKey],
-  )
-
   const activityStats = useMemo((): TradeActivityStats | PortfolioActivityRollup => {
-    if (scopeKey && summary.symbols.length === 1) {
+    if (scopeSymbol && summary.symbols.length === 1) {
       const sym = summary.symbols[0]
       const trades = tradesBySymbol.get(sym!.symbol) ?? scopedTrades
       return computeTradeActivity(trades, sym?.ledgerShares ?? 0)
-    }
-    if (scopeKey) {
-      return computePortfolioActivityRollup(
-        summary.symbols.map((s) => ({
-          trades: tradesBySymbol.get(s.symbol) ?? [],
-          ledgerShares: s.ledgerShares,
-        })),
-      )
     }
     return computePortfolioActivityRollup(
       summary.symbols.map((s) => ({
@@ -324,10 +418,10 @@ export function PortfolioPerformancePanel({
         ledgerShares: s.ledgerShares,
       })),
     )
-  }, [scopeKey, summary.symbols, tradesBySymbol, scopedTrades])
+  }, [scopeSymbol, summary.symbols, tradesBySymbol, scopedTrades])
 
   const holdingStats = useMemo(() => {
-    if (!scopeKey || summary.symbols.length !== 1 || !summary.symbols[0]) return null
+    if (!scopeSymbol || summary.symbols.length !== 1 || !summary.symbols[0]) return null
     const s = summary.symbols[0]
     const trades = tradesInDisplayCurrency(
       tradesBySymbol.get(s.symbol) ?? [],
@@ -343,7 +437,7 @@ export function PortfolioPerformancePanel({
       totalOpenMarketValue,
     )
   }, [
-    scopeKey,
+    scopeSymbol,
     summary.symbols,
     tradesBySymbol,
     totalOpenMarketValue,
@@ -431,8 +525,26 @@ export function PortfolioPerformancePanel({
   )
 
   const returnProgression = useMemo(
-    () => buildReturnProgression(tradesBySymbol, historyPoints, undefined, perfCtx),
-    [tradesBySymbol, historyPoints, perfCtx],
+    () => buildReturnProgression(equityTradesBySymbol, historyPoints, undefined, perfCtx),
+    [equityTradesBySymbol, historyPoints, perfCtx],
+  )
+
+  const returnChartOptionMarkers = useMemo(
+    () =>
+      buildReturnChartOptionMarkers(
+        optionTradesForChart,
+        returnProgression.points,
+        returnChartMode,
+        displayCurrency,
+        usdToChf ?? null,
+      ),
+    [
+      optionTradesForChart,
+      returnProgression.points,
+      returnChartMode,
+      displayCurrency,
+      usdToChf,
+    ],
   )
 
   const returnMissingNote = useMemo(() => {
@@ -487,7 +599,7 @@ export function PortfolioPerformancePanel({
         value: activityStats.lastTradeDate ?? '—',
       },
     ]
-    if (scopeKey) {
+    if (scopeSymbol) {
       rows.push({
         label: 'Holding period',
         value: formatHoldingPeriod(activityStats.holdingPeriodDays),
@@ -502,8 +614,12 @@ export function PortfolioPerformancePanel({
         value: `${activityStats.openSymbolCount} open · ${activityStats.closedSymbolCount} closed`,
       })
     }
+    rows.push({
+      label: 'Peak net capital',
+      value: fmt(capitalStats.peakNet),
+    })
     return rows
-  }, [activityStats, scopeKey])
+  }, [activityStats, scopeSymbol, capitalStats.peakNet, fmt])
 
   const holdingRows = useMemo(() => {
     if (!holdingStats) return []
@@ -549,12 +665,12 @@ export function PortfolioPerformancePanel({
       {
         label: 'TWR',
         value:
-          scopeKey && summary.symbols[0]
+          scopeSymbol && summary.symbols[0]
             ? twrLabel(twrBySymbol.get(summary.symbols[0]!.symbol))
             : '—',
       },
     ]
-  }, [holdingStats, scopeKey, twrBySymbol, fmt, displayCurrency])
+  }, [holdingStats, scopeSymbol, twrBySymbol, fmt, displayCurrency])
 
   return (
     <div className="space-y-5" data-guide-anchor="portfolio.performance">
@@ -565,20 +681,20 @@ export function PortfolioPerformancePanel({
               <h3 className="text-sm font-semibold text-white">Performance</h3>
               <FeatureGuideButton id="portfolio.performance" />
             </div>
-            {scopeOptions.length > 0 ? (
+            {tradedEquitySymbols.length > 0 ? (
               <select
-                className="input !w-auto max-w-[14rem] !py-1 !text-xs tabular-nums"
-                value={scopeKey ?? ''}
+                className="input !w-auto max-w-[11rem] !py-1 !text-xs tabular-nums"
+                value={scopeSymbol ?? ''}
                 onChange={(e) => {
                   const v = e.target.value
-                  setScopeKey(v ? v : null)
+                  setScopeSymbol(v ? v : null)
                 }}
                 aria-label="Performance scope"
               >
                 <option value="">Whole portfolio</option>
-                {scopeOptions.map((opt) => (
-                  <option key={opt.key} value={opt.key}>
-                    {opt.label}
+                {tradedEquitySymbols.map((sym) => (
+                  <option key={sym} value={sym}>
+                    {sym}
                   </option>
                 ))}
               </select>
@@ -615,14 +731,14 @@ export function PortfolioPerformancePanel({
             <button
               type="button"
               className="btn-primary !px-2.5 !py-1 !text-xs"
-              onClick={() => openNew(scopeKey ?? undefined)}
+              onClick={() => openNew(scopeSymbol ?? undefined)}
             >
               + Trade
             </button>
           </div>
           <p className="mt-1 text-xs text-white/45">
-            {scopeKey
-              ? `Trades and P&L for ${scopeLabel ?? scopeKey} on this book.`
+            {scopeSymbol
+              ? `Stock ledger and P&L for ${scopeSymbol} on this book (options are in Options P/L below).`
               : 'All traded symbols on this book (incl. closed). Ledger does not change Positions.'}
           </p>
         </div>
@@ -647,7 +763,8 @@ export function PortfolioPerformancePanel({
         <section className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
           <PortfolioReturnChart
             points={returnProgression.points}
-            trades={scopedTrades}
+            trades={equityTradesForChart}
+            optionMarkers={returnChartOptionMarkers}
             mode={returnChartMode}
             missingNote={returnMissingNote}
             displayCurrency={displayCurrency}
@@ -657,7 +774,79 @@ export function PortfolioPerformancePanel({
         </section>
       ) : null}
 
-      {scopeKey && holdingRows.length > 0 ? (
+      {optionsAggregate ? (
+        <section
+          className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2.5"
+          data-guide-anchor="portfolio.performance.optionsPnl"
+        >
+          <h4 className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/85">
+            Options P/L (whole book)
+          </h4>
+          <CompactStats
+            rows={[
+              { label: 'Realized', value: fmt(optionsAggregate.realizedPnl) },
+              { label: 'Unrealized', value: fmt(optionsAggregate.unrealizedPnl) },
+              { label: 'Total', value: fmt(optionsAggregate.totalPnl) },
+              { label: 'Premium received', value: fmt(optionsAggregate.premiumReceived) },
+              { label: 'Premium paid', value: fmt(optionsAggregate.premiumPaid) },
+              { label: 'Open contracts', value: String(optionsAggregate.openContracts) },
+              { label: 'Closed series', value: String(optionsAggregate.closedSeries) },
+              {
+                label: 'Win rate',
+                value: pct(optionsAggregate.winRate),
+              },
+            ]}
+          />
+          {optionsAggregate.byUnderlying.length > 0 ? (
+            <div className="table-shell overflow-x-auto">
+              <table className="min-w-full text-xs">
+                <thead className="uppercase tracking-wider text-white/40">
+                  <tr>
+                    <th className="px-2 py-1.5 text-left font-medium">Underlying</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Total</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Realized</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Received</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Paid</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Open</th>
+                    <th className="px-2 py-1.5 text-right font-medium">Wins</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {optionsAggregate.byUnderlying.map((row) => (
+                    <tr key={row.underlying} className="border-t border-white/5">
+                      <td className="px-2 py-1.5 font-medium text-white">{row.underlying}</td>
+                      <td
+                        className={`px-2 py-1.5 text-right tabular-nums ${pnlClass(row.totalPnl)}`}
+                      >
+                        {fmt(row.totalPnl)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-white/80">
+                        {fmt(row.realizedPnl)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
+                        {fmt(row.premiumReceived)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
+                        {fmt(row.premiumPaid)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
+                        {row.openContracts}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
+                        {row.closedSeries > 0
+                          ? `${row.winCount}/${row.closedSeries}`
+                          : '—'}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          ) : null}
+        </section>
+      ) : null}
+
+      {scopeSymbol && holdingRows.length > 0 ? (
         <section className="space-y-2 rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
           <h4 className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
             Position
@@ -678,10 +867,23 @@ export function PortfolioPerformancePanel({
               {fmt(summary.totalPnl)}
             </span>
             <span className="text-lg font-semibold tabular-nums text-white/90">
-              {pct(summary.returnPct)}
+              {pct(snapshotReturnPct)}
             </span>
             <span className="text-xs text-white/40">
-              on {fmt(summary.grossBuys)} invested
+              on {fmt(capitalStats.currentNet)} net capital
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-white/70">
+            <span>
+              <span className="text-white/45">TWR </span>
+              {twrReasonLabel(snapshotTwr)}
+            </span>
+            <span>
+              <span className="text-white/45">MWR </span>
+              {mwrReasonLabel(snapshotMwr)}
+            </span>
+            <span className="text-white/40">
+              gross buys {fmt(capitalStats.grossBuys)}
             </span>
           </div>
           {snapshotMarkNote ? (
@@ -696,8 +898,18 @@ export function PortfolioPerformancePanel({
             { label: 'Realized P&L', value: summary.realizedPnl },
             { label: 'Unrealized P&L', value: summary.unrealizedPnl },
             { label: 'Total P&L', value: summary.totalPnl },
-            { label: 'Invested (gross buys)', value: summary.grossBuys, isMoney: true },
-          ] as const
+            {
+              label: 'Net capital (current)',
+              value: capitalStats.currentNet,
+              isMoney: true,
+              sub: `Gross buys ${fmt(capitalStats.grossBuys)}`,
+            },
+          ] as Array<{
+            label: string
+            value: number
+            isMoney?: boolean
+            sub?: string
+          }>
         ).map((card) => (
           <div
             key={card.label}
@@ -708,20 +920,19 @@ export function PortfolioPerformancePanel({
             </p>
             <p
               className={`mt-1 text-lg font-semibold tabular-nums ${
-                'isMoney' in card && card.isMoney
-                  ? 'text-white'
-                  : pnlClass(card.value as number)
+                card.isMoney ? 'text-white' : pnlClass(card.value)
               }`}
             >
-              {'isMoney' in card && card.isMoney
-                ? fmt(card.value as number)
-                : fmt(card.value as number)}
+              {fmt(card.value)}
             </p>
+            {card.sub ? (
+              <p className="mt-0.5 text-[10px] text-white/40">{card.sub}</p>
+            ) : null}
           </div>
         ))}
       </div>
 
-      {summary.symbols.length > 0 && !scopeKey ? (
+      {summary.symbols.length > 0 && !scopeSymbol ? (
         <section className="space-y-2">
           <h4 className="text-xs font-semibold uppercase tracking-wide text-sky-300/80">
             By symbol
@@ -806,7 +1017,7 @@ export function PortfolioPerformancePanel({
               <thead className="text-xs uppercase tracking-wider text-white/45">
                 <tr>
                   <th className="px-3 py-2 text-left font-medium">Date</th>
-                  {!scopeKey ? (
+                  {!scopeSymbol ? (
                     <th className="px-3 py-2 text-left font-medium">Symbol</th>
                   ) : null}
                   <th className="px-3 py-2 text-left font-medium">Side</th>
@@ -826,7 +1037,7 @@ export function PortfolioPerformancePanel({
                   .map((t) => (
                     <tr key={t.id} className="border-t border-white/5">
                       <td className="px-3 py-2 tabular-nums text-white/80">{t.tradeDate}</td>
-                      {!scopeKey ? (
+                      {!scopeSymbol ? (
                         <td className="px-3 py-2 font-medium text-white">
                           {t.instrument === 'option'
                             ? (() => {
@@ -921,6 +1132,7 @@ export function PortfolioPerformancePanel({
       <PortfolioTradeImportModal
         open={importOpen}
         portfolio={portfolio}
+        scenarios={scenarios}
         tradesState={tradesState}
         onClose={() => setImportOpen(false)}
         onApply={(next) => {

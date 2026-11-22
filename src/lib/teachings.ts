@@ -1248,9 +1248,9 @@ The **Performance** tab is an **executed trade ledger** (equities and **listed o
 
 - **+ Trade** — choose **Equity** or **Option**; OCC or IB description (e.g. HIMS 16OCT26 25 P), contracts, USD premium, optional **CHF** fee currency, lifecycle **Event** (expire / assign)
 - **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
-- When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history)
+- When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history). On save, the trade **auto-links** to the position when the ticker matches **exactly one** equity row (ambiguous or option rows stay unlinked)
 
-> Equities: uppercase tickers. Options: OCC symbol or parsed IB description; scope filter includes **underlying rollups** and single contracts.
+> Equities: uppercase tickers. Options: OCC symbol or parsed IB description.
 
 ### Editing
 
@@ -1258,16 +1258,16 @@ Use **Edit** or **Delete** on any row in the trade log. When a trade was saved w
 
 ### Scope
 
-The header **select** switches what you are viewing:
+The header **select** switches **equity** scope only (**Whole portfolio** or one stock ticker). **Options** are always summarized in **Options P/L (whole book)** below the return chart — not in the scope dropdown.
 
-- **Whole portfolio** — rollup across every symbol that has any logged trade on this book, including **closed** names (fully sold) and symbol-only trades you never sized in **Positions**
-- **One ticker** — summary cards, **By symbol**, and **Trade log** show only that symbol
+- **Whole portfolio** — rollup across every **stock** that has any logged trade on this book, including **closed** names (fully sold) and symbol-only trades you never sized in **Positions**
+- **One ticker** — summary cards, **By symbol**, and **Trade log** show only that **stock**; option rows stay in the book-wide Options P/L block
 
-> Realized P&L on closed tickers still counts in the whole-portfolio rollup.
+> Realized P&L on closed tickers still counts in the whole-portfolio rollup. Whole-book **snapshot** cards still include options in total P&L.
 
 ### Stats blocks
 
-- **Activity** — trade, buy, and sell counts; first / last trade; holding period and open/closed **status** on one ticker; **open · closed symbol counts** on whole portfolio
+- **Activity** — trade, buy, and sell counts; first / last trade; holding period and open/closed **status** on one ticker; **open · closed symbol counts** on whole portfolio; **peak net capital** for the scope
 - **Position** (single ticker) — ledger shares, average cost / breakeven, gross buys, sell proceeds, % sold, open cost basis, current value
 - **TWR** — time-weighted return **per ticker** from daily price history (lazy fetch, shared cache with Comparables); shows **Unavailable** when history cannot cover the holding window
 
@@ -1275,22 +1275,41 @@ Whole-portfolio **By symbol** lists **open** ledger rows first (status, **TWR**,
 
 ### Snapshot return
 
-A highlighted card shows **today’s** total return for the current scope: **$** and **%** = (realized + unrealized) ÷ **gross buys** (invested). When open shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date.
+A highlighted card shows **today’s** totals for the current scope:
+
+- **$** — realized + unrealized P&L (display currency)
+- **%** — total P&L ÷ **peak net capital** (most of your own money at work at any point; buys minus sell proceeds through today)
+- **Net capital** subtitle — **current** net contribution (buys minus sell proceeds now)
+- **TWR** — time-weighted return on the **equity** ledger (equity curve; options excluded). Shows **n/a** with a short reason when price history cannot cover the window
+- **MWR** — money-weighted return (**XIRR**) from all **trade cash flows** in scope, including **options**, plus ending **mark-to-market** when positions are still open. Same **n/a** pattern when IRR cannot be solved
+- **Gross buys** — cumulative buy notionals (secondary line; includes rebuys funded from sales)
+
+When open shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date.
 
 ### Return progression
 
-Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** overlay) shows cumulative performance from the first trade through today for the current scope.
+Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** overlay) shows cumulative **equity** performance from the first stock trade through today for the current equity scope (options do not move the line).
 
 - **$** — realized + unrealized P&L each day (ledger marks from daily closes when shares are open)
-- **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** %)
+- **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** % on equities)
 
-The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged buy (green dot) and sell (red dot) on the curve at that day’s return; the main tooltip follows the crosshair by date and adds trade details on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
+The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged equity buy (green dot) and sell (red dot) on the curve. **Amber hollow** dots mark **option** events (open/close, **expire**, **assign**) on the same curve: **whole portfolio** shows every option on the book-wide equity curve; **one ticker** shows only options on that underlying. Tooltips list equity fills and option contract labels on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
+
+### Options P/L (whole book)
+
+When the book has option trades, an **Options P/L** block (amber panel) always shows **book-wide** totals — independent of the equity scope:
+
+- **Realized / unrealized / total** P&L (display currency)
+- **Premium received** and **premium paid** (separate lines)
+- **Open contracts** and **closed series** (one OCC series = fully flat)
+- **Win rate** — share of closed series with **total P&L &gt; 0**
+- Optional **per-underlying** table (rollup, not a scope filter)
 
 ### Bulk import, export, clear
 
 - **Export** — downloads all trades on the **current book** as JSON (round-trippable with **Import**; includes **currency**)
 - **Clear** — removes every trade on this book after confirm (export first if you need backup)
-- **Import** — paste JSON or upload **.json** / **.csv**; preview lists rows (incl. **currency**), valid / invalid counts, book reassignment, and duplicates before you confirm. Import **appends** to the **current book** only
+- **Import** — paste JSON or upload **.json** / **.csv**; preview lists rows (incl. **currency**), valid / invalid counts, book reassignment, and duplicates before you confirm. Import **appends** to the **current book** only. Equity rows **auto-link** to a position when the ticker matches exactly one row (same rules as manual saves); optional **holdingId** in the file is kept when valid on this book
 
 **JSON** — array of trades or \`{ "trades": [ … ] }\`:
 
