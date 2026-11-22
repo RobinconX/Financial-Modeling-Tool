@@ -1,8 +1,7 @@
 [
   {
     "releasedAt": "2026-11-22",
-    "prodSha": null,
-    "pending": true,
+    "prodSha": "4dfd58d433ce01f33f2ca6e7f062367d5756bfe8",
     "headline": "Option trades on Portfolio Performance",
     "notes": [
       "Log listed option trades alongside equities — short premium opens, OCC or IB description import, USD premium with CHF fee currency.",
