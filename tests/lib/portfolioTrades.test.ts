@@ -57,6 +57,7 @@ describe('portfolioTrades', () => {
     ).toBe(12)
     const prefill = positionPrefillFromHolding(holdingEquity, {
       price: 210,
+      currency: 'USD',
       source: 'manual',
       asOfDate: null,
     })
@@ -175,6 +176,52 @@ describe('portfolioTrades', () => {
     expect(whole.unrealizedPnl).toBeCloseTo(500, 4)
     expect(whole.totalPnl).toBeCloseTo(500, 4)
     expect(whole.returnPct).toBeCloseTo(0.5, 4)
+  })
+
+  it('defaults missing currency to USD on normalize', () => {
+    const t = normalizePortfolioTrade({
+      portfolioId: PORT_ID,
+      symbol: 'AAPL',
+      side: 'buy',
+      tradeDate: '2024-01-01',
+      shares: 1,
+      price: 1,
+    })
+    expect(t?.currency).toBe('USD')
+  })
+
+  it('converts CHF buys against USD marks into display USD', () => {
+    const trades = normalizePortfolioTrades({
+      version: 1,
+      trades: [
+        {
+          id: '1',
+          portfolioId: PORT_ID,
+          symbol: 'AAPL',
+          side: 'buy',
+          tradeDate: '2024-01-01',
+          shares: 10,
+          price: 90,
+          currency: 'CHF',
+        },
+      ],
+    }).trades
+    const emptyBook: SavedPortfolio = {
+      id: PORT_ID,
+      name: 'T',
+      currentCash: 0,
+      deposits: [],
+      holdings: [],
+      actions: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const whole = computePortfolioPerformance(trades, emptyBook, [], {}, '2024-06-01', {
+      displayCurrency: 'USD',
+      usdToChf: 0.9,
+      quoteCurrencyBySymbol: { AAPL: 'USD' },
+    })
+    expect(whole.grossBuys).toBeCloseTo(1000, 4)
   })
 
   it('computes average-cost realized and unrealized P&L', () => {

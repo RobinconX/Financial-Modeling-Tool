@@ -50,6 +50,7 @@ describe('portfolioTradesImport', () => {
       tradeDate: '2024-01-02',
       shares: 1,
       price: 10,
+      currency: 'USD' as const,
       fees: 0,
     }
     const state = { version: 1 as const, trades: [existing] }
@@ -63,7 +64,7 @@ describe('portfolioTradesImport', () => {
       new Set(),
     )
     expect(preview.duplicateExistingCount).toBeGreaterThan(0)
-    expect(tradeDuplicateKey(existing)).toBe('AAPL|buy|2024-01-02|1|10')
+    expect(tradeDuplicateKey(existing)).toBe('AAPL|buy|2024-01-02|1|10|USD')
     const skipped = appendPortfolioTrades(state, preview, BOOK, 'skip')
     expect(skipped.imported).toBe(0)
     const added = appendPortfolioTrades(state, preview, BOOK, 'import')

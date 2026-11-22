@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import type {
+  DisplayCurrency,
   PortfolioTrade,
   PortfolioTradeSide,
   SavedPortfolio,
@@ -8,6 +9,7 @@ import type {
 import { formatInputNumber } from '../common/MoneyInput'
 import type { PriceHistoryPoint } from '../../lib/priceHistory'
 import {
+  defaultTradeCurrencyForSymbol,
   equityHoldingForTradePrefill,
   holdingEquityTradeSymbol,
   normalizePortfolioTrade,
@@ -22,6 +24,7 @@ type Props = {
   portfolio: SavedPortfolio
   scenarios: SavedScenario[]
   historyBySymbol?: Record<string, PriceHistoryPoint[]>
+  quoteCurrencyBySymbol?: Record<string, DisplayCurrency>
   onClose: () => void
   onSave: (trade: PortfolioTrade) => boolean
 }
@@ -40,6 +43,7 @@ export function PortfolioTradeDrawer({
   portfolio,
   scenarios,
   historyBySymbol = {},
+  quoteCurrencyBySymbol = {},
   onClose,
   onSave,
 }: Props) {
@@ -49,6 +53,7 @@ export function PortfolioTradeDrawer({
   const [shares, setShares] = useState('')
   const [price, setPrice] = useState('')
   const [fees, setFees] = useState('')
+  const [currency, setCurrency] = useState<DisplayCurrency>('USD')
   const [note, setNote] = useState('')
   const [holdingId, setHoldingId] = useState<string | undefined>()
   const [error, setError] = useState<string | null>(null)
@@ -71,10 +76,11 @@ export function PortfolioTradeDrawer({
     setFees(
       draft.fees != null && draft.fees > 0 ? formatInputNumber(draft.fees, 2) : '',
     )
+    setCurrency(draft.currency ?? defaultTradeCurrencyForSymbol(resolvedSymbol, quoteCurrencyBySymbol))
     setNote(draft.note ?? '')
     setHoldingId(draft.holdingId ?? byId?.id)
     setError(null)
-  }, [open, draft, portfolio, scenarios])
+  }, [open, draft, portfolio, scenarios, quoteCurrencyBySymbol])
 
   const matchedHolding = useMemo(
     () =>
@@ -89,23 +95,46 @@ export function PortfolioTradeDrawer({
     ? holdingEquityTradeSymbol(matchedHolding, scenarios)
     : null
 
+  useEffect(() => {
+    if (!open || !symbol.trim()) return
+    if (draft && draft.symbol === symbol.trim().toUpperCase() && draft.price > 0) return
+    setCurrency(defaultTradeCurrencyForSymbol(symbol, quoteCurrencyBySymbol))
+  }, [symbol, quoteCurrencyBySymbol, open, draft])
+
   const applyPosition = useCallback(() => {
     if (!matchedHolding) return
     const ticker =
       holdingEquityTradeSymbol(matchedHolding, scenarios) ?? symbol.trim()
     const hist = historyBySymbol[ticker.toUpperCase()] ?? []
-    const mark = resolveSymbolMark(ticker, portfolio, scenarios, hist, tradeDate)
+    const histCur = quoteCurrencyBySymbol[ticker.toUpperCase()]
+    const mark = resolveSymbolMark(
+      ticker,
+      portfolio,
+      scenarios,
+      hist,
+      tradeDate,
+      histCur,
+    )
     const prefill = positionPrefillFromHolding(matchedHolding, mark)
     setShares(prefill.shares > 0 ? formatInputNumber(prefill.shares, 6) : '')
     setHoldingId(prefill.holdingId)
     if (prefill.price != null) {
       setPrice(formatInputNumber(prefill.price, 4))
+      if (mark?.currency) setCurrency(mark.currency)
     }
     if (!symbol.trim() && ticker) {
       setSymbol(ticker.toUpperCase())
     }
     setError(null)
-  }, [matchedHolding, historyBySymbol, portfolio, scenarios, tradeDate, symbol])
+  }, [
+    matchedHolding,
+    historyBySymbol,
+    portfolio,
+    scenarios,
+    tradeDate,
+    symbol,
+    quoteCurrencyBySymbol,
+  ])
 
   if (!open || !draft) return null
 
@@ -122,6 +151,7 @@ export function PortfolioTradeDrawer({
       tradeDate,
       shares: sharesN,
       price: priceN,
+      currency,
       fees: feesN,
       note: note.trim() || undefined,
       holdingId: linkId,
@@ -249,19 +279,32 @@ export function PortfolioTradeDrawer({
               />
             </div>
             <div>
-              <FieldLabel>Price (USD)</FieldLabel>
-              <input
-                className="input tabular-nums"
-                inputMode="decimal"
-                value={price}
-                onChange={(e) => setPrice(e.target.value)}
-                required
-              />
+              <FieldLabel>Currency</FieldLabel>
+              <select
+                className="input"
+                value={currency}
+                onChange={(e) => setCurrency(e.target.value === 'CHF' ? 'CHF' : 'USD')}
+                aria-label="Trade currency"
+              >
+                <option value="USD">USD</option>
+                <option value="CHF">CHF</option>
+              </select>
             </div>
           </div>
 
           <div>
-            <FieldLabel>Fees (optional)</FieldLabel>
+            <FieldLabel>Price ({currency})</FieldLabel>
+            <input
+              className="input tabular-nums"
+              inputMode="decimal"
+              value={price}
+              onChange={(e) => setPrice(e.target.value)}
+              required
+            />
+          </div>
+
+          <div>
+            <FieldLabel>Fees ({currency}, optional)</FieldLabel>
             <input
               className="input tabular-nums"
               inputMode="decimal"

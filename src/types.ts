@@ -575,9 +575,11 @@ export type PortfolioTrade = {
   /** Calendar execution date YYYY-MM-DD. */
   tradeDate: string
   shares: number
-  /** Per-share execution price (USD book). */
+  /** Per-share execution price in `currency` (native denomination). */
   price: number
-  /** Trading fees / commission in USD. Default 0. */
+  /** Trade and fee denomination. Default USD when omitted in stored JSON. */
+  currency?: DisplayCurrency
+  /** Trading fees / commission in `currency`. Default 0. */
   fees?: number
   note?: string
   /** Optional link to a holding row (UI prefill only). */

@@ -127,7 +127,11 @@ export function PortfolioTradeImportModal({
           <p className="text-xs text-white/50">
             Append to <span className="text-white/80">{portfolio.name}</span>. JSON{' '}
             <code className="text-emerald-300/80">trades[]</code> or CSV with headers{' '}
-            <code className="text-emerald-300/80">symbol,side,tradeDate,shares,price</code>.
+            <code className="text-emerald-300/80">
+              symbol,side,tradeDate,shares,price
+            </code>
+            ; optional <code className="text-emerald-300/80">currency</code> (USD/CHF,
+            default USD).
           </p>
           <textarea
             className="input min-h-[8rem] font-mono text-xs"
@@ -161,6 +165,45 @@ export function PortfolioTradeImportModal({
                   : ''}
                 {dupCount > 0 ? ` · ${dupCount} duplicate${dupCount === 1 ? '' : 's'}` : ''}
               </p>
+              {preview.valid.length > 0 ? (
+                <div className="table-shell max-h-40 overflow-auto">
+                  <table className="min-w-full text-[11px]">
+                    <thead className="text-white/40">
+                      <tr>
+                        <th className="px-2 py-1 text-left font-medium">Symbol</th>
+                        <th className="px-2 py-1 text-left font-medium">Side</th>
+                        <th className="px-2 py-1 text-left font-medium">Date</th>
+                        <th className="px-2 py-1 text-right font-medium">Shares</th>
+                        <th className="px-2 py-1 text-right font-medium">Price</th>
+                        <th className="px-2 py-1 text-left font-medium">Currency</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {preview.valid.slice(0, 20).map((row) => (
+                        <tr key={row.index} className="border-t border-white/5">
+                          <td className="px-2 py-1 text-white/80">{row.trade.symbol}</td>
+                          <td className="px-2 py-1 capitalize text-white/70">{row.trade.side}</td>
+                          <td className="px-2 py-1 tabular-nums text-white/70">
+                            {row.trade.tradeDate}
+                          </td>
+                          <td className="px-2 py-1 text-right tabular-nums text-white/70">
+                            {row.trade.shares}
+                          </td>
+                          <td className="px-2 py-1 text-right tabular-nums text-white/70">
+                            {row.trade.price}
+                          </td>
+                          <td className="px-2 py-1 text-white/60">
+                            {row.trade.currency ?? 'USD'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                  {preview.valid.length > 20 ? (
+                    <p className="mt-1 text-white/40">…and {preview.valid.length - 20} more rows</p>
+                  ) : null}
+                </div>
+              ) : null}
               {preview.invalid.length > 0 ? (
                 <ul className="max-h-24 list-disc overflow-y-auto pl-4 text-red-300/85">
                   {preview.invalid.slice(0, 12).map((r) => (
@@ -176,7 +219,7 @@ export function PortfolioTradeImportModal({
               {dupCount > 0 ? (
                 <fieldset className="space-y-1">
                   <legend className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
-                    Duplicates (same symbol, side, date, shares, price)
+                    Duplicates (same symbol, side, date, shares, price, currency)
                   </legend>
                   <label className="flex items-center gap-2 text-white/70">
                     <input

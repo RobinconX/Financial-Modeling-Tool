@@ -7,11 +7,18 @@ import type {
   SavedScenario,
 } from '../../types'
 import { formatMoney, formatPrice } from '../../lib/format'
-import { toDisplay } from '../../lib/fx'
+import { amountToDisplay } from '../../lib/fx'
+import {
+  clearTradesForPortfolio,
+  downloadPortfolioTradesExport,
+} from '../../lib/portfolioTradesExport'
+import type { PerfDisplayContext } from '../../lib/portfolioTradeFx'
+import { tradesInDisplayCurrency } from '../../lib/portfolioTradeFx'
 import {
   computePortfolioPerformance,
   formatSnapshotMarkSummary,
   newPortfolioTrade,
+  todayIsoDate,
   tradedSymbolsFromTrades,
   tradesForPortfolio,
   tradesMatchingSymbol,
@@ -111,13 +118,23 @@ export function PortfolioPerformancePanel({
   onReplaceTrades,
 }: Props) {
   const fmt = useCallback(
-    (usd: number) =>
-      formatMoney(toDisplay(usd, displayCurrency, usdToChf), displayCurrency),
+    (amount: number) => formatMoney(amount, displayCurrency),
+    [displayCurrency],
+  )
+  const fmtStoredMoney = useCallback(
+    (amount: number, amountCurrency: PortfolioTrade['currency']) =>
+      formatMoney(
+        amountToDisplay(amount, amountCurrency ?? 'USD', displayCurrency, usdToChf),
+        displayCurrency,
+      ),
     [displayCurrency, usdToChf],
   )
-  const fmtPrice = useCallback(
-    (usd: number) =>
-      formatPrice(toDisplay(usd, displayCurrency, usdToChf), displayCurrency),
+  const fmtStoredPrice = useCallback(
+    (amount: number, amountCurrency: PortfolioTrade['currency']) =>
+      formatPrice(
+        amountToDisplay(amount, amountCurrency ?? 'USD', displayCurrency, usdToChf),
+        displayCurrency,
+      ),
     [displayCurrency, usdToChf],
   )
   const portfolioTrades = useMemo(
@@ -155,6 +172,23 @@ export function PortfolioPerformancePanel({
     return out
   }, [histories])
 
+  const quoteCurrencyBySymbol = useMemo(() => {
+    const out: Record<string, DisplayCurrency> = {}
+    for (const [sym, h] of Object.entries(histories)) {
+      out[sym] = h.currency === 'CHF' ? 'CHF' : 'USD'
+    }
+    return out
+  }, [histories])
+
+  const perfCtx = useMemo(
+    (): PerfDisplayContext => ({
+      displayCurrency,
+      usdToChf: usdToChf ?? null,
+      quoteCurrencyBySymbol,
+    }),
+    [displayCurrency, usdToChf, quoteCurrencyBySymbol],
+  )
+
   const summary = useMemo(
     () =>
       computePortfolioPerformance(
@@ -162,8 +196,10 @@ export function PortfolioPerformancePanel({
         portfolio,
         scenarios,
         historyPoints,
+        todayIsoDate(),
+        perfCtx,
       ),
-    [scopedTrades, portfolio, scenarios, historyPoints],
+    [scopedTrades, portfolio, scenarios, historyPoints, perfCtx],
   )
 
   const tradesBySymbol = useMemo(() => {
@@ -250,10 +286,10 @@ export function PortfolioPerformancePanel({
         out.set(sym, { twr: null, status: 'unavailable' })
         continue
       }
-      out.set(sym, computeTimeWeightedReturn(trades, hist.points))
+      out.set(sym, computeTimeWeightedReturn(trades, hist.points, undefined, perfCtx, sym))
     }
     return out
-  }, [summary.symbols, tradesBySymbol, histories])
+  }, [summary.symbols, tradesBySymbol, histories, perfCtx])
 
   const activityStats = useMemo((): TradeActivityStats | PortfolioActivityRollup => {
     if (scopeSymbol) {
@@ -272,7 +308,11 @@ export function PortfolioPerformancePanel({
   const holdingStats = useMemo(() => {
     if (!scopeSymbol || !summary.symbols[0]) return null
     const s = summary.symbols[0]
-    const trades = tradesBySymbol.get(s.symbol) ?? []
+    const trades = tradesInDisplayCurrency(
+      tradesBySymbol.get(s.symbol) ?? [],
+      displayCurrency,
+      usdToChf ?? null,
+    )
     return computeHoldingCostStats(
       trades,
       s.ledgerShares,
@@ -281,12 +321,20 @@ export function PortfolioPerformancePanel({
       s.marketValue,
       totalOpenMarketValue,
     )
-  }, [scopeSymbol, summary.symbols, tradesBySymbol, totalOpenMarketValue])
+  }, [
+    scopeSymbol,
+    summary.symbols,
+    tradesBySymbol,
+    totalOpenMarketValue,
+    displayCurrency,
+    usdToChf,
+  ])
 
   const [drawerOpen, setDrawerOpen] = useState(false)
   const [importOpen, setImportOpen] = useState(false)
   const [draft, setDraft] = useState<PortfolioTrade | null>(null)
   const [pendingDelete, setPendingDelete] = useState<PortfolioTrade | null>(null)
+  const [pendingClear, setPendingClear] = useState(false)
   const [tradeLogOpen, setTradeLogOpen] = useState(false)
   const [closedSymbolsOpen, setClosedSymbolsOpen] = useState(false)
   const [returnChartMode, setReturnChartMode] = useState<ReturnChartMode>('pct')
@@ -308,8 +356,9 @@ export function PortfolioPerformancePanel({
   )
 
   const renderSymbolPerformanceRow = (s: SymbolPerformance) => {
+    const symTrades = tradesBySymbol.get(s.symbol) ?? []
     const holding = computeHoldingCostStats(
-      tradesBySymbol.get(s.symbol) ?? [],
+      tradesInDisplayCurrency(symTrades, displayCurrency, usdToChf ?? null),
       s.ledgerShares,
       s.costBasis,
       s.grossBuys,
@@ -361,8 +410,8 @@ export function PortfolioPerformancePanel({
   )
 
   const returnProgression = useMemo(
-    () => buildReturnProgression(tradesBySymbol, historyPoints),
-    [tradesBySymbol, historyPoints],
+    () => buildReturnProgression(tradesBySymbol, historyPoints, undefined, perfCtx),
+    [tradesBySymbol, historyPoints, perfCtx],
   )
 
   const returnMissingNote = useMemo(() => {
@@ -443,14 +492,14 @@ export function PortfolioPerformancePanel({
         label: 'Avg cost',
         value:
           holdingStats.averageCost != null
-            ? fmtPrice(holdingStats.averageCost)
+            ? formatPrice(holdingStats.averageCost, displayCurrency)
             : '—',
       },
       {
         label: 'Breakeven',
         value:
           holdingStats.breakeven != null
-            ? fmtPrice(holdingStats.breakeven)
+            ? formatPrice(holdingStats.breakeven, displayCurrency)
             : '—',
       },
       {
@@ -483,7 +532,7 @@ export function PortfolioPerformancePanel({
           : '—',
       },
     ]
-  }, [holdingStats, scopeSymbol, twrBySymbol, fmt, fmtPrice])
+  }, [holdingStats, scopeSymbol, twrBySymbol, fmt, displayCurrency])
 
   return (
     <div className="space-y-5" data-guide-anchor="portfolio.performance">
@@ -512,6 +561,28 @@ export function PortfolioPerformancePanel({
                 ))}
               </select>
             ) : null}
+            <button
+              type="button"
+              className="btn-ghost !px-2.5 !py-1 !text-xs"
+              onClick={() =>
+                downloadPortfolioTradesExport(
+                  tradesState,
+                  portfolio.id,
+                  portfolio.name.replace(/\s+/g, '-'),
+                )
+              }
+              disabled={portfolioTrades.length === 0}
+            >
+              Export
+            </button>
+            <button
+              type="button"
+              className="btn-ghost !px-2.5 !py-1 !text-xs"
+              onClick={() => setPendingClear(true)}
+              disabled={portfolioTrades.length === 0}
+            >
+              Clear
+            </button>
             <button
               type="button"
               className="btn-ghost !px-2.5 !py-1 !text-xs"
@@ -718,6 +789,7 @@ export function PortfolioPerformancePanel({
                   ) : null}
                   <th className="px-3 py-2 text-left font-medium">Side</th>
                   <th className="px-3 py-2 text-right font-medium">Shares</th>
+                  <th className="px-3 py-2 text-left font-medium">Ccy</th>
                   <th className="px-3 py-2 text-right font-medium">Price</th>
                   <th className="px-3 py-2 text-right font-medium">Fees</th>
                   {tradeLogHasPositionLink ? (
@@ -747,11 +819,16 @@ export function PortfolioPerformancePanel({
                       <td className="px-3 py-2 text-right tabular-nums text-white/80">
                         {formatInputShares(t.shares)}
                       </td>
+                      <td className="px-3 py-2 text-xs text-white/55">
+                        {t.currency ?? 'USD'}
+                      </td>
                       <td className="px-3 py-2 text-right tabular-nums text-white/80">
-                        {fmtPrice(t.price)}
+                        {fmtStoredPrice(t.price, t.currency)}
                       </td>
                       <td className="px-3 py-2 text-right tabular-nums text-white/50">
-                        {(t.fees ?? 0) > 0 ? fmt(t.fees!) : '—'}
+                        {(t.fees ?? 0) > 0
+                          ? fmtStoredMoney(t.fees!, t.currency)
+                          : '—'}
                       </td>
                       {tradeLogHasPositionLink ? (
                         <td className="px-3 py-2 text-xs text-white/55">
@@ -800,6 +877,7 @@ export function PortfolioPerformancePanel({
         portfolio={portfolio}
         scenarios={scenarios}
         historyBySymbol={historyPoints}
+        quoteCurrencyBySymbol={quoteCurrencyBySymbol}
         onClose={() => {
           setDrawerOpen(false)
           setDraft(null)
@@ -818,6 +896,27 @@ export function PortfolioPerformancePanel({
           return ok
         }}
       />
+
+      {pendingClear ? (
+        <ConfirmDialog
+          title="Clear all trades on this book?"
+          confirmLabel="Clear trades"
+          onClose={() => setPendingClear(false)}
+          onConfirm={() => {
+            const next = clearTradesForPortfolio(tradesState, portfolio.id)
+            onReplaceTrades(next)
+            setPendingClear(false)
+            setTradeLogOpen(false)
+          }}
+        >
+          <p>
+            Remove all {portfolioTrades.length} trade
+            {portfolioTrades.length === 1 ? '' : 's'} from{' '}
+            <span className="text-white/85">{portfolio.name}</span>. Export first if you
+            want a backup. Positions are unchanged.
+          </p>
+        </ConfirmDialog>
+      ) : null}
 
       {pendingDelete ? (
         <ConfirmDialog

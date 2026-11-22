@@ -1242,11 +1242,11 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
       'Log executed equity buys and sells by date and price for the selected portfolio book. Average-cost realized and unrealized P&L; full edit/delete in-app or bulk fill via save-file JSON.',
     body: `## How it works
 
-The **Performance** tab is an **executed trade ledger**. It does not change **Positions** share counts or **Chart** planned buy/sell actions. **$** amounts and the chart money axis follow the portfolio **USD** / **CHF** toggle (same live rate as elsewhere); **%** return is unchanged by currency.
+The **Performance** tab is an **executed trade ledger**. It does not change **Positions** share counts or **Chart** planned buy/sell actions. Each trade stores its own **USD** or **CHF** denomination for **price** and **fees**. P&L, cost basis, and the return chart convert those amounts plus quote/history marks into the portfolio **display currency** using the **live** USD/CHF rate (same as elsewhere); **%** return is unchanged by display currency.
 
 ### Adding trades
 
-- **+ Trade** opens a drawer: symbol, side, date (**Today** shortcut), shares, price, optional fees and note
+- **+ Trade** opens a drawer: symbol, side, date (**Today** shortcut), **currency** (defaults from the symbol quote when known), shares, price, optional fees and note — price and fees are in the trade currency you pick, not rewritten when you toggle display currency
 - **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
 - When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history)
 
@@ -1286,9 +1286,11 @@ Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** ove
 
 The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged buy (green dot) and sell (red dot) on the curve at that day’s return; the main tooltip follows the crosshair by date and adds trade details on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
 
-### Bulk import
+### Bulk import, export, clear
 
-**Import** (beside **+ Trade**) opens a modal: paste JSON, or upload **.json** / **.csv**. Preview shows valid / invalid counts, book reassignment, and duplicates before you confirm. Import **appends** to the **current book** only.
+- **Export** — downloads all trades on the **current book** as JSON (round-trippable with **Import**; includes **currency**)
+- **Clear** — removes every trade on this book after confirm (export first if you need backup)
+- **Import** — paste JSON or upload **.json** / **.csv**; preview lists rows (incl. **currency**), valid / invalid counts, book reassignment, and duplicates before you confirm. Import **appends** to the **current book** only
 
 **JSON** — array of trades or \`{ "trades": [ … ] }\`:
 
@@ -1300,6 +1302,7 @@ The line is **green above zero** and **red below zero**. Toggle **Trades** to ma
     "tradeDate": "2024-01-10",
     "shares": 50,
     "price": 185.2,
+    "currency": "USD",
     "fees": 1,
     "note": "Broker fill"
   }
@@ -1309,28 +1312,31 @@ The line is **green above zero** and **red below zero**. Toggle **Trades** to ma
 **CSV** — header row; \`portfolioId\` optional (reassigned to this book):
 
 \`\`\`
-symbol,side,tradeDate,shares,price,fees,note
-AAPL,buy,2024-01-10,50,185.20,1.00,Open
-AAPL,sell,2025-03-01,10,210.00,,
+symbol,side,tradeDate,shares,price,currency,fees,note
+AAPL,buy,2024-01-10,50,185.20,USD,1.00,Open
+AAPL,sell,2025-03-01,10,210.00,USD,,
 \`\`\`
+
+Omit **currency** → stored as **USD** (legacy rows without currency are treated the same on load).
 
 **Agent prompt** (copy to your assistant):
 
 \`\`\`
 Convert my broker export into Grok Lab portfolio trades for bulk import.
-Output CSV with columns: symbol,side,tradeDate,shares,price,fees,note
+Output CSV with columns: symbol,side,tradeDate,shares,price,currency,fees,note
 Rules: side buy|sell; tradeDate YYYY-MM-DD; equity tickers only (e.g. AAPL);
-shares and price positive numbers; fees optional; omit portfolioId.
+currency USD or CHF when known (else USD); shares and price positive numbers;
+fees optional; omit portfolioId.
 \`\`\`
 
-Duplicates (same symbol, side, date, shares, price) can be skipped (default) or imported anyway.
+Duplicates (same symbol, side, date, shares, price, **currency**) can be skipped (default) or imported anyway.
 
 ### Save file / agents
 
 Trades live under \`portfolioTrades\` in **Export** / linked JSON. Invalid rows are dropped on import; missing \`id\` values are minted.
 
 - **version** — always \`1\`
-- **trades[]** — each row needs \`portfolioId\`, \`symbol\`, \`side\` (\`buy\` / \`sell\`), \`tradeDate\` (\`YYYY-MM-DD\`), \`shares\`, \`price\`; optional \`fees\`, \`note\`, \`id\`, \`holdingId\`
+- **trades[]** — each row needs \`portfolioId\`, \`symbol\`, \`side\` (\`buy\` / \`sell\`), \`tradeDate\` (\`YYYY-MM-DD\`), \`shares\`, \`price\`; optional \`currency\` (USD/CHF, default USD), \`fees\`, \`note\`, \`id\`, \`holdingId\`
 
 See \`docs/portfolio-trades-schema.md\` in the repo for agent-oriented examples.
 
