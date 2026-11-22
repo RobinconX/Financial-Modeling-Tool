@@ -1250,7 +1250,7 @@ The **Performance** tab is an **executed trade ledger** (equities and **listed o
 - **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
 - When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history)
 
-> Equities: uppercase tickers. Options: OCC symbol or parsed IB description; scope filter includes **underlying rollups** and single contracts.
+> Equities: uppercase tickers. Options: OCC symbol or parsed IB description.
 
 ### Editing
 
@@ -1258,12 +1258,12 @@ Use **Edit** or **Delete** on any row in the trade log. When a trade was saved w
 
 ### Scope
 
-The header **select** switches what you are viewing:
+The header **select** switches **equity** scope only (**Whole portfolio** or one stock ticker). **Options** are always summarized in **Options P/L (whole book)** below the return chart — not in the scope dropdown.
 
-- **Whole portfolio** — rollup across every symbol that has any logged trade on this book, including **closed** names (fully sold) and symbol-only trades you never sized in **Positions**
-- **One ticker** — summary cards, **By symbol**, and **Trade log** show only that symbol
+- **Whole portfolio** — rollup across every **stock** that has any logged trade on this book, including **closed** names (fully sold) and symbol-only trades you never sized in **Positions**
+- **One ticker** — summary cards, **By symbol**, and **Trade log** show only that **stock**; option rows stay in the book-wide Options P/L block
 
-> Realized P&L on closed tickers still counts in the whole-portfolio rollup.
+> Realized P&L on closed tickers still counts in the whole-portfolio rollup. Whole-book **snapshot** cards still include options in total P&L.
 
 ### Stats blocks
 
@@ -1279,12 +1279,22 @@ A highlighted card shows **today’s** total return for the current scope: **$**
 
 ### Return progression
 
-Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** overlay) shows cumulative performance from the first trade through today for the current scope.
+Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** overlay) shows cumulative **equity** performance from the first stock trade through today for the current equity scope (options do not move the line).
 
 - **$** — realized + unrealized P&L each day (ledger marks from daily closes when shares are open)
-- **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** %)
+- **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** % on equities)
 
-The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged buy (green dot) and sell (red dot) on the curve at that day’s return; the main tooltip follows the crosshair by date and adds trade details on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
+The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged equity buy (green dot) and sell (red dot) on the curve. **Amber hollow** dots mark **option** events (open/close, **expire**, **assign**) on the same curve: **whole portfolio** shows every option on the book-wide equity curve; **one ticker** shows only options on that underlying. Tooltips list equity fills and option contract labels on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
+
+### Options P/L (whole book)
+
+When the book has option trades, an **Options P/L** block (amber panel) always shows **book-wide** totals — independent of the equity scope:
+
+- **Realized / unrealized / total** P&L (display currency)
+- **Premium received** and **premium paid** (separate lines)
+- **Open contracts** and **closed series** (one OCC series = fully flat)
+- **Win rate** — share of closed series with **total P&L &gt; 0**
+- Optional **per-underlying** table (rollup, not a scope filter)
 
 ### Bulk import, export, clear
 
