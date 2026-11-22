@@ -162,6 +162,101 @@ export function PerformanceMetricDrawer({
           </section>
         ) : null}
 
+        {breakdown.peakNetReconciliation ? (
+          <section className="space-y-2 rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2.5">
+            <h4 className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
+              Cash vs ledger
+            </h4>
+            <p className="text-[11px] text-white/50">
+              Gross buys − sell proceeds = open cost basis − realized P&L
+            </p>
+            <dl className="space-y-1 text-xs">
+              <div className="flex justify-between gap-2">
+                <dt className="text-white/50">Gross buys</dt>
+                <dd className="tabular-nums text-white/85">
+                  {fmt(breakdown.peakNetReconciliation.grossBuys)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-white/50">Sell proceeds</dt>
+                <dd className="tabular-nums text-white/85">
+                  {fmt(breakdown.peakNetReconciliation.sellProceeds)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2 border-t border-white/10 pt-1">
+                <dt className="text-white/70">Net (cash flows)</dt>
+                <dd className="tabular-nums text-white">
+                  {fmt(breakdown.peakNetReconciliation.netCapitalFromFlows)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-white/50">Open cost basis</dt>
+                <dd className="tabular-nums text-white/85">
+                  {fmt(breakdown.peakNetReconciliation.openCostBasis)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2">
+                <dt className="text-white/50">Realized P&L</dt>
+                <dd className="tabular-nums text-white/85">
+                  {fmt(breakdown.peakNetReconciliation.realizedPnl)}
+                </dd>
+              </div>
+              <div className="flex justify-between gap-2 border-t border-white/10 pt-1">
+                <dt className="text-white/70">Net (ledger)</dt>
+                <dd className="tabular-nums text-white">
+                  {fmt(breakdown.peakNetReconciliation.netCapitalFromLedger)}
+                </dd>
+              </div>
+            </dl>
+          </section>
+        ) : null}
+
+        {breakdown.timelineRows && breakdown.timelineRows.length > 0 ? (
+          <section>
+            <h4 className="text-[10px] font-semibold uppercase tracking-wide text-sky-300/80">
+              Running total by date
+            </h4>
+            <div className="mt-2 overflow-x-auto rounded-lg border border-white/10">
+              <table className="w-full min-w-[24rem] text-left text-[11px]">
+                <thead className="bg-white/[0.04] text-white/45">
+                  <tr>
+                    <th className="px-2 py-1.5 font-semibold">Date</th>
+                    <th className="px-2 py-1.5 font-semibold">Events</th>
+                    <th className="px-2 py-1.5 text-right font-semibold">Flow</th>
+                    <th className="px-2 py-1.5 text-right font-semibold">Running</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {breakdown.timelineRows.map((row) => (
+                    <tr
+                      key={row.date}
+                      className={`border-t border-white/[0.06] ${
+                        row.isPeak ? 'bg-emerald-500/10' : ''
+                      }`}
+                    >
+                      <td className="px-2 py-1.5 text-white/85">
+                        {row.date}
+                        {row.isPeak ? (
+                          <span className="ml-1 text-[10px] font-semibold text-emerald-300/90">
+                            peak
+                          </span>
+                        ) : null}
+                      </td>
+                      <td className="max-w-[10rem] px-2 py-1.5 text-white/55">{row.events}</td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-white/80">
+                        {fmt(row.flow)}
+                      </td>
+                      <td className="px-2 py-1.5 text-right tabular-nums text-white">
+                        {fmt(row.runningTotal)}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        ) : null}
+
         {sortedRows.length > 0 ? (
           <section>
             <div className="mb-2 flex flex-wrap items-center gap-2">

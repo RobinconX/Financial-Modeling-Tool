@@ -47,8 +47,26 @@ export function tradesInDisplayCurrency(
 
 export type PerfDisplayContext = {
   displayCurrency: DisplayCurrency
+  /** Live spot USD→CHF (marks, terminal NAV — not trade cash flows). */
   usdToChf: number | null
   quoteCurrencyBySymbol: Record<string, DisplayCurrency>
+  /** Trade-era USD→CHF by trade date; when absent, falls back to `usdToChf`. */
+  usdToChfByTradeDate?: Record<string, number>
+  /** Shown on capital / MWR / ledger cash-flow metrics when FX data was incomplete. */
+  fxWarnings?: string[]
+}
+
+/** USD→CHF for converting trade premiums and fees on `tradeDate`. */
+export function usdToChfForTradeFlow(
+  tradeDate: string,
+  ctx?: PerfDisplayContext,
+): number | null {
+  if (!ctx) return null
+  const d = tradeDate?.trim()
+  if (d && ctx.usdToChfByTradeDate?.[d] != null) {
+    return ctx.usdToChfByTradeDate[d]!
+  }
+  return ctx.usdToChf ?? null
 }
 
 export function quoteCurrencyForSymbol(

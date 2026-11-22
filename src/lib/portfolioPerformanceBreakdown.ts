@@ -15,9 +15,11 @@ import {
 } from './portfolioCashTab'
 import type { OptionsPerformanceAggregate } from './portfolioOptionsPerformance'
 import {
+  buildPeakNetInvestedTimeline,
   computeCapitalContributionStats,
   computePeakPortfolioValue,
   computePortfolioTerminalNav,
+  tradeSellProceeds,
   type MwrResult,
 } from './portfolioReturnMetrics'
 import { holdingLiveValue } from './portfolio'
@@ -65,6 +67,23 @@ export type ReconciliationLine = {
   amount: number
 }
 
+export type PeakNetTimelineRow = {
+  date: string
+  events: string
+  flow: number
+  runningTotal: number
+  isPeak: boolean
+}
+
+export type PeakNetCapitalReconciliation = {
+  grossBuys: number
+  sellProceeds: number
+  openCostBasis: number
+  realizedPnl: number
+  netCapitalFromFlows: number
+  netCapitalFromLedger: number
+}
+
 export type PerformanceMetricBreakdown = {
   metricId: PerformanceMetricId
   title: string
@@ -73,6 +92,8 @@ export type PerformanceMetricBreakdown = {
   rows: PerformanceBreakdownRow[]
   total: number
   warnings: string[]
+  timelineRows?: PeakNetTimelineRow[]
+  peakNetReconciliation?: PeakNetCapitalReconciliation
   reconciliation?: {
     chartImpliedPnl: number
     performancePnl: number
@@ -266,15 +287,50 @@ function buildReconciliation(
   }
 }
 
+function appendFxWarnings(warnings: string[], perfCtx: PerfDisplayContext): string[] {
+  const extra = perfCtx.fxWarnings ?? []
+  if (extra.length === 0) return warnings
+  return [...warnings, ...extra]
+}
+
+function peakNetCapitalReconciliation(
+  ctx: PerformanceBreakdownContext,
+): PeakNetCapitalReconciliation {
+  const { capitalStats, summary, perfCtx } = ctx
+  let sellProceeds = 0
+  const expanded = withAutoExpireTrades(ctx.trades, ctx.asOfDate)
+  for (const t of expanded) {
+    if (t.tradeDate > ctx.asOfDate) continue
+    sellProceeds += tradeSellProceeds(t, perfCtx)
+  }
+  const openCostBasis = summary.symbols.reduce(
+    (acc, s) => (s.ledgerShares !== 0 ? acc + s.costBasis : acc),
+    0,
+  )
+  const netCapitalFromFlows = capitalStats.grossBuys - sellProceeds
+  const netCapitalFromLedger = openCostBasis - summary.realizedPnl
+  return {
+    grossBuys: capitalStats.grossBuys,
+    sellProceeds,
+    openCostBasis,
+    realizedPnl: summary.realizedPnl,
+    netCapitalFromFlows,
+    netCapitalFromLedger,
+  }
+}
+
 export function buildPerformanceMetricBreakdown(
   metricId: PerformanceMetricId,
   ctx: PerformanceBreakdownContext,
 ): PerformanceMetricBreakdown {
   const { summary, capitalStats, peakPortfolio, optionsAggregate, perfCtx } = ctx
-  const warnings = equitySymbolsHeldMismatch(
-    ctx.portfolio,
-    ctx.trades,
-    ctx.asOfDate,
+  const warnings = appendFxWarnings(
+    equitySymbolsHeldMismatch(
+      ctx.portfolio,
+      ctx.trades,
+      ctx.asOfDate,
+      perfCtx,
+    ),
     perfCtx,
   )
 
@@ -352,11 +408,17 @@ export function buildPerformanceMetricBreakdown(
       }
     }
     case 'peakNetInvested': {
+      const timelineRows = buildPeakNetInvestedTimeline(
+        ctx.trades,
+        ctx.asOfDate,
+        perfCtx,
+      )
+      const peakRecon = peakNetCapitalReconciliation(ctx)
       return {
         metricId,
         title: 'Peak net invested capital',
         formula:
-          'Maximum running net of buy contributions − sell proceeds through today.',
+          'Maximum running net of buy contributions − sell proceeds through today (one net step per calendar day). Trade cash flows use USD/CHF on each trade date.',
         inputs: [
           ...baseInputs,
           { label: 'Peak', value: String(capitalStats.peakNet) },
@@ -365,6 +427,8 @@ export function buildPerformanceMetricBreakdown(
         rows: [],
         total: capitalStats.peakNet,
         warnings,
+        timelineRows,
+        peakNetReconciliation: peakRecon,
       }
     }
     case 'peakPortfolioValue': {
