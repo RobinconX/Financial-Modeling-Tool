@@ -42,9 +42,19 @@ const IDB_KEY = 'dataFile'
 export const LINKED_FILE_BOOT_STEP_TIMEOUT_MS = 2000
 /** Overall ceiling before first React paint (ms). */
 export const LINKED_FILE_BOOT_PRERENDER_DEADLINE_MS = 2000
+/** After Allow file access (user-initiated read of linked file). */
+export const LINKED_FILE_USER_READ_TIMEOUT_MS = 10_000
 
 export const LINKED_FILE_RELINK_PROMPT_ERROR =
   "Couldn't access file — use Open / link file… to pick it again"
+
+export function linkedFileReadTimeoutMessage(): string {
+  return (
+    "Couldn't read the linked file in time. If it lives on OneDrive, right-click it in " +
+    "File Explorer and choose Always keep on this device, then use Open / link file… or " +
+    "Allow file access again."
+  )
+}
 
 export function linkedFileAccessUnavailableMessage(detail?: string): string {
   const base =
@@ -399,7 +409,7 @@ async function queryPermissionState(
  * Optionally re-loads the file into localStorage when access is granted.
  */
 export async function requestLinkedFileAccess(
-  options?: { reloadFromFile?: boolean },
+  options?: { reloadFromFile?: boolean; readTimeoutMs?: number },
   gesture?: Extract<LinkedFileGesturePermission, { ok: true }>,
 ): Promise<
   | { ok: true; fileName: string; reloaded: boolean }
@@ -444,7 +454,12 @@ export async function requestLinkedFileAccess(
 
   let reloaded = false
   if (options?.reloadFromFile !== false) {
-    const snap = await readLinkedSnapshot()
+    const readTimeoutMs = options?.readTimeoutMs ?? LINKED_FILE_USER_READ_TIMEOUT_MS
+    const snap = await readLinkedSnapshot({
+      requestPermission: false,
+      stepTimeoutMs: readTimeoutMs,
+      userInitiatedRead: true,
+    })
     if (snap && !('error' in snap)) {
       const applied = hydrateOnStartup(snap)
       if (applied.ok) {
@@ -459,11 +474,11 @@ export async function requestLinkedFileAccess(
         })
       } else {
         reportLinkedFileStartupHydrateFailure(applied.error, cachedHandle.name)
-        return { ok: false, error: applied.error }
+        return { ok: false, error: applied.error, suggestRelink: true }
       }
     } else if (snap && 'error' in snap) {
       reportLinkedFileStartupHydrateFailure(snap.error, cachedHandle.name)
-      return { ok: false, error: snap.error }
+      return { ok: false, error: snap.error, suggestRelink: true }
     }
   } else {
     clearLinkedFileLoadFailedIfNeeded()
@@ -741,6 +756,14 @@ export type ReadLinkedSnapshotOptions = {
   requestPermission?: boolean
   /** When set, bound each IDB/permission/read step (boot safety). */
   stepTimeoutMs?: number
+  /** Use post-grant / OneDrive-oriented timeout copy (Allow file access). */
+  userInitiatedRead?: boolean
+}
+
+function readStepTimedOutMessage(options?: ReadLinkedSnapshotOptions): string {
+  return options?.userInitiatedRead
+    ? linkedFileReadTimeoutMessage()
+    : linkedFileAccessUnavailableMessage('reconnect in Settings')
 }
 
 export async function readLinkedSnapshot(
@@ -756,7 +779,7 @@ export async function readLinkedSnapshot(
     } catch (e) {
       if (e instanceof PromiseTimeoutError) {
         return {
-          error: linkedFileAccessUnavailableMessage('reconnect in Settings'),
+          error: readStepTimedOutMessage(options),
         }
       }
       cachedHandle = null
@@ -787,7 +810,7 @@ export async function readLinkedSnapshot(
   } catch (e) {
     if (e instanceof PromiseTimeoutError) {
       return {
-        error: linkedFileAccessUnavailableMessage('reconnect in Settings'),
+        error: readStepTimedOutMessage(options),
       }
     }
     return {

@@ -82,6 +82,31 @@ describe('Allow file access (user gesture)', () => {
     expect(result.suggestRelink).toBe(true)
   })
 
+  it('times out hanging getFile after grant with OneDrive hint', async () => {
+    vi.useFakeTimers()
+    const handle = {
+      ...createMockFileHandle('COPY-financial-model-prod.json'),
+      queryPermission: async () => 'granted' as const,
+      requestPermission: vi.fn(async () => 'granted' as const),
+      getFile: () => new Promise<File>(() => {}),
+    }
+    resetLinkedDataFileWriteStateForTests(handle)
+
+    const started = startLinkedFilePermissionRequest()
+    if (!started.ok) throw new Error('expected gesture start')
+    const resultP = requestLinkedFileAccess(
+      { reloadFromFile: true, readTimeoutMs: 100 },
+      started,
+    )
+    await vi.advanceTimersByTimeAsync(150)
+    const result = await resultP
+    expect(result.ok).toBe(false)
+    if (result.ok) throw new Error('expected failure')
+    expect(result.error).toMatch(/OneDrive/i)
+    expect(result.suggestRelink).toBe(true)
+    vi.useRealTimers()
+  })
+
   it('fails fast when handle is not cached for synchronous start', () => {
     const started = startLinkedFilePermissionRequest()
     expect(started.ok).toBe(false)
