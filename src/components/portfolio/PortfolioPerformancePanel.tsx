@@ -44,6 +44,13 @@ import {
   type TradeActivityStats,
 } from '../../lib/portfolioPerformanceStats'
 import {
+  computeCapitalContributionStats,
+  computeEquityBookTimeWeightedReturn,
+  computeMoneyWeightedReturn,
+  mwrReasonLabel,
+  twrReasonLabel,
+} from '../../lib/portfolioReturnMetrics'
+import {
   PortfolioReturnChart,
   type ReturnChartMode,
 } from './PortfolioReturnChart'
@@ -199,6 +206,8 @@ export function PortfolioPerformancePanel({
     [displayCurrency, usdToChf, quoteCurrencyBySymbol],
   )
 
+  const asOfDate = todayIsoDate()
+
   const summary = useMemo(
     () =>
       computePortfolioPerformance(
@@ -206,11 +215,36 @@ export function PortfolioPerformancePanel({
         portfolio,
         scenarios,
         historyPoints,
-        todayIsoDate(),
+        asOfDate,
         perfCtx,
       ),
-    [scopedTrades, portfolio, scenarios, historyPoints, perfCtx],
+    [scopedTrades, portfolio, scenarios, historyPoints, perfCtx, asOfDate],
   )
+
+  const capitalTrades = useMemo(
+    () => (scopeSymbol ? scopedTrades : portfolioTrades),
+    [scopeSymbol, scopedTrades, portfolioTrades],
+  )
+
+  const capitalStats = useMemo(
+    () => computeCapitalContributionStats(capitalTrades, asOfDate, perfCtx),
+    [capitalTrades, asOfDate, perfCtx],
+  )
+
+  const terminalNav = useMemo(() => {
+    let nav = 0
+    for (const s of summary.symbols) {
+      if (s.marketValue != null) nav += s.marketValue
+    }
+    return nav
+  }, [summary.symbols])
+
+  const snapshotReturnPct = useMemo(() => {
+    if (capitalStats.peakNet > 0 && Number.isFinite(summary.totalPnl)) {
+      return summary.totalPnl / capitalStats.peakNet
+    }
+    return null
+  }, [capitalStats.peakNet, summary.totalPnl])
 
   const tradesBySymbol = useMemo(() => {
     const m = new Map<string, PortfolioTrade[]>()
@@ -238,6 +272,38 @@ export function PortfolioPerformancePanel({
     for (const list of equityTradesBySymbol.values()) out.push(...list)
     return out
   }, [equityTradesBySymbol])
+
+  const snapshotTwr = useMemo(() => {
+    if (scopeSymbol) {
+      const trades = equityTradesBySymbol.get(scopeSymbol) ?? []
+      const hist = histories[scopeSymbol]
+      return computeTimeWeightedReturn(
+        trades,
+        hist?.points ?? [],
+        asOfDate,
+        perfCtx,
+        scopeSymbol,
+      )
+    }
+    return computeEquityBookTimeWeightedReturn(
+      equityTradesBySymbol,
+      historyPoints,
+      asOfDate,
+      perfCtx,
+    )
+  }, [
+    scopeSymbol,
+    equityTradesBySymbol,
+    histories,
+    historyPoints,
+    asOfDate,
+    perfCtx,
+  ])
+
+  const snapshotMwr = useMemo(
+    () => computeMoneyWeightedReturn(capitalTrades, terminalNav, asOfDate, perfCtx),
+    [capitalTrades, terminalNav, asOfDate, perfCtx],
+  )
 
   const optionTradesForChart = useMemo(
     () => optionTradesForReturnMarkers(portfolioTrades, scopeSymbol),
@@ -548,8 +614,12 @@ export function PortfolioPerformancePanel({
         value: `${activityStats.openSymbolCount} open · ${activityStats.closedSymbolCount} closed`,
       })
     }
+    rows.push({
+      label: 'Peak net capital',
+      value: fmt(capitalStats.peakNet),
+    })
     return rows
-  }, [activityStats, scopeSymbol])
+  }, [activityStats, scopeSymbol, capitalStats.peakNet, fmt])
 
   const holdingRows = useMemo(() => {
     if (!holdingStats) return []
@@ -797,10 +867,23 @@ export function PortfolioPerformancePanel({
               {fmt(summary.totalPnl)}
             </span>
             <span className="text-lg font-semibold tabular-nums text-white/90">
-              {pct(summary.returnPct)}
+              {pct(snapshotReturnPct)}
             </span>
             <span className="text-xs text-white/40">
-              on {fmt(summary.grossBuys)} invested
+              on {fmt(capitalStats.currentNet)} net capital
+            </span>
+          </div>
+          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-white/70">
+            <span>
+              <span className="text-white/45">TWR </span>
+              {twrReasonLabel(snapshotTwr)}
+            </span>
+            <span>
+              <span className="text-white/45">MWR </span>
+              {mwrReasonLabel(snapshotMwr)}
+            </span>
+            <span className="text-white/40">
+              gross buys {fmt(capitalStats.grossBuys)}
             </span>
           </div>
           {snapshotMarkNote ? (
@@ -815,8 +898,18 @@ export function PortfolioPerformancePanel({
             { label: 'Realized P&L', value: summary.realizedPnl },
             { label: 'Unrealized P&L', value: summary.unrealizedPnl },
             { label: 'Total P&L', value: summary.totalPnl },
-            { label: 'Invested (gross buys)', value: summary.grossBuys, isMoney: true },
-          ] as const
+            {
+              label: 'Net capital (current)',
+              value: capitalStats.currentNet,
+              isMoney: true,
+              sub: `Gross buys ${fmt(capitalStats.grossBuys)}`,
+            },
+          ] as Array<{
+            label: string
+            value: number
+            isMoney?: boolean
+            sub?: string
+          }>
         ).map((card) => (
           <div
             key={card.label}
@@ -827,15 +920,14 @@ export function PortfolioPerformancePanel({
             </p>
             <p
               className={`mt-1 text-lg font-semibold tabular-nums ${
-                'isMoney' in card && card.isMoney
-                  ? 'text-white'
-                  : pnlClass(card.value as number)
+                card.isMoney ? 'text-white' : pnlClass(card.value)
               }`}
             >
-              {'isMoney' in card && card.isMoney
-                ? fmt(card.value as number)
-                : fmt(card.value as number)}
+              {fmt(card.value)}
             </p>
+            {card.sub ? (
+              <p className="mt-0.5 text-[10px] text-white/40">{card.sub}</p>
+            ) : null}
           </div>
         ))}
       </div>
@@ -1040,6 +1132,7 @@ export function PortfolioPerformancePanel({
       <PortfolioTradeImportModal
         open={importOpen}
         portfolio={portfolio}
+        scenarios={scenarios}
         tradesState={tradesState}
         onClose={() => setImportOpen(false)}
         onApply={(next) => {

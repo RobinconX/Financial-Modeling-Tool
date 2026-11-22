@@ -1248,7 +1248,7 @@ The **Performance** tab is an **executed trade ledger** (equities and **listed o
 
 - **+ Trade** — choose **Equity** or **Option**; OCC or IB description (e.g. HIMS 16OCT26 25 P), contracts, USD premium, optional **CHF** fee currency, lifecycle **Event** (expire / assign)
 - **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
-- When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history)
+- When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history). On save, the trade **auto-links** to the position when the ticker matches **exactly one** equity row (ambiguous or option rows stay unlinked)
 
 > Equities: uppercase tickers. Options: OCC symbol or parsed IB description.
 
@@ -1267,7 +1267,7 @@ The header **select** switches **equity** scope only (**Whole portfolio** or one
 
 ### Stats blocks
 
-- **Activity** — trade, buy, and sell counts; first / last trade; holding period and open/closed **status** on one ticker; **open · closed symbol counts** on whole portfolio
+- **Activity** — trade, buy, and sell counts; first / last trade; holding period and open/closed **status** on one ticker; **open · closed symbol counts** on whole portfolio; **peak net capital** for the scope
 - **Position** (single ticker) — ledger shares, average cost / breakeven, gross buys, sell proceeds, % sold, open cost basis, current value
 - **TWR** — time-weighted return **per ticker** from daily price history (lazy fetch, shared cache with Comparables); shows **Unavailable** when history cannot cover the holding window
 
@@ -1275,7 +1275,16 @@ Whole-portfolio **By symbol** lists **open** ledger rows first (status, **TWR**,
 
 ### Snapshot return
 
-A highlighted card shows **today’s** total return for the current scope: **$** and **%** = (realized + unrealized) ÷ **gross buys** (invested). When open shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date.
+A highlighted card shows **today’s** totals for the current scope:
+
+- **$** — realized + unrealized P&L (display currency)
+- **%** — total P&L ÷ **peak net capital** (most of your own money at work at any point; buys minus sell proceeds through today)
+- **Net capital** subtitle — **current** net contribution (buys minus sell proceeds now)
+- **TWR** — time-weighted return on the **equity** ledger (equity curve; options excluded). Shows **n/a** with a short reason when price history cannot cover the window
+- **MWR** — money-weighted return (**XIRR**) from all **trade cash flows** in scope, including **options**, plus ending **mark-to-market** when positions are still open. Same **n/a** pattern when IRR cannot be solved
+- **Gross buys** — cumulative buy notionals (secondary line; includes rebuys funded from sales)
+
+When open shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date.
 
 ### Return progression
 
@@ -1300,7 +1309,7 @@ When the book has option trades, an **Options P/L** block (amber panel) always s
 
 - **Export** — downloads all trades on the **current book** as JSON (round-trippable with **Import**; includes **currency**)
 - **Clear** — removes every trade on this book after confirm (export first if you need backup)
-- **Import** — paste JSON or upload **.json** / **.csv**; preview lists rows (incl. **currency**), valid / invalid counts, book reassignment, and duplicates before you confirm. Import **appends** to the **current book** only
+- **Import** — paste JSON or upload **.json** / **.csv**; preview lists rows (incl. **currency**), valid / invalid counts, book reassignment, and duplicates before you confirm. Import **appends** to the **current book** only. Equity rows **auto-link** to a position when the ticker matches exactly one row (same rules as manual saves); optional **holdingId** in the file is kept when valid on this book
 
 **JSON** — array of trades or \`{ "trades": [ … ] }\`:
 

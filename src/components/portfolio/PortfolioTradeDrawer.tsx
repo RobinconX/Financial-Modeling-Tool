@@ -13,6 +13,7 @@ import { parseIbOptionDescription } from '../../lib/portfolioOptionTradeParse'
 import { formatInputNumber } from '../common/MoneyInput'
 import type { PriceHistoryPoint } from '../../lib/priceHistory'
 import {
+  applyEquityTradeHoldingLink,
   defaultTradeCurrencyForSymbol,
   equityHoldingForTradePrefill,
   holdingEquityTradeSymbol,
@@ -153,7 +154,6 @@ export function PortfolioTradeDrawer({
     const sharesN = Number(shares)
     const priceN = Number(price)
     const feesN = fees.trim() === '' ? 0 : Number(fees)
-    const linkId = matchedHolding?.id
     const symInput = symbol.trim()
     const ib = instrument === 'option' ? parseIbOptionDescription(symInput) : null
     const candidate: PortfolioTrade = {
@@ -169,7 +169,7 @@ export function PortfolioTradeDrawer({
       instrument,
       event,
       note: note.trim() || undefined,
-      holdingId: instrument === 'equity' ? linkId : undefined,
+      holdingId: instrument === 'equity' ? holdingId : undefined,
       underlying: ib?.underlying,
       right: ib?.right,
       strike: ib?.strike,
@@ -185,7 +185,8 @@ export function PortfolioTradeDrawer({
       )
       return
     }
-    const ok = onSave(normalized)
+    const linked = applyEquityTradeHoldingLink(normalized, portfolio, scenarios)
+    const ok = onSave(linked)
     if (ok) onClose()
   }
 

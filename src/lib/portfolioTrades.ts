@@ -252,8 +252,20 @@ export function tradesMatchingSymbol(
 export function upsertTrade(
   state: PortfolioTradesState,
   trade: PortfolioTrade,
+  linkContext?: {
+    portfolio: SavedPortfolio
+    scenarios?: SavedScenario[]
+  },
 ): PortfolioTradesState {
-  const normalized = normalizePortfolioTrade(trade)
+  let candidate = trade
+  if (linkContext) {
+    candidate = applyEquityTradeHoldingLink(
+      trade,
+      linkContext.portfolio,
+      linkContext.scenarios ?? [],
+    )
+  }
+  const normalized = normalizePortfolioTrade(candidate)
   if (!normalized) return state
   const rest = state.trades.filter((t) => t.id !== normalized.id)
   const trades = [...rest, normalized].sort(
@@ -321,6 +333,73 @@ export function holdingEquityTradeSymbol(
   return null
 }
 
+/** Equity holdings on this book whose trade ticker matches `symbol` (no options). */
+export function equityHoldingsForTradeSymbol(
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[] = [],
+  symbol: string,
+): PortfolioHolding[] {
+  const sym = symbol.trim().toUpperCase()
+  if (!sym) return []
+  const out: PortfolioHolding[] = []
+  for (const h of portfolio.holdings) {
+    if (h.option) continue
+    const ticker = holdingEquityTradeSymbol(h, scenarios)
+    if (ticker === sym) out.push(h)
+  }
+  return out
+}
+
+/** Link only when exactly one equity position matches the ticker. */
+export function uniqueEquityHoldingForTradeSymbol(
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[] = [],
+  symbol: string,
+): PortfolioHolding | null {
+  const matches = equityHoldingsForTradeSymbol(portfolio, scenarios, symbol)
+  return matches.length === 1 ? matches[0]! : null
+}
+
+/** Auto-link equity trades by unique ticker match; options and ambiguous rows stay unlinked. */
+export function applyEquityTradeHoldingLink(
+  trade: PortfolioTrade,
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[] = [],
+): PortfolioTrade {
+  if (tradeInstrument(trade) === 'option') {
+    const { holdingId: _h, ...rest } = trade
+    return rest
+  }
+  const byId =
+    trade.holdingId &&
+    portfolio.holdings.find((h) => h.id === trade.holdingId && !h.option)
+  if (byId) return trade
+  const unique = uniqueEquityHoldingForTradeSymbol(portfolio, scenarios, trade.symbol)
+  if (!unique) {
+    const { holdingId: _h, ...rest } = trade
+    return rest
+  }
+  return { ...trade, holdingId: unique.id }
+}
+
+export function backfillPortfolioTradeHoldingLinks(
+  state: PortfolioTradesState,
+  portfolios: SavedPortfolio[],
+  scenarios: SavedScenario[] = [],
+): PortfolioTradesState {
+  const bookById = new Map(portfolios.map((p) => [p.id, p]))
+  let changed = false
+  const trades = state.trades.map((t) => {
+    const book = bookById.get(t.portfolioId)
+    if (!book) return t
+    const linked = applyEquityTradeHoldingLink(t, book, scenarios)
+    if (linked.holdingId !== t.holdingId) changed = true
+    return linked
+  })
+  if (!changed) return state
+  return { ...state, trades }
+}
+
 /** Equity holding on this book matching trade symbol and/or draft `holdingId` (no options). */
 export function equityHoldingForTradePrefill(
   portfolio: SavedPortfolio,
@@ -333,12 +412,7 @@ export function equityHoldingForTradePrefill(
   }
   const sym = (input.symbol ?? '').trim().toUpperCase()
   if (!sym) return null
-  for (const h of portfolio.holdings) {
-    if (h.option) continue
-    const ticker = holdingEquityTradeSymbol(h, scenarios)
-    if (ticker === sym) return h
-  }
-  return null
+  return uniqueEquityHoldingForTradeSymbol(portfolio, scenarios, sym)
 }
 
 export function positionPrefillFromHolding(

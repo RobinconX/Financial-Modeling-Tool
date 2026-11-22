@@ -1,5 +1,5 @@
-import type { PortfolioTrade, PortfolioTradesState } from '../types'
-import { normalizePortfolioTrade } from './portfolioTrades'
+import type { PortfolioTrade, PortfolioTradesState, SavedPortfolio, SavedScenario } from '../types'
+import { applyEquityTradeHoldingLink, normalizePortfolioTrade } from './portfolioTrades'
 
 export type TradeDuplicatePolicy = 'skip' | 'import'
 
@@ -163,6 +163,8 @@ export function prepareTradeRowForBook(
   raw: unknown,
   bookId: string,
   holdingIds: ReadonlySet<string>,
+  portfolio?: SavedPortfolio,
+  scenarios: SavedScenario[] = [],
 ): { trade: PortfolioTrade | null; reassignedBook: boolean; strippedHoldingLink: boolean; reason?: string } {
   if (typeof raw !== 'object' || raw === null) {
     return { trade: null, reassignedBook: false, strippedHoldingLink: false, reason: 'Not an object' }
@@ -180,7 +182,7 @@ export function prepareTradeRowForBook(
       strippedHoldingLink = true
     }
   }
-  const trade = normalizePortfolioTrade(o)
+  let trade = normalizePortfolioTrade(o)
   if (!trade) {
     return {
       trade: null,
@@ -188,6 +190,11 @@ export function prepareTradeRowForBook(
       strippedHoldingLink,
       reason: describeTradeRowValidationFailure(o),
     }
+  }
+  if (portfolio) {
+    const before = trade.holdingId
+    trade = applyEquityTradeHoldingLink(trade, portfolio, scenarios)
+    if (before && !trade.holdingId && !strippedHoldingLink) strippedHoldingLink = true
   }
   return { trade, reassignedBook, strippedHoldingLink }
 }
@@ -197,6 +204,8 @@ export function buildTradeImportPreview(
   bookId: string,
   existingTrades: PortfolioTrade[],
   holdingIds: ReadonlySet<string>,
+  portfolio?: SavedPortfolio,
+  scenarios: SavedScenario[] = [],
 ): TradeImportPreview {
   const existingKeys = new Set(existingTrades.map(tradeDuplicateKey))
   const seenFile = new Map<string, number>()
@@ -207,7 +216,7 @@ export function buildTradeImportPreview(
   let reassignedCount = 0
 
   rawRows.forEach((raw, index) => {
-    const prep = prepareTradeRowForBook(raw, bookId, holdingIds)
+    const prep = prepareTradeRowForBook(raw, bookId, holdingIds, portfolio, scenarios)
     if (!prep.trade) {
       invalid.push({ index: index + 1, reason: prep.reason ?? 'Invalid row' })
       return
