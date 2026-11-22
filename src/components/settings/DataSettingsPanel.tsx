@@ -29,8 +29,11 @@ import {
   getLinkedFileStatus,
   isFileSystemAccessSupported,
   linkDataFile,
+  preloadLinkedFileHandle,
   requestLinkedFileAccess,
+  startLinkedFilePermissionRequest,
   unlinkDataFile,
+  type LinkedFileGesturePermission,
   writeLinkedSnapshot,
   getLinkedSaveMode,
   setLinkedSaveMode,
@@ -99,6 +102,7 @@ export function DataSettingsPanel({
   const [busy, setBusy] = useState(false)
   const [message, setMessage] = useState<string | null>(null)
   const [error, setError] = useState<string | null>(null)
+  const [allowRelinkHint, setAllowRelinkHint] = useState(false)
   const [pendingImport, setPendingImport] = useState<
     | { kind: 'snapshot'; parsed: Extract<ParsedSaveFile, { kind: 'snapshot' }>; name: string }
     | { kind: 'catalog'; parsed: Extract<ParsedSaveFile, { kind: 'catalog' }> }
@@ -125,6 +129,7 @@ export function DataSettingsPanel({
   }, [])
 
   useEffect(() => {
+    preloadLinkedFileHandle()
     void refreshStatus()
   }, [refreshStatus])
 
@@ -163,24 +168,34 @@ export function DataSettingsPanel({
     await refreshStatus()
   }
 
-  async function handleAllowAccess() {
+  async function completeAllowFileAccess(gesture: LinkedFileGesturePermission) {
+    if (!gesture.ok) {
+      setError(gesture.error)
+      setAllowRelinkHint(Boolean(gesture.suggestRelink))
+      return
+    }
     setBusy(true)
     setError(null)
+    setAllowRelinkHint(false)
     setMessage(null)
-    const result = await requestLinkedFileAccess({ reloadFromFile: true })
-    setBusy(false)
-    if (!result.ok) {
-      setError(result.error)
+    try {
+      const result = await requestLinkedFileAccess({ reloadFromFile: true }, gesture)
+      if (!result.ok) {
+        setError(result.error)
+        setAllowRelinkHint(Boolean(result.suggestRelink))
+        await refreshStatus()
+        return
+      }
       await refreshStatus()
-      return
+      if (result.reloaded) {
+        setMessage(`Access granted — loaded ${result.fileName}.`)
+        remountApp()
+        return
+      }
+      setMessage(`Access granted for ${result.fileName}.`)
+    } finally {
+      setBusy(false)
     }
-    await refreshStatus()
-    if (result.reloaded) {
-      setMessage(`Access granted — loaded ${result.fileName}.`)
-      remountApp()
-      return
-    }
-    setMessage(`Access granted for ${result.fileName}.`)
   }
 
   async function handleUnlink() {
@@ -520,16 +535,37 @@ export function DataSettingsPanel({
                 access — you should not need to pick the file again.
               </p>
             )}
-            {status?.lastError && status.permission === 'granted' && (
+            {needsAccess && status?.lastError ? (
               <p className="text-sm text-amber-200/80">{status.lastError}</p>
-            )}
+            ) : null}
+            {status?.lastError && status.permission === 'granted' ? (
+              <p className="text-sm text-amber-200/80">{status.lastError}</p>
+            ) : null}
+            {needsAccess && error ? (
+              <div className="space-y-2 rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-sm text-red-200">
+                <p>{error}</p>
+                {allowRelinkHint ? (
+                  <button
+                    type="button"
+                    className="btn-ghost !py-1 !text-xs"
+                    disabled={busy}
+                    onClick={() => void handleLink()}
+                  >
+                    Open / link file…
+                  </button>
+                ) : null}
+              </div>
+            ) : null}
             <div className="flex flex-wrap gap-2">
               {needsAccess && (
                 <button
                   type="button"
                   className="btn-primary !py-1.5 !text-xs"
                   disabled={busy}
-                  onClick={() => void handleAllowAccess()}
+                  onClick={() => {
+                    const gesture = startLinkedFilePermissionRequest()
+                    void completeAllowFileAccess(gesture)
+                  }}
                 >
                   Allow file access…
                 </button>

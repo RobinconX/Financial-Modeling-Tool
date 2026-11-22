@@ -42,6 +42,19 @@ const IDB_KEY = 'dataFile'
 export const LINKED_FILE_BOOT_STEP_TIMEOUT_MS = 2000
 /** Overall ceiling before first React paint (ms). */
 export const LINKED_FILE_BOOT_PRERENDER_DEADLINE_MS = 2000
+/** After Allow file access (user-initiated read of linked file). */
+export const LINKED_FILE_USER_READ_TIMEOUT_MS = 10_000
+
+export const LINKED_FILE_RELINK_PROMPT_ERROR =
+  "Couldn't access file — use Open / link file… to pick it again"
+
+export function linkedFileReadTimeoutMessage(): string {
+  return (
+    "Couldn't read the linked file in time. If it lives on OneDrive, right-click it in " +
+    "File Explorer and choose Always keep on this device, then use Open / link file… or " +
+    "Allow file access again."
+  )
+}
 
 export function linkedFileAccessUnavailableMessage(detail?: string): string {
   const base =
@@ -181,7 +194,18 @@ async function idbSetHandle(handle: FsFileHandle | null): Promise<void> {
   })
 }
 
-async function ensurePermission(
+function formatPermissionFailure(err: unknown): string {
+  if (err instanceof DOMException) {
+    if (err.name === 'NotAllowedError') return LINKED_FILE_RELINK_PROMPT_ERROR
+    if (err.name === 'NotFoundError') return LINKED_FILE_RELINK_PROMPT_ERROR
+    return err.message || LINKED_FILE_RELINK_PROMPT_ERROR
+  }
+  if (err instanceof Error && err.message) return err.message
+  return LINKED_FILE_RELINK_PROMPT_ERROR
+}
+
+/** Background / post-picker flows — may query before request (no strict user gesture). */
+async function ensurePermissionQueryFirst(
   handle: FsFileHandle,
   mode: FsPermissionMode,
 ): Promise<boolean> {
@@ -189,6 +213,66 @@ async function ensurePermission(
   if ((await handle.queryPermission?.(opts)) === 'granted') return true
   if ((await handle.requestPermission?.(opts)) === 'granted') return true
   return false
+}
+
+export type LinkedFileGesturePermission =
+  | {
+      ok: true
+      handle: FsFileHandle
+      /** Must be created synchronously inside the click handler (before any await). */
+      readWriteRequest: Promise<PermissionState | undefined>
+    }
+  | { ok: false; error: string; suggestRelink?: boolean }
+
+/** Synchronous — call directly from `onClick` before any `await`. */
+export function startLinkedFilePermissionRequest(): LinkedFileGesturePermission {
+  const handle = cachedHandle
+  if (!handle) {
+    return {
+      ok: false,
+      error: LINKED_FILE_RELINK_PROMPT_ERROR,
+      suggestRelink: true,
+    }
+  }
+  if (!handle.requestPermission) {
+    return {
+      ok: false,
+      error: LINKED_FILE_RELINK_PROMPT_ERROR,
+      suggestRelink: true,
+    }
+  }
+  const readWriteRequest = handle.requestPermission({ mode: 'readwrite' })
+  return { ok: true, handle, readWriteRequest }
+}
+
+async function resolvePermissionFromGesture(
+  handle: FsFileHandle,
+  readWriteRequest: Promise<PermissionState | undefined>,
+): Promise<{ granted: boolean; error?: string }> {
+  let readWrite: PermissionState | undefined
+  try {
+    readWrite = await readWriteRequest
+  } catch (e) {
+    return { granted: false, error: formatPermissionFailure(e) }
+  }
+  if (readWrite === 'granted') return { granted: true }
+
+  try {
+    const rw = await queryPermissionState(handle, 'readwrite')
+    const r = await queryPermissionState(handle, 'read')
+    if (rw === 'granted' || r === 'granted') return { granted: true }
+  } catch {
+    /* ignore */
+  }
+
+  return { granted: false, error: LINKED_FILE_RELINK_PROMPT_ERROR }
+}
+
+export function preloadLinkedFileHandle(): void {
+  if (cachedHandle) return
+  void idbGetHandle().then((h) => {
+    if (h && !cachedHandle) cachedHandle = h
+  })
 }
 
 let cachedHandle: FsFileHandle | null = null
@@ -210,7 +294,7 @@ export async function getLinkedFileLastModified(): Promise<number | null> {
   }
   if (!cachedHandle) return null
   try {
-    const ok = await ensurePermission(cachedHandle, 'read')
+    const ok = await ensurePermissionQueryFirst(cachedHandle, 'read')
     if (!ok) return null
     const file = await cachedHandle.getFile()
     return Number.isFinite(file.lastModified) ? file.lastModified : null
@@ -324,28 +408,58 @@ async function queryPermissionState(
  * Request read+write on the remembered handle. Must run from a click/tap.
  * Optionally re-loads the file into localStorage when access is granted.
  */
-export async function requestLinkedFileAccess(options?: {
-  reloadFromFile?: boolean
-}): Promise<
+export async function requestLinkedFileAccess(
+  options?: { reloadFromFile?: boolean; readTimeoutMs?: number },
+  gesture?: Extract<LinkedFileGesturePermission, { ok: true }>,
+): Promise<
   | { ok: true; fileName: string; reloaded: boolean }
-  | { ok: false; error: string }
+  | { ok: false; error: string; suggestRelink?: boolean }
 > {
-  if (!cachedHandle) {
+  let handle = gesture?.handle ?? cachedHandle
+  if (!handle) {
     cachedHandle = await idbGetHandle()
+    handle = cachedHandle
   }
-  if (!cachedHandle) {
-    return { ok: false, error: 'No data file linked' }
+  if (!handle) {
+    return {
+      ok: false,
+      error: 'No data file linked',
+      suggestRelink: true,
+    }
   }
-  const granted = await ensurePermission(cachedHandle, 'readwrite')
-  if (!granted) {
-    lastError = 'Permission denied'
-    return { ok: false, error: 'Permission denied — choose the file again with Open / link' }
+  cachedHandle = handle
+
+  if (gesture) {
+    const perm = await resolvePermissionFromGesture(handle, gesture.readWriteRequest)
+    if (!perm.granted) {
+      lastError = perm.error ?? LINKED_FILE_RELINK_PROMPT_ERROR
+      return {
+        ok: false,
+        error: perm.error ?? LINKED_FILE_RELINK_PROMPT_ERROR,
+        suggestRelink: true,
+      }
+    }
+  } else {
+    const granted = await ensurePermissionQueryFirst(handle, 'readwrite')
+    if (!granted) {
+      lastError = LINKED_FILE_RELINK_PROMPT_ERROR
+      return {
+        ok: false,
+        error: LINKED_FILE_RELINK_PROMPT_ERROR,
+        suggestRelink: true,
+      }
+    }
   }
   lastError = null
 
   let reloaded = false
   if (options?.reloadFromFile !== false) {
-    const snap = await readLinkedSnapshot()
+    const readTimeoutMs = options?.readTimeoutMs ?? LINKED_FILE_USER_READ_TIMEOUT_MS
+    const snap = await readLinkedSnapshot({
+      requestPermission: false,
+      stepTimeoutMs: readTimeoutMs,
+      userInitiatedRead: true,
+    })
     if (snap && !('error' in snap)) {
       const applied = hydrateOnStartup(snap)
       if (applied.ok) {
@@ -360,11 +474,11 @@ export async function requestLinkedFileAccess(options?: {
         })
       } else {
         reportLinkedFileStartupHydrateFailure(applied.error, cachedHandle.name)
-        return { ok: false, error: applied.error }
+        return { ok: false, error: applied.error, suggestRelink: true }
       }
     } else if (snap && 'error' in snap) {
       reportLinkedFileStartupHydrateFailure(snap.error, cachedHandle.name)
-      return { ok: false, error: snap.error }
+      return { ok: false, error: snap.error, suggestRelink: true }
     }
   } else {
     clearLinkedFileLoadFailedIfNeeded()
@@ -421,7 +535,7 @@ export async function linkDataFile(): Promise<
       })
     }
 
-    const canWrite = await ensurePermission(handle, 'readwrite')
+    const canWrite = await ensurePermissionQueryFirst(handle, 'readwrite')
     if (!canWrite) {
       return { ok: false, error: 'Write permission denied' }
     }
@@ -502,7 +616,7 @@ export async function createDataFile(): Promise<
         },
       ],
     })
-    const canWrite = await ensurePermission(handle, 'readwrite')
+    const canWrite = await ensurePermissionQueryFirst(handle, 'readwrite')
     if (!canWrite) return { ok: false, error: 'Write permission denied' }
     cachedHandle = handle
     await idbSetHandle(handle)
@@ -551,7 +665,7 @@ async function performLinkedWrite(
   }
   const handleForWrite = cachedHandle
   try {
-    const canWrite = await ensurePermission(handleForWrite, 'readwrite')
+    const canWrite = await ensurePermissionQueryFirst(handleForWrite, 'readwrite')
     if (!canWrite) {
       return { ok: false, error: 'Write permission denied — re-link the data file' }
     }
@@ -602,8 +716,8 @@ async function linkedSnapshotGranted(
     ? { stepTimeoutMs: opts.stepTimeoutMs }
     : undefined
   if (opts.requestPermission) {
-    let canRead = await ensurePermission(handle, 'readwrite')
-    if (!canRead) canRead = await ensurePermission(handle, 'read')
+    let canRead = await ensurePermissionQueryFirst(handle, 'readwrite')
+    if (!canRead) canRead = await ensurePermissionQueryFirst(handle, 'read')
     return canRead
   }
   const rw = await queryPermissionState(handle, 'readwrite', stepOpts)
@@ -642,6 +756,14 @@ export type ReadLinkedSnapshotOptions = {
   requestPermission?: boolean
   /** When set, bound each IDB/permission/read step (boot safety). */
   stepTimeoutMs?: number
+  /** Use post-grant / OneDrive-oriented timeout copy (Allow file access). */
+  userInitiatedRead?: boolean
+}
+
+function readStepTimedOutMessage(options?: ReadLinkedSnapshotOptions): string {
+  return options?.userInitiatedRead
+    ? linkedFileReadTimeoutMessage()
+    : linkedFileAccessUnavailableMessage('reconnect in Settings')
 }
 
 export async function readLinkedSnapshot(
@@ -657,7 +779,7 @@ export async function readLinkedSnapshot(
     } catch (e) {
       if (e instanceof PromiseTimeoutError) {
         return {
-          error: linkedFileAccessUnavailableMessage('reconnect in Settings'),
+          error: readStepTimedOutMessage(options),
         }
       }
       cachedHandle = null
@@ -688,7 +810,7 @@ export async function readLinkedSnapshot(
   } catch (e) {
     if (e instanceof PromiseTimeoutError) {
       return {
-        error: linkedFileAccessUnavailableMessage('reconnect in Settings'),
+        error: readStepTimedOutMessage(options),
       }
     }
     return {
