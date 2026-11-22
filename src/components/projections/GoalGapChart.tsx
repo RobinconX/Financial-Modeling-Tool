@@ -479,7 +479,8 @@ export function GoalGapChart({
                       fill={m.side === 'buy' ? '#34d399' : '#f87171'}
                       stroke="#0b0f14"
                       strokeWidth={1.5}
-                      ifOverflow="discard"
+                      ifOverflow="visible"
+                      isFront
                     />
                   ))
               : null}
