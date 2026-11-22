@@ -29,6 +29,24 @@ describe('linked file startup hydrate', () => {
     expect(requestPermission).not.toHaveBeenCalled()
   })
 
+  it('readLinkedSnapshotForStartup times out hanging getFile', async () => {
+    vi.useFakeTimers()
+    const handle = {
+      ...createMockFileHandle('model.json'),
+      queryPermission: async () => 'granted' as const,
+      getFile: () => new Promise<File>(() => {}),
+    }
+    resetLinkedDataFileWriteStateForTests(handle)
+
+    const snapPromise = readLinkedSnapshotForStartup({ stepTimeoutMs: 80 })
+    await vi.advanceTimersByTimeAsync(100)
+    const snap = await snapPromise
+    expect(snap).toMatchObject({
+      error: expect.stringMatching(/File access unavailable/i),
+    })
+    vi.useRealTimers()
+  })
+
   it('reportLinkedFileStartupHydrateFailure sets load-failed header event', () => {
     const handle = createMockFileHandle('model.json')
     resetLinkedDataFileWriteStateForTests(handle)

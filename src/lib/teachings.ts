@@ -1393,6 +1393,8 @@ Desktop **Chrome** or **Edge** can link a JSON file (File System Access API):
 
 Link or create the JSON in a **cloud-synced folder** (Dropbox, iCloud Drive, Google Drive, OneDrive, etc.) — the app writes to that file on this machine, and your sync client copies updates outward. On another **desktop Chrome/Edge** PC, **Open / link file…** to the same synced file for continuous save there too. **iPhone/iPad** cannot continuous-link — use **Export / Import** below.
 
+> If the header says **Couldn’t load file**, the app still opens from **browser storage**. Use **Allow file access** or **Open / link file…** here to reconnect — the link is remembered until you **Unlink**. In **Brave**, turn on File System Access under Extensions if linking fails.
+
 **Accounts** (same panel) — switch, rename, add, or remove accounts in the catalog; each account has its own data slice in the JSON snapshot.
 
 ### Export / Import
