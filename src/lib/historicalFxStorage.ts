@@ -1,6 +1,14 @@
 export const FX_DAILY_STORAGE_KEY = 'grok-lab.fx-daily.usd-chf.v1'
 
-type Store = { version: 1; byDate: Record<string, number> }
+/** Skip Frankfurter network after a failed range fetch. */
+export const FX_FETCH_COOLDOWN_MS = 30 * 60 * 1000
+
+type Store = {
+  version: 1
+  byDate: Record<string, number>
+  /** Epoch ms — do not call Frankfurter until elapsed. */
+  fetchFailedAt?: number
+}
 
 function readStore(): Store {
   if (typeof localStorage === 'undefined') return { version: 1, byDate: {} }
@@ -9,7 +17,8 @@ function readStore(): Store {
     if (!raw) return { version: 1, byDate: {} }
     const parsed: unknown = JSON.parse(raw)
     if (typeof parsed !== 'object' || parsed === null) return { version: 1, byDate: {} }
-    const byDateRaw = (parsed as { byDate?: unknown }).byDate
+    const o = parsed as { version?: unknown; byDate?: unknown; fetchFailedAt?: unknown }
+    const byDateRaw = o.byDate
     if (typeof byDateRaw !== 'object' || byDateRaw === null) {
       return { version: 1, byDate: {} }
     }
@@ -20,7 +29,11 @@ function readStore(): Store {
         byDate[k] = n
       }
     }
-    return { version: 1, byDate }
+    const fetchFailedAt =
+      typeof o.fetchFailedAt === 'number' && Number.isFinite(o.fetchFailedAt)
+        ? o.fetchFailedAt
+        : undefined
+    return { version: 1, byDate, fetchFailedAt }
   } catch {
     return { version: 1, byDate: {} }
   }
@@ -37,6 +50,24 @@ function writeStore(store: Store): void {
 
 export function readFxDailyCache(): Record<string, number> {
   return { ...readStore().byDate }
+}
+
+export function isFrankfurterFetchInCooldown(now = Date.now()): boolean {
+  const failedAt = readStore().fetchFailedAt
+  if (failedAt == null) return false
+  return now - failedAt < FX_FETCH_COOLDOWN_MS
+}
+
+export function markFrankfurterFetchFailed(at = Date.now()): void {
+  const store = readStore()
+  store.fetchFailedAt = at
+  writeStore(store)
+}
+
+export function clearFrankfurterFetchFailure(): void {
+  const store = readStore()
+  delete store.fetchFailedAt
+  writeStore(store)
 }
 
 export function cacheFxRateForDate(isoDate: string, rate: number): void {

@@ -1244,7 +1244,7 @@ Same early-vs-late story both times; at the **lower** rate the early contributio
 
 The **Performance** tab is an **executed trade ledger** (equities and **listed options**). It does not change **Positions** counts or **Chart** planned actions. Each trade stores **USD** or **CHF** for **price** (premium) and optional **feesCurrency** for commissions. Options use **contracts** in the **shares** field with multiplier **100**. Short opens (sell with no position) are options-only. P&L converts into the portfolio **display currency** using the live USD/CHF rate.
 
-> **Trade cash flows** (net capital, peak net invested, MWR flows, ledger realized from premiums) use **ECB daily USD/CHF on each trade date** (cached locally). **Marks** and terminal NAV still use the **live** spot rate.
+> **Trade cash flows** (net capital, peak net invested, MWR flows, ledger realized from premiums) use **ECB daily USD/CHF on each trade date** (one batched fetch per visit, cached locally). If Frankfurter is down, cash flows use **live spot** for ~30 minutes before retrying. **Marks** and terminal NAV still use the **live** spot rate.
 
 ### Adding trades
 
