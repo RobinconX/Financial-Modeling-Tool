@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState, type ReactNode } from 'react'
+import { useCallback, useEffect, useMemo, useState, type ReactNode } from 'react'
 import { ProjectionsView } from './components/projections/ProjectionsView'
 import { PortfolioView } from './components/portfolio/PortfolioView'
 import { useSavedScenarios } from './hooks/useSavedScenarios'
@@ -42,6 +42,8 @@ import { ReleaseLogDialog } from './components/release-log/ReleaseLogDialog'
 import { LinkedFileSaveHint } from './components/settings/LinkedFileSaveHint'
 import { StorageRecoveryBanner } from './components/common/StorageRecoveryBanner'
 import { getAccountHint } from './lib/accountCatalog'
+import { remountApp } from './lib/appRemount'
+import { relinkLinkedDataFile } from './lib/linkedDataFile'
 import { writeActualsFocus } from './lib/actualsFocus'
 import type { ActualsRepairTarget } from './lib/history'
 import { filterStorageRecoveryNoticesForTab } from './lib/storageRecoveryTab'
@@ -218,6 +220,14 @@ export default function App() {
   }, [tab])
 
   useEffect(() => scheduleInvestmentThesisModalIdlePreload(), [])
+
+  const handleRelinkLinkedFile = useCallback(() => {
+    void (async () => {
+      const result = await relinkLinkedDataFile()
+      if (!result.ok) return
+      if (result.action === 'loaded') remountApp()
+    })()
+  }, [])
 
   const {
     scenarios,
@@ -583,7 +593,10 @@ export default function App() {
             <div className="flex shrink-0 items-center gap-2 pt-1">
               <FeedbackHeaderButton onClick={() => setFeedbackOpen(true)} />
               <GuidesHeaderButton />
-              <LinkedFileSaveHint onOpenDataSettings={() => setTab('settings')} />
+              <LinkedFileSaveHint
+                onOpenDataSettings={() => setTab('settings')}
+                onRelinkFile={handleRelinkLinkedFile}
+              />
             </div>
           </header>
 

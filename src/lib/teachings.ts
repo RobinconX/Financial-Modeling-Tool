@@ -1386,14 +1386,15 @@ Always active — a fast mirror of the **current account** while you edit.
 
 Desktop **Chrome** or **Edge** can link a JSON file (File System Access API):
 
-- **Open / link file…** or **Create new file…**
-- **Allow file access…** after refresh when the browser asks again
+- **Open / link file…** / **Re-link file…** — pick (or re-pick) the JSON on this computer
+- **Create new file…** — start an empty linked file
+- **Try Allow file access…** — optional; often fails on **Brave** (prefer re-link)
 - **Auto-save** — **Edits + periodic** (~4s idle plus at least every 30s while editing) or **Edits only** (~4s idle)
 - **Save now** / **Unlink** when linked
 
 Link or create the JSON in a **cloud-synced folder** (Dropbox, iCloud Drive, Google Drive, OneDrive, etc.) — the app writes to that file on this machine, and your sync client copies updates outward. On another **desktop Chrome/Edge** PC, **Open / link file…** to the same synced file for continuous save there too. **iPhone/iPad** cannot continuous-link — use **Export / Import** below.
 
-> If the header says **Couldn’t load file**, the app still opens from **browser storage**. Use **Allow file access** or **Open / link file…** here to reconnect — the link is remembered until you **Unlink**. In **Brave**, turn on File System Access under Extensions if linking fails.
+> If the header says **Re-link file**, the app still runs from **browser storage**. Click **Re-link file** in the header or use **Re-link file…** / **Open / link file…** in Settings to pick the same JSON again (recommended on **Brave** and **OneDrive** placeholders). **Try Allow file access…** is secondary and often does not work in Brave.
 
 **Accounts** (same panel) — switch, rename, add, or remove accounts in the catalog; each account has its own data slice in the JSON snapshot.
 
