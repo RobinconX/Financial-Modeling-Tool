@@ -46,6 +46,7 @@ export type HoldingCostStats = {
 export type TwrResult = {
   twr: number | null
   status: 'ok' | 'unavailable' | 'na'
+  reason?: string
 }
 
 const MAX_CLOSE_STALE_DAYS = 7
@@ -200,7 +201,9 @@ export function computeTimeWeightedReturn(
 ): TwrResult {
   if (trades.length === 0) return { twr: null, status: 'na' }
   if (tradeInstrument(trades[0]!) === 'option') return { twr: null, status: 'na' }
-  if (!points.length) return { twr: null, status: 'unavailable' }
+  if (!points.length) {
+    return { twr: null, status: 'unavailable', reason: 'missing price history' }
+  }
 
   const sym = symbol ?? trades[0]?.symbol ?? ''
   const ledgerTrades = perfCtx
@@ -254,7 +257,9 @@ export function computeTimeWeightedReturn(
     if (prevDate != null && prevDate < date) {
       const c0 = closeAt(prevDate)
       const c1 = closeAt(date)
-      if (c0 == null || c1 == null) return { twr: null, status: 'unavailable' }
+      if (c0 == null || c1 == null) {
+        return { twr: null, status: 'unavailable', reason: 'missing price history' }
+      }
       if (shares > 0) {
         linked *= c1 / c0
       }
@@ -262,7 +267,9 @@ export function computeTimeWeightedReturn(
 
     if (dayTrades.length > 0) {
       const c = closeAt(date)
-      if (c == null) return { twr: null, status: 'unavailable' }
+      if (c == null) {
+        return { twr: null, status: 'unavailable', reason: 'missing price history' }
+      }
       const bmv = shares * c
       let cf = 0
       for (const t of dayTrades) {

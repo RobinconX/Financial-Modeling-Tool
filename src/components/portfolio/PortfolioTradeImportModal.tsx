@@ -1,5 +1,5 @@
 import { useCallback, useMemo, useState } from 'react'
-import type { SavedPortfolio } from '../../types'
+import type { SavedPortfolio, SavedScenario } from '../../types'
 import {
   appendPortfolioTrades,
   buildTradeImportPreview,
@@ -13,6 +13,7 @@ import type { PortfolioTradesState } from '../../types'
 type Props = {
   open: boolean
   portfolio: SavedPortfolio
+  scenarios: SavedScenario[]
   tradesState: PortfolioTradesState
   onClose: () => void
   onApply: (next: PortfolioTradesState) => boolean
@@ -21,6 +22,7 @@ type Props = {
 export function PortfolioTradeImportModal({
   open,
   portfolio,
+  scenarios,
   tradesState,
   onClose,
   onApply,
@@ -46,12 +48,19 @@ export function PortfolioTradeImportModal({
       const rows = parseTradeImportText(draft, formatHint === 'csv' ? 'csv' : 'auto')
       setParseError(null)
       if (rows.length === 0) return null
-      return buildTradeImportPreview(rows, portfolio.id, existingTrades, holdingIds)
+      return buildTradeImportPreview(
+        rows,
+        portfolio.id,
+        existingTrades,
+        holdingIds,
+        portfolio,
+        scenarios,
+      )
     } catch {
       setParseError('Could not parse file or paste — check JSON or CSV format.')
       return null
     }
-  }, [draft, formatHint, portfolio.id, existingTrades, holdingIds])
+  }, [draft, formatHint, portfolio.id, existingTrades, holdingIds, portfolio, scenarios])
 
   const resetAndClose = useCallback(() => {
     setDraft('')

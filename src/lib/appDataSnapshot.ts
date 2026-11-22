@@ -69,7 +69,11 @@ import {
   loadPortfolioSharedCash,
   savePortfolioSharedCash,
 } from './portfolioSharedCashStorage'
-import { emptyPortfolioTrades, normalizePortfolioTrades } from './portfolioTrades'
+import {
+  backfillPortfolioTradeHoldingLinks,
+  emptyPortfolioTrades,
+  normalizePortfolioTrades,
+} from './portfolioTrades'
 import {
   loadPortfolioTrades,
   savePortfolioTrades,
@@ -281,7 +285,11 @@ export function applyAppDataToLocalStorage(
     if (snapshot.linkedSaveMode) applyLinkedSaveMode(snapshot.linkedSaveMode)
 
     const r12 = savePortfolioTrades(
-      normalizePortfolioTrades(snapshot.portfolioTrades),
+      backfillPortfolioTradeHoldingLinks(
+        normalizePortfolioTrades(snapshot.portfolioTrades),
+        snapshot.portfolios,
+        snapshot.scenarios,
+      ),
     )
     if (!r12.ok) return { ok: false, error: r12.error }
 
