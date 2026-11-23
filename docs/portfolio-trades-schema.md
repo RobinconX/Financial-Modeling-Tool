@@ -56,6 +56,14 @@ Executed **equity and option** trades for performance tracking. Stored at the **
 - Options: `occSymbol`, OCC `symbol`, or IB **`description`** (`HIMS 16OCT26 25 P`).
 - `currency` / `feesCurrency` omitted → **USD** for that field.
 
+### Duplicate detection (import preview)
+
+A row is treated as a duplicate of an existing trade or an earlier row in the same file when its **economic key** matches (pipe-separated, after normalization):
+
+`instrument`, `event`, `symbol`, `side`, `tradeDate`, `shares`, `price`, `currency`, `fees`, `feesCurrency`, option `multiplier` (when `instrument` is `option`), and `linkedTradeId`.
+
+Numeric fields in the key are rounded to **8** decimal places. **`note` is not part of the key** — optional text does not distinguish fills. Default import policy **skips** duplicates; you can import them anyway from the preview.
+
 ## JSON examples (agent)
 
 **Option trade (short premium)**

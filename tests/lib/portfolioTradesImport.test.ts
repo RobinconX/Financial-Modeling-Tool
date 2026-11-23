@@ -64,12 +64,123 @@ describe('portfolioTradesImport', () => {
       new Set(),
     )
     expect(preview.duplicateExistingCount).toBeGreaterThan(0)
-    expect(tradeDuplicateKey(existing)).toBe('equity|trade|AAPL|buy|2024-01-02|1|10|USD|')
+    expect(tradeDuplicateKey(existing)).toBe(
+      'equity|trade|AAPL|buy|2024-01-02|1|10|USD|0|USD||',
+    )
     const skipped = appendPortfolioTrades(state, preview, BOOK, 'skip')
     expect(skipped.imported).toBe(0)
     const added = appendPortfolioTrades(state, preview, BOOK, 'import')
     expect(added.imported).toBe(2)
     expect(added.state.trades.length).toBe(3)
+  })
+
+  it('does not flag duplicate when fees differ', () => {
+    const existing = {
+      id: 'e1',
+      portfolioId: BOOK,
+      symbol: 'AAPL',
+      side: 'buy' as const,
+      tradeDate: '2024-01-02',
+      shares: 1,
+      price: 10,
+      currency: 'USD' as const,
+      fees: 0,
+      feesCurrency: 'USD' as const,
+    }
+    const preview = buildTradeImportPreview(
+      [{ symbol: 'AAPL', side: 'buy', tradeDate: '2024-01-02', shares: 1, price: 10, fees: 1.2 }],
+      BOOK,
+      [existing],
+      new Set(),
+    )
+    expect(preview.valid[0]!.duplicateOfExisting).toBe(false)
+    expect(preview.duplicateExistingCount).toBe(0)
+  })
+
+  it('does not flag duplicate when feesCurrency differs', () => {
+    const base = {
+      id: 'e1',
+      portfolioId: BOOK,
+      symbol: 'AAPL',
+      side: 'buy' as const,
+      tradeDate: '2024-01-02',
+      shares: 1,
+      price: 10,
+      currency: 'USD' as const,
+      fees: 1,
+    }
+    const chfFees = { ...base, feesCurrency: 'CHF' as const, id: 'e2' }
+    const preview = buildTradeImportPreview(
+      [{ symbol: 'AAPL', side: 'buy', tradeDate: '2024-01-02', shares: 1, price: 10, fees: 1 }],
+      BOOK,
+      [chfFees],
+      new Set(),
+    )
+    expect(preview.valid[0]!.duplicateOfExisting).toBe(false)
+  })
+
+  it('still flags duplicate when only note differs', () => {
+    const existing = {
+      id: 'e1',
+      portfolioId: BOOK,
+      symbol: 'AAPL',
+      side: 'buy' as const,
+      tradeDate: '2024-01-02',
+      shares: 1,
+      price: 10,
+      currency: 'USD' as const,
+      fees: 0,
+      note: 'first',
+    }
+    const preview = buildTradeImportPreview(
+      [
+        {
+          symbol: 'AAPL',
+          side: 'buy',
+          tradeDate: '2024-01-02',
+          shares: 1,
+          price: 10,
+          note: 're-import annotation',
+        },
+      ],
+      BOOK,
+      [existing],
+      new Set(),
+    )
+    expect(preview.valid[0]!.duplicateOfExisting).toBe(true)
+  })
+
+  it('distinguishes option rows by multiplier', () => {
+    const existing = {
+      id: 'e1',
+      portfolioId: BOOK,
+      instrument: 'option' as const,
+      symbol: 'AAPL250117C00150000',
+      side: 'buy' as const,
+      tradeDate: '2024-01-02',
+      shares: 1,
+      price: 2,
+      currency: 'USD' as const,
+      fees: 0,
+      multiplier: 100,
+    }
+    const preview = buildTradeImportPreview(
+      [
+        {
+          instrument: 'option',
+          symbol: 'AAPL250117C00150000',
+          side: 'buy',
+          tradeDate: '2024-01-02',
+          shares: 1,
+          price: 2,
+          multiplier: 50,
+        },
+      ],
+      BOOK,
+      [existing],
+      new Set(),
+    )
+    expect(preview.valid[0]!.duplicateOfExisting).toBe(false)
   })
 
   it('parses JSON trades array from paste', () => {
