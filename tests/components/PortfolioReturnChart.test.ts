@@ -1,16 +1,58 @@
 import { describe, expect, it } from 'vitest'
 import {
   buildReturnChartTradeMarkers,
+  buildReturnChartXAxisTicks,
   buildSignedReturnChartRows,
   chartRowNearestToTime,
   chartTimeForTradeDate,
+  formatReturnChartTimeTick,
   resolveReturnChartTooltipRow,
   resolveReturnChartTooltipState,
+  returnChartXAxisTickLabels,
   ReturnProgressionTooltip,
   tradesForReturnTooltip,
 } from '../../src/components/portfolio/PortfolioReturnChart'
 import type { PortfolioTrade } from '../../src/types'
 import type { ReturnProgressionPoint } from '../../src/lib/portfolioPerformanceStats'
+
+describe('return chart x-axis ticks', () => {
+  function dailyTimes(from: string, to: string): number[] {
+    const out: number[] = []
+    let cur = Date.parse(`${from}T12:00:00Z`)
+    const end = Date.parse(`${to}T12:00:00Z`)
+    while (cur <= end) {
+      const d = new Date(cur)
+      const iso = `${d.getUTCFullYear()}-${String(d.getUTCMonth() + 1).padStart(2, '0')}-${String(d.getUTCDate()).padStart(2, '0')}`
+      out.push(chartTimeForTradeDate(iso))
+      cur += 86_400_000
+    }
+    return out
+  }
+
+  it('formats month ticks for multi-month visible windows', () => {
+    expect(formatReturnChartTimeTick('2024-03-01', '2024-01-01', '2024-06-30')).toBe(
+      '2024-03',
+    )
+  })
+
+  it('dedupes x-axis labels for dense daily data (full-year span)', () => {
+    const times = dailyTimes('2023-01-01', '2023-12-31')
+    const labels = returnChartXAxisTickLabels(times, '2023-01-01', '2023-12-31')
+    expect(labels.length).toBeGreaterThan(0)
+    expect(new Set(labels).size).toBe(labels.length)
+    expect(labels.every((l) => /^\d{4}-\d{2}$/.test(l))).toBe(true)
+  })
+
+  it('dedupes x-axis labels when zoomed to a few months', () => {
+    const times = dailyTimes('2024-04-01', '2024-06-30')
+    const labels = returnChartXAxisTickLabels(times, '2024-04-01', '2024-06-30')
+    expect(new Set(labels).size).toBe(labels.length)
+    expect(labels.length).toBeLessThanOrEqual(4)
+    expect(buildReturnChartXAxisTicks(times, '2024-04-01', '2024-06-30')).toHaveLength(
+      labels.length,
+    )
+  })
+})
 
 describe('buildSignedReturnChartRows', () => {
   it('keeps one value per calendar day and null masks (no zero fill on positive days)', () => {

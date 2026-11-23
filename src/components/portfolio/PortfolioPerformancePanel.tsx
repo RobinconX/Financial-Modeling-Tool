@@ -56,6 +56,7 @@ import {
   computePortfolioTerminalNav,
   mwrReasonLabel,
   twrReasonLabel,
+  type MwrResult,
 } from '../../lib/portfolioReturnMetrics'
 import {
   PortfolioReturnChart,
@@ -144,6 +145,112 @@ function StatsCardButton({
     <button type="button" className={`${className ?? ''} cursor-pointer transition hover:border-white/20`} onClick={onClick}>
       {children}
     </button>
+  )
+}
+
+const SNAPSHOT_RETURN_LABEL_ID = 'snapshot-return-today-label'
+
+export type SnapshotReturnStatsCardProps = {
+  totalPnl: number
+  snapshotReturnPct: number | null
+  currentNet: number
+  grossBuys: number
+  snapshotTwr: TwrResult
+  snapshotMwr: MwrResult
+  snapshotMarkNote: string | null
+  perfFxWarningActive: boolean
+  fmt: (n: number) => string
+  onOpenMetric: (id: PerformanceMetricId) => void
+}
+
+export function SnapshotReturnStatsCard({
+  totalPnl,
+  snapshotReturnPct,
+  currentNet,
+  grossBuys,
+  snapshotTwr,
+  snapshotMwr,
+  snapshotMarkNote,
+  perfFxWarningActive,
+  fmt,
+  onOpenMetric,
+}: SnapshotReturnStatsCardProps) {
+  return (
+    <div
+      role="group"
+      aria-labelledby={SNAPSHOT_RETURN_LABEL_ID}
+      className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3 text-left"
+    >
+      <p
+        id={SNAPSHOT_RETURN_LABEL_ID}
+        className="text-[10px] font-semibold uppercase tracking-wide text-white/45"
+      >
+        Snapshot return (today)
+      </p>
+      <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
+        <button
+          type="button"
+          className={`text-2xl font-semibold tabular-nums underline decoration-transparent hover:decoration-white/25 ${pnlClass(totalPnl)}`}
+          onClick={() => onOpenMetric('totalPnl')}
+        >
+          {fmt(totalPnl)}
+        </button>
+        <button
+          type="button"
+          className="text-lg font-semibold tabular-nums text-white/90 underline decoration-white/20 hover:decoration-white/50"
+          onClick={() => onOpenMetric('snapshotReturn')}
+        >
+          {pct(snapshotReturnPct)}
+          {perfFxWarningActive && metricUsesTradeDateFx('snapshotReturn') ? (
+            <PerformanceFxMetricBadge />
+          ) : null}
+        </button>
+        <button
+          type="button"
+          className="text-xs text-white/40 underline decoration-white/10 hover:text-white/60"
+          onClick={() => onOpenMetric('netCapital')}
+        >
+          on {fmt(currentNet)} net capital
+          {perfFxWarningActive && metricUsesTradeDateFx('netCapital') ? (
+            <PerformanceFxMetricBadge />
+          ) : null}
+        </button>
+      </div>
+      <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-white/70">
+        <button
+          type="button"
+          className="hover:text-white"
+          onClick={() => onOpenMetric('twr')}
+        >
+          <span className="text-white/45">TWR </span>
+          {twrReasonLabel(snapshotTwr)}
+          {perfFxWarningActive && metricUsesTradeDateFx('twr') ? (
+            <PerformanceFxMetricBadge />
+          ) : null}
+        </button>
+        <button
+          type="button"
+          className="hover:text-white"
+          onClick={() => onOpenMetric('mwr')}
+        >
+          <span className="text-white/45">MWR (annualized) </span>
+          {mwrReasonLabel(snapshotMwr)}
+          {perfFxWarningActive && metricUsesTradeDateFx('mwr') ? (
+            <PerformanceFxMetricBadge />
+          ) : null}
+        </button>
+        <button
+          type="button"
+          className="text-white/40 hover:text-white/70"
+          onClick={() => onOpenMetric('grossBuys')}
+        >
+          gross buys {fmt(grossBuys)}
+        </button>
+      </div>
+      {snapshotMarkNote ? (
+        <p className="mt-1.5 text-[11px] text-white/50">{snapshotMarkNote}</p>
+      ) : null}
+    </div>
   )
 }
 
@@ -1149,90 +1256,18 @@ export function PortfolioPerformancePanel({
       ) : null}
 
       {scopedTrades.length > 0 ? (
-        <StatsCardButton
-          className="rounded-xl border border-emerald-500/25 bg-emerald-500/[0.06] px-4 py-3 text-left"
-          onClick={() => openMetric('totalPnl')}
-        >
-          <p className="text-[10px] font-semibold uppercase tracking-wide text-white/45">
-            Snapshot return (today)
-          </p>
-          <div className="mt-1.5 flex flex-wrap items-baseline gap-x-4 gap-y-1">
-            <span
-              className={`text-2xl font-semibold tabular-nums ${pnlClass(summary.totalPnl)}`}
-            >
-              {fmt(summary.totalPnl)}
-            </span>
-            <button
-              type="button"
-              className="text-lg font-semibold tabular-nums text-white/90 underline decoration-white/20 hover:decoration-white/50"
-              onClick={(e) => {
-                e.stopPropagation()
-                openMetric('snapshotReturn')
-              }}
-            >
-              {pct(snapshotReturnPct)}
-              {perfFxWarningActive && metricUsesTradeDateFx('snapshotReturn') ? (
-                <PerformanceFxMetricBadge />
-              ) : null}
-            </button>
-            <button
-              type="button"
-              className="text-xs text-white/40 underline decoration-white/10 hover:text-white/60"
-              onClick={(e) => {
-                e.stopPropagation()
-                openMetric('netCapital')
-              }}
-            >
-              on {fmt(capitalStats.currentNet)} net capital
-              {perfFxWarningActive && metricUsesTradeDateFx('netCapital') ? (
-                <PerformanceFxMetricBadge />
-              ) : null}
-            </button>
-          </div>
-          <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-white/70">
-            <button
-              type="button"
-              className="hover:text-white"
-              onClick={(e) => {
-                e.stopPropagation()
-                openMetric('twr')
-              }}
-            >
-              <span className="text-white/45">TWR </span>
-              {twrReasonLabel(snapshotTwr)}
-              {perfFxWarningActive && metricUsesTradeDateFx('twr') ? (
-                <PerformanceFxMetricBadge />
-              ) : null}
-            </button>
-            <button
-              type="button"
-              className="hover:text-white"
-              onClick={(e) => {
-                e.stopPropagation()
-                openMetric('mwr')
-              }}
-            >
-              <span className="text-white/45">MWR (annualized) </span>
-              {mwrReasonLabel(snapshotMwr)}
-              {perfFxWarningActive && metricUsesTradeDateFx('mwr') ? (
-                <PerformanceFxMetricBadge />
-              ) : null}
-            </button>
-            <button
-              type="button"
-              className="text-white/40 hover:text-white/70"
-              onClick={(e) => {
-                e.stopPropagation()
-                openMetric('grossBuys')
-              }}
-            >
-              gross buys {fmt(capitalStats.grossBuys)}
-            </button>
-          </div>
-          {snapshotMarkNote ? (
-            <p className="mt-1.5 text-[11px] text-white/50">{snapshotMarkNote}</p>
-          ) : null}
-        </StatsCardButton>
+        <SnapshotReturnStatsCard
+          totalPnl={summary.totalPnl}
+          snapshotReturnPct={snapshotReturnPct}
+          currentNet={capitalStats.currentNet}
+          grossBuys={capitalStats.grossBuys}
+          snapshotTwr={snapshotTwr}
+          snapshotMwr={snapshotMwr}
+          snapshotMarkNote={snapshotMarkNote}
+          perfFxWarningActive={perfFxWarningActive}
+          fmt={fmt}
+          onOpenMetric={openMetric}
+        />
       ) : null}
 
       <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-4">
