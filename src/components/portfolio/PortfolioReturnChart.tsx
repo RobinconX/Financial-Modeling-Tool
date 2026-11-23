@@ -1,4 +1,5 @@
 import { useMemo, useState } from 'react'
+import { useChartDateIndexZoomPan } from '../../hooks/useChartDateIndexZoomPan'
 import {
   CartesianGrid,
   ComposedChart,
@@ -101,6 +102,15 @@ function formatTick(date: string): string {
   const [y, m] = date.split('-')
   if (!m) return date
   return `${y}-${m}`
+}
+
+const RETURN_CHART_RIGHT_PX = 8
+
+function formatReturnChartTimeTick(date: string, from: string, to: string): string {
+  const days = (Date.parse(to) - Date.parse(from)) / 86_400_000
+  if (!Number.isFinite(days) || days > 500) return date.slice(0, 4)
+  if (days > 80) return date.slice(0, 7)
+  return date.slice(5)
 }
 
 function returnProgressionSeriesLabel(mode: ReturnChartMode): string {
@@ -484,6 +494,19 @@ export function PortfolioReturnChart({
     [trades, points, mode, displayCurrency, usdToChf],
   )
   const hasAnyMarkers = tradeMarkers.length > 0 || optionMarkers.length > 0
+  const yAxisPx = mode === 'pct' ? 44 : 52
+  const {
+    chartRef,
+    panning,
+    zoomed,
+    visible: visibleData,
+    surfaceClass,
+    resetWindow,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
+  } = useChartDateIndexZoomPan(data, { yAxisPx, rightPx: RETURN_CHART_RIGHT_PX })
 
   const hasValue = data.some((d) => d.value != null)
   if (!hasValue) {
@@ -545,16 +568,32 @@ export function PortfolioReturnChart({
       {missingNote ? (
         <p className="text-[11px] text-amber-200/75">{missingNote}</p>
       ) : null}
-      <div className="h-48 w-full">
+      <div
+        ref={chartRef}
+        className={`h-48 w-full ${surfaceClass}`}
+        onDoubleClick={data.length >= 2 ? resetWindow : undefined}
+        onPointerDown={data.length >= 2 ? onPointerDown : undefined}
+        onPointerMove={data.length >= 2 ? onPointerMove : undefined}
+        onPointerUp={data.length >= 2 ? onPointerUp : undefined}
+        onPointerCancel={data.length >= 2 ? onPointerCancel : undefined}
+      >
         <ResponsiveContainer width="100%" height="100%">
-          <ComposedChart data={data} margin={{ top: 4, right: 8, left: 0, bottom: 0 }}>
+          <ComposedChart
+            data={visibleData}
+            margin={{ top: 4, right: RETURN_CHART_RIGHT_PX, left: 0, bottom: 0 }}
+          >
             <CartesianGrid stroke="rgba(255,255,255,0.06)" vertical={false} />
             <XAxis
               dataKey="time"
               type="number"
               scale="time"
               domain={['dataMin', 'dataMax']}
-              tickFormatter={(t: number) => formatTick(isoDateFromUtcMs(t))}
+              tickFormatter={(t: number) => {
+                const d = isoDateFromUtcMs(t)
+                const min = visibleData[0]?.date ?? d
+                const max = visibleData[visibleData.length - 1]?.date ?? d
+                return formatReturnChartTimeTick(d, min, max)
+              }}
               tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
               minTickGap={48}
             />
@@ -565,23 +604,25 @@ export function PortfolioReturnChart({
                 mode === 'pct' ? `${v.toFixed(0)}%` : formatMoney(v, displayCurrency)
               }
             />
-            <Tooltip
-              filterNull={false}
-              cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
-              content={(props) => (
-                <ReturnChartTooltip
-                  active={props.active}
-                  label={props.label}
-                  payload={props.payload as unknown as TooltipPayloadItem[] | undefined}
-                  mode={mode}
-                  displayCurrency={displayCurrency}
-                  usdToChf={usdToChf}
-                  chartData={data}
-                  tradeMarkers={tradeMarkers}
-                  optionMarkers={optionMarkers}
-                />
-              )}
-            />
+            {panning ? null : (
+              <Tooltip
+                filterNull={false}
+                cursor={{ stroke: 'rgba(255,255,255,0.12)', strokeWidth: 1 }}
+                content={(props) => (
+                  <ReturnChartTooltip
+                    active={props.active}
+                    label={props.label}
+                    payload={props.payload as unknown as TooltipPayloadItem[] | undefined}
+                    mode={mode}
+                    displayCurrency={displayCurrency}
+                    usdToChf={usdToChf}
+                    chartData={data}
+                    tradeMarkers={tradeMarkers}
+                    optionMarkers={optionMarkers}
+                  />
+                )}
+              />
+            )}
             <Line
               type="monotone"
               dataKey="valuePos"
@@ -650,6 +691,23 @@ export function PortfolioReturnChart({
           </ComposedChart>
         </ResponsiveContainer>
       </div>
+      {data.length >= 2 ? (
+        <p className="flex flex-wrap items-center justify-center gap-x-2 text-[10px] text-white/30">
+          <span>
+            {visibleData[0]?.date} → {visibleData[visibleData.length - 1]?.date}
+            {zoomed ? ' · drag to pan · scroll to zoom' : ' · scroll to zoom'}
+          </span>
+          {zoomed ? (
+            <button
+              type="button"
+              className="text-emerald-300/80 hover:text-emerald-200"
+              onClick={resetWindow}
+            >
+              Reset
+            </button>
+          ) : null}
+        </p>
+      ) : null}
     </div>
   )
 }
