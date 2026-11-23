@@ -653,6 +653,8 @@ export function PortfolioPerformancePanel({
   const [pendingClear, setPendingClear] = useState(false)
   const [tradeLogOpen, setTradeLogOpen] = useState(false)
   const [closedSymbolsOpen, setClosedSymbolsOpen] = useState(false)
+  const [optionsPnlOpen, setOptionsPnlOpen] = useState(true)
+  const [optionsByUnderlyingOpen, setOptionsByUnderlyingOpen] = useState(true)
   const [returnChartMode, setReturnChartMode] = useState<ReturnChartMode>('pct')
 
   const holdingsById = useMemo(() => {
@@ -1005,9 +1007,22 @@ export function PortfolioPerformancePanel({
           className="space-y-2 rounded-lg border border-amber-500/20 bg-amber-500/[0.04] px-3 py-2.5"
           data-guide-anchor="portfolio.performance.optionsPnl"
         >
-          <h4 className="text-[10px] font-semibold uppercase tracking-wide text-amber-200/85">
+          <button
+            type="button"
+            className="flex w-full items-center gap-2 text-left text-[10px] font-semibold uppercase tracking-wide text-amber-200/85 hover:text-amber-100"
+            aria-expanded={optionsPnlOpen}
+            onClick={() => setOptionsPnlOpen((o) => !o)}
+          >
+            <span
+              className={`text-[10px] text-amber-200/50 transition-transform ${optionsPnlOpen ? 'rotate-90' : ''}`}
+              aria-hidden
+            >
+              ▸
+            </span>
             Options P/L (whole book)
-          </h4>
+          </button>
+          {optionsPnlOpen ? (
+          <>
           <div className="grid gap-2 sm:grid-cols-3">
             <StatsCardButton
               className="rounded-lg border border-amber-500/20 bg-black/20 px-2.5 py-2 text-left"
@@ -1044,51 +1059,79 @@ export function PortfolioPerformancePanel({
             ]}
           />
           {optionsAggregate.byUnderlying.length > 0 ? (
-            <div className="table-shell overflow-x-auto">
-              <table className="min-w-full text-xs">
-                <thead className="uppercase tracking-wider text-white/40">
-                  <tr>
-                    <th className="px-2 py-1.5 text-left font-medium">Underlying</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Total</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Realized</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Received</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Paid</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Open</th>
-                    <th className="px-2 py-1.5 text-right font-medium">Wins</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {optionsAggregate.byUnderlying.map((row) => (
-                    <tr key={row.underlying} className="border-t border-white/5">
-                      <td className="px-2 py-1.5 font-medium text-white">{row.underlying}</td>
-                      <td
-                        className={`px-2 py-1.5 text-right tabular-nums ${pnlClass(row.totalPnl)}`}
-                      >
-                        {fmt(row.totalPnl)}
-                      </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums text-white/80">
-                        {fmt(row.realizedPnl)}
-                      </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
-                        {fmt(row.premiumReceived)}
-                      </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
-                        {fmt(row.premiumPaid)}
-                      </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
-                        {row.openContracts}
-                      </td>
-                      <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
-                        {row.closedSeries > 0
-                          ? `${row.winCount}/${row.closedSeries}`
-                          : '—'}
-                      </td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
+            <div className="space-y-1">
+              <button
+                type="button"
+                className="flex w-full items-center gap-2 text-left text-[10px] font-semibold uppercase tracking-wide text-amber-200/70 hover:text-amber-100/90"
+                aria-expanded={optionsByUnderlyingOpen}
+                onClick={() => setOptionsByUnderlyingOpen((o) => !o)}
+              >
+                <span
+                  className={`text-[10px] text-amber-200/45 transition-transform ${optionsByUnderlyingOpen ? 'rotate-90' : ''}`}
+                  aria-hidden
+                >
+                  ▸
+                </span>
+                By underlying ({optionsAggregate.byUnderlying.length})
+              </button>
+              {optionsByUnderlyingOpen ? (
+                <div className="table-shell overflow-x-auto">
+                  <table className="min-w-full text-xs">
+                    <thead className="uppercase tracking-wider text-white/40">
+                      <tr>
+                        <th className="px-2 py-1.5 text-left font-medium">Underlying</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Total</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Realized</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Received</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Paid</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Open</th>
+                        <th className="px-2 py-1.5 text-right font-medium">Wins</th>
+                      </tr>
+                    </thead>
+                    <tbody>
+                      {optionsAggregate.byUnderlying.map((row) => (
+                        <tr key={row.underlying} className="border-t border-white/5">
+                          <td className="px-2 py-1.5 font-medium text-white">{row.underlying}</td>
+                          <td
+                            className={`px-2 py-1.5 text-right tabular-nums ${pnlClass(row.totalPnl)}`}
+                          >
+                            {fmt(row.totalPnl)}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-white/80">
+                            {fmt(row.realizedPnl)}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
+                            {fmt(row.premiumReceived)}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
+                            {fmt(row.premiumPaid)}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
+                            {row.openContracts}
+                          </td>
+                          <td className="px-2 py-1.5 text-right tabular-nums text-white/70">
+                            {row.closedSeries > 0
+                              ? `${row.winCount}/${row.closedSeries}`
+                              : '—'}
+                          </td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              ) : (
+                <p className="text-[11px] text-white/35">
+                  Collapsed — per-underlying rows hidden; book totals above unchanged.
+                </p>
+              )}
             </div>
           ) : null}
+          </>
+          ) : (
+            <p className="text-[11px] text-white/35">
+              Collapsed — book-wide option totals hidden until you expand.
+            </p>
+          )}
         </section>
       ) : null}
 

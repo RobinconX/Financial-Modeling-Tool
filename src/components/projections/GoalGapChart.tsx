@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState, type PointerEvent } from 'react'
+import { useMemo } from 'react'
 import {
   CartesianGrid,
   ComposedChart,
@@ -23,6 +23,7 @@ import {
   type GoalPathMetric,
   type UpsidePoint,
 } from '../../lib/goalGap'
+import { useChartDateIndexZoomPan } from '../../hooks/useChartDateIndexZoomPan'
 
 const TARGET_CAGR_COLOR = '#ef4444'
 
@@ -46,71 +47,11 @@ type Props = {
   showTrades?: boolean
 }
 
-type DateWindow = { from: string; to: string }
-
-const MIN_SPAN = 20
 const Y_AXIS_PX = 56
 const RIGHT_PX = 12
 
 function tickPct(v: number): string {
   return formatPercent(v, v >= 1 || v <= -0.5 ? 0 : 1)
-}
-
-function zoomIndexWindow(
-  length: number,
-  start: number,
-  end: number,
-  anchorFrac: number,
-  zoomIn: boolean,
-  minSpan = MIN_SPAN,
-): { start: number; end: number } {
-  if (length < 2) return { start: 0, end: Math.max(0, length - 1) }
-  const last = length - 1
-  const span = Math.max(1, end - start)
-  const frac = Math.min(1, Math.max(0, anchorFrac))
-  const factor = 0.75
-  let nextSpan = zoomIn ? Math.floor(span * factor) : Math.ceil(span / factor)
-  nextSpan = Math.max(minSpan, Math.min(last, nextSpan))
-  if (!zoomIn && start <= 0 && end >= last) return { start: 0, end: last }
-  const center = start + frac * span
-  let nextStart = Math.round(center - frac * nextSpan)
-  let nextEnd = nextStart + nextSpan
-  if (nextStart < 0) {
-    nextEnd -= nextStart
-    nextStart = 0
-  }
-  if (nextEnd > last) {
-    nextStart -= nextEnd - last
-    nextEnd = last
-  }
-  nextStart = Math.max(0, nextStart)
-  nextEnd = Math.min(last, Math.max(nextStart + 1, nextEnd))
-  return { start: nextStart, end: nextEnd }
-}
-
-/** Shift a window by `deltaIndex` points, keeping span, clamped to the series. */
-export function panIndexWindow(
-  length: number,
-  start: number,
-  end: number,
-  deltaIndex: number,
-): { start: number; end: number } {
-  if (length < 2) return { start: 0, end: Math.max(0, length - 1) }
-  const last = length - 1
-  const span = Math.max(1, end - start)
-  let nextStart = start + deltaIndex
-  let nextEnd = nextStart + span
-  if (nextStart < 0) {
-    nextStart = 0
-    nextEnd = span
-  }
-  if (nextEnd > last) {
-    nextEnd = last
-    nextStart = last - span
-  }
-  nextStart = Math.max(0, nextStart)
-  nextEnd = Math.min(last, Math.max(nextStart + 1, nextEnd))
-  return { start: nextStart, end: nextEnd }
 }
 
 function formatTimeTick(date: string, from: string, to: string): string {
@@ -248,105 +189,18 @@ export function GoalGapChart({
     }))
   }, [plot, targetCagr, metric, goalYear])
   const showTarget = targetCagr != null && Number.isFinite(targetCagr) && goalYear != null
-  const [win, setWin] = useState<DateWindow | null>(null)
-  const [panning, setPanning] = useState(false)
-  const chartRef = useRef<HTMLDivElement>(null)
-  const dragRef = useRef<{ x: number; start: number; end: number } | null>(null)
-
-  const last = Math.max(0, data.length - 1)
-  let start = 0
-  let end = last
-  if (win && data.length > 0) {
-    const lo = data.findIndex((d) => d.date >= win.from)
-    start = lo < 0 ? 0 : lo
-    end = start
-    for (let i = data.length - 1; i >= start; i--) {
-      if (data[i]!.date <= win.to) {
-        end = i
-        break
-      }
-    }
-    if (end <= start) end = Math.min(last, start + 1)
-  }
-  const visible = data.length > 0 ? data.slice(start, end + 1) : data
-  const zoomed = data.length > 1 && (start > 0 || end < last)
-
-  useEffect(() => {
-    const node = chartRef.current
-    if (!node || data.length < 2) return
-    const host: HTMLDivElement = node
-    function onWheel(e: WheelEvent) {
-      e.preventDefault()
-      e.stopPropagation()
-      const rect = host.getBoundingClientRect()
-      const plotW = Math.max(1, rect.width - Y_AXIS_PX - RIGHT_PX)
-      const frac = (e.clientX - rect.left - Y_AXIS_PX) / plotW
-      const zoomIn = e.deltaY < 0
-      setWin((w) => {
-        let curStart = 0
-        let curEnd = data.length - 1
-        if (w) {
-          const lo = data.findIndex((d) => d.date >= w.from)
-          curStart = lo < 0 ? 0 : lo
-          curEnd = curStart
-          for (let i = data.length - 1; i >= curStart; i--) {
-            if (data[i]!.date <= w.to) {
-              curEnd = i
-              break
-            }
-          }
-        }
-        const next = zoomIndexWindow(data.length, curStart, curEnd, frac, zoomIn)
-        const from = data[next.start]?.date
-        const to = data[next.end]?.date
-        if (!from || !to) return w
-        if (next.start <= 0 && next.end >= data.length - 1) return null
-        return { from, to }
-      })
-    }
-    host.addEventListener('wheel', onWheel, { passive: false })
-    return () => host.removeEventListener('wheel', onWheel)
-  }, [data])
-
-  function applyWindow(nextStart: number, nextEnd: number) {
-    const from = data[nextStart]?.date
-    const to = data[nextEnd]?.date
-    if (!from || !to) return
-    if (nextStart <= 0 && nextEnd >= last) {
-      setWin(null)
-      return
-    }
-    setWin({ from, to })
-  }
-
-  function onPointerDown(e: PointerEvent<HTMLDivElement>) {
-    if (e.button !== 0 || data.length < 2 || !zoomed) return
-    e.preventDefault()
-    dragRef.current = { x: e.clientX, start, end }
-    e.currentTarget.setPointerCapture(e.pointerId)
-    setPanning(true)
-  }
-
-  function onPointerMove(e: PointerEvent<HTMLDivElement>) {
-    const drag = dragRef.current
-    if (!drag) return
-    const host = chartRef.current
-    if (!host) return
-    const plotW = Math.max(1, host.getBoundingClientRect().width - Y_AXIS_PX - RIGHT_PX)
-    const span = Math.max(1, drag.end - drag.start)
-    const delta = Math.round((-(e.clientX - drag.x) / plotW) * span)
-    const next = panIndexWindow(data.length, drag.start, drag.end, delta)
-    applyWindow(next.start, next.end)
-  }
-
-  function onPointerUp(e: PointerEvent<HTMLDivElement>) {
-    if (!dragRef.current) return
-    dragRef.current = null
-    setPanning(false)
-    if (e.currentTarget.hasPointerCapture(e.pointerId)) {
-      e.currentTarget.releasePointerCapture(e.pointerId)
-    }
-  }
+  const {
+    chartRef,
+    panning,
+    zoomed,
+    visible,
+    surfaceClass,
+    resetWindow,
+    onPointerDown,
+    onPointerMove,
+    onPointerUp,
+    onPointerCancel,
+  } = useChartDateIndexZoomPan(data, { yAxisPx: Y_AXIS_PX, rightPx: RIGHT_PX })
 
   if (loading && data.length < 2) {
     return (
@@ -392,14 +246,12 @@ export function GoalGapChart({
       ) : null}
       <div
         ref={chartRef}
-        className={`min-h-0 w-full flex-1 ${
-          panning ? 'cursor-grabbing select-none' : zoomed ? 'cursor-grab' : ''
-        }`}
-        onDoubleClick={() => setWin(null)}
+        className={`min-h-0 w-full flex-1 ${surfaceClass}`}
+        onDoubleClick={resetWindow}
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
-        onPointerCancel={onPointerUp}
+        onPointerCancel={onPointerCancel}
       >
         <ResponsiveContainer width="100%" height="100%" debounce={50}>
           <ComposedChart data={visible} margin={{ top: 8, right: 12, left: 4, bottom: 0 }}>
@@ -522,7 +374,7 @@ export function GoalGapChart({
           <button
             type="button"
             className="text-emerald-300/80 hover:text-emerald-200"
-            onClick={() => setWin(null)}
+            onClick={resetWindow}
           >
             Reset
           </button>
@@ -531,5 +383,3 @@ export function GoalGapChart({
     </div>
   )
 }
-
-export { zoomIndexWindow }

@@ -1302,17 +1302,17 @@ Below **Activity**, a line chart (toggle **%** vs **$**, optional **Trades** ove
 - **$** — realized + unrealized P&L each day (ledger marks from daily closes when shares are open)
 - **%** — same numerator ÷ cumulative **gross buys** through that day (matches **Snapshot return** % on equities)
 
-The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged equity buy (green dot) and sell (red dot) on the curve. **Amber hollow** dots mark **option** events (open/close, **expire**, **assign**) on the same curve: **whole portfolio** shows every option on the book-wide equity curve; **one ticker** shows only options on that underlying. Tooltips list equity fills and option contract labels on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Trade log** stays collapsed until you save a new trade.
+The line is **green above zero** and **red below zero**. Toggle **Trades** to mark each logged equity buy (green dot) and sell (red dot) on the curve. **Amber hollow** dots mark **option** events (open/close, **expire**, **assign**) on the same curve: **whole portfolio** shows every option on the book-wide equity curve; **one ticker** shows only options on that underlying. Tooltips list equity fills and option contract labels on days with activity. Gaps appear when price history cannot mark an open position on a past day (today falls back to the latest history close when needed). **Scroll to zoom** on the chart; after zooming, **drag to pan** or use **Reset** / double-click to restore the full range (same interaction as **Remaining upside** on Comparables). **Trade log** stays collapsed until you save a new trade.
 
 ### Options P/L (whole book)
 
-When the book has option trades, an **Options P/L** block (amber panel) always shows **book-wide** totals — independent of the equity scope:
+When the book has option trades, an **Options P/L** block (amber panel) shows **book-wide** totals — independent of the equity scope. Use the section header to **collapse** or expand the block (totals and summary lines hide when collapsed).
 
 - **Realized / unrealized / total** P&L (display currency)
 - **Premium received** and **premium paid** (separate lines)
 - **Open contracts** and **closed series** (one OCC series = fully flat)
 - **Win rate** — share of closed series with **total P&L &gt; 0**
-- Optional **per-underlying** table (rollup, not a scope filter)
+- **By underlying** — optional rollup table with its own collapse control (per-underlying detail only; not a scope filter)
 
 ### Bulk import, export, clear
 
