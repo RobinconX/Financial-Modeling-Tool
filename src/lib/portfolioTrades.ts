@@ -469,6 +469,8 @@ export function resolveSymbolMark(
   historyPoints: PriceHistoryPoint[] = [],
   asOfDate: string = todayIsoDate(),
   historyQuoteCurrency?: string,
+  historiesBySymbol?: Record<string, PriceHistoryPoint[]>,
+  quoteCurrencyBySymbol?: Record<string, DisplayCurrency>,
 ): SymbolMark | null {
   const quoteCur = quoteToDisplayCurrency(historyQuoteCurrency)
   if (isOccSymbol(symbol)) {
@@ -493,24 +495,23 @@ export function resolveSymbolMark(
         return { price: px, currency: 'USD', source: 'quote', asOfDate: null }
       }
     }
-    const hist = latestHistoryClose(historyPoints, asOfDate)
-    if (hist) {
-      return {
-        price: hist.price,
-        currency: quoteCur,
-        source: 'history',
-        asOfDate: hist.date,
-      }
-    }
     if (parsed) {
-      const uHist = historyPoints.length ? null : null
-      void uHist
+      const uSym = parsed.underlying
+      const uPoints =
+        historiesBySymbol?.[uSym] ??
+        historiesBySymbol?.[uSym.toUpperCase()] ??
+        []
+      const uCur =
+        quoteCurrencyBySymbol?.[uSym] ?? quoteCurrencyBySymbol?.[uSym.toUpperCase()]
       const uMark = resolveSymbolMark(
-        parsed.underlying,
+        uSym,
         portfolio,
         scenarios,
-        [],
+        uPoints,
         asOfDate,
+        uCur === 'CHF' ? 'CHF' : uCur === 'USD' ? 'USD' : undefined,
+        historiesBySymbol,
+        quoteCurrencyBySymbol,
       )
       if (uMark) return intrinsicOptionMark(parsed, uMark)
     }
@@ -697,6 +698,8 @@ export function computePortfolioPerformance(
       historiesBySymbol[sym] ?? [],
       asOfDate,
       histCur === 'CHF' ? 'CHF' : histCur === 'USD' ? 'USD' : undefined,
+      historiesBySymbol,
+      perfCtx?.quoteCurrencyBySymbol,
     )
     const mark =
       markRaw && perfCtx
