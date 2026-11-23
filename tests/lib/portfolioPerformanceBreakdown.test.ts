@@ -106,19 +106,40 @@ function robinLikeTrades(): PortfolioTrade[] {
 describe('portfolioPerformanceBreakdown', () => {
   it('open short option unrealized is positive when mark below premium', () => {
     const trades = robinLikeTrades().filter((t) => t.symbol === 'LMND271219P00045000')
-    const book = { ...newPortfolio('Robin-like'), id: PORT_ID }
+    const book: SavedPortfolio = {
+      ...newPortfolio('Robin-like'),
+      id: PORT_ID,
+      holdings: [
+        {
+          id: 'h-lmnd-put',
+          symbol: 'LMND',
+          sharesHeld: -1,
+          scenarioId: null,
+          basis: 'easy',
+          yearOverrides: [],
+          manualCurrentPrice: 1.5,
+          manualOnly: true,
+          option: {
+            underlying: 'LMND',
+            expiration: '2027-12-19',
+            right: 'P',
+            strike: 45,
+            multiplier: 100,
+            occSymbol: 'LMND271219P00045000',
+          },
+        },
+      ],
+    }
     const perf = computePortfolioPerformance(
       trades,
       book,
       [],
-      {
-        LMND271219P00045000: [{ date: '2026-06-01', close: 1.5 }],
-      },
+      {},
       '2026-06-01',
       {
         displayCurrency: 'USD',
         usdToChf: 0.9,
-        quoteCurrencyBySymbol: { LMND271219P00045000: 'USD' },
+        quoteCurrencyBySymbol: { LMND: 'USD' },
       },
     )
     const lmnd = perf.symbols[0]!

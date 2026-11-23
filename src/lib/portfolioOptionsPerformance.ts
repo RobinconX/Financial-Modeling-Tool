@@ -1,5 +1,5 @@
 import type { PortfolioTrade, SavedPortfolio, SavedScenario } from '../types'
-import { parseOccSymbol } from './optionContract'
+import { isOccSymbol, parseOccSymbol } from './optionContract'
 import type { PerfDisplayContext } from './portfolioTradeFx'
 import {
   computeSymbolPerformance,
@@ -75,6 +75,22 @@ export function tradedEquitySymbolsFromTrades(trades: PortfolioTrade[]): string[
   return [...set].sort((a, b) => a.localeCompare(b))
 }
 
+/** Equity underlyings for daily price-history fetch (never OCC contract symbols). */
+export function equityHistorySymbolsFromTrades(
+  trades: PortfolioTrade[],
+  scopeSymbol?: string | null,
+): string[] {
+  const syms = new Set<string>(tradedEquitySymbolsFromTrades(trades))
+  const scope = scopeSymbol?.trim().toUpperCase()
+  if (scope && !isOccSymbol(scope)) syms.add(scope)
+  for (const t of trades) {
+    if (!isOptionTrade(t)) continue
+    const u = tradeUnderlying(t)
+    if (u && !isOccSymbol(u)) syms.add(u)
+  }
+  return [...syms].sort((a, b) => a.localeCompare(b))
+}
+
 export function equityTradesMatchingScope(
   trades: PortfolioTrade[],
   scopeSymbol: string | null,
@@ -125,15 +141,16 @@ export function computeOptionsPerformanceAggregate(
 
   const occPerfs: SymbolPerformance[] = []
   for (const [occ, list] of byOcc) {
-    const hist = historiesBySymbol[occ] ?? []
     const histCur = perfCtx?.quoteCurrencyBySymbol[occ]
     const markRaw = resolveSymbolMark(
       occ,
       portfolio,
       scenarios,
-      hist,
+      [],
       asOfDate,
       histCur === 'CHF' ? 'CHF' : histCur === 'USD' ? 'USD' : undefined,
+      historiesBySymbol,
+      perfCtx?.quoteCurrencyBySymbol,
     )
     const perf = computeSymbolPerformance(list, markRaw, asOfDate, perfCtx)
     if (perf) occPerfs.push(perf)

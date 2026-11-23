@@ -27,6 +27,7 @@ import { optionLabel, parseOccSymbol } from '../../lib/optionContract'
 import { tradeInstrument } from '../../lib/portfolioTradeLedger'
 import {
   computeOptionsPerformanceAggregate,
+  equityHistorySymbolsFromTrades,
   optionTradesForReturnMarkers,
   tradedEquitySymbolsFromTrades,
   tradesMatchingPerformanceScope,
@@ -539,14 +540,10 @@ export function PortfolioPerformancePanel({
     return any ? sum : null
   }, [summary.symbols])
 
-  const symbolsForHistory = useMemo(() => {
-    const syms = new Set<string>(tradedEquitySymbolsFromTrades(portfolioTrades))
-    if (scopeSymbol) syms.add(scopeSymbol)
-    for (const t of portfolioTrades) {
-      if (tradeInstrument(t) === 'option') syms.add(t.symbol)
-    }
-    return [...syms]
-  }, [portfolioTrades, scopeSymbol])
+  const symbolsForHistory = useMemo(
+    () => equityHistorySymbolsFromTrades(portfolioTrades, scopeSymbol),
+    [portfolioTrades, scopeSymbol],
+  )
 
   useEffect(() => {
     if (symbolsForHistory.length === 0) return

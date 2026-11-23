@@ -178,6 +178,30 @@ describe('portfolioTrades', () => {
     expect(whole.returnPct).toBeCloseTo(0.5, 4)
   })
 
+  it('ignores history points on OCC and marks intrinsic from underlying history', () => {
+    const emptyBook: SavedPortfolio = {
+      id: PORT_ID,
+      name: 'T',
+      currentCash: 0,
+      deposits: [],
+      holdings: [],
+      actions: [],
+      createdAt: '2026-01-01T00:00:00.000Z',
+      updatedAt: '2026-01-01T00:00:00.000Z',
+    }
+    const occ = 'AAPL261119C00150000'
+    const mark = resolveSymbolMark(
+      occ,
+      emptyBook,
+      [],
+      [{ date: '2024-06-15', close: 999 }],
+      '2024-06-20',
+      undefined,
+      { AAPL: [{ date: '2024-06-15', close: 180 }] },
+    )
+    expect(mark).toMatchObject({ price: 30, source: 'manual' })
+  })
+
   it('defaults missing currency to USD on normalize', () => {
     const t = normalizePortfolioTrade({
       portfolioId: PORT_ID,
