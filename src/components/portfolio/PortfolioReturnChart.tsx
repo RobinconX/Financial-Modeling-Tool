@@ -106,11 +106,61 @@ function formatTick(date: string): string {
 
 const RETURN_CHART_RIGHT_PX = 8
 
-function formatReturnChartTimeTick(date: string, from: string, to: string): string {
+export function formatReturnChartTimeTick(date: string, from: string, to: string): string {
   const days = (Date.parse(to) - Date.parse(from)) / 86_400_000
   if (!Number.isFinite(days) || days > 500) return date.slice(0, 4)
   if (days > 80) return date.slice(0, 7)
   return date.slice(5)
+}
+
+function returnChartTimeTickBucket(date: string, from: string, to: string): string {
+  const days = (Date.parse(to) - Date.parse(from)) / 86_400_000
+  if (!Number.isFinite(days) || days > 500) return date.slice(0, 4)
+  if (days > 80) return date.slice(0, 7)
+  return date
+}
+
+/** One tick per visible granularity bucket (year / month / day); keeps labels unique when zoomed. */
+export function buildReturnChartXAxisTicks(
+  sortedTimes: number[],
+  fromDate: string,
+  toDate: string,
+  maxTicks = 10,
+): number[] {
+  if (sortedTimes.length === 0) return []
+  if (sortedTimes.length === 1) return [sortedTimes[0]!]
+
+  const seen = new Set<string>()
+  const ticks: number[] = []
+  for (const t of sortedTimes) {
+    const date = isoDateFromUtcMs(t)
+    const key = returnChartTimeTickBucket(date, fromDate, toDate)
+    if (seen.has(key)) continue
+    seen.add(key)
+    ticks.push(t)
+  }
+
+  if (ticks.length <= maxTicks) return ticks
+
+  const thinned: number[] = []
+  const step = Math.ceil(ticks.length / maxTicks)
+  for (let i = 0; i < ticks.length; i += step) {
+    thinned.push(ticks[i]!)
+  }
+  const last = ticks[ticks.length - 1]!
+  if (thinned[thinned.length - 1] !== last) thinned.push(last)
+  return thinned
+}
+
+export function returnChartXAxisTickLabels(
+  sortedTimes: number[],
+  fromDate: string,
+  toDate: string,
+): string[] {
+  const ticks = buildReturnChartXAxisTicks(sortedTimes, fromDate, toDate)
+  return ticks.map((t) =>
+    formatReturnChartTimeTick(isoDateFromUtcMs(t), fromDate, toDate),
+  )
 }
 
 function returnProgressionSeriesLabel(mode: ReturnChartMode): string {
@@ -517,6 +567,14 @@ export function PortfolioReturnChart({
   } = useChartDateIndexZoomPan(data, { yAxisPx, rightPx: RETURN_CHART_RIGHT_PX })
 
   const hasValue = data.some((d) => d.value != null)
+
+  const xAxisTicks = useMemo(() => {
+    if (visibleData.length === 0) return [] as number[]
+    const times = visibleData.map((d) => d.time)
+    const from = visibleData[0]!.date
+    const to = visibleData[visibleData.length - 1]!.date
+    return buildReturnChartXAxisTicks(times, from, to)
+  }, [visibleData])
   if (!hasValue) {
     return (
       <div className="flex h-48 items-center justify-center rounded-xl border border-dashed border-white/10 text-sm text-white/40">
@@ -598,6 +656,7 @@ export function PortfolioReturnChart({
               type="number"
               scale="time"
               domain={['dataMin', 'dataMax']}
+              ticks={xAxisTicks.length > 0 ? xAxisTicks : undefined}
               tickFormatter={(t: number) => {
                 const d = isoDateFromUtcMs(t)
                 const min = visibleData[0]?.date ?? d
