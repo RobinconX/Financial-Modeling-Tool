@@ -290,6 +290,7 @@ describe('teachings registry', () => {
     expect(getGuide('comparables.upsideChart')?.body.toLowerCase()).toContain('upside')
     expect(isGuideReady('comparables.tradeMarkers')).toBe(true)
     expect(getGuide('comparables.tradeMarkers')?.body).toContain('Trades')
+    expect(getGuide('comparables.tradeMarkers')?.body).toContain('Expired')
     expect(getGuide('projections.analyze')?.body).toContain('Investment thesis')
     const thesis = getGuide('projections.thesis')
     expect(thesis?.status).toBe('ready')

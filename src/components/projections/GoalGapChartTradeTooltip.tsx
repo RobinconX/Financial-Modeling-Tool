@@ -6,6 +6,12 @@ import {
 } from '../../lib/comparablesTradeChart'
 import type { GoalPathMetric } from '../../lib/goalGap'
 import { TARGET_CAGR_SERIES_KEY } from '../../lib/goalGap'
+import {
+  tradeMarkerActionColor,
+  tradeMarkerActionLabel,
+  tradeMarkerContractLabel,
+  tradeMarkerQuantityUnit,
+} from '../../lib/tradeMarkerDisplay'
 
 type PayloadItem = {
   dataKey?: string | number
@@ -69,21 +75,24 @@ export function GoalGapChartTradeTooltip({
             Trades ({comparablesTradeMetricLabel(metric)})
           </p>
           {trades.map((m) => {
-            const sideTone = m.side === 'buy' ? '#34d399' : '#f87171'
+            const actionTone = tradeMarkerActionColor(m)
             const px = formatPrice(m.price, m.currency ?? 'USD')
+            const unit = tradeMarkerQuantityUnit(m)
+            const title = tradeMarkerContractLabel(m)
+            const action = tradeMarkerActionLabel(m)
             return (
               <div key={m.id} className="flex flex-col gap-0.5">
                 <div className="flex items-center justify-between gap-3">
-                  <span className="font-medium text-white/85">{m.symbol}</span>
-                  <span style={{ color: sideTone }}>
-                    {m.side === 'buy' ? 'Buy' : 'Sell'}
+                  <span className="font-medium text-white/85">{title}</span>
+                  <span style={{ color: actionTone }} className="text-right">
+                    {action}
                   </span>
                 </div>
                 <div className="tabular-nums text-white/75">
                   {m.tradeDate !== m.chartDate
                     ? `${m.tradeDate} (on ${m.chartDate}) · `
                     : null}
-                  {m.shares} @ {px}
+                  {m.shares} {unit} @ {px}
                 </div>
               </div>
             )
