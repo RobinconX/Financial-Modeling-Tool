@@ -312,12 +312,16 @@ export { ledgerSnapshotAt } from './portfolioTradeLedger'
 
 export type ReturnProgressionPoint = {
   date: string
+  /** Positions-only NAV (display currency). */
+  positionsNav?: number | null
+  /** Cumulative net trade capital through the day. */
+  netInvested?: number | null
   totalPnl: number | null
   /** Gross-buys return (total P&L ÷ gross buys), decimal. */
   returnPct: number | null
   /** Cumulative linked TWR from inception, decimal. */
   twrPct: number | null
-  /** Cumulative money-weighted return (not annualized), decimal. */
+  /** @deprecated Chart no longer plots cumulative MWR. */
   mwrCumPct: number | null
 }
 
@@ -442,6 +446,8 @@ export function buildReturnProgression(
         totalPnl != null && grossBuys > 0 ? totalPnl / grossBuys : null
       points.push({
         date,
+        positionsNav: null,
+        netInvested: null,
         totalPnl,
         returnPct,
         twrPct: null,

@@ -1289,24 +1289,25 @@ A highlighted card shows **today’s** totals for the current scope:
 - **%** — total P&L ÷ **peak net invested capital** (most of your own money at work at any point; one net step per calendar day from buy cash flows minus sell proceeds)
 - **Net capital** subtitle — **current** net contribution (buys minus sell proceeds now)
 - Tap any snapshot or stat **card** for a **detail drawer**: formula, inputs, per-symbol rows (equity vs option), and Chart vs Performance reconciliation on Total P/L and Net capital
-- **TWR** — cumulative **linked** time-weighted return on **Cash-tab cash plus all trade-ledger marks** in scope (equities and options). The last point on the **TWR** return chart matches this card. Shows **n/a** with a short reason when price history cannot cover the window
-- **MWR (annualized)** — money-weighted return (**XIRR**) from all **trade cash flows** in scope, including **options**, plus ending **mark-to-market** when positions are still open. Same **n/a** pattern when IRR cannot be solved. This is **not** the same as the chart’s **MWR** line (see **Return progression**)
+- **TWR** — cumulative **linked** time-weighted return on **open positions only** in scope (equities and options), using the same daily math as the **TWR** return chart. The last chart point matches this card. Shows **n/a** with a short reason when price history cannot cover the window
+- **MWR (annualized)** — money-weighted return (**XIRR**) from all **trade cash flows** in scope, including **options**, plus ending **mark-to-market** when positions are still open. Same **n/a** pattern when IRR cannot be solved
 - **Gross buys** — cumulative buy notionals (secondary line; includes rebuys funded from sales)
 
 When open **equity** shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date. **Options** use live option quotes, manual marks, or intrinsic value from the underlying — daily history is never fetched for OCC symbols.
 
 ### Return progression
 
-Below **Activity**, a line chart (**TWR**, **MWR**, **Buys %**, **$**, optional **Trades** overlay) shows **whole-scope portfolio value** from the first trade through today — equities **and** options (and Cash-tab cash in the return math). Whole-book scope = all symbols on the book; one-ticker scope = that equity row plus options on the same underlying.
+Below **Activity**, one line chart with a **TWR** or **Value** toggle tracks the scoped book from the first trade through today (equities and options). Whole-book scope = all symbols on the book; one-ticker scope = that equity row plus options on the same underlying.
 
 ### Chart modes
 
-- **TWR** — cumulative linked time-weighted return on **Cash-tab cash + marks** (options included). Past option marks use **intrinsic value** from **underlying** daily closes (no OCC price history). Matches the **TWR** snapshot card on the last point.
-- **MWR** — cumulative **non-annualized** money-weighted return: **(portfolio NAV − net capital contributed) ÷ peak net invested capital** through each day (trade cash flows use **ECB trade-date FX** when loaded). Contrast **MWR (annualized)** on the snapshot card (XIRR).
-- **Buys %** — total P&L ÷ (**gross buys** + **premium received**) through that day (legacy return-on-capital view).
-- **$** — total book P&L each day in display currency.
+- **TWR** — cumulative linked time-weighted return in the style of **IBKR PortfolioAnalyst**: each day links (end value − start value − net trade cash flow) ÷ start value, where **net trade cash flow** is buys (with fees) minus sell proceeds (net of fees), using **ECB trade-date FX** when loaded. **Start** and **end value** are **positions only** (equity + option marks). Cash-tab cash is **not** in the chart. On trade days, flows are neutralized so adding shares at unchanged marks does not spike return. Matches the **TWR** snapshot card on the last point.
 
-The line is **green above zero** and **red below zero**. Toggle **Trades** for equity buy/sell dots and option lifecycle dots (amber). Gaps appear when an open position lacks a mark (missing **underlying** history for options). **Scroll to zoom**; when zoomed, **drag to pan** or **Reset** / double-click (same as Comparables **Remaining upside**).
+> **IBKR caveat:** IBKR treats wires and transfers as external flows; FMT uses **trade cash flows** as “money in/out” (same basis as **Net capital**). Numbers should be close when idle cash is small; they can diverge if IBKR counts only deposits while you measure capital through buys.
+
+- **Value** — absolute **positions-only** mark-to-market each day in display currency (**USD** or **CHF**). Options use **intrinsic value** from **underlying** daily closes when history is needed (no OCC price history). Toggle **Net invested** (off by default) to overlay cumulative net trade capital on the same chart.
+
+The TWR line is **green above zero** and **red below zero**. Toggle **Trades** for equity buy/sell dots and option lifecycle dots (amber). Gaps appear when an open position lacks a mark (missing **underlying** history for options). **Scroll to zoom**; when zoomed, **drag to pan** or **Reset** / double-click (same as Comparables **Remaining upside**).
 
 ### Options P/L (whole book)
 

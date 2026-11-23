@@ -27,7 +27,7 @@ import {
 } from '../../lib/tradeMarkerDisplay'
 import type { DisplayCurrency, PortfolioTrade } from '../../types'
 
-export type ReturnChartMode = 'usd' | 'twr' | 'mwr' | 'grossBuys'
+export type ReturnChartMode = 'twr' | 'value'
 export type { ReturnChartTradeMarker } from '../../lib/returnChartMarkers'
 
 type Props = {
@@ -94,6 +94,7 @@ export type ReturnChartRow = {
   value: number | null
   valuePos: number | null
   valueNeg: number | null
+  netInvested?: number | null
 }
 
 type ChartRow = ReturnChartRow
@@ -164,10 +165,8 @@ export function returnChartXAxisTickLabels(
 }
 
 function returnProgressionSeriesLabel(mode: ReturnChartMode): string {
-  if (mode === 'usd') return 'Total P&L'
-  if (mode === 'twr') return 'TWR'
-  if (mode === 'mwr') return 'Cumulative MWR'
-  return 'Return on buys'
+  if (mode === 'value') return 'Portfolio value'
+  return 'TWR'
 }
 
 function formatReturnProgressionValue(
@@ -175,17 +174,16 @@ function formatReturnProgressionValue(
   mode: ReturnChartMode,
   displayCurrency: DisplayCurrency,
 ): string {
-  return mode === 'usd' ? formatMoney(value, displayCurrency) : `${value.toFixed(2)}%`
+  return mode === 'value' ? formatMoney(value, displayCurrency) : `${value.toFixed(2)}%`
 }
 
 export function progressionPctChartValue(
   p: ReturnProgressionPoint,
   mode: ReturnChartMode,
 ): number | null {
-  if (mode === 'usd') return progressionMoneyValue(p.totalPnl)
+  if (mode === 'value') return progressionMoneyValue(p.positionsNav ?? null)
   if (mode === 'twr') return p.twrPct != null ? p.twrPct * 100 : null
-  if (mode === 'mwr') return p.mwrCumPct != null ? p.mwrCumPct * 100 : null
-  return p.returnPct != null ? p.returnPct * 100 : null
+  return null
 }
 
 type TooltipPayloadItem = {
@@ -471,8 +469,9 @@ function pushChartRow(
   value: number | null,
   valuePos: number | null,
   valueNeg: number | null,
+  netInvested: number | null = null,
 ): void {
-  rows.push({ date, time, value, valuePos, valueNeg })
+  rows.push({ date, time, value, valuePos, valueNeg, netInvested })
 }
 
 /** One value per day; split stroke masks for green/red (null when not on that side). */
@@ -482,10 +481,13 @@ export function buildSignedReturnChartRows(
   _displayCurrency: DisplayCurrency = 'USD',
   _usdToChf: number | null = null,
 ): ChartRow[] {
-  const base: { date: string; value: number | null }[] = points.map((p) => ({
-    date: p.date,
-    value: progressionPctChartValue(p, mode),
-  }))
+  const base: { date: string; value: number | null; netInvested: number | null }[] =
+    points.map((p) => ({
+      date: p.date,
+      value: progressionPctChartValue(p, mode),
+      netInvested:
+        p.netInvested != null && Number.isFinite(p.netInvested) ? p.netInvested : null,
+    }))
 
   const rows: ChartRow[] = []
   for (let i = 0; i < base.length; i++) {
@@ -500,11 +502,11 @@ export function buildSignedReturnChartRows(
       const crossDate = isoDateFromUtcMs(crossTime)
       // Two rows at the cross: end one series at 0, start the other at 0 — never both masks on one row.
       if (prev.value > 0) {
-        pushChartRow(rows, crossDate, crossTime, 0, 0, null)
-        pushChartRow(rows, crossDate, crossTime, 0, null, 0)
+        pushChartRow(rows, crossDate, crossTime, 0, 0, null, cur.netInvested)
+        pushChartRow(rows, crossDate, crossTime, 0, null, 0, cur.netInvested)
       } else {
-        pushChartRow(rows, crossDate, crossTime, 0, null, 0)
-        pushChartRow(rows, crossDate, crossTime, 0, 0, null)
+        pushChartRow(rows, crossDate, crossTime, 0, null, 0, cur.netInvested)
+        pushChartRow(rows, crossDate, crossTime, 0, 0, null, cur.netInvested)
       }
     }
 
@@ -517,6 +519,7 @@ export function buildSignedReturnChartRows(
       v,
       v == null ? null : v >= 0 ? v : null,
       v == null ? null : v < 0 ? v : null,
+      cur.netInvested,
     )
   }
 
@@ -535,7 +538,7 @@ export function PortfolioReturnChart({
   onModeChange,
 }: Props) {
   const [showTrades, setShowTrades] = useState(false)
-  const moneyModeLabel = displayCurrency === 'CHF' ? 'CHF' : '$'
+  const [showNetInvested, setShowNetInvested] = useState(false)
   const data = useMemo(
     () => buildSignedReturnChartRows(points, mode, displayCurrency, usdToChf),
     [points, mode, displayCurrency, usdToChf],
@@ -552,7 +555,7 @@ export function PortfolioReturnChart({
     [trades, points, mode, displayCurrency, usdToChf],
   )
   const hasAnyMarkers = tradeMarkers.length > 0 || optionMarkers.length > 0
-  const yAxisPx = mode === 'usd' ? 52 : 44
+  const yAxisPx = mode === 'value' ? 52 : 44
   const {
     chartRef,
     panning,
@@ -609,12 +612,27 @@ export function PortfolioReturnChart({
             role="group"
             aria-label="Return chart units"
           >
+            {mode === 'value' ? (
+              <button
+                type="button"
+                className={`rounded-md border px-2 py-0.5 text-[11px] font-medium ${
+                  showNetInvested
+                    ? 'border-violet-400/40 bg-violet-500/15 text-violet-200'
+                    : 'border-white/10 text-white/45 hover:text-white/75'
+                }`}
+                aria-pressed={showNetInvested}
+                onClick={() => setShowNetInvested((v) => !v)}
+              >
+                Net invested
+              </button>
+            ) : null}
             {(
               [
                 { id: 'twr' as const, label: 'TWR' },
-                { id: 'mwr' as const, label: 'MWR' },
-                { id: 'grossBuys' as const, label: 'Buys %' },
-                { id: 'usd' as const, label: moneyModeLabel },
+                {
+                  id: 'value' as const,
+                  label: displayCurrency === 'CHF' ? 'CHF' : 'Value',
+                },
               ] as const
             ).map((opt) => (
               <button
@@ -668,9 +686,9 @@ export function PortfolioReturnChart({
             />
             <YAxis
               tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
-              width={mode === 'usd' ? 52 : 44}
+              width={mode === 'value' ? 52 : 44}
               tickFormatter={(v: number) =>
-                mode === 'usd' ? formatMoney(v, displayCurrency) : `${v.toFixed(0)}%`
+                mode === 'value' ? formatMoney(v, displayCurrency) : `${v.toFixed(0)}%`
               }
             />
             {panning ? null : (
@@ -726,6 +744,20 @@ export function PortfolioReturnChart({
               legendType="none"
               isAnimationActive={false}
             />
+            {mode === 'value' && showNetInvested ? (
+              <Line
+                type="monotone"
+                dataKey="netInvested"
+                name="Net invested"
+                stroke="#a78bfa"
+                strokeWidth={1.5}
+                strokeDasharray="4 3"
+                dot={false}
+                connectNulls={false}
+                legendType="none"
+                isAnimationActive={false}
+              />
+            ) : null}
             {showTrades
               ? tradeMarkers.map((m) => (
                   <ReferenceDot

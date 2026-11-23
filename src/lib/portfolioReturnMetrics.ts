@@ -169,6 +169,18 @@ export function buildPeakNetInvestedTimeline(
   return rows
 }
 
+/** Net trade cash into the book on one calendar day (buys − sell proceeds, display FX). */
+export function tradeDayNetCashFlow(
+  dayTrades: readonly PortfolioTrade[],
+  perfCtx?: PerfDisplayContext,
+): number {
+  let dayFlow = 0
+  for (const t of dayTrades) {
+    dayFlow += tradeBuyContribution(t, perfCtx) - tradeSellProceeds(t, perfCtx)
+  }
+  return dayFlow
+}
+
 export function computeCapitalContributionStats(
   trades: PortfolioTrade[],
   asOfDate: string = todayIsoDate(),
