@@ -77,6 +77,14 @@ import {
 } from '../../lib/portfolioPerformanceBreakdown'
 import { PerformanceMetricDrawer } from './PerformanceMetricDrawer'
 import {
+  PerformanceFxMetricBadge,
+  PerformanceFxWarningsBanner,
+} from './PerformanceFxWarningsBanner'
+import {
+  hasPerformanceFxWarnings,
+  metricUsesTradeDateFx,
+} from '../../lib/performanceFxWarnings'
+import {
   collectTradeDates,
   portfolioNeedsTradeDateFx,
   parseTradeFxPrefetchKey,
@@ -142,6 +150,7 @@ function CompactStats({
     label: string
     value: string
     onClick?: () => void
+    fxApprox?: boolean
   }[]
 }) {
   if (rows.length === 0) return null
@@ -157,6 +166,7 @@ function CompactStats({
             >
               <dt className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
                 {r.label}
+                {r.fxApprox ? <PerformanceFxMetricBadge /> : null}
               </dt>
               <dd className="mt-0.5 tabular-nums text-white/85">{r.value}</dd>
             </button>
@@ -164,6 +174,7 @@ function CompactStats({
             <>
               <dt className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
                 {r.label}
+                {r.fxApprox ? <PerformanceFxMetricBadge /> : null}
               </dt>
               <dd className="mt-0.5 tabular-nums text-white/85">{r.value}</dd>
             </>
@@ -510,6 +521,8 @@ export function PortfolioPerformancePanel({
     return buildPerformanceMetricBreakdown(metricDetailId, breakdownContext)
   }, [metricDetailId, breakdownContext])
 
+  const perfFxWarningActive = hasPerformanceFxWarnings(tradeFxWarnings)
+
   const openMetric = useCallback((id: PerformanceMetricId) => {
     setMetricDetailId(id)
   }, [])
@@ -777,7 +790,12 @@ export function PortfolioPerformancePanel({
   }
 
   const activityRows = useMemo(() => {
-    const rows: { label: string; value: string; onClick?: () => void }[] = [
+    const rows: {
+      label: string
+      value: string
+      onClick?: () => void
+      fxApprox?: boolean
+    }[] = [
       { label: 'Trades', value: String(activityStats.tradeCount) },
       { label: 'Buys', value: String(activityStats.buyCount) },
       { label: 'Sells', value: String(activityStats.sellCount) },
@@ -809,10 +827,12 @@ export function PortfolioPerformancePanel({
       label: `Peak net invested capital (${displayCurrency})`,
       value: fmt(capitalStats.peakNet),
       onClick: () => openMetric('peakNetInvested'),
+      fxApprox: perfFxWarningActive && metricUsesTradeDateFx('peakNetInvested'),
     })
     rows.push({
       label: 'Peak portfolio value',
       value: fmt(peakPortfolio.peakValue),
+      fxApprox: perfFxWarningActive && metricUsesTradeDateFx('peakPortfolioValue'),
     })
     return rows
   }, [
@@ -823,6 +843,7 @@ export function PortfolioPerformancePanel({
     fmt,
     displayCurrency,
     openMetric,
+    perfFxWarningActive,
   ])
 
   const holdingRows = useMemo(() => {
@@ -952,6 +973,10 @@ export function PortfolioPerformancePanel({
         <p className="rounded-lg border border-red-500/30 bg-red-500/10 px-3 py-2 text-xs text-red-300">
           {tradesError}
         </p>
+      ) : null}
+
+      {perfFxWarningActive ? (
+        <PerformanceFxWarningsBanner warnings={tradeFxWarnings} />
       ) : null}
 
       {scopedTrades.length > 0 ? (
@@ -1102,6 +1127,9 @@ export function PortfolioPerformancePanel({
               }}
             >
               {pct(snapshotReturnPct)}
+              {perfFxWarningActive && metricUsesTradeDateFx('snapshotReturn') ? (
+                <PerformanceFxMetricBadge />
+              ) : null}
             </button>
             <button
               type="button"
@@ -1112,6 +1140,9 @@ export function PortfolioPerformancePanel({
               }}
             >
               on {fmt(capitalStats.currentNet)} net capital
+              {perfFxWarningActive && metricUsesTradeDateFx('netCapital') ? (
+                <PerformanceFxMetricBadge />
+              ) : null}
             </button>
           </div>
           <div className="mt-2 flex flex-wrap gap-x-4 gap-y-1 text-xs tabular-nums text-white/70">
@@ -1125,6 +1156,9 @@ export function PortfolioPerformancePanel({
             >
               <span className="text-white/45">TWR </span>
               {twrReasonLabel(snapshotTwr)}
+              {perfFxWarningActive && metricUsesTradeDateFx('twr') ? (
+                <PerformanceFxMetricBadge />
+              ) : null}
             </button>
             <button
               type="button"
@@ -1136,6 +1170,9 @@ export function PortfolioPerformancePanel({
             >
               <span className="text-white/45">MWR </span>
               {mwrReasonLabel(snapshotMwr)}
+              {perfFxWarningActive && metricUsesTradeDateFx('mwr') ? (
+                <PerformanceFxMetricBadge />
+              ) : null}
             </button>
             <button
               type="button"
@@ -1186,6 +1223,9 @@ export function PortfolioPerformancePanel({
           >
             <p className="text-[10px] font-semibold uppercase tracking-wide text-white/40">
               {card.label}
+              {perfFxWarningActive && metricUsesTradeDateFx(card.id) ? (
+                <PerformanceFxMetricBadge />
+              ) : null}
             </p>
             <p
               className={`mt-1 text-lg font-semibold tabular-nums ${

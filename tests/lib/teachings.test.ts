@@ -89,6 +89,7 @@ describe('teachings registry', () => {
     expect(getGuide('portfolio.performance')?.body).toContain('MWR')
     expect(getGuide('portfolio.performance')?.body).toContain('peak net invested capital')
     expect(getGuide('portfolio.performance')?.body).toContain('Trade cash flows')
+    expect(getGuide('portfolio.performance')?.body).toContain('amber banner')
     expect(getGuide('portfolio.performance')?.body).toContain('batched fetch')
     expect(getGuide('portfolio.performance')?.body).toContain('detail drawer')
     expect(getGuide('portfolio.performance')?.body).toContain('auto-link')
