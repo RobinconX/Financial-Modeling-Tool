@@ -27,7 +27,7 @@ import {
 } from '../../lib/tradeMarkerDisplay'
 import type { DisplayCurrency, PortfolioTrade } from '../../types'
 
-export type ReturnChartMode = 'pct' | 'usd'
+export type ReturnChartMode = 'usd' | 'twr' | 'mwr' | 'grossBuys'
 export type { ReturnChartTradeMarker } from '../../lib/returnChartMarkers'
 
 type Props = {
@@ -114,7 +114,10 @@ function formatReturnChartTimeTick(date: string, from: string, to: string): stri
 }
 
 function returnProgressionSeriesLabel(mode: ReturnChartMode): string {
-  return mode === 'pct' ? 'Return on buys' : 'Total P&L'
+  if (mode === 'usd') return 'Total P&L'
+  if (mode === 'twr') return 'TWR'
+  if (mode === 'mwr') return 'Cumulative MWR'
+  return 'Return on buys'
 }
 
 function formatReturnProgressionValue(
@@ -122,7 +125,17 @@ function formatReturnProgressionValue(
   mode: ReturnChartMode,
   displayCurrency: DisplayCurrency,
 ): string {
-  return mode === 'pct' ? `${value.toFixed(2)}%` : formatMoney(value, displayCurrency)
+  return mode === 'usd' ? formatMoney(value, displayCurrency) : `${value.toFixed(2)}%`
+}
+
+export function progressionPctChartValue(
+  p: ReturnProgressionPoint,
+  mode: ReturnChartMode,
+): number | null {
+  if (mode === 'usd') return progressionMoneyValue(p.totalPnl)
+  if (mode === 'twr') return p.twrPct != null ? p.twrPct * 100 : null
+  if (mode === 'mwr') return p.mwrCumPct != null ? p.mwrCumPct * 100 : null
+  return p.returnPct != null ? p.returnPct * 100 : null
 }
 
 type TooltipPayloadItem = {
@@ -419,15 +432,10 @@ export function buildSignedReturnChartRows(
   _displayCurrency: DisplayCurrency = 'USD',
   _usdToChf: number | null = null,
 ): ChartRow[] {
-  const base: { date: string; value: number | null }[] = points.map((p) => {
-    const value =
-      mode === 'pct'
-        ? p.returnPct != null
-          ? p.returnPct * 100
-          : null
-        : progressionMoneyValue(p.totalPnl)
-    return { date: p.date, value }
-  })
+  const base: { date: string; value: number | null }[] = points.map((p) => ({
+    date: p.date,
+    value: progressionPctChartValue(p, mode),
+  }))
 
   const rows: ChartRow[] = []
   for (let i = 0; i < base.length; i++) {
@@ -494,7 +502,7 @@ export function PortfolioReturnChart({
     [trades, points, mode, displayCurrency, usdToChf],
   )
   const hasAnyMarkers = tradeMarkers.length > 0 || optionMarkers.length > 0
-  const yAxisPx = mode === 'pct' ? 44 : 52
+  const yAxisPx = mode === 'usd' ? 52 : 44
   const {
     chartRef,
     panning,
@@ -545,7 +553,9 @@ export function PortfolioReturnChart({
           >
             {(
               [
-                { id: 'pct' as const, label: '%' },
+                { id: 'twr' as const, label: 'TWR' },
+                { id: 'mwr' as const, label: 'MWR' },
+                { id: 'grossBuys' as const, label: 'Buys %' },
                 { id: 'usd' as const, label: moneyModeLabel },
               ] as const
             ).map((opt) => (
@@ -599,9 +609,9 @@ export function PortfolioReturnChart({
             />
             <YAxis
               tick={{ fill: 'rgba(255,255,255,0.4)', fontSize: 10 }}
-              width={mode === 'pct' ? 44 : 52}
+              width={mode === 'usd' ? 52 : 44}
               tickFormatter={(v: number) =>
-                mode === 'pct' ? `${v.toFixed(0)}%` : formatMoney(v, displayCurrency)
+                mode === 'usd' ? formatMoney(v, displayCurrency) : `${v.toFixed(0)}%`
               }
             />
             {panning ? null : (

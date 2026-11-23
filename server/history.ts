@@ -20,6 +20,8 @@ const YAHOO_HEADERS: Record<string, string> = {
 }
 
 const SYMBOL_RE = /^[A-Z0-9.^=_-]{1,21}$/
+/** OCC option symbols have no Yahoo daily history — mark from underlying. */
+const OCC_HISTORY_RE = /^[A-Z]{1,6}\d{6}[CP]\d{8}$/
 const HISTORY_TIMEOUT_MS = 8000
 
 type YahooHistoryResponse = {
@@ -88,6 +90,9 @@ export function parseYahooHistoryChart(
 export async function fetchPriceHistory(rawSymbol: string): Promise<PriceHistoryResult> {
   const symbol = normalizeSymbol(rawSymbol)
   if (!symbol) throw new Error('Invalid ticker symbol')
+  if (OCC_HISTORY_RE.test(symbol)) {
+    throw new Error(`No price history for option symbol ${symbol}`)
+  }
 
   const { period1, period2 } = historyPeriodRange()
   const url = `https://query1.finance.yahoo.com/v8/finance/chart/${encodeURIComponent(symbol)}?interval=1d&period1=${period1}&period2=${period2}`

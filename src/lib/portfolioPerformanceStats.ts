@@ -313,7 +313,12 @@ export { ledgerSnapshotAt } from './portfolioTradeLedger'
 export type ReturnProgressionPoint = {
   date: string
   totalPnl: number | null
+  /** Gross-buys return (total P&L ÷ gross buys), decimal. */
   returnPct: number | null
+  /** Cumulative linked TWR from inception, decimal. */
+  twrPct: number | null
+  /** Cumulative money-weighted return (not annualized), decimal. */
+  mwrCumPct: number | null
 }
 
 export type ReturnProgressionResult = {
@@ -435,7 +440,13 @@ export function buildReturnProgression(
     if (hadActivity) {
       const returnPct =
         totalPnl != null && grossBuys > 0 ? totalPnl / grossBuys : null
-      points.push({ date, totalPnl, returnPct })
+      points.push({
+        date,
+        totalPnl,
+        returnPct,
+        twrPct: null,
+        mwrCumPct: null,
+      })
     }
 
     date = addUtcDays(date, 1)

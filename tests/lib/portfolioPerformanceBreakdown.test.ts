@@ -112,7 +112,7 @@ describe('portfolioPerformanceBreakdown', () => {
       book,
       [],
       {
-        LMND271219P00045000: [{ date: '2026-06-01', close: 1.5 }],
+        LMND: [{ date: '2026-06-01', close: 60 }],
       },
       '2026-06-01',
       {

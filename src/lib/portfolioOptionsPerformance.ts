@@ -95,6 +95,19 @@ export function tradesMatchingPerformanceScope(
   return trades.filter((t) => !isOptionTrade(t) && t.symbol === sym)
 }
 
+/** Trades included in return progression (equity scope + options on underlying). */
+export function tradesForReturnProgression(
+  trades: PortfolioTrade[],
+  scopeSymbol: string | null,
+): PortfolioTrade[] {
+  if (!scopeSymbol) return trades
+  const sym = scopeSymbol.toUpperCase()
+  return trades.filter((t) => {
+    if (!isOptionTrade(t)) return t.symbol.toUpperCase() === sym
+    return (tradeUnderlying(t) ?? '').toUpperCase() === sym
+  })
+}
+
 export function optionTradesForReturnMarkers(
   trades: PortfolioTrade[],
   scopeSymbol: string | null,
@@ -125,15 +138,15 @@ export function computeOptionsPerformanceAggregate(
 
   const occPerfs: SymbolPerformance[] = []
   for (const [occ, list] of byOcc) {
-    const hist = historiesBySymbol[occ] ?? []
     const histCur = perfCtx?.quoteCurrencyBySymbol[occ]
     const markRaw = resolveSymbolMark(
       occ,
       portfolio,
       scenarios,
-      hist,
+      [],
       asOfDate,
       histCur === 'CHF' ? 'CHF' : histCur === 'USD' ? 'USD' : undefined,
+      historiesBySymbol,
     )
     const perf = computeSymbolPerformance(list, markRaw, asOfDate, perfCtx)
     if (perf) occPerfs.push(perf)
