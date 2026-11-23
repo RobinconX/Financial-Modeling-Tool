@@ -1353,7 +1353,7 @@ currency USD or CHF when known (else USD); shares and price positive numbers;
 fees optional; omit portfolioId.
 \`\`\`
 
-Duplicates (same symbol, side, date, shares, price, **currency**) can be skipped (default) or imported anyway.
+Duplicates match the same **instrument**, **event**, symbol, side, date, shares, price, **currency**, **fees**, **feesCurrency**, option **multiplier**, and **linkedTradeId** (not **note**). They can be skipped (default) or imported anyway.
 
 ### Save file / agents
 

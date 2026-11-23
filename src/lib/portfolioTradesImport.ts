@@ -25,10 +25,16 @@ export type TradeImportPreview = {
   reassignedCount: number
 }
 
+/** Stable numeric token for import duplicate keys (avoids float drift). */
+function duplicateKeyAmount(n: number): string {
+  if (!Number.isFinite(n)) return '0'
+  return String(Math.round(n * 1e8) / 1e8)
+}
+
 export function tradeDuplicateKey(
   t: Pick<
     PortfolioTrade,
-  | 'symbol'
+    | 'symbol'
     | 'side'
     | 'tradeDate'
     | 'shares'
@@ -37,17 +43,25 @@ export function tradeDuplicateKey(
     | 'instrument'
     | 'event'
     | 'linkedTradeId'
+    | 'fees'
+    | 'feesCurrency'
+    | 'multiplier'
   >,
 ): string {
+  const instrument = t.instrument ?? 'equity'
+  const currency = t.currency ?? 'USD'
   return [
-    t.instrument ?? 'equity',
+    instrument,
     t.event ?? 'trade',
     t.symbol.toUpperCase(),
     t.side,
     t.tradeDate,
-    String(t.shares),
-    String(t.price),
-    t.currency ?? 'USD',
+    duplicateKeyAmount(t.shares),
+    duplicateKeyAmount(t.price),
+    currency,
+    duplicateKeyAmount(t.fees ?? 0),
+    t.feesCurrency ?? currency,
+    instrument === 'option' ? String(t.multiplier ?? 100) : '',
     t.linkedTradeId ?? '',
   ].join('|')
 }
