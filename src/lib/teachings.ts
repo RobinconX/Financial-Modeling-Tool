@@ -891,19 +891,23 @@ Same goal; a higher starting price shrinks the raw gap still required.
     id: 'comparables.tradeMarkers',
     title: 'Trade markers',
     summary:
-      'Overlay buy and sell dots from the portfolio trade ledger on ticked Comparables upside and CAGR charts (ticker match only).',
+      'Overlay equity and option activity from the portfolio trade ledger on ticked Comparables upside and CAGR charts (underlying match for options).',
     body: `## How it works
 
 When at least one ticked row has trades in the **portfolio trade ledger**, a **Trades** toggle appears above the chart (same place for **Upside %** and **CAGR %**).
 
-- **Green circle** — buy
-- **Red square** — sell
+### Marker shapes
+
+- **Green circle** — equity buy
+- **Red square** — equity sell
+- **Amber ring** — option trade on the underlying (hollow ring)
+- **Amber dot** — option lifecycle on the underlying (**Expired**, **Assigned**, **Exercised**)
 
 Dots sit at the chart value for that ticker on the trade date (or the nearest prior price-history date). Only symbols you ticked for the overlay are shown — no extra tickers.
 
 > Trade ledger data is workspace-wide: any logged buy/sell for that ticker counts, not just one portfolio book.
 
-Hover the line: the tooltip shows the usual series values for that date; when **Trades** is on, it also lists matching trades that share the chart anchor date.
+Hover the line: the tooltip shows the usual series values for that date; when **Trades** is on, it also lists matching trades that share the chart anchor date. Option rows name the contract (underlying, expiry, strike, call/put) and use lifecycle labels instead of plain **Buy** / **Sell**.
 
 ## How to interpret
 
@@ -913,7 +917,7 @@ Compare when you bought or sold against the path the ticker needed to reach your
 
 ## Example
 
-You tick **MSFT** and toggle **Trades**. A buy logged on a dip appears below prior implied CAGR; a later sell near goal sits closer to 0% remaining upside on the upside chart.
+You tick **PLTR** and toggle **Trades**. A **Sell to open (option)** marker rings an amber hollow dot on the date you sold calls; an **Expired** row fills amber on expiry. Equity buys and sells keep green and red markers.
 `,
     status: 'ready',
     location: {

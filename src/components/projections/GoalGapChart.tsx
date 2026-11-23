@@ -13,6 +13,7 @@ import {
   YAxis,
 } from 'recharts'
 import type { ComparablesTradeMarker } from '../../lib/comparablesTradeChart'
+import { isOptionLifecycleEvent } from '../../lib/tradeMarkerDisplay'
 import { GoalGapChartTradeTooltip } from './GoalGapChartTradeTooltip'
 import { formatPercent } from '../../lib/format'
 import {
@@ -470,30 +471,37 @@ export function GoalGapChart({
             {showTrades
               ? tradeMarkers
                   .filter((m) => visible.some((row) => row.date === m.chartDate))
-                  .map((m) => (
-                    <ReferenceDot
-                      key={m.id}
-                      x={m.chartDate}
-                      y={m.y}
-                      r={m.instrument === 'option' ? 6 : m.side === 'buy' ? 5 : 4}
-                      fill={
-                        m.instrument === 'option'
-                          ? 'transparent'
-                          : m.side === 'buy'
-                            ? '#34d399'
-                            : '#f87171'
-                      }
-                      stroke={
-                        m.instrument === 'option'
-                          ? '#fbbf24'
-                          : m.side === 'buy'
-                            ? '#34d399'
-                            : '#f87171'
-                      }
-                      strokeWidth={m.instrument === 'option' ? 2.5 : 1.5}
-                      ifOverflow="visible"
-                    />
-                  ))
+                  .map((m) => {
+                    const lifecycle = isOptionLifecycleEvent(m.instrument, m.event)
+                    return (
+                      <ReferenceDot
+                        key={m.id}
+                        x={m.chartDate}
+                        y={m.y}
+                        r={m.instrument === 'option' ? 6 : m.side === 'buy' ? 5 : 4}
+                        fill={
+                          m.instrument === 'option'
+                            ? lifecycle
+                              ? '#fbbf24'
+                              : 'transparent'
+                            : m.side === 'buy'
+                              ? '#34d399'
+                              : '#f87171'
+                        }
+                        stroke={
+                          m.instrument === 'option'
+                            ? lifecycle
+                              ? '#f59e0b'
+                              : '#fbbf24'
+                            : m.side === 'buy'
+                              ? '#34d399'
+                              : '#f87171'
+                        }
+                        strokeWidth={m.instrument === 'option' ? 2.5 : 1.5}
+                        ifOverflow="visible"
+                      />
+                    )
+                  })
               : null}
           </ComposedChart>
         </ResponsiveContainer>

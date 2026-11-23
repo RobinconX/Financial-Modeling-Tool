@@ -17,6 +17,13 @@ import type {
   ReturnChartOptionMarker,
   ReturnChartTradeMarker,
 } from '../../lib/returnChartMarkers'
+import {
+  isOptionLifecycleEvent,
+  tradeMarkerActionColor,
+  tradeMarkerActionLabel,
+  tradeMarkerContractLabel,
+  tradeMarkerQuantityUnit,
+} from '../../lib/tradeMarkerDisplay'
 import type { DisplayCurrency, PortfolioTrade } from '../../types'
 
 export type ReturnChartMode = 'pct' | 'usd'
@@ -199,35 +206,50 @@ function TradeTooltipRows({
         Trades
       </p>
       {trades.map((m) => {
-        const isOpt = m.instrument === 'option'
-        const sideTone = isOpt
-          ? '#fbbf24'
-          : m.side === 'buy'
-            ? '#34d399'
-            : '#f87171'
+        const instrument = m.instrument === 'option' ? 'option' : 'equity'
+        const actionTone = tradeMarkerActionColor({
+          symbol: m.symbol,
+          side: m.side,
+          instrument,
+          event: m.event,
+          occSymbol: m.occSymbol,
+          label: m.label,
+        })
         const px = formatPrice(
           amountToDisplay(m.price, m.currency ?? 'USD', displayCurrency, usdToChf),
           displayCurrency,
         )
         const feeCur = m.feesCurrency ?? m.currency ?? 'USD'
-        const action =
-          isOpt && m.event && m.event !== 'trade'
-            ? m.event
-            : m.side === 'buy'
-              ? 'Buy'
-              : 'Sell'
+        const action = tradeMarkerActionLabel({
+          symbol: m.symbol,
+          side: m.side,
+          instrument,
+          event: m.event,
+          occSymbol: m.occSymbol,
+          label: m.label,
+        })
+        const title = tradeMarkerContractLabel({
+          symbol: m.symbol,
+          side: m.side,
+          instrument,
+          occSymbol: m.occSymbol,
+          label: m.label,
+        })
+        const unit = tradeMarkerQuantityUnit({
+          symbol: m.symbol,
+          side: m.side,
+          instrument,
+        })
         return (
           <div key={m.id} className="flex flex-col gap-0.5">
             <div className="flex items-center justify-between gap-3">
-              <span className="font-medium text-white/85">
-                {m.label ?? m.symbol}
-              </span>
-              <span style={{ color: sideTone }} className="capitalize">
+              <span className="font-medium text-white/85">{title}</span>
+              <span style={{ color: actionTone }} className="text-right">
                 {action}
               </span>
             </div>
             <div className="tabular-nums text-white/75">
-              {m.shares} ct @ {px}
+              {m.shares} {unit} @ {px}
               {m.fees > 0
                 ? ` · fees ${formatMoney(
                     amountToDisplay(m.fees, feeCur, displayCurrency, usdToChf),
@@ -609,18 +631,21 @@ export function PortfolioReturnChart({
                 ))
               : null}
             {showTrades
-              ? optionMarkers.map((m) => (
-                  <ReferenceDot
-                    key={m.id}
-                    x={m.time}
-                    y={m.y}
-                    r={6}
-                    fill="transparent"
-                    stroke="#fbbf24"
-                    strokeWidth={2.5}
-                    ifOverflow="visible"
-                  />
-                ))
+              ? optionMarkers.map((m) => {
+                  const lifecycle = isOptionLifecycleEvent('option', m.event)
+                  return (
+                    <ReferenceDot
+                      key={m.id}
+                      x={m.time}
+                      y={m.y}
+                      r={6}
+                      fill={lifecycle ? '#fbbf24' : 'transparent'}
+                      stroke={lifecycle ? '#f59e0b' : '#fbbf24'}
+                      strokeWidth={2.5}
+                      ifOverflow="visible"
+                    />
+                  )
+                })
               : null}
           </ComposedChart>
         </ResponsiveContainer>
