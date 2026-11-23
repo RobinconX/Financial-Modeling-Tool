@@ -15,8 +15,20 @@ import type { ReturnProgressionPoint } from '../../src/lib/portfolioPerformanceS
 describe('buildSignedReturnChartRows', () => {
   it('keeps one value per calendar day and null masks (no zero fill on positive days)', () => {
     const points: ReturnProgressionPoint[] = [
-      { date: '2024-01-01', totalPnl: -10, returnPct: -0.1 },
-      { date: '2024-01-02', totalPnl: 20, returnPct: 0.2 },
+      {
+        date: '2024-01-01',
+        totalPnl: -10,
+        returnPct: -0.1,
+        twrPct: null,
+        mwrCumPct: null,
+      },
+      {
+        date: '2024-01-02',
+        totalPnl: 20,
+        returnPct: 0.2,
+        twrPct: null,
+        mwrCumPct: null,
+      },
     ]
     const rows = buildSignedReturnChartRows(points, 'usd')
     const jan1 = rows.find((r) => r.date === '2024-01-01')
@@ -27,8 +39,20 @@ describe('buildSignedReturnChartRows', () => {
 
   it('inserts asymmetric zero-cross rows (not both masks on one row)', () => {
     const points: ReturnProgressionPoint[] = [
-      { date: '2024-01-01', totalPnl: 10, returnPct: 0.1 },
-      { date: '2024-01-02', totalPnl: -10, returnPct: -0.1 },
+      {
+        date: '2024-01-01',
+        totalPnl: 10,
+        returnPct: 0.1,
+        twrPct: null,
+        mwrCumPct: null,
+      },
+      {
+        date: '2024-01-02',
+        totalPnl: -10,
+        returnPct: -0.1,
+        twrPct: null,
+        mwrCumPct: null,
+      },
     ]
     const rows = buildSignedReturnChartRows(points, 'usd')
     const zeroRows = rows.filter((r) => r.value === 0)
@@ -46,7 +70,13 @@ describe('buildSignedReturnChartRows', () => {
 
   it('uses progression P&L as-is in money mode (already in display currency)', () => {
     const points: ReturnProgressionPoint[] = [
-      { date: '2024-01-01', totalPnl: 90, returnPct: 0.1 },
+      {
+        date: '2024-01-01',
+        totalPnl: 90,
+        returnPct: 0.1,
+        twrPct: null,
+        mwrCumPct: null,
+      },
     ]
     const rows = buildSignedReturnChartRows(points, 'usd', 'CHF', 0.9)
     expect(rows[0]!.value).toBeCloseTo(90, 4)
@@ -54,8 +84,20 @@ describe('buildSignedReturnChartRows', () => {
 
   it('does not assign both valuePos and valueNeg on positive-only days', () => {
     const points: ReturnProgressionPoint[] = [
-      { date: '2024-01-01', totalPnl: 5, returnPct: 0.05 },
-      { date: '2024-01-02', totalPnl: 15, returnPct: 0.15 },
+      {
+        date: '2024-01-01',
+        totalPnl: 5,
+        returnPct: 0.05,
+        twrPct: null,
+        mwrCumPct: null,
+      },
+      {
+        date: '2024-01-02',
+        totalPnl: 15,
+        returnPct: 0.15,
+        twrPct: null,
+        mwrCumPct: null,
+      },
     ]
     const rows = buildSignedReturnChartRows(points, 'usd')
     for (const r of rows) {
@@ -134,7 +176,7 @@ describe('ReturnProgressionTooltip', () => {
     const el = ReturnProgressionTooltip({
       active: true,
       label: '2024-01-01',
-      mode: 'pct',
+      mode: 'grossBuys',
       displayCurrency: 'USD',
       payload: [
         {
@@ -160,11 +202,29 @@ describe('chartRowNearestToTime', () => {
   it('picks the line point closest to hovered time', () => {
     const rows = buildSignedReturnChartRows(
       [
-        { date: '2024-01-01', totalPnl: -10, returnPct: -0.1 },
-        { date: '2024-06-01', totalPnl: 50, returnPct: 0.5 },
-        { date: '2026-08-01', totalPnl: 100, returnPct: 1 },
+        {
+          date: '2024-01-01',
+          totalPnl: -10,
+          returnPct: -0.1,
+          twrPct: null,
+          mwrCumPct: null,
+        },
+        {
+          date: '2024-06-01',
+          totalPnl: 50,
+          returnPct: 0.5,
+          twrPct: null,
+          mwrCumPct: null,
+        },
+        {
+          date: '2026-08-01',
+          totalPnl: 100,
+          returnPct: 1,
+          twrPct: null,
+          mwrCumPct: null,
+        },
       ],
-      'pct',
+      'grossBuys',
     )
     const aug26 = chartTimeForTradeDate('2026-08-01')
     const row = chartRowNearestToTime(rows, aug26 + 60_000)
@@ -177,10 +237,22 @@ describe('resolveReturnChartTooltipRow', () => {
   it('prefers time label over stale scatter-style payload', () => {
     const rows = buildSignedReturnChartRows(
       [
-        { date: '2025-04-21', totalPnl: -10, returnPct: -0.3662 },
-        { date: '2026-08-01', totalPnl: 100, returnPct: 1 },
+        {
+          date: '2025-04-21',
+          totalPnl: -10,
+          returnPct: -0.3662,
+          twrPct: null,
+          mwrCumPct: null,
+        },
+        {
+          date: '2026-08-01',
+          totalPnl: 100,
+          returnPct: 1,
+          twrPct: null,
+          mwrCumPct: null,
+        },
       ],
-      'pct',
+      'grossBuys',
     )
     const stalePayload = [
       {
@@ -301,10 +373,11 @@ describe('buildReturnChartTradeMarkers', () => {
   }
 
   it('falls back to last known return when trade day has a progression gap', () => {
+    const nullFields = { twrPct: null, mwrCumPct: null }
     const points: ReturnProgressionPoint[] = [
-      { date: '2024-01-02', totalPnl: 0, returnPct: 0 },
-      { date: '2024-01-03', totalPnl: null, returnPct: null },
-      { date: '2024-01-04', totalPnl: 40, returnPct: 0.04 },
+      { date: '2024-01-02', totalPnl: 0, returnPct: 0, ...nullFields },
+      { date: '2024-01-03', totalPnl: null, returnPct: null, ...nullFields },
+      { date: '2024-01-04', totalPnl: 40, returnPct: 0.04, ...nullFields },
     ]
     const markers = buildReturnChartTradeMarkers(
       [trade({ id: 't-gap', side: 'buy', tradeDate: '2024-01-03' })],
@@ -317,8 +390,8 @@ describe('buildReturnChartTradeMarkers', () => {
 
   it('places markers at progression Y on trade dates', () => {
     const points: ReturnProgressionPoint[] = [
-      { date: '2024-01-02', totalPnl: 0, returnPct: 0 },
-      { date: '2024-01-10', totalPnl: 50, returnPct: 0.05 },
+      { date: '2024-01-02', totalPnl: 0, returnPct: 0, twrPct: null, mwrCumPct: null },
+      { date: '2024-01-10', totalPnl: 50, returnPct: 0.05, twrPct: null, mwrCumPct: null },
     ]
     const markers = buildReturnChartTradeMarkers(
       [trade({ id: 't1', side: 'buy', tradeDate: '2024-01-02' })],
@@ -330,7 +403,7 @@ describe('buildReturnChartTradeMarkers', () => {
     const pct = buildReturnChartTradeMarkers(
       [trade({ id: 't2', side: 'sell', tradeDate: '2024-01-10', shares: 2 })],
       points,
-      'pct',
+      'grossBuys',
     )
     expect(pct[0]!.y).toBeCloseTo(5, 4)
     expect(pct[0]!.side).toBe('sell')

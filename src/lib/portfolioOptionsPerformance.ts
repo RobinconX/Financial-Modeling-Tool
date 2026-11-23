@@ -1,5 +1,5 @@
 import type { PortfolioTrade, SavedPortfolio, SavedScenario } from '../types'
-import { isOccSymbol, parseOccSymbol } from './optionContract'
+import { parseOccSymbol } from './optionContract'
 import type { PerfDisplayContext } from './portfolioTradeFx'
 import {
   computeSymbolPerformance,
@@ -75,22 +75,6 @@ export function tradedEquitySymbolsFromTrades(trades: PortfolioTrade[]): string[
   return [...set].sort((a, b) => a.localeCompare(b))
 }
 
-/** Equity underlyings for daily price-history fetch (never OCC contract symbols). */
-export function equityHistorySymbolsFromTrades(
-  trades: PortfolioTrade[],
-  scopeSymbol?: string | null,
-): string[] {
-  const syms = new Set<string>(tradedEquitySymbolsFromTrades(trades))
-  const scope = scopeSymbol?.trim().toUpperCase()
-  if (scope && !isOccSymbol(scope)) syms.add(scope)
-  for (const t of trades) {
-    if (!isOptionTrade(t)) continue
-    const u = tradeUnderlying(t)
-    if (u && !isOccSymbol(u)) syms.add(u)
-  }
-  return [...syms].sort((a, b) => a.localeCompare(b))
-}
-
 export function equityTradesMatchingScope(
   trades: PortfolioTrade[],
   scopeSymbol: string | null,
@@ -109,6 +93,19 @@ export function tradesMatchingPerformanceScope(
   if (!scopeSymbol) return trades
   const sym = scopeSymbol.toUpperCase()
   return trades.filter((t) => !isOptionTrade(t) && t.symbol === sym)
+}
+
+/** Trades included in return progression (equity scope + options on underlying). */
+export function tradesForReturnProgression(
+  trades: PortfolioTrade[],
+  scopeSymbol: string | null,
+): PortfolioTrade[] {
+  if (!scopeSymbol) return trades
+  const sym = scopeSymbol.toUpperCase()
+  return trades.filter((t) => {
+    if (!isOptionTrade(t)) return t.symbol.toUpperCase() === sym
+    return (tradeUnderlying(t) ?? '').toUpperCase() === sym
+  })
 }
 
 export function optionTradesForReturnMarkers(

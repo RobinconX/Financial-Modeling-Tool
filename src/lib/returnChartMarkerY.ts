@@ -16,13 +16,20 @@ export function progressionYOnDate(
   _usdToChf: number | null,
 ): number | null {
   const yFromPoint = (p: ReturnProgressionPoint): number | null => {
-    if (mode === 'pct') {
-      return p.returnPct != null ? p.returnPct * 100 : null
-    }
-    return progressionMoneyValue(p.totalPnl)
+    if (mode === 'usd') return progressionMoneyValue(p.totalPnl)
+    if (mode === 'twr') return p.twrPct != null ? p.twrPct * 100 : null
+    if (mode === 'mwr') return p.mwrCumPct != null ? p.mwrCumPct * 100 : null
+    return p.returnPct != null ? p.returnPct * 100 : null
   }
   const byDate = new Map(points.map((p) => [p.date, p]))
-  const onDay = yFromPoint(byDate.get(date) ?? { date, totalPnl: null, returnPct: null })
+  const empty: ReturnProgressionPoint = {
+    date,
+    totalPnl: null,
+    returnPct: null,
+    twrPct: null,
+    mwrCumPct: null,
+  }
+  const onDay = yFromPoint(byDate.get(date) ?? empty)
   if (onDay != null && Number.isFinite(onDay)) return onDay
   const prior = [...points]
     .filter((p) => p.date <= date)

@@ -27,14 +27,18 @@ import { optionLabel, parseOccSymbol } from '../../lib/optionContract'
 import { tradeInstrument } from '../../lib/portfolioTradeLedger'
 import {
   computeOptionsPerformanceAggregate,
-  equityHistorySymbolsFromTrades,
   optionTradesForReturnMarkers,
   tradedEquitySymbolsFromTrades,
+  tradesForReturnProgression,
   tradesMatchingPerformanceScope,
 } from '../../lib/portfolioOptionsPerformance'
+import { equityHistorySymbolsFromTrades } from '../../lib/equityHistorySymbols'
+import {
+  buildFullReturnProgression,
+  computeBookTimeWeightedReturn,
+} from '../../lib/portfolioReturnProgression'
 import { buildReturnChartOptionMarkers } from '../../lib/returnChartOptionMarkers'
 import {
-  buildReturnProgression,
   computeHoldingCostStats,
   computePortfolioActivityRollup,
   computeTimeWeightedReturn,
@@ -47,7 +51,6 @@ import {
 } from '../../lib/portfolioPerformanceStats'
 import {
   computeCapitalContributionStats,
-  computeEquityBookTimeWeightedReturn,
   computeMoneyWeightedReturn,
   computePeakPortfolioValue,
   computePortfolioTerminalNav,
@@ -269,10 +272,12 @@ export function PortfolioPerformancePanel({
     return out
   }, [histories])
 
-  const capitalTrades = useMemo(
-    () => (scopeSymbol ? scopedTrades : portfolioTrades),
-    [scopeSymbol, scopedTrades, portfolioTrades],
+  const progressionTrades = useMemo(
+    () => tradesForReturnProgression(portfolioTrades, scopeSymbol),
+    [portfolioTrades, scopeSymbol],
   )
+
+  const capitalTrades = progressionTrades
 
   const capitalTradeFxFingerprint = useMemo(
     () =>
@@ -426,32 +431,31 @@ export function PortfolioPerformancePanel({
     return out
   }, [equityTradesBySymbol])
 
-  const snapshotTwr = useMemo(() => {
-    if (scopeSymbol) {
-      const trades = equityTradesBySymbol.get(scopeSymbol) ?? []
-      const hist = histories[scopeSymbol]
-      return computeTimeWeightedReturn(
-        trades,
-        hist?.points ?? [],
-        asOfDate,
-        perfCtx,
-        scopeSymbol,
-      )
-    }
-    return computeEquityBookTimeWeightedReturn(
-      equityTradesBySymbol,
+  const returnProgressionInput = useMemo(
+    () => ({
+      trades: progressionTrades,
+      portfolio,
+      scenarios,
+      historiesBySymbol: historyPoints,
+      asOfDate,
+      perfCtx,
+      currentYear,
+    }),
+    [
+      progressionTrades,
+      portfolio,
+      scenarios,
       historyPoints,
       asOfDate,
       perfCtx,
-    )
-  }, [
-    scopeSymbol,
-    equityTradesBySymbol,
-    histories,
-    historyPoints,
-    asOfDate,
-    perfCtx,
-  ])
+      currentYear,
+    ],
+  )
+
+  const snapshotTwr = useMemo(
+    () => computeBookTimeWeightedReturn(returnProgressionInput),
+    [returnProgressionInput],
+  )
 
   const snapshotMwr = useMemo(
     () => computeMoneyWeightedReturn(capitalTrades, terminalNav, asOfDate, perfCtx),
@@ -541,8 +545,8 @@ export function PortfolioPerformancePanel({
   }, [summary.symbols])
 
   const symbolsForHistory = useMemo(
-    () => equityHistorySymbolsFromTrades(portfolioTrades, scopeSymbol),
-    [portfolioTrades, scopeSymbol],
+    () => equityHistorySymbolsFromTrades(progressionTrades, scopeSymbol),
+    [progressionTrades, scopeSymbol],
   )
 
   useEffect(() => {
@@ -655,7 +659,7 @@ export function PortfolioPerformancePanel({
   const [closedSymbolsOpen, setClosedSymbolsOpen] = useState(false)
   const [optionsPnlOpen, setOptionsPnlOpen] = useState(true)
   const [optionsByUnderlyingOpen, setOptionsByUnderlyingOpen] = useState(true)
-  const [returnChartMode, setReturnChartMode] = useState<ReturnChartMode>('pct')
+  const [returnChartMode, setReturnChartMode] = useState<ReturnChartMode>('twr')
 
   const holdingsById = useMemo(() => {
     const m = new Map<string, (typeof portfolio.holdings)[number]>()
@@ -728,8 +732,8 @@ export function PortfolioPerformancePanel({
   )
 
   const returnProgression = useMemo(
-    () => buildReturnProgression(equityTradesBySymbol, historyPoints, undefined, perfCtx),
-    [equityTradesBySymbol, historyPoints, perfCtx],
+    () => buildFullReturnProgression(returnProgressionInput),
+    [returnProgressionInput],
   )
 
   const returnChartOptionMarkers = useMemo(
@@ -1208,7 +1212,7 @@ export function PortfolioPerformancePanel({
                 openMetric('mwr')
               }}
             >
-              <span className="text-white/45">MWR </span>
+              <span className="text-white/45">MWR (annualized) </span>
               {mwrReasonLabel(snapshotMwr)}
               {perfFxWarningActive && metricUsesTradeDateFx('mwr') ? (
                 <PerformanceFxMetricBadge />

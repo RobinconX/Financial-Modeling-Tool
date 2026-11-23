@@ -199,7 +199,7 @@ describe('portfolioTrades', () => {
       undefined,
       { AAPL: [{ date: '2024-06-15', close: 180 }] },
     )
-    expect(mark).toMatchObject({ price: 30, source: 'manual' })
+    expect(mark).toMatchObject({ price: 30, source: 'history' })
   })
 
   it('defaults missing currency to USD on normalize', () => {

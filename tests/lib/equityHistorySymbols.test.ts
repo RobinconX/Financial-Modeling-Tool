@@ -1,5 +1,5 @@
 import { describe, expect, it, vi } from 'vitest'
-import { equityHistorySymbolsFromTrades } from '../../src/lib/portfolioOptionsPerformance'
+import { equityHistorySymbolsFromTrades } from '../../src/lib/equityHistorySymbols'
 import { normalizePortfolioTrade } from '../../src/lib/portfolioTrades'
 import { fetchPriceHistory } from '../../server/history'
 
