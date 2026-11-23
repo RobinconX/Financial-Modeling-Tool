@@ -86,7 +86,7 @@ describe('teachings registry', () => {
     expect(getGuide('portfolio.positions')?.body).toContain('Units held')
     expect(getGuide('portfolio.performance')?.body).toContain('Whole portfolio')
     expect(getGuide('portfolio.performance')?.body).toContain('TWR')
-    expect(getGuide('portfolio.performance')?.body).toContain('MWR')
+    expect(getGuide('portfolio.performance')?.body).toContain('Net invested')
     expect(getGuide('portfolio.performance')?.body).toContain('peak net invested capital')
     expect(getGuide('portfolio.performance')?.body).toContain('Trade cash flows')
     expect(getGuide('portfolio.performance')?.body).toContain('amber banner')

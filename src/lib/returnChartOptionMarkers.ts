@@ -8,7 +8,7 @@ import { progressionYOnDate } from './returnChartMarkerY'
 export function buildReturnChartOptionMarkers(
   trades: PortfolioTrade[],
   points: ReturnProgressionPoint[],
-  mode: 'usd' | 'twr' | 'mwr' | 'grossBuys',
+  mode: 'twr' | 'value',
   displayCurrency: DisplayCurrency = 'USD',
   usdToChf: number | null = null,
 ): ReturnChartOptionMarker[] {

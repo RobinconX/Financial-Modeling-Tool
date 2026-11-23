@@ -165,7 +165,7 @@ describe('portfolioOptionsPerformance', () => {
       eq({ symbol: 'AAPL', side: 'buy', tradeDate: '2024-01-01', shares: 10, price: 100 })!,
     ])
     const { points } = buildReturnProgression(map, { AAPL: [{ date: '2024-01-19', close: 110 }] })
-    const markers = buildReturnChartOptionMarkers(trades, points, 'usd', 'USD', null)
+    const markers = buildReturnChartOptionMarkers(trades, points, 'value', 'USD', null)
     expect(markers).toHaveLength(2)
     expect(markers.map((m) => m.event).sort()).toEqual(['assign', 'expire'])
   })

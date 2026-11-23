@@ -1,11 +1,10 @@
 import type { PortfolioTrade, SavedPortfolio, SavedScenario } from '../types'
 import type { PriceHistoryPoint } from './priceHistory'
-import { cashTabBalanceDisplayAsOf } from './portfolioCashTab'
 import { isOccSymbol, parseOccSymbol } from './optionContract'
 import type { PerfDisplayContext } from './portfolioTradeFx'
 import {
   computeCapitalContributionStats,
-  computePortfolioTerminalNav,
+  tradeDayNetCashFlow,
 } from './portfolioReturnMetrics'
 import {
   computePortfolioPerformance,
@@ -35,24 +34,28 @@ function tradesThroughDate(
   return withAutoExpireTrades(trades, asOfDate).filter((t) => t.tradeDate <= asOfDate)
 }
 
-export function portfolioNavOnDate(
+/**
+ * Positions-only NAV: sum of open ledger market values (equities + options).
+ * Does not include Cash-tab cash.
+ */
+export function portfolioPositionsValueOnDate(
   trades: PortfolioTrade[],
   portfolio: SavedPortfolio,
   scenarios: SavedScenario[],
   historiesBySymbol: Record<string, PriceHistoryPoint[]>,
-  date: string,
+  markDate: string,
   perfCtx: PerfDisplayContext,
-  currentYear: number,
-): { nav: number | null; missingSymbols: string[] } {
-  const slice = tradesThroughDate(trades, date)
-  if (slice.length === 0) return { nav: 0, missingSymbols: [] }
+  tradeThroughDate: string = markDate,
+): { value: number | null; missingSymbols: string[] } {
+  const slice = tradesThroughDate(trades, tradeThroughDate)
+  if (slice.length === 0) return { value: 0, missingSymbols: [] }
 
   const summary = computePortfolioPerformance(
     slice,
     portfolio,
     scenarios,
     historiesBySymbol,
-    date,
+    markDate,
     perfCtx,
   )
   const missing = new Set<string>()
@@ -72,20 +75,15 @@ export function portfolioNavOnDate(
     }
   }
   if (missing.size > 0) {
-    return { nav: null, missingSymbols: [...missing].sort() }
+    return { value: null, missingSymbols: [...missing].sort() }
   }
-  const cash = cashTabBalanceDisplayAsOf(
-    portfolio,
-    scenarios,
-    date,
-    perfCtx.displayCurrency,
-    perfCtx.usdToChf,
-    currentYear,
-  ).amount
-  return {
-    nav: computePortfolioTerminalNav(summary, cash),
-    missingSymbols: [],
+  let nav = 0
+  for (const s of summary.symbols) {
+    if (s.marketValue != null && Number.isFinite(s.marketValue)) {
+      nav += s.marketValue
+    }
   }
+  return { value: nav, missingSymbols: [] }
 }
 
 export type BuildFullReturnProgressionInput = {
@@ -99,8 +97,7 @@ export type BuildFullReturnProgressionInput = {
 }
 
 /**
- * Daily return progression: total P&L, gross-buys %, cumulative linked TWR, and
- * cumulative non-annualized money-weighted return (gain ÷ peak net invested).
+ * Daily TWR (IBKR-style flow neutralization) and positions-only NAV progression.
  */
 export function buildFullReturnProgression(
   input: BuildFullReturnProgressionInput,
@@ -112,7 +109,6 @@ export function buildFullReturnProgression(
     historiesBySymbol,
     asOfDate = todayIsoDate(),
     perfCtx,
-    currentYear = new Date().getFullYear(),
   } = input
 
   if (trades.length === 0 || !perfCtx) {
@@ -136,58 +132,66 @@ export function buildFullReturnProgression(
   let date = firstTrade
   while (date <= asOfDate) {
     const slice = tradesThroughDate(trades, date)
-  const hadActivity = slice.some((t) => t.tradeDate <= date)
-    if (!hadActivity) {
+    if (!slice.some((t) => t.tradeDate <= date)) {
       date = addUtcDays(date, 1)
       continue
     }
 
-    const { nav, missingSymbols } = portfolioNavOnDate(
+    const dayTrades = slice.filter((t) => t.tradeDate === date)
+    const hasTradeToday = dayTrades.length > 0
+    const dayFlow = tradeDayNetCashFlow(dayTrades, perfCtx)
+
+    const { value: navEod, missingSymbols } = portfolioPositionsValueOnDate(
       trades,
       portfolio,
       scenarios,
       historiesBySymbol,
       date,
       perfCtx,
-      currentYear,
+      date,
     )
     for (const m of missingSymbols) missingHistory.add(m)
 
-    const summary = computePortfolioPerformance(
-      slice,
-      portfolio,
-      scenarios,
-      historiesBySymbol,
-      date,
-      perfCtx,
-    )
     const capital = computeCapitalContributionStats(slice, date, perfCtx)
 
     let twrPct: number | null = null
-    if (nav != null) {
+    if (navEod != null) {
       if (prevNav != null && prevNav > 0) {
-        linked *= nav / prevNav
+        if (hasTradeToday) {
+          const prevDate = addUtcDays(date, -1)
+          const { value: bmv, missingSymbols: bmvMissing } = portfolioPositionsValueOnDate(
+            trades,
+            portfolio,
+            scenarios,
+            historiesBySymbol,
+            date,
+            perfCtx,
+            prevDate,
+          )
+          for (const m of bmvMissing) missingHistory.add(m)
+          if (bmv != null && bmv > 0) {
+            const r = (navEod - bmv - dayFlow) / bmv
+            if (Number.isFinite(r)) linked *= 1 + r
+          }
+        } else {
+          const r = (navEod - prevNav) / prevNav
+          if (Number.isFinite(r)) linked *= 1 + r
+        }
       }
       twrPct = linked - 1
-      prevNav = nav
+      prevNav = navEod
     } else {
       twrPct = null
     }
 
-    let mwrCumPct: number | null = null
-    if (nav != null && capital.peakNet > 0) {
-      const gain = nav - capital.currentNet
-      mwrCumPct = gain / capital.peakNet
-    }
-
-    const returnPct = nav != null ? summary.returnPct : null
-
     points.push({
       date,
-      totalPnl: nav != null ? summary.totalPnl : null,
-      returnPct,
+      positionsNav: navEod,
+      netInvested: capital.currentNet,
       twrPct,
-      mwrCumPct,
+      totalPnl: null,
+      returnPct: null,
+      mwrCumPct: null,
     })
 
     date = addUtcDays(date, 1)

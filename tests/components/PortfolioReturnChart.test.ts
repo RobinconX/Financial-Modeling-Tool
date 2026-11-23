@@ -59,20 +59,22 @@ describe('buildSignedReturnChartRows', () => {
     const points: ReturnProgressionPoint[] = [
       {
         date: '2024-01-01',
-        totalPnl: -10,
-        returnPct: -0.1,
+        positionsNav: -10,
+        totalPnl: null,
+        returnPct: null,
         twrPct: null,
         mwrCumPct: null,
       },
       {
         date: '2024-01-02',
-        totalPnl: 20,
+        positionsNav: 20,
+        totalPnl: null,
         returnPct: 0.2,
         twrPct: null,
         mwrCumPct: null,
       },
     ]
-    const rows = buildSignedReturnChartRows(points, 'usd')
+    const rows = buildSignedReturnChartRows(points, 'value')
     const jan1 = rows.find((r) => r.date === '2024-01-01')
     const jan2 = rows.find((r) => r.date === '2024-01-02')
     expect(jan1).toMatchObject({ value: -10, valuePos: null, valueNeg: -10 })
@@ -83,20 +85,22 @@ describe('buildSignedReturnChartRows', () => {
     const points: ReturnProgressionPoint[] = [
       {
         date: '2024-01-01',
-        totalPnl: 10,
-        returnPct: 0.1,
+        positionsNav: 10,
+        totalPnl: null,
+        returnPct: null,
         twrPct: null,
         mwrCumPct: null,
       },
       {
         date: '2024-01-02',
-        totalPnl: -10,
+        positionsNav: -10,
+        totalPnl: null,
         returnPct: -0.1,
         twrPct: null,
         mwrCumPct: null,
       },
     ]
-    const rows = buildSignedReturnChartRows(points, 'usd')
+    const rows = buildSignedReturnChartRows(points, 'value')
     const zeroRows = rows.filter((r) => r.value === 0)
     expect(zeroRows).toHaveLength(2)
     expect(zeroRows.some((r) => r.valuePos === 0 && r.valueNeg == null)).toBe(true)
@@ -114,13 +118,14 @@ describe('buildSignedReturnChartRows', () => {
     const points: ReturnProgressionPoint[] = [
       {
         date: '2024-01-01',
-        totalPnl: 90,
-        returnPct: 0.1,
+        positionsNav: 90,
+        totalPnl: null,
+        returnPct: null,
         twrPct: null,
         mwrCumPct: null,
       },
     ]
-    const rows = buildSignedReturnChartRows(points, 'usd', 'CHF', 0.9)
+    const rows = buildSignedReturnChartRows(points, 'value', 'CHF', 0.9)
     expect(rows[0]!.value).toBeCloseTo(90, 4)
   })
 
@@ -128,20 +133,22 @@ describe('buildSignedReturnChartRows', () => {
     const points: ReturnProgressionPoint[] = [
       {
         date: '2024-01-01',
-        totalPnl: 5,
-        returnPct: 0.05,
+        positionsNav: 5,
+        totalPnl: null,
+        returnPct: null,
         twrPct: null,
         mwrCumPct: null,
       },
       {
         date: '2024-01-02',
-        totalPnl: 15,
-        returnPct: 0.15,
+        positionsNav: 15,
+        totalPnl: null,
+        returnPct: null,
         twrPct: null,
         mwrCumPct: null,
       },
     ]
-    const rows = buildSignedReturnChartRows(points, 'usd')
+    const rows = buildSignedReturnChartRows(points, 'value')
     for (const r of rows) {
       if (r.value != null && r.value > 0) {
         expect(r.valuePos).toBe(r.value)
@@ -156,7 +163,7 @@ describe('ReturnProgressionTooltip', () => {
     const el = ReturnProgressionTooltip({
       active: true,
       label: '2024-01-02',
-      mode: 'usd',
+      mode: 'value',
       displayCurrency: 'USD',
       payload: [
         {
@@ -174,7 +181,7 @@ describe('ReturnProgressionTooltip', () => {
     expect(el).not.toBeNull()
     const text = JSON.stringify(el)
     expect(text).toContain('2024-01-02')
-    expect(text).toContain('Total P&L')
+    expect(text).toContain('Portfolio value')
     expect(text).toContain('$1.25K')
     expect(text).not.toContain('Trades')
   })
@@ -183,7 +190,7 @@ describe('ReturnProgressionTooltip', () => {
     const el = ReturnProgressionTooltip({
       active: true,
       label: '2024-03-01',
-      mode: 'usd',
+      mode: 'value',
       displayCurrency: 'USD',
       usdToChf: null,
       rowOverride: {
@@ -209,7 +216,7 @@ describe('ReturnProgressionTooltip', () => {
       ],
     })
     const text = JSON.stringify(el)
-    expect(text).toContain('Total P&L')
+    expect(text).toContain('Portfolio value')
     expect(text).toContain('AAPL')
     expect(text).toContain('"side":"buy"')
   })
@@ -218,7 +225,7 @@ describe('ReturnProgressionTooltip', () => {
     const el = ReturnProgressionTooltip({
       active: true,
       label: '2024-01-01',
-      mode: 'grossBuys',
+      mode: 'twr',
       displayCurrency: 'USD',
       payload: [
         {
@@ -246,27 +253,27 @@ describe('chartRowNearestToTime', () => {
       [
         {
           date: '2024-01-01',
-          totalPnl: -10,
-          returnPct: -0.1,
-          twrPct: null,
+          totalPnl: null,
+          returnPct: null,
+          twrPct: -0.1,
           mwrCumPct: null,
         },
         {
           date: '2024-06-01',
-          totalPnl: 50,
-          returnPct: 0.5,
-          twrPct: null,
+          totalPnl: null,
+          returnPct: null,
+          twrPct: 0.5,
           mwrCumPct: null,
         },
         {
           date: '2026-08-01',
-          totalPnl: 100,
-          returnPct: 1,
-          twrPct: null,
+          totalPnl: null,
+          returnPct: null,
+          twrPct: 1,
           mwrCumPct: null,
         },
       ],
-      'grossBuys',
+      'twr',
     )
     const aug26 = chartTimeForTradeDate('2026-08-01')
     const row = chartRowNearestToTime(rows, aug26 + 60_000)
@@ -281,20 +288,20 @@ describe('resolveReturnChartTooltipRow', () => {
       [
         {
           date: '2025-04-21',
-          totalPnl: -10,
-          returnPct: -0.3662,
-          twrPct: null,
+          totalPnl: null,
+          returnPct: null,
+          twrPct: -0.3662,
           mwrCumPct: null,
         },
         {
           date: '2026-08-01',
-          totalPnl: 100,
-          returnPct: 1,
-          twrPct: null,
+          totalPnl: null,
+          returnPct: null,
+          twrPct: 1,
           mwrCumPct: null,
         },
       ],
-      'grossBuys',
+      'twr',
     )
     const stalePayload = [
       {
@@ -417,14 +424,14 @@ describe('buildReturnChartTradeMarkers', () => {
   it('falls back to last known return when trade day has a progression gap', () => {
     const nullFields = { twrPct: null, mwrCumPct: null }
     const points: ReturnProgressionPoint[] = [
-      { date: '2024-01-02', totalPnl: 0, returnPct: 0, ...nullFields },
-      { date: '2024-01-03', totalPnl: null, returnPct: null, ...nullFields },
-      { date: '2024-01-04', totalPnl: 40, returnPct: 0.04, ...nullFields },
+      { date: '2024-01-02', positionsNav: 0, totalPnl: null, returnPct: null, ...nullFields },
+      { date: '2024-01-03', positionsNav: null, totalPnl: null, returnPct: null, ...nullFields },
+      { date: '2024-01-04', positionsNav: 40, totalPnl: null, returnPct: null, ...nullFields },
     ]
     const markers = buildReturnChartTradeMarkers(
       [trade({ id: 't-gap', side: 'buy', tradeDate: '2024-01-03' })],
       points,
-      'usd',
+      'value',
     )
     expect(markers).toHaveLength(1)
     expect(markers[0]!.y).toBe(0)
@@ -432,20 +439,34 @@ describe('buildReturnChartTradeMarkers', () => {
 
   it('places markers at progression Y on trade dates', () => {
     const points: ReturnProgressionPoint[] = [
-      { date: '2024-01-02', totalPnl: 0, returnPct: 0, twrPct: null, mwrCumPct: null },
-      { date: '2024-01-10', totalPnl: 50, returnPct: 0.05, twrPct: null, mwrCumPct: null },
+      {
+        date: '2024-01-02',
+        positionsNav: 0,
+        totalPnl: null,
+        returnPct: null,
+        twrPct: null,
+        mwrCumPct: null,
+      },
+      {
+        date: '2024-01-10',
+        positionsNav: 50,
+        totalPnl: null,
+        returnPct: null,
+        twrPct: 0.05,
+        mwrCumPct: null,
+      },
     ]
     const markers = buildReturnChartTradeMarkers(
       [trade({ id: 't1', side: 'buy', tradeDate: '2024-01-02' })],
       points,
-      'usd',
+      'value',
     )
     expect(markers).toHaveLength(1)
     expect(markers[0]!.y).toBe(0)
     const pct = buildReturnChartTradeMarkers(
       [trade({ id: 't2', side: 'sell', tradeDate: '2024-01-10', shares: 2 })],
       points,
-      'grossBuys',
+      'twr',
     )
     expect(pct[0]!.y).toBeCloseTo(5, 4)
     expect(pct[0]!.side).toBe('sell')
