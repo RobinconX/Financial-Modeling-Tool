@@ -125,14 +125,70 @@ describe('historicalFx', () => {
     expect(fetchMock).not.toHaveBeenCalled()
   })
 
-  it('caps range HTTP at FX_MAX_RANGE_REQUESTS_PER_PREFETCH', async () => {
+  it('resolves every trade date from ECB for multi-year history in one range request', async () => {
+    const tradeDates = [
+      '2022-03-15',
+      '2023-07-01',
+      '2024-11-20',
+      '2025-05-10',
+      '2026-01-08',
+    ]
+    const ecbRates: Record<string, number> = {
+      '2022-03-15': 0.92,
+      '2023-07-01': 0.895,
+      '2024-11-20': 0.88,
+      '2025-05-10': 0.87,
+      '2026-01-08': 0.865,
+    }
     const fetchMock = vi.fn().mockResolvedValue({
       ok: true,
-      json: async () => ({ rates: {} }),
+      json: async () => ({
+        rates: Object.fromEntries(tradeDates.map((d) => [d, { CHF: ecbRates[d]! }])),
+      }),
     })
     vi.stubGlobal('fetch', fetchMock)
-    const dates = ['2022-01-02', '2024-06-01']
+    const liveSpot = 0.99
+    const res = await prefetchUsdChfRatesForTradeDates(tradeDates, liveSpot)
+    for (const d of tradeDates) {
+      expect(res.ratesByDate[d]).toBe(ecbRates[d])
+      expect(res.ratesByDate[d]).not.toBe(liveSpot)
+    }
+    expect(res.warnings.some((w) => w.includes('live USD/CHF spot'))).toBe(false)
+    expect(fetchMock).toHaveBeenCalledTimes(1)
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('2022')
+    expect(String(fetchMock.mock.calls[0]?.[0])).toContain('2026')
+  })
+
+  it('caps range HTTP at FX_MAX_RANGE_REQUESTS_PER_PREFETCH when chunking', async () => {
+    const dates = [
+      '2018-02-01',
+      '2019-02-01',
+      '2020-02-01',
+      '2021-02-01',
+      '2022-02-01',
+      '2023-02-01',
+    ]
+    const fetchMock = vi.fn().mockImplementation(async (input: RequestInfo | URL) => {
+      const url = String(input)
+      const isFullSpan = url.includes('2018') && url.includes('2023') && url.includes('..')
+      if (isFullSpan) {
+        return {
+          ok: true,
+          json: async () => ({ rates: { '2018-02-01': { CHF: 0.9 } } }),
+        }
+      }
+      const startYear = url.match(/\/(\d{4})-\d{2}-\d{2}\.\./)?.[1]
+      const rates: Record<string, { CHF: number }> = {}
+      if (startYear) {
+        for (const d of dates) {
+          if (d.startsWith(startYear)) rates[d] = { CHF: 0.9 }
+        }
+      }
+      return { ok: true, json: async () => ({ rates }) }
+    })
+    vi.stubGlobal('fetch', fetchMock)
     await prefetchUsdChfRatesForTradeDates(dates, 0.87)
-    expect(fetchMock.mock.calls.length).toBeLessThanOrEqual(FX_MAX_RANGE_REQUESTS_PER_PREFETCH)
+    expect(fetchMock).toHaveBeenCalledTimes(FX_MAX_RANGE_REQUESTS_PER_PREFETCH)
+    expect(fetchMock.mock.calls.some((c) => String(c[0]).includes('..'))).toBe(true)
   })
 })

@@ -147,6 +147,16 @@ async function fetchRangeDeduped(
   return req
 }
 
+function tradeDatesInRangeNeedNetwork(
+  sortedDates: string[],
+  rangeStart: string,
+  rangeEnd: string,
+  cache: Record<string, number>,
+): boolean {
+  const inRange = sortedDates.filter((d) => d >= rangeStart && d <= rangeEnd)
+  return tradeDatesNeedNetwork(inRange, cache)
+}
+
 async function fillCacheFromFrankfurter(
   sortedDates: string[],
   cache: Record<string, number>,
@@ -158,14 +168,19 @@ async function fillCacheFromFrankfurter(
   const bounds = rangeBounds(sortedDates)
   if (!bounds) return
 
-  const chunks = yearChunks(bounds.fetchStart, bounds.fetchEnd).slice(
-    0,
-    FX_MAX_RANGE_REQUESTS_PER_PREFETCH,
-  )
-  if (chunks.length === 0) return
+  const { fetchStart, fetchEnd } = bounds
 
+  if (sessionRangeRequestCount < FX_MAX_RANGE_REQUESTS_PER_PREFETCH) {
+    const fullRange = await fetchRangeDeduped(fetchStart, fetchEnd)
+    if (fullRange) Object.assign(cache, fullRange)
+    if (isFrankfurterFetchInCooldown()) return
+    if (!tradeDatesNeedNetwork(sortedDates, cache)) return
+  }
+
+  const chunks = yearChunks(fetchStart, fetchEnd)
   for (const { start, end } of chunks) {
     if (sessionRangeRequestCount >= FX_MAX_RANGE_REQUESTS_PER_PREFETCH) break
+    if (!tradeDatesInRangeNeedNetwork(sortedDates, start, end, cache)) continue
     const rates = await fetchRangeDeduped(start, end)
     if (rates) Object.assign(cache, rates)
     else if (isFrankfurterFetchInCooldown()) break
@@ -205,7 +220,8 @@ export function resolveUsdToChfForTradeDateSync(
 }
 
 /**
- * Load Frankfurter daily USD/CHF for trade dates (one range per year chunk, max 3 HTTP calls).
+ * Load Frankfurter daily USD/CHF for trade dates (prefer one min..max range; yearly
+ * chunks only if gaps remain; max {@link FX_MAX_RANGE_REQUESTS_PER_PREFETCH} HTTP calls per prefetch).
  */
 export async function prefetchUsdChfRatesForTradeDates(
   dates: string[],
