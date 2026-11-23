@@ -1293,7 +1293,7 @@ A highlighted card shows **today’s** totals for the current scope:
 - **MWR (annualized)** — money-weighted return (**XIRR**) from all **trade cash flows** in scope, including **options**, plus ending **mark-to-market** when positions are still open. Same **n/a** pattern when IRR cannot be solved. This is **not** the same as the chart’s **MWR** line (see **Return progression**)
 - **Gross buys** — cumulative buy notionals (secondary line; includes rebuys funded from sales)
 
-When open shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date.
+When open **equity** shares are marked from cached **price history** instead of a live quote, the card lists the symbol and history close date. **Options** use live option quotes, manual marks, or intrinsic value from the underlying — daily history is never fetched for OCC symbols.
 
 ### Return progression
 

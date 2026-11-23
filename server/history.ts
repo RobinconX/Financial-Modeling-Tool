@@ -1,5 +1,7 @@
 /** Daily closes from 1 Jan 2022 through today (Yahoo chart). */
 
+import { isOccSymbol } from '../src/lib/optionContract'
+
 export const PRICE_HISTORY_START_YEAR = 2022
 
 export type PriceHistoryPoint = {
@@ -20,8 +22,6 @@ const YAHOO_HEADERS: Record<string, string> = {
 }
 
 const SYMBOL_RE = /^[A-Z0-9.^=_-]{1,21}$/
-/** OCC option symbols have no Yahoo daily history — mark from underlying. */
-const OCC_HISTORY_RE = /^[A-Z]{1,6}\d{6}[CP]\d{8}$/
 const HISTORY_TIMEOUT_MS = 8000
 
 type YahooHistoryResponse = {
@@ -90,8 +90,8 @@ export function parseYahooHistoryChart(
 export async function fetchPriceHistory(rawSymbol: string): Promise<PriceHistoryResult> {
   const symbol = normalizeSymbol(rawSymbol)
   if (!symbol) throw new Error('Invalid ticker symbol')
-  if (OCC_HISTORY_RE.test(symbol)) {
-    throw new Error(`No price history for option symbol ${symbol}`)
+  if (isOccSymbol(symbol)) {
+    throw new Error(`Option contracts use quotes, not equity price history (${symbol})`)
   }
 
   const { period1, period2 } = historyPeriodRange()

@@ -1,4 +1,4 @@
-import { parseOccSymbol } from './optionContract'
+import { isOccSymbol, parseOccSymbol } from './optionContract'
 import { tradeInstrument, tradeUnderlying } from './portfolioTradeLedger'
 import type { PortfolioTrade } from '../types'
 
@@ -13,11 +13,12 @@ export function equityHistorySymbolsFromTrades(
       const u = (tradeUnderlying(t) ?? parseOccSymbol(t.symbol)?.underlying ?? '')
         .trim()
         .toUpperCase()
-      if (u) set.add(u)
+      if (u && !isOccSymbol(u)) set.add(u)
     } else {
       set.add(t.symbol.toUpperCase())
     }
   }
-  if (scopeSymbol) set.add(scopeSymbol.toUpperCase())
+  const scope = scopeSymbol?.trim().toUpperCase()
+  if (scope && !isOccSymbol(scope)) set.add(scope)
   return [...set].sort((a, b) => a.localeCompare(b))
 }

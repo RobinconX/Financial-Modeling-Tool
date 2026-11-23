@@ -147,6 +147,7 @@ export function computeOptionsPerformanceAggregate(
       asOfDate,
       histCur === 'CHF' ? 'CHF' : histCur === 'USD' ? 'USD' : undefined,
       historiesBySymbol,
+      perfCtx?.quoteCurrencyBySymbol,
     )
     const perf = computeSymbolPerformance(list, markRaw, asOfDate, perfCtx)
     if (perf) occPerfs.push(perf)
