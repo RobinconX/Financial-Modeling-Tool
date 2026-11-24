@@ -10,12 +10,14 @@ import {
   parseExternalCashCsv,
 } from '../../lib/portfolioExternalCash'
 import type { DerivedCashReconciliation } from '../../lib/portfolioDerivedCash'
+import type { TwrImpliedCashTopUp } from '../../lib/portfolioPerformanceStats'
 
 type Props = {
   portfolioId: string
   state: PortfolioExternalCashState
   displayCurrency: DisplayCurrency
   reconciliation: DerivedCashReconciliation | null
+  impliedCashTopUps: TwrImpliedCashTopUp[]
   onSaveFlow: (flow: PortfolioExternalCashFlow) => boolean
   onDeleteFlow: (id: string) => boolean
   onReplace: (next: PortfolioExternalCashState) => boolean
@@ -26,6 +28,7 @@ export function PortfolioExternalCashSection({
   state,
   displayCurrency,
   reconciliation,
+  impliedCashTopUps,
   onSaveFlow,
   onDeleteFlow,
   onReplace,
@@ -35,6 +38,11 @@ export function PortfolioExternalCashSection({
     [state, portfolioId],
   )
   const [open, setOpen] = useState(false)
+  const [topUpsOpen, setTopUpsOpen] = useState(false)
+  const topUpTotal = useMemo(
+    () => impliedCashTopUps.reduce((s, t) => s + t.amount, 0),
+    [impliedCashTopUps],
+  )
   const [date, setDate] = useState('')
   const [direction, setDirection] =
     useState<PortfolioExternalCashFlow['direction']>('deposit')
@@ -105,12 +113,37 @@ export function PortfolioExternalCashSection({
           </p>
           {reconciliation.negativeCashDays > 0 ? (
             <p className="text-amber-400/90">
-              Cash went negative on {reconciliation.negativeCashDays} day
+              Raw settlement cash went negative on {reconciliation.negativeCashDays} day
               {reconciliation.negativeCashDays === 1 ? '' : 's'} (min{' '}
               {formatMoney(reconciliation.minCash, displayCurrency)} on{' '}
-              {reconciliation.minCashDate}): margin or missing wires.
+              {reconciliation.minCashDate}) — FX, fees, timing, or margin vs the wire log.
             </p>
           ) : null}
+        </div>
+      ) : null}
+      {impliedCashTopUps.length > 0 ? (
+        <div className="mt-2 text-xs">
+          <button
+            type="button"
+            className="text-sky-400/90 hover:text-sky-300"
+            onClick={() => setTopUpsOpen((v) => !v)}
+          >
+            Cash top-ups used for TWR: {impliedCashTopUps.length}, total{' '}
+            {formatMoney(topUpTotal, displayCurrency)} {topUpsOpen ? '▾' : '▸'}
+          </button>
+          {topUpsOpen ? (
+            <ul className="mt-1 max-h-32 space-y-0.5 overflow-y-auto text-zinc-400">
+              {impliedCashTopUps.map((row) => (
+                <li key={row.date}>
+                  {row.date}: +{formatMoney(row.amount, displayCurrency)} (synthetic wire for
+                  chart)
+                </li>
+              ))}
+            </ul>
+          ) : null}
+          <p className="mt-1 text-zinc-500">
+            Not in your wire log — bridges FX/fees/timing gaps for full-NAV TWR linking only.
+          </p>
         </div>
       ) : null}
       {open && (

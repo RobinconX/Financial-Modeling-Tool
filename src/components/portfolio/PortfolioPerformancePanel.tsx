@@ -1155,6 +1155,7 @@ export function PortfolioPerformancePanel({
         state={externalCashState}
         displayCurrency={displayCurrency}
         reconciliation={wireCashReconciliation}
+        impliedCashTopUps={returnProgression.impliedCashTopUps}
         onSaveFlow={onSaveExternalFlow}
         onDeleteFlow={onDeleteExternalFlow}
         onReplace={onReplaceExternalCash}
