@@ -617,6 +617,25 @@ export type PortfolioTradesState = {
   trades: PortfolioTrade[]
 }
 
+/** Wire / transfer in or out for TWR (not Cash-tab year deposits). */
+export type PortfolioExternalCashDirection = 'deposit' | 'withdrawal'
+
+export type PortfolioExternalCashFlow = {
+  id: string
+  portfolioId: string
+  flowDate: string
+  /** Positive magnitude. */
+  amount: number
+  direction: PortfolioExternalCashDirection
+  currency: DisplayCurrency
+  note?: string
+}
+
+export type PortfolioExternalCashState = {
+  version: 1
+  flows: PortfolioExternalCashFlow[]
+}
+
 /** Display order of holdings on the Positions tab (does not reorder stored array). */
 export type PortfolioHoldingSort = 'manual' | 'symbol' | 'value'
 

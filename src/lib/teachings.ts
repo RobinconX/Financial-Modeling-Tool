@@ -1301,9 +1301,9 @@ Below **Activity**, one line chart with a **TWR** or **Value** toggle tracks the
 
 ### Chart modes
 
-- **TWR** — cumulative linked time-weighted return in the style of **IBKR PortfolioAnalyst**: each day links (end value − start value − net trade cash flow) ÷ start value, where **net trade cash flow** is buys (with fees) minus sell proceeds (net of fees), using **ECB trade-date FX** when loaded. **Start** and **end value** are **positions only** (equity + option marks). Cash-tab cash is **not** in the chart. On trade days, flows are neutralized so adding shares at unchanged marks does not spike return. Matches the **TWR** snapshot card on the last point.
+- **TWR** — cumulative linked time-weighted return. **Value** stays **positions only** (equity + option marks). **TWR** uses **full NAV** (positions + **derived settlement cash**) when you log **Wire transfers (TWR)** on Performance (deposits / withdrawals — **not** Cash-tab year deposits). Daily link: (end full NAV − start full NAV − external flow) ÷ (start full NAV + external flow), **ECB trade-date FX** on marks and flows when loaded. Buys, sells, and option lifecycle events are **internal** (they move cash and positions, not external flow). With **no** wire rows, FMT falls back to an **approximate** IBKR-style link on **positions-only** NAV (trade-day cash neutralization); a muted chart note says so.
 
-> **IBKR caveat:** IBKR treats wires and transfers as external flows; FMT uses **trade cash flows** as “money in/out” (same basis as **Net capital**). Numbers should be close when idle cash is small; they can diverge if IBKR counts only deposits while you measure capital through buys.
+> **CSV (MVP):** paste flowDate,direction,amount,currency under wire transfers. Full IBKR cash-import is later.
 
 - **Value** — absolute **positions-only** mark-to-market each day in display currency (**USD** or **CHF**). Options use **intrinsic value** from **underlying** daily closes when history is needed (no OCC price history). Toggle **Net invested** (off by default) to overlay cumulative net trade capital on the same chart.
 

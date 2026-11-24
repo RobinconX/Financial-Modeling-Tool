@@ -14,6 +14,7 @@ import { useSavings } from './hooks/useSavings'
 import { useOverview } from './hooks/useOverview'
 import { usePortfolioContributions } from './hooks/usePortfolioContributions'
 import { usePortfolioTrades } from './hooks/usePortfolioTrades'
+import { usePortfolioExternalCash } from './hooks/usePortfolioExternalCash'
 import { usePortfolioActuals } from './hooks/usePortfolioActuals'
 import { usePortfolioSharedCash } from './hooks/usePortfolioSharedCash'
 import {
@@ -304,6 +305,7 @@ export default function App() {
     deleteTrade: onDeleteTrade,
     replace: onReplaceTrades,
   } = usePortfolioTrades()
+  const portfolioExternalCash = usePortfolioExternalCash()
   const portfolioActuals = usePortfolioActuals()
   const {
     storageRecovery: portfolioActualsStorageRecovery,
@@ -360,6 +362,7 @@ export default function App() {
       projectionsStorageRecovery,
       portfolioStorageRecovery,
       portfolioTradesStorageRecovery,
+      portfolioExternalCash.storageRecovery,
       incomeCostStorageRecovery,
       portfolioActualsStorageRecovery,
       savingsStorageRecovery,
@@ -372,6 +375,7 @@ export default function App() {
     projectionsStorageRecovery,
     portfolioStorageRecovery,
     portfolioTradesStorageRecovery,
+    portfolioExternalCash.storageRecovery,
     incomeCostStorageRecovery,
     portfolioActualsStorageRecovery,
     savingsStorageRecovery,
@@ -388,6 +392,9 @@ export default function App() {
     }
     if (portfolioTradesStorageRecovery?.storageKey === storageKey) {
       dismissPortfolioTradesStorageRecovery()
+    }
+    if (portfolioExternalCash.storageRecovery?.storageKey === storageKey) {
+      portfolioExternalCash.dismissStorageRecovery()
     }
     if (incomeCostStorageRecovery?.storageKey === storageKey) {
       dismissIncomeCostStorageRecovery()
@@ -667,6 +674,10 @@ export default function App() {
                 onSaveTrade={onSaveTrade}
                 onDeleteTrade={onDeleteTrade}
                 onReplaceTrades={onReplaceTrades}
+                portfolioExternalCash={portfolioExternalCash.externalCash}
+                onSaveExternalCashFlow={portfolioExternalCash.saveFlow}
+                onDeleteExternalCashFlow={portfolioExternalCash.deleteFlow}
+                onReplaceExternalCash={portfolioExternalCash.replace}
               />
             )}
 

@@ -337,11 +337,14 @@ export type ReturnProgressionPoint = {
   mwrCumPct: number | null
 }
 
+export type ReturnProgressionTwrMethod = 'external' | 'approximate'
+
 export type ReturnProgressionResult = {
   points: ReturnProgressionPoint[]
   missingHistorySymbols: string[]
   /** Symbols whose carried history close was >7 calendar days old on at least one past chart day. */
   staleHistorySymbols: string[]
+  twrMethod: ReturnProgressionTwrMethod
 }
 
 function addUtcDays(isoDate: string, days: number): string {
@@ -408,7 +411,12 @@ export function buildReturnProgression(
 ): ReturnProgressionResult {
   const entries = [...tradesBySymbol.entries()].filter(([, tr]) => tr.length > 0)
   if (entries.length === 0) {
-    return { points: [], missingHistorySymbols: [], staleHistorySymbols: [] }
+    return {
+      points: [],
+      missingHistorySymbols: [],
+      staleHistorySymbols: [],
+      twrMethod: 'approximate',
+    }
   }
 
   let firstTrade: string | null = null
@@ -418,7 +426,12 @@ export function buildReturnProgression(
     if (!firstTrade || f < firstTrade) firstTrade = f
   }
   if (!firstTrade || firstTrade > asOfDate) {
-    return { points: [], missingHistorySymbols: [], staleHistorySymbols: [] }
+    return {
+      points: [],
+      missingHistorySymbols: [],
+      staleHistorySymbols: [],
+      twrMethod: 'approximate',
+    }
   }
 
   const missingHistory = new Set<string>()
@@ -476,6 +489,7 @@ export function buildReturnProgression(
     points,
     missingHistorySymbols: [...missingHistory].sort(),
     staleHistorySymbols: [],
+    twrMethod: 'approximate',
   }
 }
 

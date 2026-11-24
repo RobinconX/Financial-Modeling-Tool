@@ -6,6 +6,8 @@ import type {
   PortfolioContributionsState,
   PortfolioActualsState,
   PortfolioSharedCashState,
+  PortfolioExternalCashFlow,
+  PortfolioExternalCashState,
   PortfolioTrade,
   PortfolioTradesState,
   SavedPortfolio,
@@ -175,6 +177,10 @@ type Props = {
   onSaveTrade: (trade: PortfolioTrade) => boolean
   onDeleteTrade: (tradeId: string) => boolean
   onReplaceTrades: (next: PortfolioTradesState) => boolean
+  portfolioExternalCash: PortfolioExternalCashState
+  onSaveExternalCashFlow: (flow: PortfolioExternalCashFlow) => boolean
+  onDeleteExternalCashFlow: (id: string) => boolean
+  onReplaceExternalCash: (next: PortfolioExternalCashState) => boolean
 }
 
 export function PortfolioView({
@@ -206,6 +212,10 @@ export function PortfolioView({
   onSaveTrade,
   onDeleteTrade,
   onReplaceTrades,
+  portfolioExternalCash,
+  onSaveExternalCashFlow,
+  onDeleteExternalCashFlow,
+  onReplaceExternalCash,
 }: Props) {
   const [selectedId, setSelectedId] = useState<string | null>(() =>
     readSelectedPortfolioId(portfolios),
@@ -1290,6 +1300,10 @@ export function PortfolioView({
                 onSaveTrade={onSaveTrade}
                 onDeleteTrade={onDeleteTrade}
                 onReplaceTrades={onReplaceTrades}
+                externalCashState={portfolioExternalCash}
+                onSaveExternalFlow={onSaveExternalCashFlow}
+                onDeleteExternalFlow={onDeleteExternalCashFlow}
+                onReplaceExternalCash={onReplaceExternalCash}
                 logTradeSeed={logTradeSeed}
                 onClearLogTradeSeed={() => setLogTradeSeed(null)}
                 onFocusHolding={(holdingId) => {

@@ -2,6 +2,8 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import type {
   DisplayCurrency,
   PortfolioContributionsState,
+  PortfolioExternalCashFlow,
+  PortfolioExternalCashState,
   PortfolioTrade,
   PortfolioTradesState,
   SavedPortfolio,
@@ -74,6 +76,8 @@ import {
 import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { PortfolioTradeDrawer } from './PortfolioTradeDrawer'
 import { PortfolioTradeImportModal } from './PortfolioTradeImportModal'
+import { PortfolioExternalCashSection } from './PortfolioExternalCashSection'
+import { externalFlowsForPortfolio } from '../../lib/portfolioExternalCash'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { cashTabBalanceDisplayAsOf } from '../../lib/portfolioCashTab'
 import {
@@ -110,6 +114,10 @@ type Props = {
   onClearLogTradeSeed?: () => void
   onFocusHolding?: (holdingId: string) => void
   onReplaceTrades: (next: PortfolioTradesState) => boolean
+  externalCashState: PortfolioExternalCashState
+  onSaveExternalFlow: (flow: PortfolioExternalCashFlow) => boolean
+  onDeleteExternalFlow: (id: string) => boolean
+  onReplaceExternalCash: (next: PortfolioExternalCashState) => boolean
   contributions?: PortfolioContributionsState | null
   currentYear?: number
 }
@@ -309,6 +317,10 @@ export function PortfolioPerformancePanel({
   onClearLogTradeSeed,
   onFocusHolding,
   onReplaceTrades,
+  externalCashState,
+  onSaveExternalFlow,
+  onDeleteExternalFlow,
+  onReplaceExternalCash,
   contributions = null,
   currentYear = new Date().getFullYear(),
 }: Props) {
@@ -538,6 +550,11 @@ export function PortfolioPerformancePanel({
     return out
   }, [equityTradesBySymbol])
 
+  const bookExternalFlows = useMemo(
+    () => externalFlowsForPortfolio(externalCashState, portfolio.id),
+    [externalCashState, portfolio.id],
+  )
+
   const returnProgressionInput = useMemo(
     () => ({
       trades: progressionTrades,
@@ -547,6 +564,7 @@ export function PortfolioPerformancePanel({
       asOfDate,
       perfCtx,
       currentYear,
+      externalFlows: bookExternalFlows,
     }),
     [
       progressionTrades,
@@ -556,6 +574,7 @@ export function PortfolioPerformancePanel({
       asOfDate,
       perfCtx,
       currentYear,
+      bookExternalFlows,
     ],
   )
 
@@ -864,16 +883,25 @@ export function PortfolioPerformancePanel({
   const returnHistoryNote = useMemo(() => {
     const missing = returnProgression.missingHistorySymbols
     const stale = returnProgression.staleHistorySymbols ?? []
-    if (missing.length === 0 && stale.length === 0) return null
     const parts: string[] = []
+    if (returnProgression.twrMethod === 'approximate') {
+      parts.push(
+        'TWR approximates external flows from trade cash until you log wire transfers below.',
+      )
+    }
     if (missing.length > 0) {
       parts.push(`Missing price history: ${missing.join(', ')}`)
     }
     if (stale.length > 0) {
       parts.push(`Carried closes >7d old on past dates: ${stale.join(', ')}`)
     }
+    if (parts.length === 0) return null
     return parts.join(' · ')
-  }, [returnProgression.missingHistorySymbols, returnProgression.staleHistorySymbols])
+  }, [
+    returnProgression.missingHistorySymbols,
+    returnProgression.staleHistorySymbols,
+    returnProgression.twrMethod,
+  ])
 
   const handleSaveTrade = (trade: PortfolioTrade) => {
     const ok = onSaveTrade(trade)
@@ -1106,6 +1134,14 @@ export function PortfolioPerformancePanel({
           <CompactStats rows={activityRows} />
         </section>
       ) : null}
+
+      <PortfolioExternalCashSection
+        portfolioId={portfolio.id}
+        state={externalCashState}
+        onSaveFlow={onSaveExternalFlow}
+        onDeleteFlow={onDeleteExternalFlow}
+        onReplace={onReplaceExternalCash}
+      />
 
       {returnProgression.points.length > 0 ? (
         <section className="rounded-lg border border-white/[0.08] bg-white/[0.02] px-3 py-2.5">
