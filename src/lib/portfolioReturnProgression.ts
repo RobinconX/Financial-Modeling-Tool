@@ -3,11 +3,8 @@ import type { PriceHistoryPoint } from './priceHistory'
 import { isOccSymbol, parseOccSymbol } from './optionContract'
 import type { PerfDisplayContext } from './portfolioTradeFx'
 import { externalCfByDate } from './portfolioExternalCash'
-import { derivedCashBalanceThrough } from './portfolioDerivedCash'
-import {
-  computeCapitalContributionStats,
-  tradeDayNetCashFlow,
-} from './portfolioReturnMetrics'
+import { stepDerivedCashBalance } from './portfolioDerivedCash'
+import { tradeDayNetCashFlow } from './portfolioReturnMetrics'
 import {
   computePortfolioPerformance,
   todayIsoDate,
@@ -189,19 +186,24 @@ export function buildFullReturnProgression(
   let linked = 1
   let prevNav: number | null = null
   let prevFullNav: number | null = null
+  let derivedCash = 0
+  let runningNetInvested = 0
 
   let date = firstTrade
   while (date <= asOfDate) {
-    const slice = tradesThroughDate(trades, date)
+    const expanded = withAutoExpireTrades(trades, date)
+    const slice = expanded.filter((t) => t.tradeDate <= date)
     if (!slice.some((t) => t.tradeDate <= date)) {
       date = addUtcDays(date, 1)
       continue
     }
 
-    const dayTrades = slice.filter((t) => t.tradeDate === date)
+    const dayTrades = expanded.filter((t) => t.tradeDate === date)
     const hasTradeToday = dayTrades.length > 0
     const dayFlow = tradeDayNetCashFlow(dayTrades, perfCtx)
+    if (hasTradeToday) runningNetInvested += dayFlow
     const extCf = externalByDate.get(date) ?? 0
+    derivedCash = stepDerivedCashBalance(derivedCash, dayTrades, extCf, perfCtx)
 
     const { value: navEod, missingSymbols, staleHistorySymbols } =
       portfolioPositionsValueOnDate(
@@ -217,11 +219,8 @@ export function buildFullReturnProgression(
     for (const m of missingSymbols) missingHistory.add(m)
     for (const s of staleHistorySymbols) staleHistory.add(s)
 
-    const derivedCash = derivedCashBalanceThrough(trades, date, externalByDate, perfCtx)
     const fullNavEod =
       navEod != null && Number.isFinite(derivedCash) ? navEod + derivedCash : null
-
-    const capital = computeCapitalContributionStats(slice, date, perfCtx)
 
     let twrPct: number | null = null
     if (twrMethod === 'external') {
@@ -278,7 +277,7 @@ export function buildFullReturnProgression(
     points.push({
       date,
       positionsNav: navEod,
-      netInvested: capital.currentNet,
+      netInvested: runningNetInvested,
       twrPct,
       totalPnl: null,
       returnPct: null,
