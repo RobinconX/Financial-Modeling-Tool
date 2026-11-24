@@ -125,6 +125,24 @@ describe('derived cash incremental vs legacy', () => {
     expect(incrementalMs).toBeLessThan(500)
   })
 
+  it('full progression over ~1650 days / 300 trades under 200ms', () => {
+    const trades = makeTrades(300)
+    const asOf = '2026-11-05'
+    const portfolio = { ...newPortfolio('Perf'), id: 'p1', currentCash: 0 }
+    const histories = { NESN: [{ date: '2022-05-01', close: 100 }] }
+    const t0 = performance.now()
+    buildFullReturnProgression({
+      trades,
+      portfolio,
+      scenarios: [],
+      historiesBySymbol: histories,
+      asOfDate: asOf,
+      perfCtx,
+      externalFlows: flows,
+    })
+    expect(performance.now() - t0).toBeLessThan(200)
+  })
+
   it('full progression over ~1000 days finishes quickly', () => {
     const asOf = '2026-11-05'
     const portfolio = { ...newPortfolio('Perf'), id: 'p1', currentCash: 0 }

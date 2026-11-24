@@ -37,7 +37,7 @@ import {
 import { equityHistorySymbolsFromTrades } from '../../lib/equityHistorySymbols'
 import {
   buildFullReturnProgression,
-  computeBookTimeWeightedReturn,
+  twrResultFromProgression,
 } from '../../lib/portfolioReturnProgression'
 import { buildReturnChartOptionMarkers } from '../../lib/returnChartOptionMarkers'
 import {
@@ -578,11 +578,6 @@ export function PortfolioPerformancePanel({
     ],
   )
 
-  const snapshotTwr = useMemo(
-    () => computeBookTimeWeightedReturn(returnProgressionInput),
-    [returnProgressionInput],
-  )
-
   const snapshotMwr = useMemo(
     () => computeMoneyWeightedReturn(capitalTrades, terminalNav, asOfDate, perfCtx),
     [capitalTrades, terminalNav, asOfDate, perfCtx],
@@ -604,6 +599,16 @@ export function PortfolioPerformancePanel({
         perfCtx,
       ),
     [portfolioTrades, portfolio, scenarios, historyPoints, perfCtx],
+  )
+
+  const returnProgression = useMemo(
+    () => buildFullReturnProgression(returnProgressionInput),
+    [returnProgressionInput],
+  )
+
+  const snapshotTwr = useMemo(
+    () => twrResultFromProgression(returnProgression),
+    [returnProgression],
   )
 
   const breakdownContext = useMemo(
@@ -857,11 +862,6 @@ export function PortfolioPerformancePanel({
     [summary.symbols],
   )
 
-  const returnProgression = useMemo(
-    () => buildFullReturnProgression(returnProgressionInput),
-    [returnProgressionInput],
-  )
-
   const returnChartOptionMarkers = useMemo(
     () =>
       buildReturnChartOptionMarkers(
@@ -884,6 +884,11 @@ export function PortfolioPerformancePanel({
     const missing = returnProgression.missingHistorySymbols
     const stale = returnProgression.staleHistorySymbols ?? []
     const parts: string[] = []
+    if (returnProgression.impliedDepositDays > 0) {
+      parts.push(
+        `${returnProgression.impliedDepositDays} implied deposit${returnProgression.impliedDepositDays === 1 ? '' : 's'} added where wire log doesn't cover trades.`,
+      )
+    }
     if (returnProgression.twrMethod === 'approximate') {
       parts.push(
         'TWR approximates external flows from trade cash until you log wire transfers below.',
@@ -901,6 +906,7 @@ export function PortfolioPerformancePanel({
     returnProgression.missingHistorySymbols,
     returnProgression.staleHistorySymbols,
     returnProgression.twrMethod,
+    returnProgression.impliedDepositDays,
   ])
 
   const handleSaveTrade = (trade: PortfolioTrade) => {

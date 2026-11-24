@@ -3,7 +3,7 @@ import type { PriceHistoryPoint } from './priceHistory'
 import { isOccSymbol, parseOccSymbol } from './optionContract'
 import type { PerfDisplayContext } from './portfolioTradeFx'
 import { externalCfByDate } from './portfolioExternalCash'
-import { stepDerivedCashBalance } from './portfolioDerivedCash'
+import { stepDerivedCashWithImplied } from './portfolioDerivedCash'
 import { tradeDayNetCashFlow } from './portfolioReturnMetrics'
 import {
   computePortfolioPerformance,
@@ -17,7 +17,7 @@ import type {
   TwrResult,
 } from './portfolioPerformanceStats'
 import { isCarriedHistoryStale } from './portfolioPerformanceStats'
-import { tradeUnderlying, withAutoExpireTrades } from './portfolioTradeLedger'
+import { tradeInstrument, tradeUnderlying, withAutoExpireTrades } from './portfolioTradeLedger'
 
 const TWR_NAV_DENOM_FLOOR = 1e-4
 
@@ -61,12 +61,8 @@ function staleCarriedHistorySymbols(
   return [...stale].sort((a, b) => a.localeCompare(b))
 }
 
-/**
- * Positions-only NAV: sum of open ledger market values (equities + options).
- * Does not include Cash-tab cash or derived settlement cash.
- */
-export function portfolioPositionsValueOnDate(
-  trades: PortfolioTrade[],
+function portfolioPositionsNavForSlice(
+  slice: PortfolioTrade[],
   portfolio: SavedPortfolio,
   scenarios: SavedScenario[],
   historiesBySymbol: Record<string, PriceHistoryPoint[]>,
@@ -75,11 +71,13 @@ export function portfolioPositionsValueOnDate(
   tradeThroughDate: string = markDate,
   liveDay: string = todayIsoDate(),
 ): { value: number | null; missingSymbols: string[]; staleHistorySymbols: string[] } {
-  const slice = tradesThroughDate(trades, tradeThroughDate)
   if (slice.length === 0) return { value: 0, missingSymbols: [], staleHistorySymbols: [] }
 
+  const active = slice.filter((t) => t.tradeDate <= tradeThroughDate)
+  if (active.length === 0) return { value: 0, missingSymbols: [], staleHistorySymbols: [] }
+
   const summary = computePortfolioPerformance(
-    slice,
+    active,
     portfolio,
     scenarios,
     historiesBySymbol,
@@ -93,9 +91,9 @@ export function portfolioPositionsValueOnDate(
     if (s.markPrice == null || !Number.isFinite(s.markPrice)) {
       if (isOccSymbol(s.symbol)) {
         const u =
-          s.underlying ?? parseOccSymbol(s.symbol)?.underlying ?? tradeUnderlying(
-            slice.find((t) => t.symbol === s.symbol)!,
-          )
+          s.underlying ??
+          parseOccSymbol(s.symbol)?.underlying ??
+          tradeUnderlying(active.find((t) => t.symbol === s.symbol)!)
         if (u) missing.add(u)
         else missing.add(s.symbol)
       } else {
@@ -116,6 +114,33 @@ export function portfolioPositionsValueOnDate(
   return { value: nav, missingSymbols: [], staleHistorySymbols }
 }
 
+/**
+ * Positions-only NAV: sum of open ledger market values (equities + options).
+ * Does not include Cash-tab cash or derived settlement cash.
+ */
+export function portfolioPositionsValueOnDate(
+  trades: PortfolioTrade[],
+  portfolio: SavedPortfolio,
+  scenarios: SavedScenario[],
+  historiesBySymbol: Record<string, PriceHistoryPoint[]>,
+  markDate: string,
+  perfCtx: PerfDisplayContext,
+  tradeThroughDate: string = markDate,
+  liveDay: string = todayIsoDate(),
+): { value: number | null; missingSymbols: string[]; staleHistorySymbols: string[] } {
+  const slice = tradesThroughDate(trades, tradeThroughDate)
+  return portfolioPositionsNavForSlice(
+    slice,
+    portfolio,
+    scenarios,
+    historiesBySymbol,
+    markDate,
+    perfCtx,
+    tradeThroughDate,
+    liveDay,
+  )
+}
+
 export type BuildFullReturnProgressionInput = {
   trades: PortfolioTrade[]
   portfolio: SavedPortfolio
@@ -134,13 +159,21 @@ function emptyResult(twrMethod: ReturnProgressionTwrMethod): ReturnProgressionRe
     missingHistorySymbols: [],
     staleHistorySymbols: [],
     twrMethod,
+    impliedDepositDays: 0,
   }
 }
 
-function twrDenom(base: number, flow: number): number {
-  const d = base + flow
-  if (!Number.isFinite(d)) return TWR_NAV_DENOM_FLOOR
-  return Math.abs(d) >= TWR_NAV_DENOM_FLOOR ? d : Math.sign(d || 1) * TWR_NAV_DENOM_FLOOR
+function canLinkExternalTwr(
+  prevFullNav: number,
+  fullNavEod: number,
+  denom: number,
+): boolean {
+  if (!Number.isFinite(prevFullNav) || !Number.isFinite(fullNavEod)) return false
+  if (prevFullNav <= TWR_NAV_DENOM_FLOOR || fullNavEod <= TWR_NAV_DENOM_FLOOR) {
+    return false
+  }
+  if (!Number.isFinite(denom) || denom <= TWR_NAV_DENOM_FLOOR) return false
+  return true
 }
 
 /**
@@ -170,6 +203,14 @@ export function buildFullReturnProgression(
   }
 
   const liveDay = todayIsoDate()
+  const hasOptions = trades.some((t) => tradeInstrument(t) === 'option')
+  const sortedEquityTrades = hasOptions
+    ? []
+    : [...trades]
+        .filter((t) => t.tradeDate <= asOfDate)
+        .sort((a, b) => a.tradeDate.localeCompare(b.tradeDate) || a.id.localeCompare(b.id))
+  let equityTradeIdx = 0
+  const sliceAccum: PortfolioTrade[] = []
 
   let firstTrade: string | null = null
   for (const t of trades) {
@@ -188,26 +229,51 @@ export function buildFullReturnProgression(
   let prevFullNav: number | null = null
   let derivedCash = 0
   let runningNetInvested = 0
+  let impliedDepositDays = 0
 
   let date = firstTrade
   while (date <= asOfDate) {
-    const expanded = withAutoExpireTrades(trades, date)
-    const slice = expanded.filter((t) => t.tradeDate <= date)
-    if (!slice.some((t) => t.tradeDate <= date)) {
+    let slice: PortfolioTrade[]
+    let dayTrades: PortfolioTrade[]
+    let sliceBeforeDay: PortfolioTrade[]
+
+    if (hasOptions) {
+      const expanded = withAutoExpireTrades(trades, date)
+      sliceBeforeDay = expanded.filter((t) => t.tradeDate < date)
+      dayTrades = expanded.filter((t) => t.tradeDate === date)
+      slice = expanded.filter((t) => t.tradeDate <= date)
+    } else {
+      sliceBeforeDay = sliceAccum
+      dayTrades = []
+      while (
+        equityTradeIdx < sortedEquityTrades.length &&
+        sortedEquityTrades[equityTradeIdx]!.tradeDate === date
+      ) {
+        const t = sortedEquityTrades[equityTradeIdx]!
+        sliceAccum.push(t)
+        dayTrades.push(t)
+        equityTradeIdx++
+      }
+      slice = sliceAccum
+    }
+
+    if (slice.length === 0) {
       date = addUtcDays(date, 1)
       continue
     }
 
-    const dayTrades = expanded.filter((t) => t.tradeDate === date)
     const hasTradeToday = dayTrades.length > 0
     const dayFlow = tradeDayNetCashFlow(dayTrades, perfCtx)
     if (hasTradeToday) runningNetInvested += dayFlow
     const extCf = externalByDate.get(date) ?? 0
-    derivedCash = stepDerivedCashBalance(derivedCash, dayTrades, extCf, perfCtx)
+    const cashStep = stepDerivedCashWithImplied(derivedCash, dayTrades, extCf, perfCtx)
+    derivedCash = cashStep.cash
+    const totalExtCf = extCf + cashStep.impliedCf
+    if (cashStep.impliedCf > 0) impliedDepositDays++
 
     const { value: navEod, missingSymbols, staleHistorySymbols } =
-      portfolioPositionsValueOnDate(
-        trades,
+      portfolioPositionsNavForSlice(
+        slice,
         portfolio,
         scenarios,
         historiesBySymbol,
@@ -226,12 +292,16 @@ export function buildFullReturnProgression(
     if (twrMethod === 'external') {
       if (fullNavEod != null) {
         if (prevFullNav != null) {
-          const denom = twrDenom(prevFullNav, extCf)
-          const r = (fullNavEod - prevFullNav - extCf) / denom
-          if (Number.isFinite(r) && Math.abs(r) < 5) linked *= 1 + r
+          const denom = prevFullNav + totalExtCf
+          if (canLinkExternalTwr(prevFullNav, fullNavEod, denom)) {
+            const r = (fullNavEod - prevFullNav - totalExtCf) / denom
+            if (Number.isFinite(r) && r > -0.9999 && Math.abs(r) < 5) {
+              linked *= 1 + r
+            }
+          }
         }
         twrPct = linked - 1
-        prevFullNav = fullNavEod
+        if (fullNavEod > TWR_NAV_DENOM_FLOOR) prevFullNav = fullNavEod
         prevNav = navEod
       } else {
         twrPct = null
@@ -240,32 +310,26 @@ export function buildFullReturnProgression(
       if (prevNav != null) {
         const safePrev = Math.abs(prevNav) >= TWR_NAV_DENOM_FLOOR ? prevNav : TWR_NAV_DENOM_FLOOR
         if (hasTradeToday) {
-          const prevDate = addUtcDays(date, -1)
-          const {
-            value: bmv,
-            missingSymbols: bmvMissing,
-            staleHistorySymbols: bmvStale,
-          } = portfolioPositionsValueOnDate(
-            trades,
-            portfolio,
-            scenarios,
-            historiesBySymbol,
-            date,
-            perfCtx,
-            prevDate,
-            liveDay,
-          )
+          const { value: bmv, missingSymbols: bmvMissing, staleHistorySymbols: bmvStale } =
+            portfolioPositionsNavForSlice(
+              sliceBeforeDay,
+              portfolio,
+              scenarios,
+              historiesBySymbol,
+              date,
+              perfCtx,
+              addUtcDays(date, -1),
+              liveDay,
+            )
           for (const m of bmvMissing) missingHistory.add(m)
           for (const s of bmvStale) staleHistory.add(s)
-          if (bmv != null) {
-            const bmvSafe =
-              Math.abs(bmv) >= TWR_NAV_DENOM_FLOOR ? bmv : TWR_NAV_DENOM_FLOOR
-            const r = (navEod - bmv - dayFlow) / bmvSafe
-            if (Number.isFinite(r) && Math.abs(r) < 5) linked *= 1 + r
+          if (bmv != null && bmv > TWR_NAV_DENOM_FLOOR) {
+            const r = (navEod - bmv - dayFlow) / bmv
+            if (Number.isFinite(r) && r > -0.9999 && Math.abs(r) < 5) linked *= 1 + r
           }
-        } else {
+        } else if (navEod > TWR_NAV_DENOM_FLOOR) {
           const r = (navEod - safePrev) / safePrev
-          if (Number.isFinite(r) && Math.abs(r) < 5) linked *= 1 + r
+          if (Number.isFinite(r) && r > -0.9999 && Math.abs(r) < 5) linked *= 1 + r
         }
       }
       twrPct = linked - 1
@@ -292,13 +356,11 @@ export function buildFullReturnProgression(
     missingHistorySymbols: [...missingHistory].sort(),
     staleHistorySymbols: [...staleHistory].sort(),
     twrMethod,
+    impliedDepositDays,
   }
 }
 
-export function computeBookTimeWeightedReturn(
-  input: BuildFullReturnProgressionInput,
-): TwrResult {
-  const prog = buildFullReturnProgression(input)
+export function twrResultFromProgression(prog: ReturnProgressionResult): TwrResult {
   if (prog.points.length === 0) {
     return { twr: null, status: 'na', reason: 'No trades' }
   }
@@ -311,4 +373,10 @@ export function computeBookTimeWeightedReturn(
     return { twr: null, status: 'unavailable', reason }
   }
   return { twr: last.twrPct, status: 'ok' }
+}
+
+export function computeBookTimeWeightedReturn(
+  input: BuildFullReturnProgressionInput,
+): TwrResult {
+  return twrResultFromProgression(buildFullReturnProgression(input))
 }

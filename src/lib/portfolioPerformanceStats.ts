@@ -345,6 +345,8 @@ export type ReturnProgressionResult = {
   /** Symbols whose carried history close was >7 calendar days old on at least one past chart day. */
   staleHistorySymbols: string[]
   twrMethod: ReturnProgressionTwrMethod
+  /** Days where implied wire deposits bridged trade cash before logged wires. */
+  impliedDepositDays: number
 }
 
 function addUtcDays(isoDate: string, days: number): string {
@@ -416,6 +418,7 @@ export function buildReturnProgression(
       missingHistorySymbols: [],
       staleHistorySymbols: [],
       twrMethod: 'approximate',
+      impliedDepositDays: 0,
     }
   }
 
@@ -431,6 +434,7 @@ export function buildReturnProgression(
       missingHistorySymbols: [],
       staleHistorySymbols: [],
       twrMethod: 'approximate',
+      impliedDepositDays: 0,
     }
   }
 
@@ -490,6 +494,7 @@ export function buildReturnProgression(
     missingHistorySymbols: [...missingHistory].sort(),
     staleHistorySymbols: [],
     twrMethod: 'approximate',
+    impliedDepositDays: 0,
   }
 }
 

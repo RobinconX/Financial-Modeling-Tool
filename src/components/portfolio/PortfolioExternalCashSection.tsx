@@ -186,10 +186,20 @@ export function PortfolioExternalCashSection({
               className="mt-1 w-full rounded border border-zinc-700 bg-zinc-950 p-2 text-xs font-mono"
               rows={3}
               placeholder="flowDate,direction,amount,currency&#10;2024-01-02,deposit,10000,USD"
-              onBlur={(e) => {
-                if (e.target.value.trim()) onCsvPaste(e.target.value)
-              }}
             />
+            <button
+              type="button"
+              className="mt-1 rounded bg-sky-800/80 px-2 py-1 text-xs text-white hover:bg-sky-700"
+              onClick={(e) => {
+                const ta = e.currentTarget.previousElementSibling as HTMLTextAreaElement | null
+                if (ta?.value.trim()) {
+                  onCsvPaste(ta.value)
+                  ta.value = ''
+                }
+              }}
+            >
+              Import CSV
+            </button>
             {csvError && (
               <p className="mt-1 text-xs text-amber-400">{csvError}</p>
             )}
