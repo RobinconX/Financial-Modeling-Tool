@@ -7,6 +7,7 @@ import {
   PORTFOLIO_ACTUALS_KEY,
 } from '../../src/lib/portfolioActualsStorage'
 import { PORTFOLIO_STORAGE_KEY } from '../../src/lib/portfolioStorage'
+import { PORTFOLIO_TRADES_KEY } from '../../src/lib/portfolioTradesStorage'
 import { SAVINGS_STORAGE_KEY } from '../../src/lib/savingsStorage'
 import { STORAGE_KEY } from '../../src/lib/storage'
 import type { StorageRecoveryNotice } from '../../src/lib/storageLoadRecovery'
@@ -29,6 +30,7 @@ describe('storageRecoveryTab', () => {
     expect(storageRecoveryTabForKey(STORAGE_KEY)).toBe('projections')
     expect(storageRecoveryTabForKey(COMPARABLES_STORAGE_KEY)).toBe('projections')
     expect(storageRecoveryTabForKey(PORTFOLIO_STORAGE_KEY)).toBe('portfolio')
+    expect(storageRecoveryTabForKey(PORTFOLIO_TRADES_KEY)).toBe('portfolio')
     expect(storageRecoveryTabForKey(PORTFOLIO_ACTUALS_KEY)).toBe('portfolio')
     expect(storageRecoveryTabForKey(PORTFOLIO_ACTUALS_EMBEDDED_RECOVERY_KEY)).toBe(
       'portfolio',
@@ -59,5 +61,14 @@ describe('storageRecoveryTab', () => {
       notice(SAVINGS_STORAGE_KEY, 'Savings'),
     ]
     expect(filterStorageRecoveryNoticesForTab('projections', all)).toEqual([all[0], all[1]])
+  })
+
+  it('shows portfolio trades recovery on the portfolio tab', () => {
+    const all = [
+      notice(PORTFOLIO_STORAGE_KEY, 'Portfolio'),
+      notice(PORTFOLIO_TRADES_KEY, 'Portfolio trades'),
+      notice(SAVINGS_STORAGE_KEY, 'Savings'),
+    ]
+    expect(filterStorageRecoveryNoticesForTab('portfolio', all)).toEqual([all[0], all[1]])
   })
 })

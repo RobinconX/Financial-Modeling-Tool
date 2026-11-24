@@ -1421,6 +1421,8 @@ Always active — a fast mirror of the **current account** while you edit.
 
 > Clearing site data or uninstalling the browser profile wipes this copy. Keep a **linked file** or **Export** JSON if you need durability.
 
+If a slice (projections, portfolios, **trade ledger**, budget, etc.) fails to load, a yellow **recovery banner** on that tab explains the problem and offers **Download backup** of the raw bytes from before the app overwrote them. The session starts empty for that slice until you import JSON or dismiss the banner; saving edits does not silently destroy the backup copy.
+
 ### Linked data file
 
 Desktop **Chrome** or **Edge** can link a JSON file (File System Access API):
