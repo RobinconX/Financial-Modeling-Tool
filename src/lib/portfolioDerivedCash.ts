@@ -11,7 +11,10 @@ function tradesOnDay(
   return withAutoExpireTrades(trades, asOfDate).filter((t) => t.tradeDate === day)
 }
 
-/** Cumulative derived cash (external wires ± trade settlement), display currency. */
+/**
+ * Legacy cumulative cash (correctness reference). Prefer incremental updates in
+ * buildFullReturnProgression — this scans every event date on each call.
+ */
 export function derivedCashBalanceThrough(
   trades: PortfolioTrade[],
   throughDate: string,
@@ -34,4 +37,14 @@ export function derivedCashBalanceThrough(
     cash += externalCfByDate.get(d) ?? 0
   }
   return cash
+}
+
+/** One calendar step of derived settlement cash (external wires − trade cash). */
+export function stepDerivedCashBalance(
+  cash: number,
+  dayTrades: readonly PortfolioTrade[],
+  externalCf: number,
+  perfCtx: PerfDisplayContext,
+): number {
+  return cash - tradeDayNetCashFlow(dayTrades, perfCtx) + externalCf
 }
