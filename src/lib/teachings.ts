@@ -1252,7 +1252,7 @@ The **Performance** tab is an **executed trade ledger** (equities and **listed o
 
 ### Adding trades
 
-- **+ Trade** — choose **Equity** or **Option**; OCC or IB description (e.g. HIMS 16OCT26 25 P), contracts, USD premium, optional **CHF** fee currency, lifecycle **Event** (expire / assign)
+- **+ Trade** — choose **Equity** or **Option**; OCC or IB description (e.g. HIMS 16OCT26 25 P), contracts, USD premium, optional **CHF** fee currency, lifecycle **Event** (expire / assign / exercise). On **assign** or **exercise**, **Linked trade** picks the follow-on stock row on this book (same underlying, date within 7 days, shares ≈ contracts × multiplier) or **None** to clear; imports still set **linkedTradeId** on the option row only
 - **Positions** → expand a stock row → **Log trade** (same drawer, prefilled symbol)
 - When the symbol matches an equity row on this book (not an option), **Use position** fills **shares** from **Positions** and **price** from the current mark (quote, manual, or history). On save, the trade **auto-links** to the position when the ticker matches **exactly one** equity row (ambiguous or option rows stay unlinked)
 

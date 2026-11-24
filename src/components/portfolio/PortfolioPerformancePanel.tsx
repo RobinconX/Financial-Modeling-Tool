@@ -1517,6 +1517,7 @@ export function PortfolioPerformancePanel({
         draft={draft}
         portfolio={portfolio}
         scenarios={scenarios}
+        bookTrades={portfolioTrades}
         historyBySymbol={historyPoints}
         quoteCurrencyBySymbol={quoteCurrencyBySymbol}
         onClose={() => {
