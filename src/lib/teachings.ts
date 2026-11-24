@@ -1443,10 +1443,12 @@ Link or create the JSON in a **cloud-synced folder** (Dropbox, iCloud Drive, Goo
 
 ### Export / Import
 
-- **Export JSON** — current account (same shape as before)
+- **Export JSON** — current account (same shape as before); includes warmed **USD/CHF daily rates** for trade-era FX when present (not live price history)
 - **Export all accounts** — multi-account catalog file
 - **Import JSON** — add as new account or replace current (prompt when ambiguous); multi-account **Replace all** lists accounts with invalid snapshots that were skipped
 - **Tables (.xlsx)** — Excel-friendly tables only; **not** re-importable
+
+> Import **merges** imported USD/CHF daily rates into the browser cache: dates you already have locally stay put; missing dates are filled from the file.
 
 On devices without linked files, export is the primary backup path.
 

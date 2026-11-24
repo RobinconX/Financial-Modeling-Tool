@@ -340,6 +340,7 @@ describe('teachings registry', () => {
     expect(g?.body).toMatch(/Brave/i)
     expect(g?.body).toMatch(/Open \/ link file/i)
     expect(g?.body).toContain('skipped')
+    expect(g?.body).toMatch(/USD\/CHF daily rates/i)
     expect(getGuide('settings.browser')).toBeUndefined()
     expect(getGuide('settings.linkedFile')).toBeUndefined()
     expect(getGuide('settings.export')).toBeUndefined()

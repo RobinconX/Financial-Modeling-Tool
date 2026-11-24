@@ -86,3 +86,34 @@ export function cacheFxRatesBulk(rates: Record<string, number>): void {
   }
   writeStore(store)
 }
+
+const ISO_DATE = /^\d{4}-\d{2}-\d{2}$/
+
+function isValidFxDailyRate(date: string, rate: unknown): rate is number {
+  const n = Number(rate)
+  return ISO_DATE.test(date) && Number.isFinite(n) && n > 0
+}
+
+/** Parse USD/CHF daily rates from a snapshot field; strips invalid entries. */
+export function parseFxDailyRatesMap(raw: unknown): Record<string, number> | undefined {
+  if (raw === undefined) return undefined
+  if (typeof raw !== 'object' || raw === null || Array.isArray(raw)) return undefined
+  const out: Record<string, number> = {}
+  for (const [k, v] of Object.entries(raw)) {
+    if (isValidFxDailyRate(k, v)) out[k] = v
+  }
+  return out
+}
+
+/** Add snapshot rates only for dates missing locally; existing local dates are kept. */
+export function mergeFxDailyCacheFromSnapshot(incoming: Record<string, number>): void {
+  const store = readStore()
+  let changed = false
+  for (const [d, rate] of Object.entries(incoming)) {
+    if (!isValidFxDailyRate(d, rate)) continue
+    if (Object.prototype.hasOwnProperty.call(store.byDate, d)) continue
+    store.byDate[d] = rate
+    changed = true
+  }
+  if (changed) writeStore(store)
+}
