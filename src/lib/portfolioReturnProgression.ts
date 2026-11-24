@@ -3,7 +3,7 @@ import type { PriceHistoryPoint } from './priceHistory'
 import { isOccSymbol, parseOccSymbol } from './optionContract'
 import type { PerfDisplayContext } from './portfolioTradeFx'
 import { externalCfByDate } from './portfolioExternalCash'
-import { stepDerivedCashWithImplied } from './portfolioDerivedCash'
+import { stepDerivedCashBalance } from './portfolioDerivedCash'
 import { tradeDayNetCashFlow } from './portfolioReturnMetrics'
 import {
   computePortfolioPerformance,
@@ -159,21 +159,11 @@ function emptyResult(twrMethod: ReturnProgressionTwrMethod): ReturnProgressionRe
     missingHistorySymbols: [],
     staleHistorySymbols: [],
     twrMethod,
-    impliedDepositDays: 0,
   }
 }
 
-function canLinkExternalTwr(
-  prevFullNav: number,
-  fullNavEod: number,
-  denom: number,
-): boolean {
-  if (!Number.isFinite(prevFullNav) || !Number.isFinite(fullNavEod)) return false
-  if (prevFullNav <= TWR_NAV_DENOM_FLOOR || fullNavEod <= TWR_NAV_DENOM_FLOOR) {
-    return false
-  }
-  if (!Number.isFinite(denom) || denom <= TWR_NAV_DENOM_FLOOR) return false
-  return true
+function canLinkExternalTwr(denom: number): boolean {
+  return Number.isFinite(denom) && denom > TWR_NAV_DENOM_FLOOR
 }
 
 /**
@@ -229,8 +219,6 @@ export function buildFullReturnProgression(
   let prevFullNav: number | null = null
   let derivedCash = 0
   let runningNetInvested = 0
-  let impliedDepositDays = 0
-
   let date = firstTrade
   while (date <= asOfDate) {
     let slice: PortfolioTrade[]
@@ -266,10 +254,7 @@ export function buildFullReturnProgression(
     const dayFlow = tradeDayNetCashFlow(dayTrades, perfCtx)
     if (hasTradeToday) runningNetInvested += dayFlow
     const extCf = externalByDate.get(date) ?? 0
-    const cashStep = stepDerivedCashWithImplied(derivedCash, dayTrades, extCf, perfCtx)
-    derivedCash = cashStep.cash
-    const totalExtCf = extCf + cashStep.impliedCf
-    if (cashStep.impliedCf > 0) impliedDepositDays++
+    derivedCash = stepDerivedCashBalance(derivedCash, dayTrades, extCf, perfCtx)
 
     const { value: navEod, missingSymbols, staleHistorySymbols } =
       portfolioPositionsNavForSlice(
@@ -292,16 +277,16 @@ export function buildFullReturnProgression(
     if (twrMethod === 'external') {
       if (fullNavEod != null) {
         if (prevFullNav != null) {
-          const denom = prevFullNav + totalExtCf
-          if (canLinkExternalTwr(prevFullNav, fullNavEod, denom)) {
-            const r = (fullNavEod - prevFullNav - totalExtCf) / denom
+          const denom = prevFullNav + extCf
+          if (canLinkExternalTwr(denom)) {
+            const r = (fullNavEod - prevFullNav - extCf) / denom
             if (Number.isFinite(r) && r > -0.9999 && Math.abs(r) < 5) {
               linked *= 1 + r
             }
           }
         }
         twrPct = linked - 1
-        if (fullNavEod > TWR_NAV_DENOM_FLOOR) prevFullNav = fullNavEod
+        if (Number.isFinite(fullNavEod)) prevFullNav = fullNavEod
         prevNav = navEod
       } else {
         twrPct = null
@@ -356,7 +341,6 @@ export function buildFullReturnProgression(
     missingHistorySymbols: [...missingHistory].sort(),
     staleHistorySymbols: [...staleHistory].sort(),
     twrMethod,
-    impliedDepositDays,
   }
 }
 

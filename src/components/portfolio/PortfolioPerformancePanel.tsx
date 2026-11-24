@@ -77,7 +77,11 @@ import { FeatureGuideButton } from '../guides/FeatureGuideButton'
 import { PortfolioTradeDrawer } from './PortfolioTradeDrawer'
 import { PortfolioTradeImportModal } from './PortfolioTradeImportModal'
 import { PortfolioExternalCashSection } from './PortfolioExternalCashSection'
-import { externalFlowsForPortfolio } from '../../lib/portfolioExternalCash'
+import {
+  externalCfByDate,
+  externalFlowsForPortfolio,
+} from '../../lib/portfolioExternalCash'
+import { computeDerivedCashReconciliation } from '../../lib/portfolioDerivedCash'
 import { ConfirmDialog } from '../common/ConfirmDialog'
 import { cashTabBalanceDisplayAsOf } from '../../lib/portfolioCashTab'
 import {
@@ -555,6 +559,17 @@ export function PortfolioPerformancePanel({
     [externalCashState, portfolio.id],
   )
 
+  const wireCashReconciliation = useMemo(() => {
+    if (bookExternalFlows.length === 0 || progressionTrades.length === 0) return null
+    const byDate = externalCfByDate(bookExternalFlows, perfCtx)
+    return computeDerivedCashReconciliation(
+      progressionTrades,
+      asOfDate,
+      byDate,
+      perfCtx,
+    )
+  }, [bookExternalFlows, progressionTrades, asOfDate, perfCtx])
+
   const returnProgressionInput = useMemo(
     () => ({
       trades: progressionTrades,
@@ -884,11 +899,6 @@ export function PortfolioPerformancePanel({
     const missing = returnProgression.missingHistorySymbols
     const stale = returnProgression.staleHistorySymbols ?? []
     const parts: string[] = []
-    if (returnProgression.impliedDepositDays > 0) {
-      parts.push(
-        `${returnProgression.impliedDepositDays} implied deposit${returnProgression.impliedDepositDays === 1 ? '' : 's'} added where wire log doesn't cover trades.`,
-      )
-    }
     if (returnProgression.twrMethod === 'approximate') {
       parts.push(
         'TWR approximates external flows from trade cash until you log wire transfers below.',
@@ -906,7 +916,6 @@ export function PortfolioPerformancePanel({
     returnProgression.missingHistorySymbols,
     returnProgression.staleHistorySymbols,
     returnProgression.twrMethod,
-    returnProgression.impliedDepositDays,
   ])
 
   const handleSaveTrade = (trade: PortfolioTrade) => {
@@ -1144,6 +1153,8 @@ export function PortfolioPerformancePanel({
       <PortfolioExternalCashSection
         portfolioId={portfolio.id}
         state={externalCashState}
+        displayCurrency={displayCurrency}
+        reconciliation={wireCashReconciliation}
         onSaveFlow={onSaveExternalFlow}
         onDeleteFlow={onDeleteExternalFlow}
         onReplace={onReplaceExternalCash}

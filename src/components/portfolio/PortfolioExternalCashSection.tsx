@@ -9,10 +9,13 @@ import {
   externalFlowsForPortfolio,
   parseExternalCashCsv,
 } from '../../lib/portfolioExternalCash'
+import type { DerivedCashReconciliation } from '../../lib/portfolioDerivedCash'
 
 type Props = {
   portfolioId: string
   state: PortfolioExternalCashState
+  displayCurrency: DisplayCurrency
+  reconciliation: DerivedCashReconciliation | null
   onSaveFlow: (flow: PortfolioExternalCashFlow) => boolean
   onDeleteFlow: (id: string) => boolean
   onReplace: (next: PortfolioExternalCashState) => boolean
@@ -21,6 +24,8 @@ type Props = {
 export function PortfolioExternalCashSection({
   portfolioId,
   state,
+  displayCurrency,
+  reconciliation,
   onSaveFlow,
   onDeleteFlow,
   onReplace,
@@ -87,6 +92,27 @@ export function PortfolioExternalCashSection({
         Deposits and withdrawals for time-weighted return — separate from Cash-tab year
         deposits.
       </p>
+      {reconciliation && flows.length > 0 ? (
+        <div className="mt-2 space-y-1 text-xs text-zinc-400">
+          <p>
+            Wires (logged): {formatMoney(reconciliation.totalWiresDisplay, displayCurrency)}
+            {' · '}
+            Derived cash today:{' '}
+            {formatMoney(reconciliation.derivedCashToday, displayCurrency)}
+            {' · '}
+            Min cash: {formatMoney(reconciliation.minCash, displayCurrency)} on{' '}
+            {reconciliation.minCashDate}
+          </p>
+          {reconciliation.negativeCashDays > 0 ? (
+            <p className="text-amber-400/90">
+              Cash went negative on {reconciliation.negativeCashDays} day
+              {reconciliation.negativeCashDays === 1 ? '' : 's'} (min{' '}
+              {formatMoney(reconciliation.minCash, displayCurrency)} on{' '}
+              {reconciliation.minCashDate}): margin or missing wires.
+            </p>
+          ) : null}
+        </div>
+      ) : null}
       {open && (
         <div className="mt-3 space-y-3">
           {flows.length > 0 && (
