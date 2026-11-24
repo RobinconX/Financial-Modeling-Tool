@@ -1307,7 +1307,9 @@ Below **Activity**, one line chart with a **TWR** or **Value** toggle tracks the
 
 - **Value** — absolute **positions-only** mark-to-market each day in display currency (**USD** or **CHF**). Options use **intrinsic value** from **underlying** daily closes when history is needed (no OCC price history). Toggle **Net invested** (off by default) to overlay cumulative net trade capital on the same chart.
 
-The TWR line is **green above zero** and **red below zero**. Toggle **Trades** for equity buy/sell dots and option lifecycle dots (amber). Gaps appear when an open position lacks a mark (missing **underlying** history for options). **Scroll to zoom**; when zoomed, **drag to pan** or **Reset** / double-click (same as Comparables **Remaining upside**).
+> **Marks on the chart:** **Past** days use the latest daily **history close** on or before that date (weekends/holidays carry the prior session). **Today** uses live **quote** or **manual** marks like the snapshot cards. A muted note under the chart lists missing history or carried closes more than seven days old on past dates.
+
+The TWR line is **green above zero** and **red below zero**. Toggle **Trades** for equity buy/sell dots and option lifecycle dots (amber). **Scroll to zoom**; when zoomed, **drag to pan** or **Reset** / double-click (same as Comparables **Remaining upside**).
 
 ### Options P/L (whole book)
 

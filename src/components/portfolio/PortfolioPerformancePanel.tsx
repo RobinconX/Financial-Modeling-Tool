@@ -861,10 +861,19 @@ export function PortfolioPerformancePanel({
     ],
   )
 
-  const returnMissingNote = useMemo(() => {
-    if (returnProgression.missingHistorySymbols.length === 0) return null
-    return `Return curve has gaps — price history missing for: ${returnProgression.missingHistorySymbols.join(', ')}.`
-  }, [returnProgression.missingHistorySymbols])
+  const returnHistoryNote = useMemo(() => {
+    const missing = returnProgression.missingHistorySymbols
+    const stale = returnProgression.staleHistorySymbols ?? []
+    if (missing.length === 0 && stale.length === 0) return null
+    const parts: string[] = []
+    if (missing.length > 0) {
+      parts.push(`Missing price history: ${missing.join(', ')}`)
+    }
+    if (stale.length > 0) {
+      parts.push(`Carried closes >7d old on past dates: ${stale.join(', ')}`)
+    }
+    return parts.join(' · ')
+  }, [returnProgression.missingHistorySymbols, returnProgression.staleHistorySymbols])
 
   const handleSaveTrade = (trade: PortfolioTrade) => {
     const ok = onSaveTrade(trade)
@@ -1105,7 +1114,7 @@ export function PortfolioPerformancePanel({
             trades={equityTradesForChart}
             optionMarkers={returnChartOptionMarkers}
             mode={returnChartMode}
-            missingNote={returnMissingNote}
+            missingNote={returnHistoryNote}
             displayCurrency={displayCurrency}
             usdToChf={usdToChf}
             onModeChange={setReturnChartMode}
