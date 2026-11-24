@@ -7,6 +7,7 @@ import {
   PORTFOLIO_ACTUALS_KEY,
 } from './portfolioActualsStorage'
 import { PORTFOLIO_STORAGE_KEY } from './portfolioStorage'
+import { PORTFOLIO_TRADES_KEY } from './portfolioTradesStorage'
 import { SAVINGS_STORAGE_KEY } from './savingsStorage'
 import type { StorageRecoveryNotice } from './storageLoadRecovery'
 import { STORAGE_KEY } from './storage'
@@ -16,6 +17,7 @@ const STORAGE_RECOVERY_TAB: Record<string, AppTab> = {
   [STORAGE_KEY]: 'projections',
   [COMPARABLES_STORAGE_KEY]: 'projections',
   [PORTFOLIO_STORAGE_KEY]: 'portfolio',
+  [PORTFOLIO_TRADES_KEY]: 'portfolio',
   [PORTFOLIO_ACTUALS_KEY]: 'portfolio',
   [PORTFOLIO_ACTUALS_EMBEDDED_RECOVERY_KEY]: 'portfolio',
   [INCOME_COST_STORAGE_KEY]: 'income-cost',

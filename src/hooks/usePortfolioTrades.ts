@@ -2,13 +2,18 @@ import { useCallback, useEffect, useRef, useState } from 'react'
 import type { PortfolioTrade, PortfolioTradesState } from '../types'
 import { removeTrade, upsertTrade } from '../lib/portfolioTrades'
 import {
-  loadPortfolioTrades,
+  loadPortfolioTradesWithRecovery,
   PORTFOLIO_TRADES_KEY,
   savePortfolioTrades,
 } from '../lib/portfolioTradesStorage'
+import type { StorageRecoveryNotice } from '../lib/storageLoadRecovery'
 
 export function usePortfolioTrades() {
-  const [state, setState] = useState<PortfolioTradesState>(() => loadPortfolioTrades())
+  const [initialLoad] = useState(() => loadPortfolioTradesWithRecovery())
+  const [state, setState] = useState<PortfolioTradesState>(() => initialLoad.data)
+  const [storageRecovery, setStorageRecovery] = useState<StorageRecoveryNotice | null>(
+    () => initialLoad.recovery,
+  )
   const [error, setError] = useState<string | null>(null)
   const stateRef = useRef(state)
   stateRef.current = state
@@ -28,9 +33,10 @@ export function usePortfolioTrades() {
   useEffect(() => {
     function onStorage(e: StorageEvent) {
       if (e.key !== PORTFOLIO_TRADES_KEY) return
-      const loaded = loadPortfolioTrades()
-      stateRef.current = loaded
-      setState(loaded)
+      const loaded = loadPortfolioTradesWithRecovery()
+      stateRef.current = loaded.data
+      setState(loaded.data)
+      if (loaded.recovery) setStorageRecovery(loaded.recovery)
     }
     window.addEventListener('storage', onStorage)
     return () => window.removeEventListener('storage', onStorage)
@@ -48,7 +54,17 @@ export function usePortfolioTrades() {
 
   const replace = useCallback((next: PortfolioTradesState) => persist(next), [persist])
 
-  return { trades: state, error, saveTrade, deleteTrade, replace }
+  const dismissStorageRecovery = useCallback(() => setStorageRecovery(null), [])
+
+  return {
+    trades: state,
+    error,
+    storageRecovery,
+    dismissStorageRecovery,
+    saveTrade,
+    deleteTrade,
+    replace,
+  }
 }
 
 export type PortfolioTradesApi = ReturnType<typeof usePortfolioTrades>

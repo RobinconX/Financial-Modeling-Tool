@@ -295,7 +295,15 @@ export default function App() {
   const savingsAccounts = savings.accounts
   const overview = useOverview()
   const portfolioContributions = usePortfolioContributions()
-  const portfolioTrades = usePortfolioTrades()
+  const {
+    trades: portfolioTradesState,
+    error: portfolioTradesError,
+    storageRecovery: portfolioTradesStorageRecovery,
+    dismissStorageRecovery: dismissPortfolioTradesStorageRecovery,
+    saveTrade: onSaveTrade,
+    deleteTrade: onDeleteTrade,
+    replace: onReplaceTrades,
+  } = usePortfolioTrades()
   const portfolioActuals = usePortfolioActuals()
   const {
     storageRecovery: portfolioActualsStorageRecovery,
@@ -351,6 +359,7 @@ export default function App() {
     const list = [
       projectionsStorageRecovery,
       portfolioStorageRecovery,
+      portfolioTradesStorageRecovery,
       incomeCostStorageRecovery,
       portfolioActualsStorageRecovery,
       savingsStorageRecovery,
@@ -362,6 +371,7 @@ export default function App() {
     tab,
     projectionsStorageRecovery,
     portfolioStorageRecovery,
+    portfolioTradesStorageRecovery,
     incomeCostStorageRecovery,
     portfolioActualsStorageRecovery,
     savingsStorageRecovery,
@@ -375,6 +385,9 @@ export default function App() {
     }
     if (portfolioStorageRecovery?.storageKey === storageKey) {
       dismissPortfolioStorageRecovery()
+    }
+    if (portfolioTradesStorageRecovery?.storageKey === storageKey) {
+      dismissPortfolioTradesStorageRecovery()
     }
     if (incomeCostStorageRecovery?.storageKey === storageKey) {
       dismissIncomeCostStorageRecovery()
@@ -610,7 +623,7 @@ export default function App() {
               <ProjectionsView
                 scenarios={scenarios}
                 portfolios={portfolios}
-                tradesState={portfolioTrades.trades}
+                tradesState={portfolioTradesState}
                 storageError={storageError}
                 upsertScenario={upsertScenario}
                 updateScenario={updateScenario}
@@ -649,11 +662,11 @@ export default function App() {
                 sharedCashError={portfolioSharedCash.error}
                 onSharedCashPatch={portfolioSharedCash.updateFromPortfolioPatch}
                 portfolioActualsMode={portfolioActualsMode}
-                portfolioTrades={portfolioTrades.trades}
-                portfolioTradesError={portfolioTrades.error}
-                onSaveTrade={portfolioTrades.saveTrade}
-                onDeleteTrade={portfolioTrades.deleteTrade}
-                onReplaceTrades={portfolioTrades.replace}
+                portfolioTrades={portfolioTradesState}
+                portfolioTradesError={portfolioTradesError}
+                onSaveTrade={onSaveTrade}
+                onDeleteTrade={onDeleteTrade}
+                onReplaceTrades={onReplaceTrades}
               />
             )}
 
