@@ -245,6 +245,81 @@ describe('ReturnProgressionTooltip', () => {
     expect(text).toContain('2024-01-01')
     expect(text).toContain('—')
   })
+
+  it('shows net invested when overlay is on in value mode', () => {
+    const el = ReturnProgressionTooltip({
+      active: true,
+      label: '2024-01-02',
+      mode: 'value',
+      displayCurrency: 'USD',
+      showNetInvested: true,
+      payload: [
+        {
+          dataKey: 'value',
+          payload: {
+            date: '2024-01-02',
+            time: chartTimeForTradeDate('2024-01-02'),
+            value: 1250.5,
+            valuePos: 1250.5,
+            valueNeg: null,
+            netInvested: 1000,
+          },
+        },
+      ],
+    })
+    const text = JSON.stringify(el)
+    expect(text).toContain('Net invested')
+    expect(text).toContain('$1.00K')
+    expect(text).toContain('Value − net invested')
+    expect(text).toContain('$250.50')
+  })
+
+  it('hides net invested when overlay is off or in twr mode', () => {
+    const basePayload = [
+      {
+        dataKey: 'value',
+        payload: {
+          date: '2024-01-02',
+          time: chartTimeForTradeDate('2024-01-02'),
+          value: 12.5,
+          valuePos: null,
+          valueNeg: null,
+          netInvested: 1000,
+        },
+      },
+    ] as const
+    const overlayOff = ReturnProgressionTooltip({
+      active: true,
+      label: '2024-01-02',
+      mode: 'value',
+      displayCurrency: 'USD',
+      showNetInvested: false,
+      payload: [...basePayload],
+    })
+    expect(JSON.stringify(overlayOff)).not.toContain('Net invested')
+
+    const twrMode = ReturnProgressionTooltip({
+      active: true,
+      label: '2024-01-02',
+      mode: 'twr',
+      displayCurrency: 'USD',
+      showNetInvested: true,
+      payload: [
+        {
+          dataKey: 'value',
+          payload: {
+            date: '2024-01-02',
+            time: chartTimeForTradeDate('2024-01-02'),
+            value: 12.5,
+            valuePos: 12.5,
+            valueNeg: null,
+            netInvested: 1000,
+          },
+        },
+      ],
+    })
+    expect(JSON.stringify(twrMode)).not.toContain('Net invested')
+  })
 })
 
 describe('chartRowNearestToTime', () => {

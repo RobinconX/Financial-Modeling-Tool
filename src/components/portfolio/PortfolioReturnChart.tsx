@@ -191,6 +191,8 @@ type TooltipPayloadItem = {
   payload?: ChartRow | ReturnChartTradeMarker
 }
 
+const NET_INVESTED_LINE_COLOR = '#a78bfa'
+
 type ReturnProgressionTooltipProps = {
   active?: boolean
   payload?: ReadonlyArray<TooltipPayloadItem>
@@ -201,6 +203,7 @@ type ReturnProgressionTooltipProps = {
   /** When hovering a trade dot, line series may be absent — supply row from chart data. */
   rowOverride?: ChartRow
   trades?: ReturnChartTradeMarker[]
+  showNetInvested?: boolean
 }
 
 export function resolveReturnChartTooltipState(
@@ -345,6 +348,7 @@ export function ReturnProgressionTooltip({
   usdToChf = null,
   rowOverride,
   trades = [],
+  showNetInvested = false,
 }: ReturnProgressionTooltipProps) {
   if (!active) return null
   const row =
@@ -359,31 +363,67 @@ export function ReturnProgressionTooltip({
         ? formatTick(isoDateFromUtcMs(label))
         : String(label)
       : trades[0]?.tradeDate ?? '')
+  const showNetInvestedRow =
+    mode === 'value' &&
+    showNetInvested &&
+    row?.netInvested != null &&
+    Number.isFinite(row.netInvested)
+  const netInvestedFormatted = showNetInvestedRow
+    ? formatMoney(row!.netInvested!, displayCurrency)
+    : null
+  const valueDiff =
+    showNetInvestedRow &&
+    row?.value != null &&
+    Number.isFinite(row.value)
+      ? row.value - row!.netInvested!
+      : null
   const body =
     row?.value == null || !Number.isFinite(row.value) ? (
       <div className="tabular-nums text-white/50">—</div>
     ) : (
-      (() => {
-        const tone =
-          row.value > 0 ? '#34d399' : row.value < 0 ? '#f87171' : 'rgba(255,255,255,0.45)'
-        const formatted = formatReturnProgressionValue(
-          row.value,
-          mode,
-          displayCurrency,
-        )
-        return (
+      <div className="space-y-1">
+        {(() => {
+          const tone =
+            row.value > 0 ? '#34d399' : row.value < 0 ? '#f87171' : 'rgba(255,255,255,0.45)'
+          const formatted = formatReturnProgressionValue(
+            row.value,
+            mode,
+            displayCurrency,
+          )
+          return (
+            <div className="flex items-center justify-between gap-4">
+              <span className="flex items-center gap-1.5 text-white/60">
+                <span
+                  className="inline-block h-1.5 w-1.5 rounded-sm"
+                  style={{ background: tone }}
+                />
+                {seriesLabel}
+              </span>
+              <span className="tabular-nums text-white/85">{formatted}</span>
+            </div>
+          )
+        })()}
+        {showNetInvestedRow ? (
           <div className="flex items-center justify-between gap-4">
             <span className="flex items-center gap-1.5 text-white/60">
               <span
                 className="inline-block h-1.5 w-1.5 rounded-sm"
-                style={{ background: tone }}
+                style={{ background: NET_INVESTED_LINE_COLOR }}
               />
-              {seriesLabel}
+              Net invested
             </span>
-            <span className="tabular-nums text-white/85">{formatted}</span>
+            <span className="tabular-nums text-white/85">{netInvestedFormatted}</span>
           </div>
-        )
-      })()
+        ) : null}
+        {valueDiff != null ? (
+          <div className="flex items-center justify-between gap-4">
+            <span className="text-white/50">Value − net invested</span>
+            <span className="tabular-nums text-white/75">
+              {formatMoney(valueDiff, displayCurrency)}
+            </span>
+          </div>
+        ) : null}
+      </div>
     )
   return (
     <div className="rounded-xl border border-white/10 bg-[#121820] px-3 py-2 text-xs shadow-xl">
@@ -408,6 +448,7 @@ type ReturnChartTooltipProps = {
   chartData: readonly ChartRow[]
   tradeMarkers: ReturnChartTradeMarker[]
   optionMarkers: ReturnChartOptionMarker[]
+  showNetInvested: boolean
 }
 
 function ReturnChartTooltip({
@@ -420,6 +461,7 @@ function ReturnChartTooltip({
   chartData,
   tradeMarkers,
   optionMarkers,
+  showNetInvested,
 }: ReturnChartTooltipProps) {
   if (!active) return null
   const row = resolveReturnChartTooltipRow(chartData, label, payload)
@@ -435,6 +477,7 @@ function ReturnChartTooltip({
       usdToChf={usdToChf}
       rowOverride={row}
       trades={trades}
+      showNetInvested={showNetInvested}
     />
   )
 }
@@ -714,6 +757,7 @@ export function PortfolioReturnChart({
                     chartData={data}
                     tradeMarkers={tradeMarkers}
                     optionMarkers={optionMarkers}
+                    showNetInvested={showNetInvested}
                   />
                 )}
               />
@@ -757,7 +801,7 @@ export function PortfolioReturnChart({
                 type="monotone"
                 dataKey="netInvested"
                 name="Net invested"
-                stroke="#a78bfa"
+                stroke={NET_INVESTED_LINE_COLOR}
                 strokeWidth={1.5}
                 strokeDasharray="4 3"
                 dot={false}
