@@ -50,7 +50,19 @@ export type TwrResult = {
   reason?: string
 }
 
-const MAX_CLOSE_STALE_DAYS = 7
+/** Beyond this gap, carried closes still mark the series but are flagged stale. */
+export const MAX_HISTORY_CARRY_STALE_DAYS = 7
+
+const MAX_CLOSE_STALE_DAYS = MAX_HISTORY_CARRY_STALE_DAYS
+
+export function historyCarryGapDays(closeDate: string, asOfDate: string): number | null {
+  return daysBetween(closeDate, asOfDate)
+}
+
+export function isCarriedHistoryStale(closeDate: string, asOfDate: string): boolean {
+  const gap = historyCarryGapDays(closeDate, asOfDate)
+  return gap != null && gap > MAX_HISTORY_CARRY_STALE_DAYS
+}
 
 export function closeOnOrBefore(
   points: PriceHistoryPoint[],
@@ -328,6 +340,8 @@ export type ReturnProgressionPoint = {
 export type ReturnProgressionResult = {
   points: ReturnProgressionPoint[]
   missingHistorySymbols: string[]
+  /** Symbols whose carried history close was >7 calendar days old on at least one past chart day. */
+  staleHistorySymbols: string[]
 }
 
 function addUtcDays(isoDate: string, days: number): string {
@@ -394,7 +408,7 @@ export function buildReturnProgression(
 ): ReturnProgressionResult {
   const entries = [...tradesBySymbol.entries()].filter(([, tr]) => tr.length > 0)
   if (entries.length === 0) {
-    return { points: [], missingHistorySymbols: [] }
+    return { points: [], missingHistorySymbols: [], staleHistorySymbols: [] }
   }
 
   let firstTrade: string | null = null
@@ -404,7 +418,7 @@ export function buildReturnProgression(
     if (!firstTrade || f < firstTrade) firstTrade = f
   }
   if (!firstTrade || firstTrade > asOfDate) {
-    return { points: [], missingHistorySymbols: [] }
+    return { points: [], missingHistorySymbols: [], staleHistorySymbols: [] }
   }
 
   const missingHistory = new Set<string>()
@@ -458,7 +472,11 @@ export function buildReturnProgression(
     date = addUtcDays(date, 1)
   }
 
-  return { points, missingHistorySymbols: [...missingHistory].sort() }
+  return {
+    points,
+    missingHistorySymbols: [...missingHistory].sort(),
+    staleHistorySymbols: [],
+  }
 }
 
 /** Split performance symbol rows for whole-portfolio table (open vs fully sold). */

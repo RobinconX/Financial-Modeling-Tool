@@ -4,7 +4,7 @@ import {
   computeBookTimeWeightedReturn,
   portfolioPositionsValueOnDate,
 } from '../../src/lib/portfolioReturnProgression'
-import type { PortfolioTrade, SavedScenario } from '../../src/types'
+import type { PortfolioTrade, SavedPortfolio, SavedScenario } from '../../src/types'
 import type { PerfDisplayContext } from '../../src/lib/portfolioTradeFx'
 import { newPortfolio } from '../../src/lib/portfolio'
 
@@ -124,5 +124,78 @@ describe('buildFullReturnProgression', () => {
     })
     expect(r.points.at(-1)?.netInvested).toBeCloseTo(1000, 4)
     expect(r.points.at(-1)?.positionsNav).toBeCloseTo(1100, 4)
+  })
+
+  it('past NAV follows history closes, not linked holding live quote', () => {
+    const trades = [buy('AAPL', '2024-01-02', 10, 100)]
+    const linkedBook: SavedPortfolio = {
+      ...portfolio,
+      holdings: [
+        {
+          id: 'h-aapl',
+          symbol: 'AAPL',
+          sharesHeld: 10,
+          scenarioId: 'sc-aapl',
+          basis: 'easy',
+          yearOverrides: [],
+          manualOnly: false,
+          manualCurrentPrice: null,
+        },
+      ],
+    }
+    const linkedScenarios: SavedScenario[] = [
+      {
+        id: 'sc-aapl',
+        name: 'AAPL',
+        symbol: 'AAPL',
+        companyName: 'Apple Inc.',
+        currency: 'USD',
+        currentPrice: 250,
+        currentMarketCap: null,
+        sharesOutstanding: null,
+        instrumentType: 'EQUITY',
+        mcapOverride: null,
+        easyRows: [],
+        advancedRows: [],
+        createdAt: '2024-01-01T00:00:00.000Z',
+        updatedAt: '2024-01-01T00:00:00.000Z',
+      },
+    ]
+    const histories = {
+      AAPL: [
+        { date: '2024-01-02', close: 100 },
+        { date: '2024-01-03', close: 105 },
+      ],
+    }
+    const r = buildFullReturnProgression({
+      trades,
+      portfolio: linkedBook,
+      scenarios: linkedScenarios,
+      historiesBySymbol: histories,
+      asOfDate: '2024-01-03',
+      perfCtx,
+    })
+  const day2 = r.points.find((p) => p.date === '2024-01-02')
+  const day3 = r.points.find((p) => p.date === '2024-01-03')
+  expect(day2?.positionsNav).toBeCloseTo(1000, 4)
+  expect(day3?.positionsNav).toBeCloseTo(1050, 4)
+  expect(day3?.positionsNav).not.toBeCloseTo(2500, 4)
+  })
+
+  it('flags stale carried history older than seven days on past dates', () => {
+    const trades = [buy('AAPL', '2024-01-02', 10, 100)]
+    const histories = {
+      AAPL: [{ date: '2024-01-02', close: 100 }],
+    }
+    const r = buildFullReturnProgression({
+      trades,
+      portfolio,
+      scenarios,
+      historiesBySymbol: histories,
+      asOfDate: '2024-01-15',
+      perfCtx,
+    })
+    expect(r.staleHistorySymbols).toContain('AAPL')
+    expect(r.points.at(-1)?.positionsNav).toBeCloseTo(1000, 4)
   })
 })

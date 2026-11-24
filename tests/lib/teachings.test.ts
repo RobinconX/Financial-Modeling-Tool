@@ -94,6 +94,7 @@ describe('teachings registry', () => {
     expect(getGuide('portfolio.performance')?.body).toContain('detail drawer')
     expect(getGuide('portfolio.performance')?.body).toContain('auto-link')
     expect(getGuide('portfolio.performance')?.body).toContain('Return progression')
+    expect(getGuide('portfolio.performance')?.body).toContain('Past')
     expect(getGuide('portfolio.performance')?.body).toContain('Use position')
     expect(getGuide('portfolio.performance')?.body).toContain('Closed positions')
     expect(getGuide('portfolio.performance')?.body).toContain('Bulk import')

@@ -482,7 +482,11 @@ export function resolveSymbolMark(
     const optHolding = portfolio.holdings.find(
       (h) => h.option?.occSymbol.toUpperCase() === symbol.toUpperCase(),
     )
-    if (optHolding?.manualCurrentPrice != null && optHolding.manualCurrentPrice >= 0) {
+    if (
+      isLiveMarkDay &&
+      optHolding?.manualCurrentPrice != null &&
+      optHolding.manualCurrentPrice >= 0
+    ) {
       return {
         price: optHolding.manualCurrentPrice,
         currency: 'USD',
@@ -531,35 +535,37 @@ export function resolveSymbolMark(
   const holding = portfolio.holdings.find(
     (h) => !h.option && h.symbol.toUpperCase() === sym,
   )
-  if (holding) {
-    const scenario =
-      (holding.scenarioId
-        ? scenarios.find((s) => s.id === holding.scenarioId)
-        : null) ?? scenarios.find((s) => s.symbol.toUpperCase() === sym) ?? null
-    if (
-      holding.manualOnly === true &&
-      holding.manualCurrentPrice != null &&
-      holding.manualCurrentPrice > 0
-    ) {
-      return {
-        price: holding.manualCurrentPrice,
-        currency: scenarioQuoteCur(scenario),
-        source: 'manual',
-        asOfDate: null,
+  if (isLiveMarkDay) {
+    if (holding) {
+      const scenario =
+        (holding.scenarioId
+          ? scenarios.find((s) => s.id === holding.scenarioId)
+          : null) ?? scenarios.find((s) => s.symbol.toUpperCase() === sym) ?? null
+      if (
+        holding.manualOnly === true &&
+        holding.manualCurrentPrice != null &&
+        holding.manualCurrentPrice > 0
+      ) {
+        return {
+          price: holding.manualCurrentPrice,
+          currency: scenarioQuoteCur(scenario),
+          source: 'manual',
+          asOfDate: null,
+        }
+      }
+      const p = resolveCurrentPrice(holding, scenario)
+      if (p != null && p > 0) {
+        return { price: p, currency: scenarioQuoteCur(scenario), source: 'quote', asOfDate: null }
       }
     }
-    const p = resolveCurrentPrice(holding, scenario)
-    if (p != null && p > 0) {
-      return { price: p, currency: scenarioQuoteCur(scenario), source: 'quote', asOfDate: null }
-    }
-  }
-  const scenario = scenarios.find((s) => s.symbol.toUpperCase() === sym)
-  if (scenario?.currentPrice != null && scenario.currentPrice > 0) {
-    return {
-      price: scenario.currentPrice,
-      currency: scenarioQuoteCur(scenario),
-      source: 'quote',
-      asOfDate: null,
+    const scenario = scenarios.find((s) => s.symbol.toUpperCase() === sym)
+    if (scenario?.currentPrice != null && scenario.currentPrice > 0) {
+      return {
+        price: scenario.currentPrice,
+        currency: scenarioQuoteCur(scenario),
+        source: 'quote',
+        asOfDate: null,
+      }
     }
   }
   const hist = latestHistoryClose(historyPoints, asOfDate)

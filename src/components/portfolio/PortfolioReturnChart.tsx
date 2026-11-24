@@ -652,7 +652,15 @@ export function PortfolioReturnChart({
         </div>
       </div>
       {missingNote ? (
-        <p className="text-[11px] text-amber-200/75">{missingNote}</p>
+        <p
+          className="flex items-start gap-1.5 text-[10px] leading-snug text-white/35"
+          title={missingNote}
+        >
+          <span className="shrink-0 text-white/30" aria-hidden>
+            ⓘ
+          </span>
+          <span>{missingNote}</span>
+        </p>
       ) : null}
       <div
         ref={chartRef}

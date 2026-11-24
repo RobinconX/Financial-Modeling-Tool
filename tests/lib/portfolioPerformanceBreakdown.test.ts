@@ -134,7 +134,9 @@ describe('portfolioPerformanceBreakdown', () => {
       trades,
       book,
       [],
-      {},
+      {
+        LMND: [{ date: '2026-06-01', close: 60 }],
+      },
       '2026-06-01',
       {
         displayCurrency: 'USD',
