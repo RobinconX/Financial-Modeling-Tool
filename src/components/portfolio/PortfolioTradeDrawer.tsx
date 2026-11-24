@@ -9,7 +9,16 @@ import type {
   SavedScenario,
 } from '../../types'
 import { optionLabel, parseOccSymbol } from '../../lib/optionContract'
-import { parseIbOptionDescription } from '../../lib/portfolioOptionTradeParse'
+import {
+  contractFieldsFromOcc,
+  parseIbOptionDescription,
+} from '../../lib/portfolioOptionTradeParse'
+import {
+  formatLinkedEquityTradeLabel,
+  linkedEquityTradeCandidates,
+  optionTradesLinkingToEquity,
+  stripLinkedTradeIdUnlessLifecycleOption,
+} from '../../lib/portfolioLinkedEquityTrades'
 import { formatInputNumber } from '../common/MoneyInput'
 import type { PriceHistoryPoint } from '../../lib/priceHistory'
 import {
@@ -28,6 +37,7 @@ type Props = {
   draft: PortfolioTrade | null
   portfolio: SavedPortfolio
   scenarios: SavedScenario[]
+  bookTrades: PortfolioTrade[]
   historyBySymbol?: Record<string, PriceHistoryPoint[]>
   quoteCurrencyBySymbol?: Record<string, DisplayCurrency>
   onClose: () => void
@@ -47,6 +57,7 @@ export function PortfolioTradeDrawer({
   draft,
   portfolio,
   scenarios,
+  bookTrades,
   historyBySymbol = {},
   quoteCurrencyBySymbol = {},
   onClose,
@@ -64,6 +75,7 @@ export function PortfolioTradeDrawer({
   const [event, setEvent] = useState<PortfolioTradeEvent>('trade')
   const [note, setNote] = useState('')
   const [holdingId, setHoldingId] = useState<string | undefined>()
+  const [linkedTradeId, setLinkedTradeId] = useState('')
   const [error, setError] = useState<string | null>(null)
 
   useEffect(() => {
@@ -90,8 +102,71 @@ export function PortfolioTradeDrawer({
     setEvent(draft.event ?? 'trade')
     setNote(draft.note ?? '')
     setHoldingId(draft.holdingId ?? byId?.id)
+    setLinkedTradeId(draft.linkedTradeId ?? '')
     setError(null)
   }, [open, draft, portfolio, scenarios, quoteCurrencyBySymbol])
+
+  const optionContractFields = useMemo(() => {
+    if (instrument !== 'option' || !symbol.trim()) return null
+    const parsed =
+      parseOccSymbol(symbol.trim().toUpperCase()) ?? parseIbOptionDescription(symbol)
+    if (!parsed) return null
+    return contractFieldsFromOcc(parsed.occSymbol)
+  }, [instrument, symbol])
+
+  const sharesNForLink = useMemo(() => {
+    const n = Number(shares)
+    return Number.isFinite(n) && n > 0 ? n : 0
+  }, [shares])
+
+  const linkedEquityCandidates = useMemo(() => {
+    if (instrument !== 'option' || (event !== 'assign' && event !== 'exercise')) {
+      return []
+    }
+    if (!draft) return []
+    return linkedEquityTradeCandidates(
+      {
+        id: draft.id,
+        portfolioId: portfolio.id,
+        symbol,
+        tradeDate,
+        shares: sharesNForLink,
+        multiplier: optionContractFields?.multiplier,
+        event,
+        underlying: optionContractFields?.underlying,
+        right: optionContractFields?.right,
+        linkedTradeId: linkedTradeId || null,
+      },
+      bookTrades,
+    )
+  }, [
+    instrument,
+    event,
+    draft,
+    portfolio.id,
+    symbol,
+    tradeDate,
+    sharesNForLink,
+    optionContractFields,
+    linkedTradeId,
+    bookTrades,
+  ])
+
+  const linkingOptionRows = useMemo(() => {
+    if (instrument !== 'equity' || !draft?.id) return []
+    return optionTradesLinkingToEquity(draft.id, bookTrades)
+  }, [instrument, draft?.id, bookTrades])
+
+  useEffect(() => {
+    if (!open) return
+    if (instrument !== 'option' || (event !== 'assign' && event !== 'exercise')) {
+      if (linkedTradeId) setLinkedTradeId('')
+      return
+    }
+    if (!linkedTradeId) return
+    if (linkedEquityCandidates.some((t) => t.id === linkedTradeId)) return
+    setLinkedTradeId('')
+  }, [open, instrument, event, linkedTradeId, linkedEquityCandidates])
 
   const matchedHolding = useMemo(
     () =>
@@ -175,8 +250,11 @@ export function PortfolioTradeDrawer({
       strike: ib?.strike,
       expiry: ib?.expiration,
       multiplier: ib?.multiplier,
+      linkedTradeId: linkedTradeId.trim() || undefined,
     }
-    const normalized = normalizePortfolioTrade(candidate)
+    const normalized = normalizePortfolioTrade(
+      stripLinkedTradeIdUnlessLifecycleOption(candidate),
+    )
     if (!normalized) {
       setError(
         instrument === 'option'
@@ -242,12 +320,51 @@ export function PortfolioTradeDrawer({
                 className="input !py-1.5 !text-xs"
                 value={event}
                 onChange={(e) => setEvent(e.target.value as PortfolioTradeEvent)}
+                data-testid="trade-drawer-event"
               >
                 <option value="trade">Trade</option>
                 <option value="expire">Expire</option>
                 <option value="assign">Assign</option>
                 <option value="exercise">Exercise</option>
               </select>
+            </div>
+          ) : null}
+          {instrument === 'option' && (event === 'assign' || event === 'exercise') ? (
+            <div>
+              <FieldLabel>Linked trade</FieldLabel>
+              <select
+                className="input !py-1.5 !text-xs"
+                value={linkedTradeId}
+                onChange={(e) => setLinkedTradeId(e.target.value)}
+                data-testid="trade-drawer-linked-trade"
+                disabled={sharesNForLink <= 0 || !optionContractFields}
+              >
+                <option value="">None</option>
+                {linkedEquityCandidates.map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {formatLinkedEquityTradeLabel(t)}
+                  </option>
+                ))}
+              </select>
+              <p className="mt-1 text-[11px] text-white/45">
+                {optionContractFields
+                  ? 'Equity on this book: same underlying, date within 7 days, shares ≈ contracts × multiplier.'
+                  : 'Enter a valid option symbol to list follow-on stock trades.'}
+              </p>
+            </div>
+          ) : null}
+          {instrument === 'equity' && linkingOptionRows.length > 0 ? (
+            <div className="rounded-lg border border-white/10 bg-white/[0.03] px-3 py-2">
+              <p className="text-[11px] font-semibold uppercase tracking-wide text-white/45">
+                Linked option events
+              </p>
+              <ul className="mt-1 space-y-0.5 text-xs text-white/70">
+                {linkingOptionRows.map((t) => (
+                  <li key={t.id}>
+                    {t.event} · {t.symbol} · {t.tradeDate}
+                  </li>
+                ))}
+              </ul>
             </div>
           ) : null}
           <div>
