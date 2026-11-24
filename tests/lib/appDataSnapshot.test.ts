@@ -1,8 +1,35 @@
-import { describe, expect, it } from 'vitest'
+import { beforeEach, describe, expect, it } from 'vitest'
 import {
+  applyAppDataToLocalStorage,
+  collectAppData,
+  emptyAppData,
   parseAppDataSnapshot,
   APP_DATA_SNAPSHOT_VERSION,
+  type AppDataSnapshot,
 } from '../../src/lib/appDataSnapshot'
+import {
+  cacheFxRateForDate,
+  FX_DAILY_STORAGE_KEY,
+  readFxDailyCache,
+} from '../../src/lib/historicalFxStorage'
+
+const store = new Map<string, string>()
+
+beforeEach(() => {
+  store.clear()
+  Object.defineProperty(globalThis, 'localStorage', {
+    configurable: true,
+    value: {
+      getItem: (k: string) => store.get(k) ?? null,
+      setItem: (k: string, v: string) => {
+        store.set(k, String(v))
+      },
+      removeItem: (k: string) => {
+        store.delete(k)
+      },
+    },
+  })
+})
 
 describe('appDataSnapshot', () => {
   it('parses a minimal valid snapshot envelope', () => {
@@ -155,5 +182,65 @@ describe('appDataSnapshot', () => {
     expect(parseAppDataSnapshot({ version: 1, scenarios: [] })).toMatchObject({
       error: expect.any(String),
     })
+  })
+
+  it('parses historicalFxUsdChfDaily when present and strips junk', () => {
+    const parsed = parseAppDataSnapshot({
+      version: APP_DATA_SNAPSHOT_VERSION,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      scenarios: [],
+      portfolios: [],
+      incomeCost: { version: 3, scenarios: [], lines: [], draws: [] },
+      savings: { version: 1, accounts: [] },
+      overview: { version: 2, scenarios: [], selectedScenarioId: null },
+      historicalFxUsdChfDaily: { '2024-07-01': 0.89, foo: 1 },
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed) return
+    expect(parsed.historicalFxUsdChfDaily).toEqual({ '2024-07-01': 0.89 })
+  })
+
+  it('accepts older snapshots without historicalFxUsdChfDaily', () => {
+    const parsed = parseAppDataSnapshot({
+      version: APP_DATA_SNAPSHOT_VERSION,
+      exportedAt: '2026-01-01T00:00:00.000Z',
+      scenarios: [],
+      portfolios: [],
+      incomeCost: { version: 3, scenarios: [], lines: [], draws: [] },
+      savings: { version: 1, accounts: [] },
+      overview: { version: 2, scenarios: [], selectedScenarioId: null },
+    })
+    expect('error' in parsed).toBe(false)
+    if ('error' in parsed) return
+    expect(parsed.historicalFxUsdChfDaily).toBeUndefined()
+  })
+
+  it('collectAppData includes non-empty FX cache', () => {
+    cacheFxRateForDate('2023-12-31', 0.861)
+    const data = collectAppData()
+    expect(data.historicalFxUsdChfDaily).toEqual({ '2023-12-31': 0.861 })
+  })
+
+  it('collectAppData omits empty FX cache', () => {
+    const data = collectAppData()
+    expect(data.historicalFxUsdChfDaily).toBeUndefined()
+  })
+
+  it('applyAppDataToLocalStorage merges FX cache into localStorage', () => {
+    cacheFxRateForDate('2024-01-10', 0.87)
+    const minimal: AppDataSnapshot = {
+      ...emptyAppData(),
+      historicalFxUsdChfDaily: {
+        '2024-01-10': 0.5,
+        '2024-01-11': 0.871,
+      },
+    }
+    const applied = applyAppDataToLocalStorage(minimal)
+    expect(applied).toEqual({ ok: true })
+    expect(readFxDailyCache()).toEqual({
+      '2024-01-10': 0.87,
+      '2024-01-11': 0.871,
+    })
+    expect(store.get(FX_DAILY_STORAGE_KEY)).toContain('2024-01-11')
   })
 })

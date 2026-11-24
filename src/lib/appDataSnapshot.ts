@@ -78,6 +78,11 @@ import {
   loadPortfolioTrades,
   savePortfolioTrades,
 } from './portfolioTradesStorage'
+import {
+  mergeFxDailyCacheFromSnapshot,
+  parseFxDailyRatesMap,
+  readFxDailyCache,
+} from './historicalFxStorage'
 
 export const APP_DATA_FILE_NAME = 'financial-model.json'
 export const APP_DATA_SNAPSHOT_VERSION = 1 as const
@@ -105,6 +110,8 @@ export type AppDataSnapshot = {
   linkedSaveMode?: LinkedSaveMode
   /** Executed trade ledger (all books). Optional on older saves. */
   portfolioTrades?: PortfolioTradesState
+  /** Trade-era USD/CHF ECB daily rates (YYYY-MM-DD → rate). Optional on older saves. */
+  historicalFxUsdChfDaily?: Record<string, number>
 }
 
 export function collectAppData(): AppDataSnapshot {
@@ -127,6 +134,12 @@ export function collectAppData(): AppDataSnapshot {
     portfolioActualsMode: getPortfolioActualsMode(),
     linkedSaveMode: getLinkedSaveMode(),
     portfolioTrades: loadPortfolioTrades(),
+    ...(() => {
+      const historicalFxUsdChfDaily = readFxDailyCache()
+      return Object.keys(historicalFxUsdChfDaily).length > 0
+        ? { historicalFxUsdChfDaily }
+        : {}
+    })(),
   }
 }
 
@@ -217,6 +230,7 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
     portfolioActualsMode: parsePortfolioActualsMode(raw.portfolioActualsMode),
     linkedSaveMode: parseLinkedSaveMode(raw.linkedSaveMode),
     portfolioTrades: normalizePortfolioTrades(raw.portfolioTrades),
+    historicalFxUsdChfDaily: parseFxDailyRatesMap(raw.historicalFxUsdChfDaily),
   }
 }
 
@@ -292,6 +306,10 @@ export function applyAppDataToLocalStorage(
       ),
     )
     if (!r12.ok) return { ok: false, error: r12.error }
+
+    if (snapshot.historicalFxUsdChfDaily) {
+      mergeFxDailyCacheFromSnapshot(snapshot.historicalFxUsdChfDaily)
+    }
 
     return { ok: true }
   })
