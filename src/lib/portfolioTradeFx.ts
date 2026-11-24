@@ -80,12 +80,10 @@ export function historyCloseInDisplay(
   close: number,
   symbol: string,
   ctx: PerfDisplayContext,
+  asOfDate?: string,
 ): number {
   const quote = quoteCurrencyForSymbol(symbol, ctx.quoteCurrencyBySymbol)
-  return convertAmountToDisplay(
-    close,
-    quote,
-    ctx.displayCurrency,
-    ctx.usdToChf,
-  )
+  const fx =
+    asOfDate != null ? usdToChfForTradeFlow(asOfDate, ctx) : ctx.usdToChf
+  return convertAmountToDisplay(close, quote, ctx.displayCurrency, fx)
 }

@@ -12,6 +12,7 @@ import type {
 import {
   convertAmountToDisplay,
   quoteToDisplayCurrency,
+  usdToChfForTradeFlow,
   type PerfDisplayContext,
 } from './portfolioTradeFx'
 import type { PriceHistoryPoint } from './priceHistory'
@@ -462,6 +463,11 @@ function intrinsicOptionMark(
   }
 }
 
+export type ResolveSymbolMarkOptions = {
+  /** Return chart / TWR: prefer history close on the live day when a bar exists. */
+  preferHistoryOnLiveDay?: boolean
+}
+
 export function resolveSymbolMark(
   symbol: string,
   portfolio: SavedPortfolio,
@@ -471,6 +477,7 @@ export function resolveSymbolMark(
   historyQuoteCurrency?: string,
   historiesBySymbol?: Record<string, PriceHistoryPoint[]>,
   quoteCurrencyBySymbol?: Record<string, DisplayCurrency>,
+  options?: ResolveSymbolMarkOptions,
 ): SymbolMark | null {
   const quoteCur = quoteToDisplayCurrency(historyQuoteCurrency)
   const isLiveMarkDay = asOfDate >= todayIsoDate()
@@ -517,6 +524,7 @@ export function resolveSymbolMark(
         uCur === 'CHF' ? 'CHF' : uCur === 'USD' ? 'USD' : undefined,
         historiesBySymbol,
         quoteCurrencyBySymbol,
+        options,
       )
       if (uMark) {
         const intrinsic = intrinsicOptionMark(parsed, uMark)
@@ -535,6 +543,17 @@ export function resolveSymbolMark(
   const holding = portfolio.holdings.find(
     (h) => !h.option && h.symbol.toUpperCase() === sym,
   )
+  if (isLiveMarkDay && options?.preferHistoryOnLiveDay) {
+    const histFirst = latestHistoryClose(historyPoints, asOfDate)
+    if (histFirst) {
+      return {
+        price: histFirst.price,
+        currency: quoteCur,
+        source: 'history',
+        asOfDate: histFirst.date,
+      }
+    }
+  }
   if (isLiveMarkDay) {
     if (holding) {
       const scenario =
@@ -627,9 +646,13 @@ export function computeSymbolPerformance(
     mark != null && typeof mark !== 'number' ? mark.asOfDate : null
   const symbol = trades[0]!.symbol
   const instrument = tradeInstrument(trades[0]!)
+  const markFx =
+    perfCtx && markSource === 'history'
+      ? usdToChfForTradeFlow(markAsOfDate ?? asOfDate, perfCtx)
+      : perfCtx?.usdToChf ?? null
   const markInDisplay =
     mark != null && typeof mark !== 'number' && perfCtx
-      ? symbolMarkInDisplay(mark, perfCtx.displayCurrency, perfCtx.usdToChf).price
+      ? symbolMarkInDisplay(mark, perfCtx.displayCurrency, markFx).price
       : markPrice
 
   const ledger = computeLedgerPerformance(expanded, markInDisplay, perfCtx)
@@ -685,6 +708,8 @@ export type PortfolioPerformanceSummary = {
   symbols: SymbolPerformance[]
 }
 
+export type PortfolioMarkContext = 'snapshot' | 'progression'
+
 export function computePortfolioPerformance(
   trades: PortfolioTrade[],
   portfolio: SavedPortfolio,
@@ -692,9 +717,14 @@ export function computePortfolioPerformance(
   historiesBySymbol: Record<string, PriceHistoryPoint[]> = {},
   asOfDate: string = todayIsoDate(),
   perfCtx?: PerfDisplayContext,
+  markContext: PortfolioMarkContext = 'snapshot',
 ): PortfolioPerformanceSummary {
   const display = perfCtx?.displayCurrency ?? 'USD'
-  const usdToChf = perfCtx?.usdToChf ?? null
+  const spotFx = perfCtx?.usdToChf ?? null
+  const progressionFx =
+    markContext === 'progression' && perfCtx
+      ? usdToChfForTradeFlow(asOfDate, perfCtx)
+      : spotFx
 
   const bySymbol = new Map<string, PortfolioTrade[]>()
   for (const t of trades) {
@@ -715,10 +745,11 @@ export function computePortfolioPerformance(
       histCur === 'CHF' ? 'CHF' : histCur === 'USD' ? 'USD' : undefined,
       historiesBySymbol,
       perfCtx?.quoteCurrencyBySymbol,
+      markContext === 'progression' ? { preferHistoryOnLiveDay: true } : undefined,
     )
     const mark =
       markRaw && perfCtx
-        ? symbolMarkInDisplay(markRaw, display, usdToChf)
+        ? symbolMarkInDisplay(markRaw, display, progressionFx)
         : markRaw
     const perf = computeSymbolPerformance(list, mark, asOfDate, perfCtx)
     if (perf) symbols.push(perf)

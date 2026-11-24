@@ -15,6 +15,7 @@ import type {
   PortfolioContributionsState,
   PortfolioSharedCashState,
   PortfolioTradesState,
+  PortfolioExternalCashState,
 } from '../types'
 import { emptyIncomeCostState } from './incomeCost'
 import { defaultOverviewState } from './overview'
@@ -78,6 +79,11 @@ import {
   loadPortfolioTrades,
   savePortfolioTrades,
 } from './portfolioTradesStorage'
+import { normalizePortfolioExternalCash } from './portfolioExternalCash'
+import {
+  loadPortfolioExternalCash,
+  savePortfolioExternalCash,
+} from './portfolioExternalCashStorage'
 import {
   mergeFxDailyCacheFromSnapshot,
   parseFxDailyRatesMap,
@@ -110,6 +116,8 @@ export type AppDataSnapshot = {
   linkedSaveMode?: LinkedSaveMode
   /** Executed trade ledger (all books). Optional on older saves. */
   portfolioTrades?: PortfolioTradesState
+  /** Wire transfers for TWR (per book). Optional on older saves. */
+  portfolioExternalCash?: PortfolioExternalCashState
   /** Trade-era USD/CHF ECB daily rates (YYYY-MM-DD → rate). Optional on older saves. */
   historicalFxUsdChfDaily?: Record<string, number>
 }
@@ -134,6 +142,7 @@ export function collectAppData(): AppDataSnapshot {
     portfolioActualsMode: getPortfolioActualsMode(),
     linkedSaveMode: getLinkedSaveMode(),
     portfolioTrades: loadPortfolioTrades(),
+    portfolioExternalCash: loadPortfolioExternalCash(),
     ...(() => {
       const historicalFxUsdChfDaily = readFxDailyCache()
       return Object.keys(historicalFxUsdChfDaily).length > 0
@@ -230,6 +239,7 @@ export function parseAppDataSnapshot(raw: unknown): AppDataSnapshot | { error: s
     portfolioActualsMode: parsePortfolioActualsMode(raw.portfolioActualsMode),
     linkedSaveMode: parseLinkedSaveMode(raw.linkedSaveMode),
     portfolioTrades: normalizePortfolioTrades(raw.portfolioTrades),
+    portfolioExternalCash: normalizePortfolioExternalCash(raw.portfolioExternalCash),
     historicalFxUsdChfDaily: parseFxDailyRatesMap(raw.historicalFxUsdChfDaily),
   }
 }
@@ -306,6 +316,11 @@ export function applyAppDataToLocalStorage(
       ),
     )
     if (!r12.ok) return { ok: false, error: r12.error }
+
+    const r13 = savePortfolioExternalCash(
+      normalizePortfolioExternalCash(snapshot.portfolioExternalCash),
+    )
+    if (!r13.ok) return { ok: false, error: r13.error }
 
     if (snapshot.historicalFxUsdChfDaily) {
       mergeFxDailyCacheFromSnapshot(snapshot.historicalFxUsdChfDaily)
