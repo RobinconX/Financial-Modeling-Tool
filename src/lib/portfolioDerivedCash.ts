@@ -49,6 +49,18 @@ export function stepDerivedCashBalance(
   return cash - tradeDayNetCashFlow(dayTrades, perfCtx) + externalCf
 }
 
+/** Floor cash at zero; implied CF feeds external TWR (FX / fees / timing vs wire log). */
+export function stepDerivedCashWithImplied(
+  cash: number,
+  dayTrades: readonly PortfolioTrade[],
+  externalCf: number,
+  perfCtx: PerfDisplayContext,
+): { cash: number; impliedCf: number } {
+  const raw = stepDerivedCashBalance(cash, dayTrades, externalCf, perfCtx)
+  if (raw >= 0) return { cash: raw, impliedCf: 0 }
+  return { cash: 0, impliedCf: -raw }
+}
+
 export type DerivedCashReconciliation = {
   /** Sum of logged wires (deposits − withdrawals), display currency. */
   totalWiresDisplay: number

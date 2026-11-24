@@ -339,12 +339,19 @@ export type ReturnProgressionPoint = {
 
 export type ReturnProgressionTwrMethod = 'external' | 'approximate'
 
+export type TwrImpliedCashTopUp = {
+  date: string
+  amount: number
+}
+
 export type ReturnProgressionResult = {
   points: ReturnProgressionPoint[]
   missingHistorySymbols: string[]
   /** Symbols whose carried history close was >7 calendar days old on at least one past chart day. */
   staleHistorySymbols: string[]
   twrMethod: ReturnProgressionTwrMethod
+  /** TWR-only cash top-ups where derived settlement dipped below zero. */
+  impliedCashTopUps: TwrImpliedCashTopUp[]
 }
 
 function addUtcDays(isoDate: string, days: number): string {
@@ -416,6 +423,7 @@ export function buildReturnProgression(
       missingHistorySymbols: [],
       staleHistorySymbols: [],
       twrMethod: 'approximate',
+      impliedCashTopUps: [],
     }
   }
 
@@ -431,6 +439,7 @@ export function buildReturnProgression(
       missingHistorySymbols: [],
       staleHistorySymbols: [],
       twrMethod: 'approximate',
+      impliedCashTopUps: [],
     }
   }
 
@@ -490,6 +499,7 @@ export function buildReturnProgression(
     missingHistorySymbols: [...missingHistory].sort(),
     staleHistorySymbols: [],
     twrMethod: 'approximate',
+    impliedCashTopUps: [],
   }
 }
 
