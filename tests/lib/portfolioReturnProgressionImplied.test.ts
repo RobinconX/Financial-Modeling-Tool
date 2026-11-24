@@ -25,12 +25,12 @@ function buy(date: string, shares: number, price: number): PortfolioTrade {
   }
 }
 
-describe('implied deposits before first wire', () => {
+describe('trades before first wire (no implied adjustments)', () => {
   const histories = {
     TEST: [{ date: '2022-05-01', close: 100 }],
   }
 
-  it('does not pin TWR at -100% when trades predate wires', () => {
+  it('allows negative cash and does not pin TWR at -100%', () => {
     const trades = [buy('2022-05-09', 10, 100)]
     const wires: PortfolioExternalCashFlow[] = [
       {
@@ -42,14 +42,6 @@ describe('implied deposits before first wire', () => {
         currency: 'USD',
       },
     ]
-    const approx = buildFullReturnProgression({
-      trades,
-      portfolio,
-      scenarios,
-      historiesBySymbol: histories,
-      asOfDate: '2024-06-01',
-      perfCtx,
-    })
     const external = buildFullReturnProgression({
       trades,
       portfolio,
@@ -59,14 +51,9 @@ describe('implied deposits before first wire', () => {
       perfCtx,
       externalFlows: wires,
     })
-    expect(external.impliedDepositDays).toBeGreaterThan(0)
     const lastExt = external.points.at(-1)!.twrPct
-    const lastApprox = approx.points.at(-1)!.twrPct
     expect(lastExt).not.toBeNull()
     expect(lastExt!).toBeGreaterThan(-0.5)
     expect(lastExt!).not.toBeCloseTo(-1, 1)
-    if (lastApprox != null && lastExt != null) {
-      expect(Math.abs(lastExt - lastApprox)).toBeLessThan(0.15)
-    }
   })
 })
